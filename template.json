@@ -1,0 +1,240 @@
+{
+  "Actor": {
+    "types": [
+      "character",
+      "monster"
+    ],
+    "templates": {
+      "base": {
+        "niveau": 1,
+        "classe": "",
+        "xp": {
+          "valeur": 0
+        },
+        "description": "",
+        "manaMax": 5,
+        "regenPv": 1.0,
+        "regenMana": 1.0,
+        "podsMax": 50,
+        "pvMax": 30,
+        "principales": {
+          "force": 0,
+          "intelligence": 0,
+          "dexterite": 0,
+          "acuite": 0,
+          "endurance": 0
+        },
+        "defenses": {
+          "armureFixe": 0,
+          "resistanceFixe": 0,
+          "scoreArmure": 0,
+          "scoreResistance": 0
+        },
+        "regeneration": {
+          "pv": 1.0,
+          "mana": 1.0
+        },
+        "deplacement": {
+          "vitesse": 3
+        },
+        "charge": {
+          "podsActuels": 0,
+          "podsMax": 0
+        },
+        "monnaie": {
+          "cuivre": 0,
+          "argent": 0,
+          "or": 0
+        },
+        "etats": "",
+        "etatsActifs": [],
+        "butin": {
+          "tableUuid": ""
+        },
+        "recompenses": {
+          "xp": 0
+        },
+        "derived": {
+          "reductions": {
+            "physiquePct": 0,
+            "magiquePct": 0
+          }
+        }
+      }
+    },
+    "character": {
+      "templates": [
+        "base"
+      ],
+      "ressources": {
+        "pv": {
+          "valeur": 30,
+          "max": 30
+        },
+        "mana": {
+          "valeur": 5,
+          "max": 5
+        }
+      }
+    },
+    "monster": {
+      "templates": [
+        "base"
+      ],
+      "regeneration": {
+        "pv": 0.0,
+        "mana": 0.0
+      },
+      "ressources": {
+        "pv": {
+          "valeur": 30,
+          "max": 30
+        },
+        "mana": {
+          "valeur": 0,
+          "max": 0
+        }
+      }
+    }
+  },
+  "Item": {
+    "types": [
+      "loot",
+      "weapon",
+      "armor",
+      "consumable",
+      "spell",
+      "skill"
+    ],
+    "templates": {
+      "baseItem": {
+        "qte": 1,
+        "poids": 0
+      },
+      "equipBonus": {
+        "equipe": false,
+        "effects": [],
+        "bonus": {
+          "force": 0,
+          "intelligence": 0,
+          "dexterite": 0,
+          "acuite": 0,
+          "endurance": 0,
+          "pvMax": 0,
+          "manaMax": 0,
+          "vitesse": 0,
+          "armureFixe": 0,
+          "resistanceFixe": 0,
+          "scoreArmure": 0,
+          "scoreResistance": 0,
+          "regenPvPct": 0,
+          "regenManaPct": 0
+        }
+      },
+      "details": {
+        "lore": "",
+        "description": ""
+      }
+    },
+    "loot": {
+      "templates": [
+        "baseItem"
+      ]
+    },
+    "weapon": {
+      "templates": [
+        "baseItem",
+        "equipBonus",
+        "details"
+      ],
+      "poids": 1,
+      "emplacement": "mainDroite",
+      "difficulte": 0,
+      "degats": "1d6",
+      "livraison": "physique",
+      "portee": 1,
+      "degatsFixes": 0,
+      "degatsAdd": 0,
+      "crit": {
+        "mode": "max+die",
+        "extraDie": "1d6",
+        "extraFlat": 0
+      },
+      "scaling": {
+        "stat": "force",
+        "mode": "sqrt",
+        "coef": 1
+      },
+      "effet": ""
+    },
+    "armor": {
+      "templates": [
+        "baseItem",
+        "equipBonus",
+        "details"
+      ],
+      "poids": 2,
+      "emplacement": "torse"
+    },
+    "consumable": {
+      "templates": [
+        "baseItem",
+        "details"
+      ],
+      "poids": 0.2,
+      "utilisations": 1,
+      "effet": ""
+    },
+    "spell": {
+      "templates": [
+        "baseItem",
+        "equipBonus",
+        "details"
+      ],
+      "mode": "attaque",
+      "actif": false,
+      "dureeTours": 0,
+      "effects": [], 
+      "bonus": {
+        "force": 0,
+        "intelligence": 0,
+        "dexterite": 0,
+        "acuite": 0,
+        "endurance": 0,
+        "pvMax": 0,
+        "manaMax": 0,
+        "vitesse": 0,
+        "armureFixe": 0,
+        "resistanceFixe": 0,
+        "scoreArmure": 0,
+        "scoreResistance": 0,
+        "regenPvPct": 0,
+        "regenManaPct": 0
+      },
+      "portee": 6,
+      "coutMana": 5,
+      "difficulte": 0,
+      "degats": "1d6",
+      "livraison": "magique",
+      "recharge": {
+        "max": 0,
+        "restant": 0
+      },
+      "aura": {
+        "active": false,
+        "rayon": 0,
+        "regenPv": 0,
+        "regenMana": 0
+      }
+    },
+    "skill": {
+      "templates": [
+        "baseItem",
+        "details"
+      ],
+      "rang": 0,
+      "statLiee": "dexterite",
+      "difficulte": 0
+    }
+  }
+}

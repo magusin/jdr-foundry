@@ -1,0 +1,251 @@
+<form class="rpg-sheet item-sheet weapon-sheet" autocomplete="off">
+  <header class="sheet-header">
+    <img class="profile" src="{{item.img}}" {{#if editable}}data-edit="img"{{/if}} title="{{item.name}}" height="64" width="64"/>
+    <h1>
+      <input name="name" type="text" value="{{item.name}}" {{#unless editable}}disabled{{/unless}}/>
+    </h1>
+  </header>
+
+  <section class="sheet-body">
+
+    <section class="top-grid">
+      <!-- INFOS -->
+      <div class="col card">
+        <h2>Infos</h2>
+
+        <div class="mm-line">
+          <span>Quantité</span>
+          <input type="number" name="system.qte" value="{{system.qte}}" min="0" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Poids (unité)</span>
+          <input type="number" name="system.poids" value="{{system.poids}}" step="0.1" min="0" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Main</span>
+          <select name="system.emplacement" {{#unless editable}}disabled{{/unless}}>
+            <option value="mainDroite" {{#if (eq system.emplacement "mainDroite")}}selected{{/if}}>Main droite</option>
+            <option value="mainGauche" {{#if (eq system.emplacement "mainGauche")}}selected{{/if}}>Main gauche</option>
+          </select>
+        </div>
+
+        <div class="mm-line">
+          <span>Arme à 2 mains</span>
+          <input type="checkbox" name="system.twoHands" {{#if system.twoHands}}checked{{/if}} {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Difficulté</span>
+          <input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="4" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <p class="hint">
+          Les dégâts réels sont : <b>stat/10</b> + <b>dé</b> + <b>fixe</b> (+ états éventuels).<br/>
+          (Le calcul final est affiché au moment de l’attaque dans le chat.)
+        </p>
+      </div>
+
+      <!-- DEGATS -->
+      <div class="col card">
+        <h2>Dégâts</h2>
+
+        <div class="mm-line">
+          <span>Type de dégâts</span>
+          <select name="system.livraison" {{#unless editable}}disabled{{/unless}}>
+            <option value="physique" {{#if (eq system.livraison "physique")}}selected{{/if}}>Physique</option>
+            <option value="magique" {{#if (eq system.livraison "magique")}}selected{{/if}}>Magique</option>
+          </select>
+        </div>
+
+        <div class="mm-line">
+          <span>Dé de base</span>
+          <input type="text" name="system.degats" value="{{system.degats}}" placeholder="ex: 1d6" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Dégâts fixes (optionnel)</span>
+          <input type="number" name="system.degatsFixes" value="{{system.degatsFixes}}" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Portée (cases)</span>
+          <input type="number" name="system.portee" value="{{system.portee}}" min="1" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>États infligés (rare)</span>
+          <input type="text" name="system.etatsInfliges" value="{{system.etatsInfliges}}" placeholder="ex: Saignement (2 tours), Poison (1)" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <hr/>
+
+        <h3>Critique</h3>
+        <div class="mm-line">
+          <span>Mode</span>
+          <select name="system.crit.mode" {{#unless editable}}disabled{{/unless}}>
+            <option value="max+die" {{#if (eq system.crit.mode "max+die")}}selected{{/if}}>Max + dé</option>
+            <option value="double" {{#if (eq system.crit.mode "double")}}selected{{/if}}>Double dégâts</option>
+            <option value="flat" {{#if (eq system.crit.mode "flat")}}selected{{/if}}>Bonus fixe</option>
+          </select>
+        </div>
+
+        <div class="mm-line">
+          <span>Dé extra</span>
+          <input type="text" name="system.crit.extraDie" value="{{system.crit.extraDie}}" placeholder="ex: 1d6" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+
+        <div class="mm-line">
+          <span>Fixe extra</span>
+          <input type="number" name="system.crit.extraFlat" value="{{system.crit.extraFlat}}" {{#unless editable}}disabled{{/unless}}/>
+        </div>
+      </div>
+    </section>
+
+    <!-- BONUS -->
+    <section class="card">
+      <h2>Bonus d’équipement</h2>
+      <p class="hint">Ces bonus s’appliquent quand l’arme est équipée.</p>
+
+      <div class="grid-mm">
+        <div class="mm-line"><span>Force</span><input type="number" name="system.bonus.force" value="{{system.bonus.force}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Intelligence</span><input type="number" name="system.bonus.intelligence" value="{{system.bonus.intelligence}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Dextérité</span><input type="number" name="system.bonus.dexterite" value="{{system.bonus.dexterite}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Acuité</span><input type="number" name="system.bonus.acuite" value="{{system.bonus.acuite}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Endurance</span><input type="number" name="system.bonus.endurance" value="{{system.bonus.endurance}}" {{#unless editable}}disabled{{/unless}}/></div>
+
+        <div class="mm-line"><span>PV max</span><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Mana max</span><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Vitesse</span><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}" {{#unless editable}}disabled{{/unless}}/></div>
+
+        <div class="mm-line"><span>Armure fixe</span><input type="number" name="system.bonus.armureFixe" value="{{system.bonus.armureFixe}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Résistance fixe</span><input type="number" name="system.bonus.resistanceFixe" value="{{system.bonus.resistanceFixe}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Score Armure</span><input type="number" name="system.bonus.scoreArmure" value="{{system.bonus.scoreArmure}}" {{#unless editable}}disabled{{/unless}}/></div>
+        <div class="mm-line"><span>Score Résistance</span><input type="number" name="system.bonus.scoreResistance" value="{{system.bonus.scoreResistance}}" {{#unless editable}}disabled{{/unless}}/></div>
+      </div>
+    </section>
+
+    <section class="card">
+  <h2>États / Effets</h2>
+  <p class="hint">Définis les effets appliqués à la cible en cas de touche. (MJ)</p>
+
+  <div class="row" style="gap:8px; flex-wrap:wrap;">
+    <button type="button" class="btn" data-action="addEffect">+ Ajouter un effet</button>
+  </div>
+
+  {{#if system.effects.length}}
+    <ol class="items-list simple" style="margin-top:10px;">
+      {{#each system.effects as |e idx|}}
+        <li class="item">
+          <div class="mm-line">
+            <span>Nom</span>
+            <input type="text" name="system.effects.{{idx}}.label" value="{{e.label}}" />
+          </div>
+
+          <div class="grid-mm">
+            <div class="mm-line">
+              <span>Durée (tours)</span>
+              <input type="number" name="system.effects.{{idx}}.duration" value="{{e.duration}}" min="0"/>
+            </div>
+
+            <div class="mm-line">
+              <span>Difficulté (retirer)</span>
+              <input type="number" name="system.effects.{{idx}}.cleanseDC" value="{{e.cleanseDC}}" min="0" max="20"/>
+            </div>
+
+            <div class="mm-line">
+              <span>Stacking</span>
+              <select name="system.effects.{{idx}}.stacking">
+                <option value="replace" {{#if (eq e.stacking "replace")}}selected{{/if}}>Remplace</option>
+                <option value="refresh" {{#if (eq e.stacking "refresh")}}selected{{/if}}>Refresh durée</option>
+                <option value="stack" {{#if (eq e.stacking "stack")}}selected{{/if}}>Cumule</option>
+              </select>
+            </div>
+          </div>
+
+          <hr/>
+
+          <h3>DOT (optionnel)</h3>
+          <div class="grid-mm">
+            <div class="mm-line">
+              <span>Base</span>
+              <input type="number" name="system.effects.{{idx}}.dot.base" value="{{e.dot.base}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Stat source</span>
+              <select name="system.effects.{{idx}}.dot.stat">
+                <option value="force" {{#if (eq e.dot.stat "force")}}selected{{/if}}>Force</option>
+                <option value="intelligence" {{#if (eq e.dot.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+                <option value="dexterite" {{#if (eq e.dot.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+                <option value="acuite" {{#if (eq e.dot.stat "acuite")}}selected{{/if}}>Acuité</option>
+                <option value="endurance" {{#if (eq e.dot.stat "endurance")}}selected{{/if}}>Endurance</option>
+              </select>
+            </div>
+
+            <div class="mm-line">
+              <span>Par</span>
+              <input type="number" name="system.effects.{{idx}}.dot.per" value="{{e.dot.per}}" min="1" />
+            </div>
+
+            <div class="mm-line">
+              <span>Type dégâts</span>
+              <select name="system.effects.{{idx}}.dot.livraison">
+                <option value="physique" {{#if (eq e.dot.livraison "physique")}}selected{{/if}}>Physique</option>
+                <option value="magique" {{#if (eq e.dot.livraison "magique")}}selected{{/if}}>Magique</option>
+              </select>
+            </div>
+          </div>
+
+          <hr/>
+
+          <h3>Debuff (optionnel)</h3>
+          <div class="grid-mm">
+            <div class="mm-line">
+              <span>Force (flat)</span>
+              <input type="number" name="system.effects.{{idx}}.modsFlat.principales.force" value="{{e.modsFlat.principales.force}}" />
+            </div>
+            <div class="mm-line">
+              <span>Dextérité (flat)</span>
+              <input type="number" name="system.effects.{{idx}}.modsFlat.principales.dexterite" value="{{e.modsFlat.principales.dexterite}}" />
+            </div>
+            <div class="mm-line">
+              <span>Acuité (flat)</span>
+              <input type="number" name="system.effects.{{idx}}.modsFlat.principales.acuite" value="{{e.modsFlat.principales.acuite}}" />
+            </div>
+            <div class="mm-line">
+              <span>Endurance (flat)</span>
+              <input type="number" name="system.effects.{{idx}}.modsFlat.principales.endurance" value="{{e.modsFlat.principales.endurance}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Force (%)</span>
+              <input type="number" name="system.effects.{{idx}}.modsPct.principales.force" value="{{e.modsPct.principales.force}}" />
+            </div>
+            <div class="mm-line">
+              <span>Dextérité (%)</span>
+              <input type="number" name="system.effects.{{idx}}.modsPct.principales.dexterite" value="{{e.modsPct.principales.dexterite}}" />
+            </div>
+          </div>
+
+          <div class="row" style="justify-content:flex-end; margin-top:8px;">
+            <button type="button" class="btn small" data-action="removeEffect" data-idx="{{idx}}">Supprimer</button>
+          </div>
+        </li>
+      {{/each}}
+    </ol>
+  {{else}}
+    <p class="hint">Aucun effet défini.</p>
+  {{/if}}
+</section>
+
+
+    <!-- DESCRIPTION -->
+    <section class="card">
+      <h2>Description</h2>
+      <textarea name="system.description" rows="5" {{#unless editable}}disabled{{/unless}}>{{system.description}}</textarea>
+    </section>
+
+  </section>
+</form>

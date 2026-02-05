@@ -1,0 +1,117 @@
+<form class="rpg-sheet" autocomplete="off">
+  <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
+    <img src="{{item.img}}" data-edit="img" title="{{item.name}}" width="64" height="64"/>
+    <div style="flex:1;">
+      <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;"/>
+      <small>Sort</small>
+    </div>
+  </header>
+
+  <hr/>
+
+  <section>
+    <h2>Type</h2>
+    <label>Mode</label>
+    <select name="system.mode">
+      <option value="attaque" {{#if (eq system.mode "attaque")}}selected{{/if}}>Attaque</option>
+      <option value="passif" {{#if (eq system.mode "passif")}}selected{{/if}}>Passif</option>
+      <option value="aura" {{#if (eq system.mode "aura")}}selected{{/if}}>Aura</option>
+    </select>
+
+    <label><input type="checkbox" name="system.actif" {{#if system.actif}}checked{{/if}}/> Actif (si passif)</label>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div>
+        <label>Durée (tours)</label>
+        <input type="number" name="system.dureeTours" value="{{system.dureeTours}}" min="0"/>
+      </div>
+      <div>
+        <label>Coût Mana</label>
+        <input type="number" name="system.coutMana" value="{{system.coutMana}}" min="0"/>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div>
+        <label>Portée (cases)</label>
+        <input type="number" name="system.portee" value="{{system.portee}}" min="0"/>
+      </div>
+      <div>
+        <label>Difficulté toucher</label>
+        <input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="4"/>
+      </div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h2>Attaque (si mode=attaque)</h2>
+    <label>Dégâts (dés)</label>
+    <input type="text" name="system.degats" value="{{system.degats}}" placeholder="ex: 1d6"/>
+
+    <label>Livraison</label>
+    <select name="system.livraison">
+      <option value="magique" {{#if (eq system.livraison "magique")}}selected{{/if}}>Magique</option>
+      <option value="physique" {{#if (eq system.livraison "physique")}}selected{{/if}}>Physique</option>
+    </select>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div>
+        <label>Recharge max (tours)</label>
+        <input type="number" name="system.recharge.max" value="{{system.recharge.max}}" min="0"/>
+      </div>
+      <div>
+        <label>Recharge restante</label>
+        <input type="number" name="system.recharge.restant" value="{{system.recharge.restant}}" min="0"/>
+      </div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h2>Bonus (si passif actif)</h2>
+    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+      <div><label>Force</label><input type="number" name="system.bonus.force" value="{{system.bonus.force}}"/></div>
+      <div><label>Intelligence</label><input type="number" name="system.bonus.intelligence" value="{{system.bonus.intelligence}}"/></div>
+      <div><label>Dextérité</label><input type="number" name="system.bonus.dexterite" value="{{system.bonus.dexterite}}"/></div>
+      <div><label>Acuité</label><input type="number" name="system.bonus.acuite" value="{{system.bonus.acuite}}"/></div>
+      <div><label>Endurance</label><input type="number" name="system.bonus.endurance" value="{{system.bonus.endurance}}"/></div>
+
+      <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
+      <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
+      <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
+
+      <div><label>Armure fixe</label><input type="number" name="system.bonus.armureFixe" value="{{system.bonus.armureFixe}}"/></div>
+      <div><label>Résistance fixe</label><input type="number" name="system.bonus.resistanceFixe" value="{{system.bonus.resistanceFixe}}"/></div>
+      <div><label>Score Armure</label><input type="number" name="system.bonus.scoreArmure" value="{{system.bonus.scoreArmure}}"/></div>
+      <div><label>Score Résistance</label><input type="number" name="system.bonus.scoreResistance" value="{{system.bonus.scoreResistance}}"/></div>
+
+      <div><label>Regen PV %</label><input type="number" name="system.bonus.regenPvPct" value="{{system.bonus.regenPvPct}}"/></div>
+      <div><label>Regen Mana %</label><input type="number" name="system.bonus.regenManaPct" value="{{system.bonus.regenManaPct}}"/></div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h2>Aura</h2>
+    <label><input type="checkbox" name="system.aura.active" {{#if system.aura.active}}checked{{/if}}/> Aura active</label>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+      <div><label>Rayon</label><input type="number" name="system.aura.rayon" value="{{system.aura.rayon}}" min="0"/></div>
+      <div><label>Regen PV</label><input type="number" name="system.aura.regenPv" value="{{system.aura.regenPv}}" min="0"/></div>
+      <div><label>Regen Mana</label><input type="number" name="system.aura.regenMana" value="{{system.aura.regenMana}}" min="0"/></div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h2>Lore & Description</h2>
+    <label>Lore</label>
+    <textarea name="system.lore" rows="3">{{system.lore}}</textarea>
+    <label>Description</label>
+    <textarea name="system.description" rows="4">{{system.description}}</textarea>
+  </section>
+</form>

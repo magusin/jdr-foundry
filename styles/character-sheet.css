@@ -1,0 +1,531 @@
+.rpg-sheet {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+  
+  .rpg-sheet .sheet-header {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border-light-2);
+  }
+  
+  .rpg-sheet .header-left {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .rpg-sheet .profile-img {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 1px solid var(--color-border-light-2);
+  }
+  
+  .rpg-sheet input.name {
+    font-size: 20px;
+    font-weight: 800;
+    height: 34px;
+    margin-bottom: 8px;
+  }
+  
+  .rpg-sheet .meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  
+  .rpg-sheet .meta label {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+  }
+  
+  .rpg-sheet .encumbrance {
+    margin-top: 10px;
+    border: 1px solid var(--color-border-light-2);
+    border-radius: 16px;
+    padding: 10px;
+  }
+  
+  .rpg-sheet .enc-label {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  
+  .rpg-sheet .enc-bar {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--color-border-light-2);
+    overflow: hidden;
+  }
+  
+  .rpg-sheet .enc-fill {
+    height: 100%;
+    background: rgba(255,255,255,0.35);
+  }
+  
+  .rpg-sheet .enc-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  .rpg-sheet .header-right {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-content: start;
+  }
+  
+  .rpg-sheet .resource {
+    border: 1px solid var(--color-border-light-2);
+    border-radius: 16px;
+    padding: 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  
+  .rpg-sheet .resource-label {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  
+  .rpg-sheet .resource-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .rpg-sheet .resource-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  
+  .rpg-sheet nav.sheet-tabs {
+    border-bottom: 1px solid var(--color-border-light-2);
+    padding: 0 12px;
+  }
+  
+  .rpg-sheet nav.sheet-tabs .item {
+    padding: 10px 12px;
+    font-weight: 800;
+  }
+  
+  .rpg-sheet .sheet-body {
+    padding: 12px;
+  }
+  
+  .rpg-sheet .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  
+  .rpg-sheet .card {
+    border: 1px solid var(--color-border-light-2);
+    border-radius: 18px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .rpg-sheet .card h2 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+  }
+  
+  .rpg-sheet .hint {
+    opacity: 0.85;
+    margin-top: 10px;
+  }
+  
+  .rpg-sheet .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 90px;
+    gap: 10px;
+    max-width: 420px;
+  }
+  
+  .rpg-sheet .stat {
+    display: contents;
+  }
+  
+  .rpg-sheet .btn {
+    border-radius: 12px;
+    border: 1px solid var(--color-border-light-2);
+    padding: 8px 10px;
+    font-weight: 800;
+  }
+  
+  .rpg-sheet .btn.small {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .rpg-sheet .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  
+  .rpg-sheet .items-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .rpg-sheet .items-list.simple .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 6px;
+    border-bottom: 1px dashed var(--color-border-light-2);
+  }
+  
+  .rpg-sheet .items-header,
+  .rpg-sheet .items-list:not(.simple) .item {
+    display: grid;
+    grid-template-columns: 1.8fr 0.6fr 0.6fr 0.6fr 0.4fr;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 6px;
+    border-bottom: 1px dashed var(--color-border-light-2);
+  }
+  
+  .rpg-sheet .items-header {
+    font-weight: 900;
+    opacity: 0.85;
+  }
+  
+  .rpg-sheet .item .name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .rpg-sheet .item .name img {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+  
+  .rpg-sheet .slot {
+    opacity: 0.85;
+    margin-left: 6px;
+  }
+  
+  .rpg-sheet .actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .rpg-sheet button.icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border-light-2);
+  }
+  
+  .rpg-sheet .equip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .minmax-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .minmax-row .sep {
+    opacity: 0.7;
+  }
+  
+  input.minmax {
+    width: 80px !important;
+    flex: 0 0 80px !important;
+  }
+  
+  .gen-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  
+  .gen-line {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .grid-mm {
+    display: grid;
+    gap: 10px;
+  }
+  
+  .mm-line {
+    display: grid;
+    grid-template-columns: 200px 120px 30px 120px;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .mm-line input {
+    width: 100%;
+  }
+
+  /* === MONSTER SHEET FIX === */
+.rpg-sheet.monster-sheet {
+  min-width: 980px;
+}
+
+.rpg-sheet .grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rpg-sheet .card {
+  overflow: hidden;
+}
+
+.rpg-sheet .mm-line {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 10px;
+  align-items: center;
+}
+
+.rpg-sheet .grid-mm {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.rpg-sheet input,
+.rpg-sheet select,
+.rpg-sheet textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rpg-sheet .pv-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rpg-sheet .pv-row input[type="number"] {
+  flex: 0 0 70px;
+  width: 70px;
+}
+
+.rpg-sheet .pv-row .hp-state {
+  margin-left: auto;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.rpg-sheet .btn-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.rpg-sheet .btn-row .btn {
+  flex: 1 1 120px;
+}
+
+/* évite débordement vertical de la fiche */
+.rpg-sheet.monster-sheet .sheet-body {
+  overflow: auto;
+}
+
+.monster-sheet input,
+.monster-sheet select,
+.monster-sheet textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.rpg-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.resource-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-row .num.sm {
+  width: 90px;
+}
+
+.resource-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.etat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.etat-card {
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.etat-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.etat-tr {
+  display: grid;
+  grid-template-columns: 1.2fr 80px 70px 120px 1.6fr 150px;
+  gap: 10px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.25);
+}
+
+.etat-th {
+  font-weight: 700;
+  background: rgba(0,0,0,0.05);
+}
+
+.etat-mods .etag {
+  font-size: 12px;
+  opacity: 0.9;
+  line-height: 1.2;
+}
+
+.etat-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.muted { opacity: 0.7; }
+.soft { opacity: 0.25; }
+
+.rp-text { white-space: pre-wrap; }
+
+.hp-btn-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:nowrap;
+}
+.hp-btn-row .btn{
+  flex:1;
+  min-width:0;
+  white-space:nowrap;
+}
+
+.etat-table{ display:flex; flex-direction:column; gap:6px; }
+.etat-head,.etat-row{
+  display:grid;
+  grid-template-columns: 1.2fr 0.5fr 0.5fr 1fr 1fr 0.9fr;
+  gap:8px;
+  align-items:center;
+}
+.etat-head{ font-weight:700; opacity:.85; }
+.etat-row{
+  padding:8px;
+  border:1px solid rgba(0,0,0,.15);
+  border-radius:10px;
+}
+.etat-row .actions{ display:flex; gap:6px; justify-content:flex-end; }
+
+.panel-states {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.panel-states .panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.panel-states .state-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-states .state-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 8px;
+}
+
+.panel-states .state-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.panel-states .state-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.panel-states .state-actions button {
+  width: 30px;
+  height: 26px;
+  line-height: 1;
+  padding: 0;
+}
+
+
+
+
+
+  
+  
+  

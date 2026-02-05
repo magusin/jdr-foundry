@@ -1,0 +1,288 @@
+<form class="rpg-sheet sheet actor monster-sheet" autocomplete="off">
+  <header class="sheet-header">
+    <img class="profile" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64" />
+    <h1>
+      <input name="name" type="text" value="{{actor.name}}" {{#unless canSeeStats}}disabled{{/unless}} />
+    </h1>
+  </header>
+
+  <nav class="sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="main">Monstre</a>
+
+    {{#if canSeeStats}}
+    <a class="item" data-tab="attacks">Attaques</a>
+    {{/if}}
+
+    {{#if showGenConfig}}
+    <a class="item" data-tab="gen">Génération (MJ)</a>
+    {{/if}}
+  </nav>
+
+  <section class="sheet-body" data-group="primary">
+
+    {{!-- =========================
+    TAB MAIN
+    ========================== --}}
+    <div class="tab" data-group="primary" data-tab="main">
+
+      {{!-- VUE JOUEUR : RP-only --}}
+      {{#unless canSeeStats}}
+      <section class="card">
+        <h2>Description</h2>
+        <div class="rp-text">{{system.description}}</div>
+      </section>
+      {{/unless}}
+
+      {{!-- VUE MJ : STATS --}}
+      {{#if canSeeStats}}
+
+      <div class="rpg-grid-2">
+
+        {{!-- COLONNE GAUCHE --}}
+        <section class="card">
+          <h2>Informations</h2>
+          <div class="grid-mm">
+            <div class="mm-line">
+              <span>Niveau</span>
+              <input type="number" name="system.niveau" value="{{system.niveau}}" min="1" />
+            </div>
+
+            <div class="mm-line">
+              <span>XP donnée</span>
+              <input type="number" name="system.recompenses.xp" value="{{system.recompenses.xp}}" min="0" />
+            </div>
+
+            <div class="mm-line">
+              <span>Butin (RollTable UUID)</span>
+              <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}" placeholder="..." />
+            </div>
+
+            <div class="mm-line">
+              <span>Vitesse</span>
+              <input type="number" name="system.deplacement.vitesse" value="{{system.deplacement.vitesse}}" min="0" />
+            </div>
+          </div>
+        </section>
+
+        {{!-- COLONNE DROITE : PV --}}
+        <section class="card">
+          <h2>Ressources</h2>
+
+          <div class="resource-block">
+            <div class="resource-head">
+              <div class="resource-title">PV</div>
+              <div class="resource-meta">
+                {{system.derived.hp.pct}}% — {{system.derived.hp.etat}}
+              </div>
+            </div>
+
+            <div class="resource-row">
+              <input class="num sm" type="number" name="system.ressources.pv.valeur"
+                value="{{system.ressources.pv.valeur}}" min="0" />
+              <span class="sep">/</span>
+              <input class="num sm" type="number" name="system.ressources.pv.max" value="{{system.ressources.pv.max}}"
+                min="1" />
+            </div>
+
+            <div class="mm-line">
+              <span>Régén PV</span>
+              <input type="number" name="system.regeneration.pv" value="{{system.regeneration.pv}}" />
+            </div>
+
+            <div class="hp-btn-row">
+              <button type="button" class="btn" data-action="hpPlus" data-delta="5">+5 PV</button>
+              <button type="button" class="btn" data-action="hpPlus" data-delta="1">+1 PV</button>
+              <button type="button" class="btn" data-action="hpPlus" data-delta="-1">-1 PV</button>
+              <button type="button" class="btn" data-action="hpPlus" data-delta="-5">-5 PV</button>
+            </div>
+          </div>
+        </section>
+
+        {{!-- COLONNE GAUCHE --}}
+        <section class="card">
+          <h2>Caractéristiques</h2>
+          <div class="grid-mm">
+            <div class="stat-total" data-stat="force"><span>Force</span><input type="number"
+                name="system.principales.force" value="{{system.derived.effective.principales.force}}" /></div>
+            <div class="stat-total" data-stat="intelligence"><span>Intelligence</span><input type="number"
+                name="system.principales.intelligence" value="{{system.derived.effective.principales.intelligence}}" />
+            </div>
+            <div class="stat-total" data-stat="dexterite"><span>Dextérité</span><input type="number"
+                name="system.principales.dexterite" value="{{system.derived.effective.principales.dexterite}}" /></div>
+            <div class="stat-total" data-stat="acuite"><span>Acuité</span><input type="number"
+                name="system.principales.acuite" value="{{system.derived.effective.principales.acuite}}" /></div>
+            <div class="stat-total" data-stat="endurance"><span>Endurance</span><input type="number"
+                name="system.principales.endurance" value="{{system.derived.effective.principales.endurance}}" /></div>
+          </div>
+        </section>
+
+        {{!-- COLONNE DROITE --}}
+        <section class="card">
+          <h2>Défenses</h2>
+          <div class="grid-mm">
+
+            <div class="mm-line">
+              <span>Armure fixe</span>
+              <input type="number" class="def-total" data-def="armureFixe" name="system.defenses.armureFixe"
+                value="{{system.derived.effective.defenses.armureFixe}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Résistance fixe</span>
+              <input type="number" class="def-total" data-def="resistanceFixe" name="system.defenses.resistanceFixe"
+                value="{{system.derived.effective.defenses.resistanceFixe}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Score Armure</span>
+              <input type="number" class="def-total" data-def="scoreArmure" name="system.defenses.scoreArmure"
+                value="{{system.derived.effective.defenses.scoreArmure}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Réduction phys.</span>
+              <input type="text" value="{{system.derived.reductions.physiquePct}}%" disabled />
+            </div>
+
+            <div class="mm-line">
+              <span>Score Résistance</span>
+              <input type="number" class="def-total" data-def="scoreResistance" name="system.defenses.scoreResistance"
+                value="{{system.derived.effective.defenses.scoreResistance}}" />
+            </div>
+
+            <div class="mm-line">
+              <span>Réduction mag.</span>
+              <input type="text" value="{{system.derived.reductions.magiquePct}}%" disabled />
+            </div>
+
+          </div>
+        </section>
+
+
+        {{!-- ÉTATS (pleine largeur) --}}
+
+        <section class="panel-states" style="grid-column: 1 / -1;">
+          <header class="panel-title">
+            <h2>États</h2>
+
+            {{#if flags.isGM}}
+            <button type="button" data-action="stateAdd">+ Ajouter</button>
+            {{/if}}
+          </header>
+
+          <ul class="state-list">
+            {{#each system.etatsActifs as |e|}}
+            <li class="state-row" data-state-id="{{e.id}}">
+              <div class="state-main">
+                <b>{{e.label}}</b>
+
+                {{#if e.isAura}}
+                <span class="muted" style="margin-left:6px;">🌀</span>
+                {{/if}}
+
+                {{#if e.isBeneficial}}
+                <span class="muted" style="margin-left:6px;">✨</span>
+                {{/if}}
+
+                {{#if e.isHarmful}}
+                <span class="muted" style="margin-left:6px;">☠️</span>
+                {{/if}}
+
+                <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+
+                {{#if e.cleanseDC}}
+                <span class="muted">Retrait: {{e.cleanseDC}}+</span>
+                {{/if}}
+
+                {{#if e.summary}}
+                <div class="muted" style="margin-top:4px;">
+                  {{e.summary}}
+                </div>
+                {{/if}}
+              </div>
+
+              <div class="state-actions">
+                {{#if ../flags.isGM}}
+                <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
+                <button type="button" data-action="stateDelete" data-id="{{e.id}}">🗑</button>
+                {{/if}}
+                <button type="button" data-action="stateShow" data-id="{{e.id}}">?</button>
+              </div>
+            </li>
+            {{/each}}
+          </ul>
+
+        </section>
+
+
+        {{!-- DESCRIPTION (pleine largeur) --}}
+        <section class="card" style="grid-column: 1 / -1;">
+          <h2>Description</h2>
+          {{editor system.description target="system.description" button=true owner=owner editable=editable}}
+        </section>
+
+      </div>
+      {{/if}}
+    </div>
+
+    {{!-- =========================
+    TAB ATTAQUES (MJ only)
+    ========================== --}}
+    {{#if canSeeStats}}
+    <div class="tab" data-group="primary" data-tab="attacks">
+      <section class="card">
+        <h2>Armes & Sorts du monstre</h2>
+        <p class="hint">Astuce : glisse-dépose une arme/sort depuis ton compendium vers cette fiche.</p>
+
+        {{#if itemsAttaques.length}}
+        <ol class="items-list simple">
+          {{#each itemsAttaques as |it|}}
+          <li class="item" data-item-id="{{it._id}}">
+            <span class="name">
+              <img src="{{it.img}}" alt="" />
+              <a class="item-edit">{{it.name}}</a>
+              <small>
+                {{#if it.system.livraison}}({{it.system.livraison}}){{/if}}
+                {{#if it.system.degats}} — {{it.system.degats}}{{/if}}
+              </small>
+            </span>
+
+            <span class="actions">
+              <button type="button" class="btn small" data-action="useItem" data-item-id="{{it._id}}">
+                Utiliser
+              </button>
+            </span>
+          </li>
+          {{/each}}
+        </ol>
+        {{else}}
+        <p class="hint">Aucune arme/sort sur ce monstre.</p>
+        {{/if}}
+      </section>
+    </div>
+    {{/if}}
+
+    {{!-- =========================
+    TAB GEN (MJ only)
+    ========================== --}}
+    {{#if showGenConfig}}
+    <div class="tab" data-group="primary" data-tab="gen">
+      <section class="card">
+        <h2>Configuration aléatoire</h2>
+
+        <label>Niveaux possibles</label>
+        <input type="text" name="system.gen.levelsCsv" value="{{system.gen.levelsCsv}}" placeholder="Ex: 2,4,6" />
+
+        {{!-- (le reste inchangé) --}}
+        {{#each genBands as |b|}}
+        <fieldset class="gen-band">
+          <legend>Niveau {{b.lvl}}</legend>
+          {{!-- ... --}}
+        </fieldset>
+        {{/each}}
+      </section>
+    </div>
+    {{/if}}
+
+  </section>
+</form>

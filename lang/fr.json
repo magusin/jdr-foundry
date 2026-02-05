@@ -1,0 +1,11 @@
+{
+    "RPG.Personnage": "Personnage",
+    "RPG.Monstre": "Monstre",
+    "RPG.Objet": "Objet",
+    "RPG.Arme": "Arme",
+    "RPG.Armure": "Armure",
+    "RPG.Consommable": "Consommable",
+    "RPG.Sort": "Sort",
+    "RPG.Compétence": "Compétence"
+  }
+  

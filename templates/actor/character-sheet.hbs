@@ -1,0 +1,622 @@
+<form class="{{cssClass}} rpg-sheet" autocomplete="off">
+
+  {{!-- =========================
+  HEADER
+  ========================== --}}
+  <header class="sheet-header">
+    <div class="header-left">
+      <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" />
+
+      <div class="header-meta">
+        <input class="name" name="name" type="text" value="{{actor.name}}" placeholder="Nom" {{#if
+          flags.readOnly}}disabled{{/if}} />
+
+        <div class="meta-row">
+          <div class="meta">
+            <label>Niveau</label>
+            <input type="number" name="system.niveau" value="{{system.niveau}}" min="1" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+
+          <div class="meta" style="grid-column: 1 / -1;">
+            <label>Expérience</label>
+
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div
+                style="flex:1; height:10px; background: rgba(255,255,255,0.12); border-radius:999px; overflow:hidden;">
+                <div style="height:100%; width: {{calc.xpPct}}%; background: rgba(255,255,255,0.55);"></div>
+              </div>
+              <small>{{calc.xpValeur}} / {{calc.xpPalier}} ({{calc.xpPct}}%)</small>
+            </div>
+
+            {{#if flags.isGM}}
+            <div style="margin-top:8px;">
+              <label>XP actuelle</label>
+              <input type="number" name="system.xp.valeur" value="{{system.xp.valeur}}" min="0" />
+            </div>
+            {{/if}}
+          </div>
+
+
+
+          <div class="meta">
+            <label>Vitesse (cases/tour)</label>
+            <input type="number" name="system.deplacement.vitesse" value="{{system.deplacement.vitesse}}" min="0" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+        </div>
+
+        <div class="meta-row">
+          <div class="meta">
+            <label>Pods max</label>
+            <input type="number" name="system.charge.podsMax" value="{{system.charge.podsMax}}" min="0" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+
+          <div class="meta">
+            <label>Pods actuels</label>
+            <input type="number" name="system.charge.podsActuels" value="{{system.charge.podsActuels}}" min="0"
+              step="0.1" disabled />
+          </div>
+        </div>
+
+        <div class="encumbrance">
+          <div class="enc-label">
+            <span>Charge</span>
+            <span>{{charge.podsActuels}} / {{charge.podsMax}} ({{charge.pct}}%) — {{charge.etat}}</span>
+          </div>
+          <div class="enc-bar">
+            <div class="enc-fill" style="width: {{charge.pct}}%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="resource">
+        <div class="resource-label">
+          <span>PV</span>
+          <span class="resource-value">{{system.ressources.pv.valeur}} / {{system.ressources.pv.max}}</span>
+        </div>
+        <div class="resource-grid">
+          <input type="number" name="system.ressources.pv.valeur" value="{{system.ressources.pv.valeur}}" min="0" {{#if
+            flags.readOnly}}disabled{{/if}} />
+          <span>/</span>
+          <input type="number" name="system.ressources.pv.max" value="{{system.ressources.pv.max}}" min="0" {{#if
+            flags.readOnly}}disabled{{/if}} />
+        </div>
+        {{#if flags.isGM}}
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button type="button" class="btn small" data-action="adjRes" data-res="pv" data-delta="-5">-5</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="pv" data-delta="-1">-1</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="pv" data-delta="1">+1</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="pv" data-delta="5">+5</button>
+        </div>
+        {{/if}}
+
+        <div class="resource-sub">
+          <label>Régén PV</label>
+          <input type="number" name="system.regeneration.pv" value="{{system.regeneration.pv}}" {{#if
+            flags.readOnly}}disabled{{/if}} />
+        </div>
+        <div>
+          {{system.derived.hp.pct}}% — {{system.derived.hp.etat}}
+        </div>
+      </div>
+
+      <div class="resource">
+        <div class="resource-label">
+          <span>Mana</span>
+          <span class="resource-value">{{system.ressources.mana.valeur}} / {{system.ressources.mana.max}}</span>
+        </div>
+        <div class="resource-grid">
+          <input type="number" name="system.ressources.mana.valeur" value="{{system.ressources.mana.valeur}}" min="0"
+            {{#if flags.readOnly}}disabled{{/if}} />
+          <span>/</span>
+          <input type="number" name="system.ressources.mana.max" value="{{system.ressources.mana.max}}" min="0" {{#if
+            flags.readOnly}}disabled{{/if}} />
+          {{#if flags.isGM}}
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-5">-5</button>
+            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-1">-1</button>
+            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="1">+1</button>
+            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="5">+5</button>
+          </div>
+          {{/if}}
+
+        </div>
+
+        <div class="resource-sub">
+          <label>Régén Mana</label>
+          <input type="number" name="system.regeneration.mana" value="{{system.regeneration.mana}}" {{#if
+            flags.readOnly}}disabled{{/if}} />
+        </div>
+      </div>
+
+      {{!-- Classe --}}
+      <div class="resource" style="grid-column: 1 / -1;">
+        <div class="resource-label">
+          <span>Classe</span>
+        </div>
+        <input type="text" name="system.classe" value="{{system.classe}}" placeholder="Ex: Mage, Épéiste, Druide..."
+          {{#if flags.readOnly}}disabled{{/if}} />
+      </div>
+
+      {{!-- Monnaie (classique) --}}
+      <div class="resource" style="grid-column: 1 / -1;">
+        <div class="resource-label">
+          <span>Monnaie</span>
+          <span class="resource-value">100 cuivre = 1 argent • 100 argent = 1 or</span>
+        </div>
+        <div class="resource-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+          <div>
+            <label>Cuivre</label>
+            <input type="number" name="system.monnaie.cuivre" value="{{system.monnaie.cuivre}}" min="0" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+          <div>
+            <label>Argent</label>
+            <input type="number" name="system.monnaie.argent" value="{{system.monnaie.argent}}" min="0" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+          <div>
+            <label>Or</label>
+            <input type="number" name="system.monnaie.or" value="{{system.monnaie.or}}" min="0" {{#if
+              flags.readOnly}}disabled{{/if}} />
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  {{!-- =========================
+  TABS (Observer = page 1 seulement)
+  ========================== --}}
+  <nav class="sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="stats">Caractéristiques</a>
+
+    {{#unless flags.limitedView}}
+    <a class="item" data-tab="inventory">Inventaire</a>
+    <a class="item" data-tab="equipment">Équipement</a>
+    <a class="item" data-tab="consumables">Consommables</a>
+    <a class="item" data-tab="spells">Sorts</a>
+    <a class="item" data-tab="skills">Compétences</a>
+    {{/unless}}
+  </nav>
+
+  <section class="sheet-body">
+
+    {{!-- =========================
+    TAB: STATS (visible pour tous)
+    ========================== --}}
+    <div class="tab" data-group="primary" data-tab="stats">
+      <div class="grid-2">
+
+        <section class="card">
+          <h2>Caractéristiques</h2>
+
+          <div class="stats-grid">
+            <div class="stat">
+              <label>Force</label>
+              <input type="number" class="stat-total" data-stat="force"
+                value="{{system.derived.effective.principales.force}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            </div>
+
+            <div class="stat">
+              <label>Intelligence</label>
+              <input type="number" class="stat-total" data-stat="intelligence"
+                value="{{system.derived.effective.principales.intelligence}}" {{#unless
+                flags.isGM}}disabled{{/unless}} />
+            </div>
+
+            <div class="stat">
+              <label>Dextérité</label>
+              <input type="number" class="stat-total" data-stat="dexterite"
+                value="{{system.derived.effective.principales.dexterite}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            </div>
+
+            <div class="stat">
+              <label>Acuité</label>
+              <input type="number" class="stat-total" data-stat="acuite"
+                value="{{system.derived.effective.principales.acuite}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            </div>
+
+            <div class="stat">
+              <label>Endurance</label>
+              <input type="number" class="stat-total" data-stat="endurance"
+                value="{{system.derived.effective.principales.endurance}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            </div>
+          </div>
+        </section>
+
+
+        <section class="card">
+          <h2>Défenses</h2>
+
+          <label>Armure fixe (physique)</label>
+          <input type="number" class="def-total" data-def="armureFixe"
+            value="{{system.derived.effective.defenses.armureFixe}}" {{#unless flags.isGM}}disabled{{/unless}} />
+
+          <label>Résistance fixe (magique)</label>
+          <input type="number" class="def-total" data-def="resistanceFixe"
+            value="{{system.derived.effective.defenses.resistanceFixe}}" {{#unless flags.isGM}}disabled{{/unless}} />
+
+          <label>Score Armure (physique)</label>
+          <input type="number" class="def-total" data-def="scoreArmure"
+            value="{{system.derived.effective.defenses.scoreArmure}}" {{#unless flags.isGM}}disabled{{/unless}} />
+
+          <label>Réduction physique (%)</label>
+          <input type="text" class="def-total" data-def="physiquePct" value="{{system.derived.reductions.physiquePct}}%"
+            {{#unless flags.isGM}}disabled{{/unless}} />
+
+          <label>Score Résistance (magique)</label>
+          <input type="number" class="def-total" data-def="scoreResistance"
+            value="{{system.derived.effective.defenses.scoreResistance}}" {{#unless flags.isGM}}disabled{{/unless}} />
+
+          <label>Réduction magique (%)</label>
+          <input type="text" class="def-total" data-def="magiquePct" value="{{system.derived.reductions.magiquePct}}%"
+            {{#unless flags.isGM}}disabled{{/unless}} />
+        </section>
+
+
+        <section class="panel-states" style="grid-column: 1 / -1;">
+          <header class="panel-title">
+            <h2>États</h2>
+
+            {{#if flags.isGM}}
+            <button type="button" data-action="stateAdd">+ Ajouter</button>
+            {{/if}}
+          </header>
+
+          <ul class="state-list">
+            {{#each system.etatsActifs as |e|}}
+            <li class="state-row" data-state-id="{{e.id}}">
+              <div class="state-main">
+                <b>{{e.label}}</b>
+
+                {{#if e.isAura}}
+                <span class="muted" style="margin-left:6px;">[AURA]</span>
+                {{/if}}
+
+                {{#if e.isBeneficial}}
+                <span class="muted" style="margin-left:6px;">[BUFF]</span>
+                {{/if}}
+
+                {{#if e.isHarmful}}
+                <span class="muted" style="margin-left:6px;">[AFFLICTION]</span>
+                {{/if}}
+
+                <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+
+                {{#if e.cleanseDC}}
+                <span class="muted">Retrait: {{e.cleanseDC}}+</span>
+                {{/if}}
+
+                {{#if e.summary}}
+                <div class="muted" style="margin-top:4px;">
+                  {{e.summary}}
+                </div>
+                {{/if}}
+              </div>
+
+              <div class="state-actions">
+                {{#if ../flags.isGM}}
+                <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
+                <button type="button" data-action="stateDelete" data-id="{{e.id}}">🗑</button>
+                {{/if}}
+                <button type="button" data-action="stateShow" data-id="{{e.id}}">?</button>
+              </div>
+            </li>
+            {{/each}}
+          </ul>
+
+        </section>
+
+
+
+      </div>
+    </div>
+
+    {{!-- =========================
+    Les onglets suivants : uniquement si pas limitedView
+    ========================== --}}
+    {{#unless flags.limitedView}}
+
+    {{!-- TAB: INVENTORY --}}
+    <div class="tab" data-group="primary" data-tab="inventory">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Inventaire</h2>
+
+          {{!-- Création : MJ uniquement --}}
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="loot">+ Objet</button>
+          </div>
+          {{/if}}
+        </div>
+
+        <ol class="items-list">
+          <li class="items-header">
+            <span>Nom</span>
+            <span>Qté</span>
+            <span>Poids</span>
+            <span>Total</span>
+            <span></span>
+          </li>
+
+          {{#each items.inventaire as |it|}}
+          <li class="item" data-item-id="{{it._id}}">
+            <span class="name">
+              <img src="{{it.img}}" alt="" />
+              <a class="item-edit">{{it.name}}</a>
+            </span>
+
+            {{#if ../flags.isGM}}
+            <span><input type="number" value="{{it.system.qte}}" min="0" data-field="system.qte" /></span>
+            <span><input type="number" value="{{it.system.poids}}" min="0" step="0.1"
+                data-field="system.poids" /></span>
+            {{else}}
+            <span>{{it.system.qte}}</span>
+            <span>{{it.system.poids}}</span>
+            {{/if}}
+
+            <span class="total">{{it._derived.poidsTotal}}</span>
+
+            <span class="actions">
+              {{#if ../flags.isGM}}
+              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+              {{/if}}
+            </span>
+          </li>
+          {{/each}}
+        </ol>
+      </section>
+    </div>
+
+    {{!-- TAB: EQUIPMENT --}}
+    <div class="tab" data-group="primary" data-tab="equipment">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Équipement</h2>
+
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="weapon">+ Arme</button>
+            <button type="button" class="btn" data-action="createItem" data-type="armor">+ Armure</button>
+          </div>
+          {{/if}}
+        </div>
+
+        <p class="hint">
+          Slots : tête • torse • taille • bras • mains • jambes • pieds • main gauche • main droite • artefact
+          <br />Arme 2 mains : occupe main droite + main gauche.
+        </p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          {{!-- COL 1: SLOTS --}}
+          <div>
+            <h3>Slots</h3>
+
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              {{#each equipSlots as |s|}}
+              <div data-slot="{{s.key}}"
+                style="border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                  <b>{{s.label}}</b>
+                  {{#if s.locked}}<small style="opacity:0.8;">(lié)</small>{{/if}}
+                </div>
+
+                <div style="margin-top:8px; display:flex; gap:10px; align-items:center;">
+                  <select style="flex:1;" data-action="equipSlotSelect" data-slot="{{s.key}}" {{#if
+                    s.locked}}disabled{{/if}}>
+                    <option value="">Aucun</option>
+                    {{#each s.options as |opt|}}
+                    <option value="{{opt._id}}" {{#if opt.selected}}selected{{/if}}>
+                      {{opt.name}}{{#if opt.system.twoHands}} (2 mains){{/if}}
+                    </option>
+                    {{/each}}
+                  </select>
+
+                  {{#if s.item}}
+                  <img src="{{s.item.img}}" alt=""
+                    style="width:32px; height:32px; border-radius:6px; object-fit:cover;" />
+                  {{/if}}
+                </div>
+
+                {{#if s.item}}
+                <div class="item" data-item-id="{{s.item._id}}"
+                  style="margin-top:8px; display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                  <div style="flex:1;">
+                    <a class="item-edit"><b>{{s.item.name}}</b></a>
+                    <div style="opacity:0.8; font-size:12px;">
+                      Slot: {{s.item.system.emplacement}}
+                      {{#if s.item.system.twoHands}} — 2 mains{{/if}}
+                      {{#if s.item.system.degats}} — Dégâts: {{s.item.system.degats}}{{/if}}
+                    </div>
+
+                    <div style="opacity:0.8; font-size:12px; margin-top:4px;">
+                      Qté: {{s.item.system.qte}} • Poids: {{s.item.system.poids}} • Total:
+                      {{s.item._derived.poidsTotal}}
+                    </div>
+                  </div>
+
+                  {{#if ../flags.isGM}}
+                  <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+                  {{/if}}
+                </div>
+                {{else}}
+                <div style="margin-top:8px; opacity:0.8;">Vide</div>
+                {{/if}}
+              </div>
+              {{/each}}
+            </div>
+          </div>
+
+          {{!-- COL 2: LISTE RAPIDE --}}
+          <div>
+            <h3>Équipements possédés</h3>
+            <p class="hint" style="margin-bottom:8px;">
+              Modifie poids/quantité dans l’onglet Inventaire si besoin.
+            </p>
+
+            <ol class="items-list simple">
+              {{#each items.equipe as |it|}}
+              <li class="item" data-item-id="{{it._id}}" style="display:flex; align-items:center; gap:10px;">
+                <img src="{{it.img}}" alt="" style="width:28px; height:28px; border-radius:6px; object-fit:cover;" />
+                <div style="flex:1;">
+                  <a class="item-edit"><b>{{it.name}}</b></a>
+                  <div style="opacity:0.8; font-size:12px;">Équipé sur: {{it.system.emplacement}}</div>
+                </div>
+              </li>
+              {{/each}}
+
+              {{#each items.nonEquipe as |it|}}
+              <li class="item" data-item-id="{{it._id}}" style="display:flex; align-items:center; gap:10px;">
+                <img src="{{it.img}}" alt="" style="width:28px; height:28px; border-radius:6px; object-fit:cover;" />
+                <div style="flex:1;">
+                  <a class="item-edit"><b>{{it.name}}</b></a>
+                  <div style="opacity:0.8; font-size:12px;">Slot: {{it.system.emplacement}}</div>
+                </div>
+                {{#if ../flags.isGM}}
+                <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+                {{/if}}
+              </li>
+              {{/each}}
+            </ol>
+          </div>
+        </div>
+      </section>
+    </div>
+
+
+
+    {{!-- TAB: CONSUMABLES --}}
+    <div class="tab" data-group="primary" data-tab="consumables">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Consommables</h2>
+
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="consumable">+ Consommable</button>
+          </div>
+          {{/if}}
+        </div>
+
+        <ol class="items-list simple">
+          {{#each items.consommables as |it|}}
+          <li class="item" data-item-id="{{it._id}}">
+            <span class="name">
+              <img src="{{it.img}}" alt="" />
+              <a class="item-edit">{{it.name}}</a>
+              <small>Utilisations: {{it.system.utilisations}}</small>
+            </span>
+
+            <span class="actions">
+              {{#if ../flags.isGM}}
+              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+              {{/if}}
+            </span>
+          </li>
+          {{/each}}
+        </ol>
+      </section>
+    </div>
+
+    {{!-- TAB: SPELLS --}}
+    <div class="tab" data-group="primary" data-tab="spells">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Sorts</h2>
+
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="spell">+ Sort</button>
+          </div>
+          {{/if}}
+        </div>
+
+        <ol class="items-list simple">
+          {{#each items.sorts as |it|}}
+          <li class="item" data-item-id="{{it._id}}">
+            <span class="name">
+              <img src="{{it.img}}" alt="" />
+              <a class="item-edit">{{it.name}}</a>
+              <small>Coût: {{it.system.coutMana}} — Recharge:
+                {{it.system.recharge.restant}}/{{it.system.recharge.max}}</small>
+              {{#if ../flags.isOwner}}
+              <button type="button" class="btn small" data-action="useItem" data-item-id="{{it._id}}">
+                Utiliser
+              </button>
+              {{/if}}
+              <small>
+                Coût: {{it.system.coutMana}}
+                — Portée: {{it.system.portee}}
+                — Diff: +{{it.system.difficulte}}
+                — Recharge: {{it.system.recharge.restant}}/{{it.system.recharge.max}}
+                - Durée : {{it.system.duree.restant}}/{{it.system.duree.max}}
+                - Mode : {{it.system.mode}}
+              </small>
+            </span>
+
+            <span class="actions">
+              {{#if ../flags.isOwner}}
+              {{#if (eq it.system.mode "attaque")}}
+              <button type="button" class="btn small" data-action="castSpell">Lancer</button>
+              {{else}}
+              {{#if it.system.actif}}
+              <button type="button" class="btn small" data-action="toggleSpell" data-next="off">Désactiver</button>
+              {{else}}
+              <button type="button" class="btn small" data-action="toggleSpell" data-next="on">Activer</button>
+              {{/if}}
+              {{/if}}
+              {{/if}}
+
+              {{#if ../flags.isGM}}
+              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+              {{/if}}
+            </span>
+          </li>
+          {{/each}}
+        </ol>
+      </section>
+    </div>
+
+    {{!-- TAB: SKILLS --}}
+    <div class="tab" data-group="primary" data-tab="skills">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Compétences</h2>
+
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="skill">+ Compétence</button>
+          </div>
+          {{/if}}
+        </div>
+
+        <ol class="items-list simple">
+          {{#each items.competences as |it|}}
+          <li class="item" data-item-id="{{it._id}}">
+            <span class="name">
+              <img src="{{it.img}}" alt="" />
+              <a class="item-edit">{{it.name}}</a>
+              <small>Rang: {{it.system.rang}}</small>
+            </span>
+
+            <span class="actions">
+              {{#if ../flags.isGM}}
+              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+              {{/if}}
+            </span>
+          </li>
+          {{/each}}
+        </ol>
+      </section>
+    </div>
+
+    {{/unless}}
+
+  </section>
+</form>
