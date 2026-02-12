@@ -62,6 +62,38 @@ function sumBonuses(actor) {
   return totals;
 }
 
+function sumSkillBonuses(actor) {
+  const skills = actor.system?.skills ?? {};
+  const totals = {
+    principales: { force: 0, intelligence: 0, dexterite: 0, acuite: 0, endurance: 0 },
+    defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
+    ressources: { pvMax: 0, manaMax: 0 },
+    regen: { pvPct: 0, manaPct: 0 },
+    move: { vitesse: 0 }
+  };
+
+  for (const s of Object.values(skills)) {
+    const lvl = Number(s?.level) || 0;
+    const grants = s?.grants ?? {}; // ex { dexterite:1 } par level
+
+    // On applique grants * level
+    if (grants.force) totals.principales.force += lvl * Number(grants.force);
+    if (grants.intelligence) totals.principales.intelligence += lvl * Number(grants.intelligence);
+    if (grants.dexterite) totals.principales.dexterite += lvl * Number(grants.dexterite);
+    if (grants.acuite) totals.principales.acuite += lvl * Number(grants.acuite);
+    if (grants.endurance) totals.principales.endurance += lvl * Number(grants.endurance);
+
+    // Optionnel si tu veux aussi booster d’autres champs :
+    if (grants.vitesse) totals.move.vitesse += lvl * Number(grants.vitesse);
+    if (grants.pvMax) totals.ressources.pvMax += lvl * Number(grants.pvMax);
+    if (grants.manaMax) totals.ressources.manaMax += lvl * Number(grants.manaMax);
+    if (grants.scoreArmure) totals.defenses.scoreArmure += lvl * Number(grants.scoreArmure);
+    if (grants.scoreResistance) totals.defenses.scoreResistance += lvl * Number(grants.scoreResistance);
+  }
+
+  return totals;
+}
+
 export class RPGActor extends Actor {
   getRollData() {
     const data = super.getRollData();
@@ -91,8 +123,33 @@ export class RPGActor extends Actor {
     const baseCharge = sys.charge ?? {};
 
     // BONUS items / sorts passifs
-    const bonus = sumBonuses(this);
+    const bonusItems = sumBonuses(this);
+    const bonusSkills = sumSkillBonuses(this);
+
+    // fusion simple
+    const bonus = foundry.utils.deepClone(bonusItems);
+    bonus.principales.force += bonusSkills.principales.force;
+    bonus.principales.intelligence += bonusSkills.principales.intelligence;
+    bonus.principales.dexterite += bonusSkills.principales.dexterite;
+    bonus.principales.acuite += bonusSkills.principales.acuite;
+    bonus.principales.endurance += bonusSkills.principales.endurance;
+
+    bonus.defenses.armureFixe += bonusSkills.defenses.armureFixe;
+    bonus.defenses.resistanceFixe += bonusSkills.defenses.resistanceFixe;
+    bonus.defenses.scoreArmure += bonusSkills.defenses.scoreArmure;
+    bonus.defenses.scoreResistance += bonusSkills.defenses.scoreResistance;
+
+    bonus.ressources.pvMax += bonusSkills.ressources.pvMax;
+    bonus.ressources.manaMax += bonusSkills.ressources.manaMax;
+
+    bonus.regen.pvPct += bonusSkills.regen.pvPct;
+    bonus.regen.manaPct += bonusSkills.regen.manaPct;
+
+    bonus.move.vitesse += bonusSkills.move.vitesse;
+
     sys.derived.bonus = bonus;
+    sys.derived.bonusSkills = bonusSkills; // utile si tu veux afficher le détail
+
 
     // Etats (mods)
     const modsAE = (typeof sumActiveEffectMods === "function") ? sumActiveEffectMods(this) : null;
@@ -193,14 +250,14 @@ export class RPGActor extends Actor {
     const regenPvBase = isMonster ? 0 : (baseRegenPv + Math.floor(Math.max(0, effP.dexterite) / REGEN_STEP));
     const regenManaBase = isMonster ? 0 : (baseRegenMana + Math.floor(Math.max(0, effP.acuite) / REGEN_STEP));
 
-    let regenPv   = Math.floor(regenPvBase * (1 + (Number(bonus.regen.pvPct ?? 0) || 0) / 100));
+    let regenPv = Math.floor(regenPvBase * (1 + (Number(bonus.regen.pvPct ?? 0) || 0) / 100));
     let regenMana = Math.floor(regenManaBase * (1 + (Number(bonus.regen.manaPct ?? 0) || 0) / 100));
-    
+
     // états -> regen (flat puis %)
     regenPv += Number(flat?.regen?.pv ?? 0) || 0;
     regenPv = applyPct(regenPv, pct?.regen?.pv);
     regenPv = Math.max(0, Math.floor(regenPv));
-    
+
     regenMana += Number(flat?.regen?.mana ?? 0) || 0;
     regenMana = applyPct(regenMana, pct?.regen?.mana);
     regenMana = Math.max(0, Math.floor(regenMana));
@@ -241,7 +298,7 @@ export class RPGActor extends Actor {
     // -----------------------
     sys.derived.initiativeMod = Math.floor(((Number(effP.dexterite) || 0) + (Number(effP.acuite) || 0)) / 2);
     sys.derived.initiativeMod += Number(flat?.initiative?.mod ?? 0) || 0;
-sys.derived.initiativeMod = applyPct(sys.derived.initiativeMod, pct?.initiative?.mod);
-sys.derived.initiativeMod = Math.floor(sys.derived.initiativeMod);
+    sys.derived.initiativeMod = applyPct(sys.derived.initiativeMod, pct?.initiative?.mod);
+    sys.derived.initiativeMod = Math.floor(sys.derived.initiativeMod);
   }
 }

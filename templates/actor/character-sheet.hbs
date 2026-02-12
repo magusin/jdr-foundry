@@ -105,33 +105,43 @@
       </div>
 
       <div class="resource">
-        <div class="resource-label">
-          <span>Mana</span>
-          <span class="resource-value">{{system.ressources.mana.valeur}} / {{system.ressources.mana.max}}</span>
-        </div>
-        <div class="resource-grid">
-          <input type="number" name="system.ressources.mana.valeur" value="{{system.ressources.mana.valeur}}" min="0"
-            {{#if flags.readOnly}}disabled{{/if}} />
-          <span>/</span>
-          <input type="number" name="system.ressources.mana.max" value="{{system.ressources.mana.max}}" min="0" {{#if
-            flags.readOnly}}disabled{{/if}} />
-          {{#if flags.isGM}}
-          <div style="display:flex; gap:6px; margin-top:6px;">
-            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-5">-5</button>
-            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-1">-1</button>
-            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="1">+1</button>
-            <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="5">+5</button>
-          </div>
-          {{/if}}
+  <div class="resource-label">
+    <span>Mana</span>
+    <span class="resource-value">{{system.ressources.mana.valeur}} / {{system.ressources.mana.max}}</span>
+  </div>
 
-        </div>
+  <div class="resource-grid">
+    <input type="number"
+      name="system.ressources.mana.valeur"
+      value="{{system.ressources.mana.valeur}}"
+      min="0"
+      {{#if flags.readOnly}}disabled{{/if}} />
 
-        <div class="resource-sub">
-          <label>Régén Mana</label>
-          <input type="number" name="system.regeneration.mana" value="{{system.regeneration.mana}}" {{#if
-            flags.readOnly}}disabled{{/if}} />
-        </div>
-      </div>
+    <span class="sep">/</span>
+
+    <input type="number"
+      name="system.ressources.mana.max"
+      value="{{system.ressources.mana.max}}"
+      min="0"
+      {{#if flags.readOnly}}disabled{{/if}} />
+  </div>
+
+  {{#if flags.isGM}}
+  <div style="display:flex; gap:6px; margin-top:6px;">
+    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-5">-5</button>
+    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-1">-1</button>
+    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="1">+1</button>
+    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="5">+5</button>
+  </div>
+  {{/if}}
+
+  <div class="resource-sub">
+    <label>Régén Mana</label>
+    <input type="number" name="system.regeneration.mana" value="{{system.regeneration.mana}}"
+      {{#if flags.readOnly}}disabled{{/if}} />
+  </div>
+</div>
+
 
       {{!-- Classe --}}
       <div class="resource" style="grid-column: 1 / -1;">
@@ -583,38 +593,51 @@
       </section>
     </div>
 
-    {{!-- TAB: SKILLS --}}
-    <div class="tab" data-group="primary" data-tab="skills">
-      <section class="card">
-        <div class="toolbar">
-          <h2>Compétences</h2>
+    {{!-- TAB: SKILLS (system.skills) --}}
+<div class="tab" data-group="primary" data-tab="skills">
+  <section class="card">
+    <div class="toolbar">
+      <h2>Compétences</h2>
 
-          {{#if flags.isGM}}
-          <div class="tool-actions">
-            <button type="button" class="btn" data-action="createItem" data-type="skill">+ Compétence</button>
-          </div>
-          {{/if}}
-        </div>
-
-        <ol class="items-list simple">
-          {{#each items.competences as |it|}}
-          <li class="item" data-item-id="{{it._id}}">
-            <span class="name">
-              <img src="{{it.img}}" alt="" />
-              <a class="item-edit">{{it.name}}</a>
-              <small>Rang: {{it.system.rang}}</small>
-            </span>
-
-            <span class="actions">
-              {{#if ../flags.isGM}}
-              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
-              {{/if}}
-            </span>
-          </li>
-          {{/each}}
-        </ol>
-      </section>
+      <div class="hint" style="margin-left:auto;">
+        Total: <b>{{calc.skillsTotal}}</b> / <b>{{calc.skillsCap}}</b> niveaux
+      </div>
     </div>
+
+    <ol class="items-list simple">
+      {{#each skills as |s|}}
+      <li class="item" data-skill="{{s.key}}">
+        <span class="name" style="display:flex; flex-direction:column; gap:4px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <b>{{s.label}}</b>
+            <small style="opacity:.85;">Niv: {{s.level}}</small>
+            <small style="opacity:.85;">XP: {{s.xp}} / {{s.next}} ({{s.pct}}%)</small>
+          </div>
+
+          {{#if s.grants}}
+            <small style="opacity:.8;">
+              Bonus par niveau :
+              {{#each s.grants}}
+                <b>{{@key}}</b> +{{this}}
+              {{/each}}
+            </small>
+          {{/if}}
+        </span>
+
+        <span class="actions" style="display:flex; gap:8px; align-items:center;">
+          {{#if ../flags.isGM}}
+            <input class="skill-xp-add" type="number" value="0" style="width:90px;" />
+            <button type="button" class="btn small" data-action="skillAddXp">+ XP</button>
+            <button type="button" class="btn small" data-action="skillRemoveXp">- XP</button>
+          {{/if}}
+        </span>
+      </li>
+      {{/each}}
+    </ol>
+
+  </section>
+</div>
+
 
     {{/unless}}
 

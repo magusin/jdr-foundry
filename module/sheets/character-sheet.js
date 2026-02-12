@@ -10,12 +10,91 @@ async function setEquipped(actor, itemId, equipped) {
   await item.update({ "system.equipe": !!equipped });
 }
 
-async function onSlotChange(actor, slot, newItemId, previousItemId) {
-  // déséquipe l'ancien
-  if (previousItemId) await setEquipped(actor, previousItemId, false);
+function skillXpToNext(currentLevel) {
+  // L0->1:100, L1->2:150, L2->3:200...
+  return 100 + 50 * Math.max(0, Number(currentLevel) || 0);
+}
 
-  // équipe le nouveau
-  if (newItemId) await setEquipped(actor, newItemId, true);
+function skillsTotalLevels(skills) {
+  if (!skills) return 0;
+  return Object.values(skills).reduce((a, s) => a + (Number(s?.level) || 0), 0);
+}
+
+function skillsLevelCap(actor) {
+  const lvl = Number(actor.system?.niveau || 1);
+  return 10 + 2 * lvl;
+}
+
+async function addXpToSkill(actor, skillKey, amount) {
+  const skills = foundry.utils.deepClone(actor.system?.skills ?? {});
+  const s = skills[skillKey];
+  if (!s) return ui.notifications.warn("Compétence introuvable.");
+
+  const add = Number(amount) || 0;
+  if (!add) return;
+
+  s.xp = Math.max(0, (Number(s.xp) || 0) + add);
+
+  // cap global
+  const cap = skillsLevelCap(actor);
+
+  while (true) {
+    const total = skillsTotalLevels(skills);
+    if (total >= cap) break;
+
+    const lvl = Number(s.level) || 0;
+    const need = skillXpToNext(lvl);
+    if (s.xp < need) break;
+
+    s.xp -= need;
+    s.level = lvl + 1;
+  }
+
+  skills[skillKey] = s;
+
+  await actor.update({ "system.skills": skills });
+
+  // force recalcul
+  if (actor.sheet) actor.sheet.render(false);
+}
+
+async function removeXpFromSkill(actor, skillKey, amount) {
+  const skills = foundry.utils.deepClone(actor.system?.skills ?? {});
+  const s = skills[skillKey];
+  if (!s) return ui.notifications.warn("Compétence introuvable.");
+
+  let sub = Math.abs(Number(amount) || 0);
+  if (!sub) return;
+
+  // on retire l'xp du niveau actuel, si ça passe sous 0 on "délevel"
+  while (sub > 0) {
+    const curXp = Number(s.xp) || 0;
+
+    if (curXp >= sub) {
+      s.xp = curXp - sub;
+      sub = 0;
+      break;
+    }
+
+    // il faut emprunter sur un niveau précédent
+    sub -= curXp;
+    s.xp = 0;
+
+    const lvl = Number(s.level) || 0;
+    if (lvl <= 0) {
+      // déjà au niveau 0, on ne peut pas aller plus bas
+      sub = 0;
+      break;
+    }
+
+    // redescend d'un niveau et remet l'xp "full" du palier précédent
+    s.level = lvl - 1;
+    s.xp = skillXpToNext(s.level) - 1; // ex: 149/150
+  }
+
+  skills[skillKey] = s;
+  await actor.update({ "system.skills": skills });
+  if (actor.sheet) actor.sheet.render(false);
 }
 
 
@@ -67,6 +146,30 @@ export class RPGCharacterSheet extends ActorSheet {
     data.system = data.actor.system;
     data.system.etatsInit = Array.isArray(data.system.etatsInit) ? data.system.etatsInit : [];
     data.system.etatsActifs = Array.isArray(data.system.etatsActifs) ? data.system.etatsActifs : [];
+    data.system.skills = data.system.skills ?? {};
+
+    // transforme l'objet skills en tableau pratique pour Handlebars
+    data.skills = Object.entries(data.system.skills).map(([key, s]) => {
+      const level = Number(s?.level ?? 0) || 0;
+      const xp = Number(s?.xp ?? 0) || 0;
+      const next = skillXpToNext(level);
+      const pct = next > 0 ? Math.min(100, Math.round((xp / next) * 100)) : 0;
+
+      return {
+        key,
+        label: s?.label ?? key,
+        level,
+        xp,
+        next,
+        pct,
+        grants: s?.grants ?? {}
+      };
+    });
+
+    // cap affichage
+    data.calc = data.calc ?? {};
+    data.calc.skillsTotal = skillsTotalLevels(data.system.skills);
+    data.calc.skillsCap = skillsLevelCap(this.actor);
 
     const labelMap = {
       force: "Force",
@@ -74,12 +177,12 @@ export class RPGCharacterSheet extends ActorSheet {
       intelligence: "Intelligence",
       acuite: "Acuité",
       endurance: "Endurance",
-    
+
       scoreArmure: "Score Armure",
       scoreResistance: "Score Résistance",
       armureFixe: "Armure fixe",
       resistanceFixe: "Résistance fixe",
-    
+
       vieMax: "Vie max",
       manaMax: "Mana max",
       regenPv: "Régén PV",
@@ -90,41 +193,41 @@ export class RPGCharacterSheet extends ActorSheet {
       resistance: "Résistance",
       savoir: "Savoir"
     };
-    
+
     const states = Array.isArray(data.system?.etatsActifs) ? foundry.utils.deepClone(data.system.etatsActifs) : [];
-    
+
     for (const e of states) {
       const parts = [];
-    
+
       // DOT
       const dot = e?.dot?.perTick ?? 0;
       if (Number(dot) > 0) parts.push(`DOT ${dot}`);
-    
+
       // Mods
       const mods = e?.mods ?? {};
       for (const [k, v] of Object.entries(mods)) {
         const flat = Number(v?.flat ?? 0) || 0;
-        const pct  = Number(v?.pct ?? 0) || 0;
-    
+        const pct = Number(v?.pct ?? 0) || 0;
+
         if (flat) parts.push(`${labelMap[k] ?? k} ${flat > 0 ? "+" : ""}${flat}`);
-        if (pct)  parts.push(`${labelMap[k] ?? k} ${pct > 0 ? "+" : ""}${pct}%`);
+        if (pct) parts.push(`${labelMap[k] ?? k} ${pct > 0 ? "+" : ""}${pct}%`);
       }
-    
+
       // Petit tag “bénéfique”
       // (on considère bénéfique si au moins un bonus >0 et aucun malus, sinon neutre/malus)
       let hasPlus = false, hasMinus = false;
       for (const v of Object.values(mods)) {
         const flat = Number(v?.flat ?? 0) || 0;
-        const pct  = Number(v?.pct ?? 0) || 0;
+        const pct = Number(v?.pct ?? 0) || 0;
         if (flat > 0 || pct > 0) hasPlus = true;
         if (flat < 0 || pct < 0) hasMinus = true;
       }
       e.isBeneficial = hasPlus && !hasMinus;
-      e.isHarmful    = hasMinus && !hasPlus;
-    
+      e.isHarmful = hasMinus && !hasPlus;
+
       e.summary = parts.join(" • ");
     }
-    
+
     data.system.etatsActifs = states;
 
     return data;
@@ -274,8 +377,6 @@ export class RPGCharacterSheet extends ActorSheet {
       await this.actor.update({ [`system.defenses.${key}`]: newBase });
     });
 
-
-
     html.find("[data-action='equipFromSlot']").on("click", async (ev) => {
       ev.preventDefault();
 
@@ -307,7 +408,6 @@ export class RPGCharacterSheet extends ActorSheet {
 
       this.render(false);
     });
-
 
     // Qty / Poids change -> update item -> pods auto
     html.find("input[data-field]").on("change", async ev => {
@@ -503,7 +603,7 @@ export class RPGCharacterSheet extends ActorSheet {
       await this._stateUpsert(edited);
       this.render(false);
     });
-    
+
     html.find("[data-action='stateEdit']").on("click", async (ev) => {
       ev.preventDefault();
       if (!game.user.isGM) return;
@@ -536,6 +636,26 @@ export class RPGCharacterSheet extends ActorSheet {
 
       await this._postStateInfoToChat(st);
     });
+
+    html.find("[data-action='skillAddXp']").on("click", async (ev) => {
+      ev.preventDefault();
+      const li = ev.currentTarget.closest("[data-skill]");
+      const key = li?.dataset?.skill;
+      if (!key) return;
+
+      const amt = Number(li.querySelector(".skill-xp-add")?.value || 0);
+      await addXpToSkill(this.actor, key, amt);
+    });
+
+    html.find("[data-action='skillRemoveXp']").on("click", async (ev) => {
+      ev.preventDefault();
+      const li = ev.currentTarget.closest("[data-skill]");
+      const key = li?.dataset?.skill;
+      if (!key) return;
+    
+      const amt = Number(li.querySelector(".skill-xp-add")?.value || 0);
+      await removeXpFromSkill(this.actor, key, amt);
+    });    
 
   }
 
@@ -958,7 +1078,7 @@ export class RPGCharacterSheet extends ActorSheet {
     const row = (k, label) => {
       const cur = st.mods?.[k] ?? {};
       const flat = Number(cur.flat ?? 0) || 0;
-      const pct  = Number(cur.pct ?? 0) || 0;
+      const pct = Number(cur.pct ?? 0) || 0;
 
       return `
       <div class="form-group" style="display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;">
@@ -988,9 +1108,9 @@ export class RPGCharacterSheet extends ActorSheet {
       <div class="form-group">
         <label>Type</label>
         <select name="type">
-          ${["poison","burn","buff","debuff","aura","custom"].map(t =>
-            `<option value="${t}" ${st.type===t?"selected":""}>${t}</option>`
-          ).join("")}
+          ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
+      `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`
+    ).join("")}
         </select>
       </div>
 
@@ -1049,8 +1169,8 @@ export class RPGCharacterSheet extends ActorSheet {
               const form = dlgHtml[0].querySelector("form");
               const fd = new FormData(form);
 
-              const getStr = (k, d="") => String(fd.get(k) ?? d).trim();
-              const getNum = (k, d=0) => Number(fd.get(k) ?? d) || 0;
+              const getStr = (k, d = "") => String(fd.get(k) ?? d).trim();
+              const getNum = (k, d = 0) => Number(fd.get(k) ?? d) || 0;
               const getChk = (k) => !!fd.get(k);
 
               const out = this._normalizeState(st);
@@ -1070,7 +1190,7 @@ export class RPGCharacterSheet extends ActorSheet {
               out.mods = out.mods ?? {};
               for (const k of keys) {
                 const flat = getNum(`mods.${k}.flat`, 0);
-                const pct  = getNum(`mods.${k}.pct`, 0);
+                const pct = getNum(`mods.${k}.pct`, 0);
                 // n’enregistre pas des lignes vides
                 if (flat !== 0 || pct !== 0) out.mods[k] = { flat, pct };
                 else delete out.mods[k];
@@ -1092,7 +1212,7 @@ export class RPGCharacterSheet extends ActorSheet {
 
     const mods = st.mods ?? {};
     const modsTxt = Object.entries(mods)
-      .map(([k,v]) => `${k}: ${v.flat ? (v.flat>0?"+":"") + v.flat : ""}${v.pct ? ` ${v.pct>0?"+":""}${v.pct}%` : ""}`.trim())
+      .map(([k, v]) => `${k}: ${v.flat ? (v.flat > 0 ? "+" : "") + v.flat : ""}${v.pct ? ` ${v.pct > 0 ? "+" : ""}${v.pct}%` : ""}`.trim())
       .filter(Boolean)
       .join("<br>") || "<i>Aucun modificateur</i>";
 
@@ -1111,7 +1231,7 @@ export class RPGCharacterSheet extends ActorSheet {
       content
     });
   }
-  
+
   // _stateDefaults(list) {
   //   // Un modèle simple, tu peux enrichir plus tard
   //   const base = {
@@ -1119,12 +1239,12 @@ export class RPGCharacterSheet extends ActorSheet {
   //     name: "Poison",
   //     duration: 3,
   //     dc: 0,
-  
+
   //     // DOT : dotFlat + floor(stat/dotDiv)
   //     dotFlat: 0,
   //     dotStat: "intelligence", // ou "" si aucun
   //     dotDiv: 10,
-  
+
   //     // Debuffs (exemples)
   //     debuff: {
   //       forceFlat: 0, forcePct: 0,
@@ -1132,45 +1252,45 @@ export class RPGCharacterSheet extends ActorSheet {
   //       intFlat: 0, intPct: 0,
   //     }
   //   };
-  
+
   //   // États actifs ont un "remaining"
   //   if (list === "etatsActifs") {
   //     return { ...base, remaining: base.duration, dotPerTick: 0 };
   //   }
   //   return base;
   // }
-  
+
   async _stateAdd(list) {
     const path = this._statePath(list);
     const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
     const st = this._stateDefaults(list);
-  
+
     // ouvre directement la modale d’édition pour le nouvel état
     const edited = await this._editStateDialog(st, { isActive: list === "etatsActifs" });
     if (!edited) return;
-  
+
     arr.push(edited);
     await this.actor.update({ [path]: arr });
   }
-  
+
   async _stateEdit(list, idx) {
     const path = this._statePath(list);
     const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
     const st = arr[idx];
     if (!st) return;
-  
+
     const edited = await this._editStateDialog(st, { isActive: list === "etatsActifs" });
     if (!edited) return;
-  
+
     arr[idx] = edited;
     await this.actor.update({ [path]: arr });
   }
-  
+
   async _stateDelete(list, idx) {
     const path = this._statePath(list);
     const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
     if (idx < 0 || idx >= arr.length) return;
-  
+
     arr.splice(idx, 1);
     await this.actor.update({ [path]: arr });
   }

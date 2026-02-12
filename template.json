@@ -48,6 +48,18 @@
         },
         "etats": "",
         "etatsActifs": [],
+        "skills": {
+          "crochetage": { "label": "Crochetage", "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
+          "larcin":     { "label": "Larcin",     "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
+          "forge":      { "label": "Forge",      "level": 0, "xp": 0, "grants": { "force": 1 } },
+          "survie":     { "label": "Volonté",     "level": 0, "xp": 0, "grants": { "endurance": 1 } },
+          "discretion": { "label": "Discrétion", "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
+          "perception": { "label": "Perception", "level": 0, "xp": 0, "grants": { "acuite": 1 } },
+          "detection":  { "label": "Détection",  "level": 0, "xp": 0, "grants": { "acuite": 1 } },
+          "intuition":   { "label": "Intuition", "level": 0, "xp": 0, "grants": { "intelligence": 1 } },
+          "connaissance": { "label": "Connaissance", "level": 0, "xp": 0, "grants": { "intelligence": 1 } },
+          "athletisme": { "label": "Athlétisme", "level": 0, "xp": 0, "grants": { "endurance": 1 } }
+        },
         "butin": {
           "tableUuid": ""
         },

@@ -240,6 +240,31 @@
   {{/if}}
 </section>
 
+  {{!-- ✅ PRIX : MJ ONLY --}}
+  {{#if flags.isGM}}
+  <hr/>
+  <section>
+    <h2>Prix (MJ)</h2>
+    <div class="resource-grid" style="grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+      <div>
+        <label>Cuivre</label>
+        <input type="number" name="system.prix.cuivre" value="{{system.prix.cuivre}}" min="0"/>
+      </div>
+      <div>
+        <label>Argent</label>
+        <input type="number" name="system.prix.argent" value="{{system.prix.argent}}" min="0"/>
+      </div>
+      <div>
+        <label>Or</label>
+        <input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/>
+      </div>
+    </div>
+    <small style="opacity:0.8;">100 cuivre = 1 argent • 100 argent = 1 or</small>
+  </section>
+  {{/if}}
+
+  <hr/>
+
 
     <!-- DESCRIPTION -->
     <section class="card">

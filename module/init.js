@@ -8,7 +8,7 @@ import { RPGActor } from "./documents/actor.js";
 import * as Combat from "./rules/combat.js";
 import { RPGItem } from "./documents/item.js";
 import * as Status from "./rules/status-effects.js";
-
+import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
 // fonction level
 function xpPalierForLevel(level) {
   const n = Math.max(1, Number(level) || 1);
@@ -60,7 +60,6 @@ function buildActiveStateFromInit(initState, actor) {
   };
 }
 
-
 async function applyInitStatesToTokenActor(actor) {
   const init = Array.isArray(actor.system?.etatsInit) ? actor.system.etatsInit : [];
   if (!init.length) return;
@@ -73,7 +72,6 @@ async function applyInitStatesToTokenActor(actor) {
   // Important : on remplace les états actifs au spawn
   await actor.update({ "system.etatsActifs": actives });
 }
-
 
 // gestion des cooldowns et durées au tour
 async function tickActorCooldowns(actor) {
@@ -156,6 +154,17 @@ async function tickActorStates(actor) {
   }
 }
 
+// compétences de base 
+const BASE_SKILLS = {
+  crochetage: { level: 0, xp: 0 },
+  larcin: { level: 0, xp: 0 },
+  forge: { level: 0, xp: 0 },
+  survie: { level: 0, xp: 0 },
+  discretion: { level: 0, xp: 0 },
+  perception: { level: 0, xp: 0 },
+  detection: { level: 0, xp: 0 },
+};
+
 Hooks.once("init", async () => {
   console.log("RPG init chargé");
 
@@ -168,7 +177,7 @@ Hooks.once("init", async () => {
   // Import robuste (évite les erreurs de chemin relatif)
   const Combat = await import(new URL("./rules/combat.js", import.meta.url).href);
   game.rpg.combat = Combat;
-
+  Items.unregisterSheet("core", ItemSheet);
   console.log("[RPG] Combat API OK:", Object.keys(game.rpg.combat));
 
   game.rpg.status = Status;
@@ -179,9 +188,14 @@ Hooks.once("init", async () => {
   Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
   Items.registerSheet("rpg", RPGArmorSheet, { types: ["armor"], makeDefault: true });
   Items.registerSheet("rpg", RPGSpellSheet, { types: ["spell"], makeDefault: true });
+  Items.registerSheet("rpg", RPGGenericItemSheet, {
+    types: ["loot", "consumable"],
+    makeDefault: true
+  });
+
 
   // Defaults à la création (si tu en as besoin)
-  Hooks.on("preCreateActor", (doc, createData) => {
+  Hooks.on("preCreateActor", (doc, createData,  options) => {
     const system = createData.system ?? {};
 
     system.base = system.base ?? {};
@@ -204,6 +218,20 @@ Hooks.once("init", async () => {
     system.xp = system.xp ?? { valeur: 0 };
     system.xp.valeur = Math.max(0, Number(system.xp.valeur) || 0);
     system.xp.palier = xpPalierForLevel(system.niveau);
+
+    // ✅ SKILLS : on merge les bases
+  system.skills = system.skills ?? {};
+  let changed = false;
+
+  for (const [k, v] of Object.entries(BASE_SKILLS)) {
+    if (!system.skills[k]) {
+      system.skills[k] = foundry.utils.deepClone(v);
+      changed = true;
+    }
+  }
+
+  // Si tu veux forcer même si déjà présent, enlève le if(!changed)
+  if (!changed) return;
 
     doc.updateSource({ type, system });
   });
@@ -228,7 +256,7 @@ Hooks.once("init", async () => {
   CONFIG.Combat.initiative = {
     formula: "1d100 + floor((@effP.dexterite + @effP.acuite) / 2)",
     decimals: 0
-  };  
+  };
 
   function getTokenForActorOnScene(actor) {
     return canvas.tokens.placeables.find(t => t.actor?.id === actor.id) ?? null;
@@ -242,61 +270,61 @@ Hooks.once("init", async () => {
   Hooks.on("updateCombat", async (combat, changed) => {
     if (!("turn" in changed) && !("round" in changed)) return;
     if (!canvas?.ready) return;
-  
+
     const combatant = combat.combatant;
     const actor = combatant?.actor;
     if (!actor) return;
-  
+
     // --- TICK (GM only) ---
     if (game.user.isGM) {
       await tickActorCooldowns(actor);
       // await tickActorStates(actor);                 // DOT states system.etatsActifs
       await Status.tickActorEffectsAtTurnStart(actor); // ActiveEffects Foundry (optionnel)
     }
-  
+
     // --- AURAS (regen) ---
     const targetToken = canvas.tokens.placeables.find(t => t.actor?.id === actor.id) ?? null;
     if (!targetToken) return;
-  
+
     const distanceBetweenTokens = (t1, t2) => canvas.grid.measureDistance(t1.center, t2.center);
-  
+
     let totalPv = 0;
     let totalMana = 0;
-  
+
     for (const t of canvas.tokens.placeables) {
       const a = t.actor;
       if (!a) continue;
-  
+
       const activeAuras = a.items
         .filter(i => i.type === "spell")
         .filter(i => i.system?.mode === "aura" && i.system?.aura?.active === true);
-  
+
       if (!activeAuras.length) continue;
-  
+
       const dist = distanceBetweenTokens(t, targetToken);
-  
+
       for (const s of activeAuras) {
         const rayon = Number(s.system?.aura?.rayon ?? 0) || 0;
         if (rayon <= 0) continue;
         if (dist > rayon) continue;
-  
+
         totalPv += Number(s.system?.aura?.regenPv ?? 0) || 0;
         totalMana += Number(s.system?.aura?.regenMana ?? 0) || 0;
       }
     }
-  
+
     if (totalPv === 0 && totalMana === 0) return;
-  
+
     const pv = Number(actor.system?.ressources?.pv?.valeur ?? 0) || 0;
     const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0) || 0;
     const mana = Number(actor.system?.ressources?.mana?.valeur ?? 0) || 0;
     const manaMax = Number(actor.system?.ressources?.mana?.max ?? 0) || 0;
-  
+
     await actor.update({
       "system.ressources.pv.valeur": Math.min(pvMax, pv + totalPv),
       "system.ressources.mana.valeur": Math.min(manaMax, mana + totalMana)
     });
-  
+
     ChatMessage.create({
       content: `<b>Effets d'aura</b> → +${totalPv} PV, +${totalMana} Mana (cumul)`,
       speaker: ChatMessage.getSpeaker({ actor })
@@ -351,7 +379,7 @@ Hooks.once("init", async () => {
       await game.rpg.randomizeMonster(actor);
 
       // 2) Appliquer les états initiaux (depuis la fiche monstre copiée dans le token)
-    await applyInitStatesToTokenActor(actor);
+      await applyInitStatesToTokenActor(actor);
     } catch (e) {
       console.error("[RPG] Erreur génération monstre createToken:", e);
     }
@@ -361,13 +389,13 @@ Hooks.once("init", async () => {
     if (!game.user.isGM) return;
     if (!("system" in changed) || !("niveau" in (changed.system ?? {}))) return;
     if (options.rpgXpSync) return;
-  
+
     const lvl = Math.max(1, Number(actor.system?.niveau ?? 1) || 1);
     await actor.update(
       { "system.xp.palier": xpPalierForLevel(lvl) },
       { rpgXpSync: true }
     );
-  });  
+  });
 
   // --- BONUS EQUIP/PASSIF: applique/retire les stats directement dans system ---
 
