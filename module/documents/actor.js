@@ -1,7 +1,10 @@
 // systems/rpg/module/documents/actor.js
 import { sumActiveEffectMods } from "../rules/status-effects.js";
 
-function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function clamp(v, min, max) {
+  v = Number(v) || 0;
+  return Math.max(min, Math.min(max, v));
+}
 
 function scoreToPct(score) {
   const S = Math.max(0, Number(score) || 0);
@@ -29,12 +32,18 @@ function sumBonuses(actor) {
     move: { vitesse: 0 }
   };
 
+  const isMonster = actor.type === "monster";
+
   for (const item of actor.items) {
     const t = item.type;
     const sys = item.system ?? {};
 
-    const isEquip = (t === "weapon" || t === "armor") && !!sys.equipe;
-    const isPassiveSpell = (t === "spell") && (sys.mode !== "attaque") && !!sys.actif;
+    // ✅ Monstres: pas d'équipement weapon/armor (on ignore)
+    const isEquip = !isMonster && (t === "weapon" || t === "armor") && !!sys.equipe;
+
+    // ✅ PJ + Monstres: sorts passifs (buff/aura) actifs => pris en compte
+    const isPassiveSpell = (t === "spell") && !!sys?.aura?.active;
+
     if (!isEquip && !isPassiveSpell) continue;
 
     const b = sys.bonus ?? {};
@@ -74,16 +83,14 @@ function sumSkillBonuses(actor) {
 
   for (const s of Object.values(skills)) {
     const lvl = Number(s?.level) || 0;
-    const grants = s?.grants ?? {}; // ex { dexterite:1 } par level
+    const grants = s?.grants ?? {};
 
-    // On applique grants * level
     if (grants.force) totals.principales.force += lvl * Number(grants.force);
     if (grants.intelligence) totals.principales.intelligence += lvl * Number(grants.intelligence);
     if (grants.dexterite) totals.principales.dexterite += lvl * Number(grants.dexterite);
     if (grants.acuite) totals.principales.acuite += lvl * Number(grants.acuite);
     if (grants.endurance) totals.principales.endurance += lvl * Number(grants.endurance);
 
-    // Optionnel si tu veux aussi booster d’autres champs :
     if (grants.vitesse) totals.move.vitesse += lvl * Number(grants.vitesse);
     if (grants.pvMax) totals.ressources.pvMax += lvl * Number(grants.pvMax);
     if (grants.manaMax) totals.ressources.manaMax += lvl * Number(grants.manaMax);
@@ -110,6 +117,7 @@ export class RPGActor extends Actor {
     sys.derived = sys.derived ?? {};
     sys.derived.effective = sys.derived.effective ?? {};
     sys.derived.reductions = sys.derived.reductions ?? {};
+    sys.derived.damageBonus = sys.derived.damageBonus ?? {};
     sys.base = sys.base ?? {};
 
     const isMonster = this.type === "monster";
@@ -120,13 +128,11 @@ export class RPGActor extends Actor {
     const baseR = sys.ressources ?? {};
     const baseReg = sys.regeneration ?? {};
     const baseMove = sys.deplacement ?? {};
-    const baseCharge = sys.charge ?? {};
 
-    // BONUS items / sorts passifs
+    // BONUS items / sorts passifs + skills
     const bonusItems = sumBonuses(this);
     const bonusSkills = sumSkillBonuses(this);
 
-    // fusion simple
     const bonus = foundry.utils.deepClone(bonusItems);
     bonus.principales.force += bonusSkills.principales.force;
     bonus.principales.intelligence += bonusSkills.principales.intelligence;
@@ -148,8 +154,7 @@ export class RPGActor extends Actor {
     bonus.move.vitesse += bonusSkills.move.vitesse;
 
     sys.derived.bonus = bonus;
-    sys.derived.bonusSkills = bonusSkills; // utile si tu veux afficher le détail
-
+    sys.derived.bonusSkills = bonusSkills;
 
     // Etats (mods)
     const modsAE = (typeof sumActiveEffectMods === "function") ? sumActiveEffectMods(this) : null;
@@ -174,15 +179,16 @@ export class RPGActor extends Actor {
     for (const s of ["force", "intelligence", "dexterite", "acuite", "endurance"]) {
       effP[s] += Number(flat?.principales?.[s] ?? 0) || 0;
       effP[s] = applyPct(effP[s], pct?.principales?.[s]);
+      // ✅ clamp à 0 pour respecter ta règle "pas en dessous de 0"
       effP[s] = Math.max(0, Math.floor(Number(effP[s]) || 0));
     }
 
     // -----------------------
     // 2) DEFENSES (avec endurance finale)
     // -----------------------
-    const SCORE_PER_END_STEP = 3;
+    const SCORE_PER_END_STEP = 3;   // 3 END => +1 score
     const SCORE_PER_END_GAIN = 1;
-    const scoreFromEnd = Math.floor(Math.max(0, effP.endurance) / SCORE_PER_END_STEP) * SCORE_PER_END_GAIN;
+    const scoreFromEnd = Math.floor(effP.endurance / SCORE_PER_END_STEP) * SCORE_PER_END_GAIN;
 
     const effD = {
       armureFixe: (Number(baseD.armureFixe ?? 0) || 0) + bonus.defenses.armureFixe,
@@ -197,88 +203,142 @@ export class RPGActor extends Actor {
       effD[k] = Math.max(0, Math.floor(Number(effD[k]) || 0));
     }
 
-    // write effective
     sys.derived.effective.principales = effP;
     sys.derived.effective.defenses = effD;
 
     // -----------------------
-    // 3) Réductions
+    // 3) Réductions (doivent bouger avec les buffs/debuffs)
     // -----------------------
     sys.derived.reductions.physiquePct = scoreToPct(effD.scoreArmure);
     sys.derived.reductions.magiquePct = scoreToPct(effD.scoreResistance);
 
     // -----------------------
-    // 4) Ressources / regen / pods / move
+    // 3bis) Bonus dégâts depuis stats (FOR/INT)
     // -----------------------
-    const PODS_BASE = isMonster ? (Number(sys.base.podsMax ?? baseCharge.podsMax ?? 0) || 0) : 50;
-    const PODS_PER_FORCE = 0.5;
+    sys.derived.damageBonus.physique = Math.floor(effP.force / 10);
+    sys.derived.damageBonus.magique = Math.floor(effP.intelligence / 10);
 
-    const MANA_PER_INT_STEP = 20;
+    // -----------------------
+    // 4) Ressources / regen / move
+    // -----------------------
     const REGEN_STEP = 20;
-    const PV_PER_END_STEP = 5;
+    const PV_PER_END_STEP = 5; // 5 END => +1 PV
     const PV_PER_END_GAIN = 1;
 
-    const basePvMax = Number(sys.base.pvMax ?? baseR?.pv?.max ?? 30) || 30;
-    const baseManaMax = Number(sys.base.manaMax ?? baseR?.mana?.max ?? (isMonster ? 0 : 5)) || 0;
-
-    const baseRegenPv = Number(sys.base.regenPv ?? baseReg?.pv ?? (isMonster ? 0 : 1)) || 0;
-    const baseRegenMana = Number(sys.base.regenMana ?? baseReg?.mana ?? (isMonster ? 0 : 1)) || 0;
-
-    // pods (PJ)
-    const podsFromForce = isMonster ? 0 : Math.floor(Math.max(0, effP.force) * PODS_PER_FORCE);
-    sys.charge = sys.charge ?? {};
-    sys.charge.podsMax = PODS_BASE + podsFromForce;
-
     // pv max
-    const pvFromEnd = isMonster ? 0 : (Math.floor(Math.max(0, effP.endurance) / PV_PER_END_STEP) * PV_PER_END_GAIN);
+    const basePvMax = Number(sys.base.pvMax ?? baseR?.pv?.max ?? 30) || 30;
+    const pvFromEnd = Math.floor(effP.endurance / PV_PER_END_STEP) * PV_PER_END_GAIN;
+
     let pvMax = Math.max(1, basePvMax + pvFromEnd + (Number(bonus.ressources.pvMax ?? 0) || 0));
 
-    // mana max
-    const manaFromInt = isMonster ? 0 : Math.floor(Math.max(0, effP.intelligence) / MANA_PER_INT_STEP);
-    let manaMax = Math.max(0, baseManaMax + manaFromInt + (Number(bonus.ressources.manaMax ?? 0) || 0));
-
-    // états -> ressources max
+    // états -> ressources max (PV OK pour monstres aussi)
     pvMax += Number(flat?.ressources?.pvMax ?? 0) || 0;
     pvMax = applyPct(pvMax, pct?.ressources?.pvMax);
     pvMax = Math.max(1, Math.floor(pvMax));
 
-    manaMax += Number(flat?.ressources?.manaMax ?? 0) || 0;
-    manaMax = applyPct(manaMax, pct?.ressources?.manaMax);
-    manaMax = Math.max(0, Math.floor(manaMax));
+    // mana : PJ normal, monstre forcé à 0 (même avec états)
+    let manaMax = 0;
 
-    // regen
-    const regenPvBase = isMonster ? 0 : (baseRegenPv + Math.floor(Math.max(0, effP.dexterite) / REGEN_STEP));
-    const regenManaBase = isMonster ? 0 : (baseRegenMana + Math.floor(Math.max(0, effP.acuite) / REGEN_STEP));
+    if (!isMonster) {
+      // Base : supporte sys.base.manaMax, sys.manaMax (template base), ou ressources existantes
+      const baseManaMax = Number(
+        sys.base.manaMax ??
+        sys.manaMax ??
+        baseR?.mana?.max ??
+        5
+      ) || 5;
+
+      // Scaling : Intelligence => mana  
+      const MANA_PER_INT_STEP = 20;      // 20 INT => +1 mana
+      const manaFromInt = Math.floor((Number(effP.intelligence) || 0) / MANA_PER_INT_STEP);
+
+      manaMax = baseManaMax + manaFromInt + (Number(bonus.ressources.manaMax ?? 0) || 0);
+
+      // états -> mana max
+      manaMax += Number(flat?.ressources?.manaMax ?? 0) || 0;
+      manaMax = applyPct(manaMax, pct?.ressources?.manaMax);
+      manaMax = Math.max(0, Math.floor(manaMax));
+    }
+
+    // regen PV : base (tirée en gen / editable) + scaling DEX/20 + bonus % + états
+    const baseRegenPv = Number(
+      sys.base.regenPv ??
+      sys.regenPv ??              // template base
+      baseReg?.pv ??              // system.regeneration.pv
+      1
+    ) || 1;
+    const regenPvBase = baseRegenPv + Math.floor(effP.dexterite / REGEN_STEP);
 
     let regenPv = Math.floor(regenPvBase * (1 + (Number(bonus.regen.pvPct ?? 0) || 0) / 100));
-    let regenMana = Math.floor(regenManaBase * (1 + (Number(bonus.regen.manaPct ?? 0) || 0) / 100));
-
-    // états -> regen (flat puis %)
     regenPv += Number(flat?.regen?.pv ?? 0) || 0;
     regenPv = applyPct(regenPv, pct?.regen?.pv);
     regenPv = Math.max(0, Math.floor(regenPv));
 
-    regenMana += Number(flat?.regen?.mana ?? 0) || 0;
-    regenMana = applyPct(regenMana, pct?.regen?.mana);
-    regenMana = Math.max(0, Math.floor(regenMana));
-
-    sys.ressources = sys.ressources ?? {};
-    sys.ressources.pv = sys.ressources.pv ?? { valeur: pvMax, max: pvMax };
-    sys.ressources.mana = sys.ressources.mana ?? { valeur: manaMax, max: manaMax };
-
-    sys.ressources.pv.max = pvMax;
-    sys.ressources.pv.valeur = Math.min(Number(sys.ressources.pv.valeur ?? 0) || 0, pvMax);
-
+    // regen mana : monstre = 0, PJ = calcul normal (mais ici on garde ta règle monstre=0)
+    let regenMana = 0;
     if (!isMonster) {
-      sys.ressources.mana.max = manaMax;
-      sys.ressources.mana.valeur = Math.min(Number(sys.ressources.mana.valeur ?? 0) || 0, manaMax);
+      const baseRegenMana = Number(
+        sys.base.regenMana ??
+        sys.regenMana ??            // template base
+        baseReg?.mana ??            // system.regeneration.mana
+        1
+      ) || 1;
+      const regenManaBase = baseRegenMana + Math.floor(effP.acuite / REGEN_STEP);
+
+      regenMana = Math.floor(regenManaBase * (1 + (Number(bonus.regen.manaPct ?? 0) || 0) / 100));
+      regenMana += Number(flat?.regen?.mana ?? 0) || 0;
+      regenMana = applyPct(regenMana, pct?.regen?.mana);
+      regenMana = Math.max(0, Math.floor(regenMana));
     }
 
+    // -----------------------
+    // ✅ WRITE REGEN (IMPORTANT)
+    // -----------------------
     sys.regeneration = sys.regeneration ?? {};
+
+    // Valeurs “source of truth” affichées dans la fiche si ton HBS est sur system.regeneration.*
     sys.regeneration.pv = regenPv;
     sys.regeneration.mana = regenMana;
 
-    // move: base + bonus items + effets d'états
+    // ✅ Compat si certaines parties de ton système/HBS utilisent encore les champs “plats”
+    sys.regenPv = regenPv;
+    sys.regenMana = regenMana;
+
+
+    // write ressources
+    sys.ressources = sys.ressources ?? {};
+    sys.ressources.pv = sys.ressources.pv ?? { valeur: pvMax, max: pvMax };
+    sys.ressources.mana = sys.ressources.mana ?? { valeur: null, max: null };
+
+    // PV
+    sys.ressources.pv.max = pvMax;
+    if (sys.ressources.pv.valeur === null || sys.ressources.pv.valeur === undefined) {
+      sys.ressources.pv.valeur = pvMax; // init
+    }
+    sys.ressources.pv.valeur = clamp(Number(sys.ressources.pv.valeur) || 0, 0, pvMax);
+
+    // MANA
+    if (isMonster) {
+      sys.ressources.mana.max = 0;
+      sys.ressources.mana.valeur = 0;
+    } else {
+      sys.ressources.mana.max = manaMax;
+
+      // ✅ init si valeur pas définie (ou si elle était restée à 0/0 d'une ancienne version)
+      const hadNoManaValue =
+        sys.ressources.mana.valeur === null ||
+        sys.ressources.mana.valeur === undefined;
+
+      if (hadNoManaValue) {
+        sys.ressources.mana.valeur = manaMax; // init full
+      }
+
+      // si tu veux autoriser le négatif, mets min=-9999, sinon 0
+      sys.ressources.mana.valeur = clamp(Number(sys.ressources.mana.valeur) || 0, -9999, manaMax);
+    }
+
+
+    // move
     sys.deplacement = sys.deplacement ?? {};
     const baseVit = (Number(baseMove.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
     let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0);
@@ -294,11 +354,39 @@ export class RPGActor extends Actor {
     sys.derived.hp = { pct: pctHp, etat: hpState(pctHp) };
 
     // -----------------------
-    // 6) InitiativeMod (dépend d'effP)
+    // 6) InitiativeMod
     // -----------------------
     sys.derived.initiativeMod = Math.floor(((Number(effP.dexterite) || 0) + (Number(effP.acuite) || 0)) / 2);
     sys.derived.initiativeMod += Number(flat?.initiative?.mod ?? 0) || 0;
     sys.derived.initiativeMod = applyPct(sys.derived.initiativeMod, pct?.initiative?.mod);
     sys.derived.initiativeMod = Math.floor(sys.derived.initiativeMod);
+
+    // -----------------------
+    // 7) Pods (monstre = 0)
+    // -----------------------
+    sys.charge = sys.charge ?? {};
+
+    if (isMonster) {
+      sys.charge.podsMax = 0;
+    } else {
+      const basePodsMax = Number(
+        sys.base.podsMax ??
+        sys.podsMax ??          // ✅ template base podsMax: 50
+        50
+      ) || 50;
+
+      // Scaling : Force => pods
+      const PODS_PER_FOR_STEP = 2;     // 2 FOR => +1 pods
+      const podsFromFor = Math.floor((Number(effP.force) || 0) / PODS_PER_FOR_STEP);
+
+      let podsMax = basePodsMax + podsFromFor;
+
+      // états éventuels si tu veux (optionnel)
+      podsMax += Number(flat?.charge?.podsMax ?? 0) || 0;
+      podsMax = applyPct(podsMax, pct?.charge?.podsMax);
+
+      sys.charge.podsMax = Math.max(0, Math.floor(podsMax));
+    }
+
   }
 }

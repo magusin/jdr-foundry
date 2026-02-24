@@ -307,6 +307,8 @@
   min-width: 980px;
 }
 
+.monster-sheet .regen-input { margin-bottom: 6px; }
+
 .rpg-sheet .grid-2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -541,6 +543,12 @@
   border: 1px solid var(--color-border-light-2);
   flex: 0 0 auto;
 }
+
+.stat-row { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.stat-cols { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.stat-col small { display:block; margin-bottom:4px; opacity:.75; }
+.spell-row.spell-ready { border-left: 4px solid rgba(40,180,120,.9); }
+.spell-row.spell-cd    { border-left: 4px solid rgba(220,80,80,.9); opacity: .8; }
 
 
 

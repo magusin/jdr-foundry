@@ -1,5 +1,7 @@
+// systems/rpg/module/sheets/monster-sheet.js
+import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+
 function parseLevels(csv) {
-  // accepte: "2,4,6" ou "2;4;6" ou "2 4 6" ou "2.4.6"
   return String(csv ?? "")
     .trim()
     .split(/[,\s;.]+/g)
@@ -7,36 +9,70 @@ function parseLevels(csv) {
     .filter(n => Number.isFinite(n) && n > 0);
 }
 
-function rangeObj(arr) {
+function uniqSorted(arr) {
+  return Array.from(new Set(arr)).sort((a, b) => a - b);
+}
+
+function rangeArrToObj(arr) {
   return {
     min: Number(arr?.[0] ?? 0) || 0,
     max: Number(arr?.[1] ?? 0) || 0
   };
 }
 
-function getBand(system, lvl) {
+function ensureBand(system, lvl) {
+  system.gen = system.gen ?? { levelsCsv: "", bands: {}, generated: false };
+  system.gen.bands = system.gen.bands ?? {};
+
   const key = String(lvl);
-  const b = system?.gen?.bands?.[key] ?? {};
+  const cur = system.gen.bands[key] ?? {};
+
+  const next = {
+    stats: cur.stats ?? {},
+    defenses: cur.defenses ?? {},
+    pv: cur.pv ?? [0, 0],
+    regenPv: cur.regenPv ?? [0, 0],
+    vitesse: cur.vitesse ?? [0, 0],
+    xpReward: cur.xpReward ?? [0, 0],
+  };
+
+  next.stats.force = next.stats.force ?? [0, 0];
+  next.stats.intelligence = next.stats.intelligence ?? [0, 0];
+  next.stats.dexterite = next.stats.dexterite ?? [0, 0];
+  next.stats.acuite = next.stats.acuite ?? [0, 0];
+  next.stats.endurance = next.stats.endurance ?? [0, 0];
+
+  next.defenses.scoreArmure = next.defenses.scoreArmure ?? [0, 0];
+  next.defenses.scoreResistance = next.defenses.scoreResistance ?? [0, 0];
+  next.defenses.armureFixe = next.defenses.armureFixe ?? [0, 0];
+  next.defenses.resistanceFixe = next.defenses.resistanceFixe ?? [0, 0];
+
+  system.gen.bands[key] = next;
+  return next;
+}
+
+function getBand(system, lvl) {
+  const b = ensureBand(system, lvl);
   const stats = b.stats ?? {};
   const defenses = b.defenses ?? {};
 
   return {
     lvl,
-    force: rangeObj(stats.force),
-    intelligence: rangeObj(stats.intelligence),
-    dexterite: rangeObj(stats.dexterite),
-    acuite: rangeObj(stats.acuite),
-    endurance: rangeObj(stats.endurance),
+    force: rangeArrToObj(stats.force),
+    intelligence: rangeArrToObj(stats.intelligence),
+    dexterite: rangeArrToObj(stats.dexterite),
+    acuite: rangeArrToObj(stats.acuite),
+    endurance: rangeArrToObj(stats.endurance),
 
-    scoreArmure: rangeObj(defenses.scoreArmure),
-    scoreResistance: rangeObj(defenses.scoreResistance),
-    armureFixe: rangeObj(defenses.armureFixe),
-    resistanceFixe: rangeObj(defenses.resistanceFixe),
+    scoreArmure: rangeArrToObj(defenses.scoreArmure),
+    scoreResistance: rangeArrToObj(defenses.scoreResistance),
+    armureFixe: rangeArrToObj(defenses.armureFixe),
+    resistanceFixe: rangeArrToObj(defenses.resistanceFixe),
 
-    pv: rangeObj(b.pv),
-    regenPv: rangeObj(b.regenPv),
-    vitesse: rangeObj(b.vitesse),
-    xpReward: rangeObj(b.xpReward)
+    pv: rangeArrToObj(b.pv),
+    regenPv: rangeArrToObj(b.regenPv),
+    vitesse: rangeArrToObj(b.vitesse),
+    xpReward: rangeArrToObj(b.xpReward)
   };
 }
 
@@ -53,80 +89,74 @@ export class RPGMonsterSheet extends ActorSheet {
 
   async getData(options) {
     const data = await super.getData(options);
-    data.canSeeStats = game.user.isGM;
-    data.system = data.actor.system;
 
     data.isGM = game.user.isGM;
-    data.isToken = this.actor.isToken === true;          // IMPORTANT
-    data.showGenConfig = data.isGM && !data.isToken;     // hide on token sheets
+    data.canSeeStats = game.user.isGM;
 
-    const levels = parseLevels(data.system?.gen?.levelsCsv);
+    data.system = data.actor.system;
+
+    data.isToken = this.actor.isToken === true;
+    data.showGenConfig = data.isGM && !data.isToken;
+
+    data.system.gen = data.system.gen ?? { levelsCsv: "", bands: {}, generated: false };
+    data.system.gen.bands = data.system.gen.bands ?? {};
+    data.system.gen.levelsCsv = String(data.system.gen.levelsCsv ?? "");
+
+    const levels = uniqSorted(parseLevels(data.system.gen.levelsCsv));
+    data.genLevels = levels;
     data.genBands = levels.map(lvl => getBand(data.system, lvl));
 
     const all = this.actor.items.map(i => i.toObject());
     data.itemsAttaques = all.filter(i => i.type === "weapon" || i.type === "spell");
 
-    data.statusEffects = this.actor.system?.etatsActifs ?? [];
-    data.flags = data.flags ?? {};
-    data.flags.isGM = game.user.isGM;
+    for (const it of data.itemsAttaques) {
+      if (it.type !== "spell") continue;
+      // ici it est un objet; buildSpellUI accepte item doc/obj selon ton implémentation actuelle
+      const ui = buildSpellUI({ actor: this.actor, item: it });
+      it._ui = ui?.text ?? ui?.text;
+      it._previewEffects = buildSpellEffectsPreview({ actor: this.actor, item: it });
+    }
 
+    // états: résumé lisible
     const labelMap = {
-      force: "Force",
-      dexterite: "Dextérité",
-      intelligence: "Intelligence",
-      acuite: "Acuité",
-      endurance: "Endurance",
-    
-      scoreArmure: "Score Armure",
-      scoreResistance: "Score Résistance",
-      armureFixe: "Armure fixe",
-      resistanceFixe: "Résistance fixe",
-    
-      vieMax: "Vie max",
-      manaMax: "Mana max",
-      regenPv: "Régén PV",
-      regenMana: "Régén Mana",
-      vitesse: "Vitesse",
-      initiative: "Initiative",
-      defense: "Défense",
-      resistance: "Résistance",
-      savoir: "Savoir"
+      force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
+      scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
+      pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana",
+      vitesse: "Vitesse"
     };
-    
-    const states = Array.isArray(data.system?.etatsActifs) ? foundry.utils.deepClone(data.system.etatsActifs) : [];
-    
+
+    const states = Array.isArray(data.system?.etatsActifs)
+      ? foundry.utils.deepClone(data.system.etatsActifs)
+      : [];
+
     for (const e of states) {
       const parts = [];
-    
-      // DOT
-      const dot = e?.dot?.perTick ?? 0;
-      if (Number(dot) > 0) parts.push(`DOT ${dot}`);
-    
-      // Mods
+
+      const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
+      if (dot > 0) parts.push(`DOT ${dot}`);
+
       const mods = e?.mods ?? {};
       for (const [k, v] of Object.entries(mods)) {
         const flat = Number(v?.flat ?? 0) || 0;
-        const pct  = Number(v?.pct ?? 0) || 0;
-    
-        if (flat) parts.push(`${labelMap[k] ?? k} ${flat > 0 ? "+" : ""}${flat}`);
-        if (pct)  parts.push(`${labelMap[k] ?? k} ${pct > 0 ? "+" : ""}${pct}%`);
+        const pct = Number(v?.pct ?? 0) || 0;
+        const name = labelMap[k] ?? k;
+        if (flat) parts.push(`${name} ${flat > 0 ? "+" : ""}${flat}`);
+        if (pct) parts.push(`${name} ${pct > 0 ? "+" : ""}${pct}%`);
       }
-    
-      // Petit tag “bénéfique”
-      // (on considère bénéfique si au moins un bonus >0 et aucun malus, sinon neutre/malus)
+
       let hasPlus = false, hasMinus = false;
       for (const v of Object.values(mods)) {
         const flat = Number(v?.flat ?? 0) || 0;
-        const pct  = Number(v?.pct ?? 0) || 0;
+        const pct = Number(v?.pct ?? 0) || 0;
         if (flat > 0 || pct > 0) hasPlus = true;
         if (flat < 0 || pct < 0) hasMinus = true;
       }
       e.isBeneficial = hasPlus && !hasMinus;
-      e.isHarmful    = hasMinus && !hasPlus;
-    
+      e.isHarmful = hasMinus && !hasPlus;
+
       e.summary = parts.join(" • ");
     }
-    
+
     data.system.etatsActifs = states;
 
     return data;
@@ -135,65 +165,56 @@ export class RPGMonsterSheet extends ActorSheet {
   activateListeners(html) {
     super.activateListeners(html);
 
-    if (!game.user.isGM) return;
+    // =========================
+    // ✅ Init bands (GEN)
+    // =========================
+    html.find("[data-action='genInitBands']").on("click", async (ev) => {
+      ev.preventDefault();
+      if (!game.user.isGM) return;
 
-    const applyDelta = async (path, delta) => {
-      const cur = Number(foundry.utils.getProperty(this.actor, path)) || 0;
-      await this.actor.update({ [path]: cur + delta });
-    };
+      const sys = this.actor.system ?? {};
+      const levels = uniqSorted(parseLevels(sys.gen?.levelsCsv));
 
+      const clone = foundry.utils.deepClone(sys);
+      clone.gen = clone.gen ?? { levelsCsv: "", bands: {}, generated: false };
+      clone.gen.bands = clone.gen.bands ?? {};
+
+      for (const lvl of levels) ensureBand(clone, lvl);
+
+      await this.actor.update({ "system.gen.bands": clone.gen.bands });
+      this.render(false);
+    });
+
+    // =========================
+    // ✅ PV (+/-) clamp 0..max
+    // =========================
     html.find("[data-action='hpPlus']").on("click", async (ev) => {
       ev.preventDefault();
       if (!game.user.isGM) return;
 
-      const delta = Number(ev.currentTarget.dataset.delta || 0);
+      const delta = Number(ev.currentTarget.dataset.delta ?? 0) || 0;
       const path = "system.ressources.pv.valeur";
+
       const cur = Number(foundry.utils.getProperty(this.actor, path)) || 0;
-      await this.actor.update({ [path]: cur + delta });
+      const max = Number(foundry.utils.getProperty(this.actor, "system.ressources.pv.max")) || 0;
+
+      const next = Math.max(0, Math.min(max > 0 ? max : 999999, cur + delta));
+      await this.actor.update({ [path]: next });
+      this.render(false);
     });
 
-    html.find(".stat-total").on("change", async (ev) => {
-      if (!game.user.isGM) return;
-
-      const stat = ev.currentTarget.dataset.stat; // force/intelligence/...
-      const totalWanted = Number(ev.currentTarget.value ?? 0) || 0;
-
-      const bonus = Number(this.actor.system?.derived?.bonus?.principales?.[stat] ?? 0) || 0;
-
-      // mods d'états (flat/pct) sont déjà inclus dans derived.effective
-      // donc on ne peut pas "déduire" précisément une base si % est utilisé.
-      // => on fait simple: base = total - bonusItemsSorts (comme PJ)
-      const newBase = totalWanted - bonus;
-
-      await this.actor.update({ [`system.principales.${stat}`]: newBase });
-    });
-
-    html.find(".def-total").on("change", async (ev) => {
-      if (!game.user.isGM) return;
-
-      const key = ev.currentTarget.dataset.def; // scoreArmure/scoreResistance/armureFixe/resistanceFixe
-      const totalWanted = Number(ev.currentTarget.value ?? 0) || 0;
-
-      const baseCur = Number(this.actor.system?.defenses?.[key] ?? 0) || 0;
-      const bonusItem = Number(this.actor.system?.derived?.bonus?.defenses?.[key] ?? 0) || 0;
-
-      // endurance peut influer chez toi (scoreFromEnd). Sur monstre c'est 0 dans ton actor.js,
-      // mais on calcule génériquement au cas où.
-      const effCur = Number(this.actor.system?.derived?.effective?.defenses?.[key] ?? 0) || 0;
-      const contribOther = effCur - (baseCur + bonusItem); // ex: endurance, etc.
-
-      const newBase = totalWanted - bonusItem - contribOther;
-      await this.actor.update({ [`system.defenses.${key}`]: newBase });
-    });
-
-    // Ouvrir item sheet
+    // =========================
+    // ✅ Ouvrir item
+    // =========================
     html.find(".item-edit").on("click", ev => {
       const li = ev.currentTarget.closest(".item");
       const item = this.actor.items.get(li?.dataset?.itemId);
       item?.sheet?.render(true);
     });
 
-    // Utiliser une attaque/sort
+    // =========================
+    // ✅ UseItem (preview chat)
+    // =========================
     html.find("[data-action='useItem']").on("click", async (ev) => {
       ev.preventDefault();
 
@@ -202,102 +223,62 @@ export class RPGMonsterSheet extends ActorSheet {
       if (!item) return;
 
       const targetToken = Array.from(game.user.targets)[0];
-      if (!targetToken?.actor) {
-        return ui.notifications.warn("Cible un PJ/ennemi (T) avant d'utiliser une attaque/sort.");
-      }
+      if (!targetToken?.actor) return ui.notifications.warn("Cible un PJ/ennemi (T) avant d'utiliser une attaque/sort.");
 
       const Combat = game.rpg?.combat;
-      if (!Combat?.computeTN || !Combat?.damagePreview) {
-        return ui.notifications.error("Combat API introuvable (game.rpg.combat).");
+      if (!Combat?.computeTN || !Combat?.damagePreview) return ui.notifications.error("Combat API introuvable (game.rpg.combat).");
+
+      const cd = Number(item.system?.cooldown?.restant ?? item.system?.recharge?.restant ?? 0) || 0;
+      if (cd > 0) return ui.notifications.warn(`Sort en recharge : ${cd} tour(s).`);
+
+      const rmin = Number(item.system?.range?.min ?? 0) || 0;
+      const rmax = Number(item.system?.range?.max ?? item.system?.portee ?? 0) || 0;
+
+      const casterToken = this.actor.getActiveTokens()?.[0];
+      if (canvas?.grid && casterToken) {
+        const dist = canvas.grid.measureDistance(casterToken.center, targetToken.center);
+        if (dist < rmin || dist > rmax) {
+          return ui.notifications.warn(`Hors portée: ${dist.toFixed(1)} cases (min ${rmin}, max ${rmax}).`);
+        }
       }
 
       const tn = Combat.computeTN(this.actor, targetToken.actor, item);
       const dmgPrev = Combat.damagePreview(this.actor, item);
-      const etats = String(item.system?.etatsInfliges ?? "").trim();
+
       const content =
         `<b>${this.actor.name}</b> utilise <b>${item.name}</b> sur <b>${targetToken.actor.name}</b> (${tn.livraison})<br>` +
         `Seuil toucher: <b>${tn.tnFinal}+</b> (base ${tn.tnBase}+ ; difficulté +${tn.diff})<br>` +
-        `Dégâts: <b>${dmgPrev.text}</b><br>` +
-        (etats ? `États: <b>${etats}</b><br>` : "");
+        `Dégâts: <b>${dmgPrev.text}</b>`;
 
-      await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-        content
-      });
+      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), content });
     });
 
-    // --- Supprimer ---
-    html.find("[data-action='etatDelete']").on("click", async (ev) => {
+    if (!game.user.isGM) return;
+
+    /* -------------------------------------------- */
+    /* SPELL WORKFLOW : Déclarer / Resolve GM         */
+    /* -------------------------------------------- */
+
+    html.find('[data-action="declareSpell"]').on("click", async (ev) => {
       ev.preventDefault();
-      if (!game.user.isGM) return;
 
-      const row = ev.currentTarget.closest("[data-etat-id]");
-      const id = row?.dataset?.etatId;
-      if (!id) return;
+      const li = ev.currentTarget.closest("[data-item-id]");
+      const itemId = li?.dataset?.itemId || ev.currentTarget.dataset.itemId;
+      if (!itemId) return;
 
-      const list = Array.isArray(this.actor.system.etatsActifs) ? foundry.utils.deepClone(this.actor.system.etatsActifs) : [];
-      const next = list.filter(e => e.id !== id);
+      const item = this.actor.items.get(itemId);
+      if (!item) return;
 
-      await game.rpg.status.upsertEffect(this.actor, editedState)
-
-      // si on supprimait celui qu’on éditait
-      const editId = html.find("[data-field='etat.editId']").val()?.trim();
-      if (editId === id) this._fillEtatForm(html, null);
-
+      const res = await declareSpell(this.actor, item);
+      if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
       this.render(false);
     });
 
-    // --- Modifier (charge le form) ---
-    html.find("[data-action='etatEdit']").on("click", (ev) => {
-      ev.preventDefault();
-      if (!game.user.isGM) return;
-
-      const row = ev.currentTarget.closest("[data-etat-id]");
-      const id = row?.dataset?.etatId;
-      if (!id) return;
-
-      const list = Array.isArray(this.actor.system.etatsActifs) ? this.actor.system.etatsActifs : [];
-      const etat = list.find(e => e.id === id);
-      if (!etat) return;
-
-      this._fillEtatForm(html, etat);
-    });
-
-    html.find("[data-action='etatDec']").on("click", async (ev) => {
-      ev.preventDefault();
-      if (!this.actor.isOwner && !game.user.isGM) return;
-
-      const li = ev.currentTarget.closest("[data-etat-id]");
-      const id = li?.dataset?.etatId;
-      if (!id) return;
-
-      const list = Array.isArray(this.actor.system?.etatsActifs) ? this.actor.system.etatsActifs : [];
-      const next = list
-        .map(e => e.id === id ? ({ ...e, remaining: Math.max(0, (Number(e.remaining) || 0) - 1) }) : e)
-        .filter(e => (Number(e.remaining) || 0) > 0);
-
-      await game.rpg.status.upsertEffect(this.actor, editedState)
-      this.render(false);
-    });
-
-    html.find("[data-action='stateDelete']").on("click", async (ev) => {
-      ev.preventDefault();
-      if (!game.user.isGM) return;
-
-      const id = ev.currentTarget.dataset.id;
-      await this._stateRemove(id);
-      this.render(false);
-    });
-
-    html.find("[data-action='statusShowCleanse']").on("click", async (ev) => {
-      ev.preventDefault();
-      if (!game.user.isGM) return;
-      await game.rpg.status.postCleanseInfo(this.actor, ev.currentTarget.dataset.id);
-    });
-
+    // =========================
+    // ✅ États (V2) : Add/Edit/Delete/Show
+    // =========================
     html.find("[data-action='stateAdd']").on("click", async (ev) => {
       ev.preventDefault();
-      if (!game.user.isGM) return;
 
       const st = this._stateDefaults();
       const edited = await this._editStateDialog(st, { title: "Ajouter un état" });
@@ -309,7 +290,6 @@ export class RPGMonsterSheet extends ActorSheet {
 
     html.find("[data-action='stateEdit']").on("click", async (ev) => {
       ev.preventDefault();
-      if (!game.user.isGM) return;
 
       const id = ev.currentTarget.dataset.id;
       const st = this._stateFindById(id);
@@ -322,17 +302,131 @@ export class RPGMonsterSheet extends ActorSheet {
       this.render(false);
     });
 
+    html.find("[data-action='stateDelete']").on("click", async (ev) => {
+      ev.preventDefault();
+
+      const id = ev.currentTarget.dataset.id;
+      await this._stateRemove(id);
+      this.render(false);
+    });
+
     html.find("[data-action='stateShow']").on("click", async (ev) => {
       ev.preventDefault();
       const id = ev.currentTarget.dataset.id;
       const st = this._stateFindById(id);
       if (!st) return;
 
-      await this._postStateInfoToChat(st);
+      const dot = Number(st?.dot?.perTick ?? st?.dot?.flat ?? 0) || 0;
+      const lines = [];
+      if (dot) lines.push(`DOT: <b>${dot}</b>`);
+
+      const labels = {
+        force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
+        pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana",
+        scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
+        vitesse: "Vitesse"
+      };
+
+      for (const [k, v] of Object.entries(st.mods ?? {})) {
+        const f = Number(v.flat ?? 0) || 0;
+        const p = Number(v.pct ?? 0) || 0;
+        const name = labels[k] ?? k;
+        if (f) lines.push(`${name}: ${f > 0 ? "+" : ""}${f}`);
+        if (p) lines.push(`${name}: ${p > 0 ? "+" : ""}${p}%`);
+      }
+
+      await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        content: `<b>${st.label}</b> (${st.remaining} tour(s))<br>${lines.join("<br>") || "<i>Aucun effet</i>"}`
+      });
+    });
+
+    html.find('[data-action="castSpell"]').on("click", async (ev) => {
+      ev.preventDefault();
+
+      const li = ev.currentTarget.closest("[data-item-id]");
+      const itemId = li?.dataset?.itemId;
+      if (!itemId) return;
+
+      const actor = this.actor;
+      const item = actor.items.get(itemId);
+      if (!item) return;
+
+      const res = await castSpell(actor, item, {
+        targetToken: Array.from(game.user.targets)[0] ?? null,
+        casterToken: actor.getActiveTokens()?.[0] ?? null
+      });
+
+      if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de lancer le sort.");
+    });
+
+    html.find("[data-action='deleteItem']").on("click", async ev => {
+      const li = ev.currentTarget.closest(".item");
+      const itemId = ev.currentTarget.dataset.itemId || li?.dataset?.itemId;
+      if (!itemId) return;
+      await this.actor.deleteEmbeddedDocuments("Item", [itemId]);
+    });
+
+    html.find('[data-action="gmAura"]').on("click", async (ev) => {
+      ev.preventDefault();
+      if (!game.user.isGM) return;
+
+      const token = this.actor.getActiveTokens()?.[0] ?? canvas.tokens.controlled?.[0];
+      if (!token) return ui.notifications.warn("Sélectionne/affiche un token.");
+
+      const content = `
+        <form>
+          <div class="form-group">
+            <label>Rayon (cases)</label>
+            <input type="number" name="radius" value="3" min="0" step="1"/>
+          </div>
+
+          <div class="form-group">
+            <label>Couleur (hex)</label>
+            <input type="text" name="color" value="#33aaff"/>
+          </div>
+
+          <div class="form-group">
+            <label>Opacité (0 → 1)</label>
+            <input type="number" name="alpha" value="0.2" min="0" max="1" step="0.05"/>
+          </div>
+
+          <div class="form-group">
+            <label>Mode</label>
+            <select name="mode">
+              <option value="add">Créer / Mettre à jour</option>
+              <option value="remove">Supprimer</option>
+            </select>
+          </div>
+        </form>
+      `;
+
+      new Dialog({
+        title: `Aura (MJ) — ${token.name}`,
+        content,
+        buttons: {
+          ok: {
+            label: "OK",
+            callback: async (dlgHtml) => {
+              const form = dlgHtml[0].querySelector("form");
+              const fd = new FormData(form);
+
+              const radius = Number(fd.get("radius") ?? 0) || 0;
+              const color = String(fd.get("color") ?? "#33aaff").trim() || "#33aaff";
+              const alpha = Math.max(0, Math.min(1, Number(fd.get("alpha") ?? 0.2) || 0.2));
+              const mode = String(fd.get("mode") ?? "add");
+
+              await game.rpg?.gmAura?.toggle(token, { radius, color, alpha, mode });
+            }
+          },
+          cancel: { label: "Annuler" }
+        },
+        default: "ok"
+      }).render(true);
     });
   }
 
-  // -------- Helpers --------
+  // ========= Helpers états (V2 sheet) =========
   _statePath() { return "system.etatsActifs"; }
 
   _stateList() {
@@ -341,8 +435,7 @@ export class RPGMonsterSheet extends ActorSheet {
   }
 
   _stateFindById(id) {
-    const list = this._stateList();
-    return list.find(e => e.id === id) ?? null;
+    return this._stateList().find(e => e.id === id) ?? null;
   }
 
   async _stateUpsert(state) {
@@ -358,16 +451,12 @@ export class RPGMonsterSheet extends ActorSheet {
     else list.push(normalized);
 
     await this.actor.update({ [path]: list });
-
-    if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.actor);
   }
 
   async _stateRemove(id) {
     const path = this._statePath();
     const list = this._stateList().filter(e => e.id !== id);
     await this.actor.update({ [path]: list });
-
-    if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.actor);
   }
 
   _stateDefaults() {
@@ -387,7 +476,6 @@ export class RPGMonsterSheet extends ActorSheet {
   _normalizeState(st) {
     const out = foundry.utils.deepClone(st ?? {});
     out.id = String(out.id || foundry.utils.randomID());
-
     out.label = String(out.label ?? "").trim() || "État";
     out.type = String(out.type ?? "custom").trim();
     out.isAura = !!out.isAura;
@@ -407,9 +495,9 @@ export class RPGMonsterSheet extends ActorSheet {
 
   _allModKeys() {
     return [
-      "force", "dexterite", "intelligence", "acuite", "savoir",
-      "initiative", "defense", "resistance",
-      "vieMax", "manaMax", "regenPv", "regenMana",
+      "force", "dexterite", "intelligence", "acuite", "endurance",
+      "pvMax", "manaMax",
+      "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
       "vitesse"
     ];
@@ -419,48 +507,56 @@ export class RPGMonsterSheet extends ActorSheet {
     const st = this._normalizeState(state);
     const keys = this._allModKeys();
 
-    // mini helper pour générer les inputs flat/pct
-    const row = (k, label) => {
+    const labels = {
+      force: "Force",
+      dexterite: "Dextérité",
+      intelligence: "Intelligence",
+      acuite: "Acuité",
+      endurance: "Endurance",
+      pvMax: "PV max",
+      manaMax: "Mana max",
+      regenPv: "Régén PV",
+      regenMana: "Régén Mana",
+      scoreArmure: "Score Armure",
+      scoreResistance: "Score Résistance",
+      armureFixe: "Armure fixe",
+      resistanceFixe: "Résistance fixe",
+      vitesse: "Vitesse"
+    };
+
+    const row = (k) => {
       const cur = st.mods?.[k] ?? {};
       const flat = Number(cur.flat ?? 0) || 0;
-      const pct  = Number(cur.pct ?? 0) || 0;
+      const pct = Number(cur.pct ?? 0) || 0;
 
       return `
       <div class="form-group" style="display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;">
-        <label>${label}</label>
+        <label>${labels[k] ?? k}</label>
         <input type="number" name="mods.${k}.flat" value="${flat}" placeholder="Flat"/>
         <input type="number" name="mods.${k}.pct" value="${pct}" placeholder="%"/>
       </div>`;
     };
 
-    const labels = {
-      force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", savoir: "Savoir",
-      initiative: "Initiative", defense: "Défense", resistance: "Résistance",
-      vieMax: "Vie max", manaMax: "Mana max", regenPv: "Regen PV", regenMana: "Regen Mana",
-      scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
-      vitesse: "Vitesse"
-    };
-
-    const modsHtml = keys.map(k => row(k, labels[k] ?? k)).join("");
+    const modsHtml = keys.map(row).join("");
 
     const html = `
     <form class="rpg-state-edit">
       <div class="form-group">
-        <label>Nom (label)</label>
+        <label>Nom</label>
         <input type="text" name="label" value="${st.label}"/>
       </div>
 
       <div class="form-group">
         <label>Type</label>
         <select name="type">
-          ${["poison","burn","buff","debuff","aura","custom"].map(t =>
-            `<option value="${t}" ${st.type===t?"selected":""}>${t}</option>`
+          ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
+            `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`
           ).join("")}
         </select>
       </div>
 
       <div class="form-group">
-        <label>Aura (buff permanent tant que présent)</label>
+        <label>Aura</label>
         <input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/>
       </div>
 
@@ -470,20 +566,18 @@ export class RPGMonsterSheet extends ActorSheet {
           <input type="number" name="duration" value="${st.duration}" min="1"/>
         </div>
         <div>
-          <label>Restant (tours)</label>
+          <label>Restant</label>
           <input type="number" name="remaining" value="${st.remaining}" min="0"/>
         </div>
       </div>
 
       <div class="form-group">
-        <label>Difficulté retrait (cleanse DC)</label>
+        <label>Difficulté retrait (DC)</label>
         <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
       </div>
 
       <hr/>
-      <h3>DOT (Poison / Brûlure)</h3>
-      <p class="hint">DOT fixe = dégâts appliqués à chaque tick (ex: début de tour). Tu peux aussi garder une formule optionnelle.</p>
-
+      <h3>DOT</h3>
       <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div>
           <label>DOT fixe</label>
@@ -496,9 +590,8 @@ export class RPGMonsterSheet extends ActorSheet {
       </div>
 
       <hr/>
-      <h3>Modificateurs (buff / debuff)</h3>
-      <p class="hint">Flat = +10 / -10. % = +10 / -10 (pour +10% / -10%). Laisse à 0 si non utilisé.</p>
-
+      <h3>Modificateurs</h3>
+      <p class="hint">Flat = +10 / -10. % = +10 / -10.</p>
       ${modsHtml}
     </form>`;
 
@@ -514,8 +607,8 @@ export class RPGMonsterSheet extends ActorSheet {
               const form = dlgHtml[0].querySelector("form");
               const fd = new FormData(form);
 
-              const getStr = (k, d="") => String(fd.get(k) ?? d).trim();
-              const getNum = (k, d=0) => Number(fd.get(k) ?? d) || 0;
+              const getStr = (k, d = "") => String(fd.get(k) ?? d).trim();
+              const getNum = (k, d = 0) => Number(fd.get(k) ?? d) || 0;
               const getChk = (k) => !!fd.get(k);
 
               const out = this._normalizeState(st);
@@ -530,13 +623,12 @@ export class RPGMonsterSheet extends ActorSheet {
               out.dot = out.dot ?? {};
               out.dot.flat = getNum("dot.flat", 0);
               out.dot.formula = getStr("dot.formula", "");
-              out.dot.perTick = out.dot.flat; // affichage simple
+              out.dot.perTick = out.dot.flat;
 
               out.mods = out.mods ?? {};
               for (const k of keys) {
                 const flat = getNum(`mods.${k}.flat`, 0);
-                const pct  = getNum(`mods.${k}.pct`, 0);
-                // n’enregistre pas des lignes vides
+                const pct = getNum(`mods.${k}.pct`, 0);
                 if (flat !== 0 || pct !== 0) out.mods[k] = { flat, pct };
                 else delete out.mods[k];
               }
@@ -548,125 +640,5 @@ export class RPGMonsterSheet extends ActorSheet {
         default: "ok"
       }).render(true);
     });
-  }
-
-  async _postStateInfoToChat(st) {
-    return RPGCharacterSheet.prototype._postStateInfoToChat.call(this, st);
-  }
-
-  _readEtatForm(html) {
-    const get = (sel) => html.find(`[data-field='${sel}']`).val();
-
-    const name = String(get("etat.name") ?? "").trim();
-    const tours = Number(get("etat.duration") ?? 0) || 0;
-    const dc = Number(get("etat.dc") ?? 0) || 0;
-
-    const dotFlat = Number(get("etat.dotFlat") ?? 0) || 0;
-    const dotStat = String(get("etat.dotStat") ?? "").trim();
-    const dotDiv = Math.max(1, Number(get("etat.dotDiv") ?? 10) || 10);
-
-    // debuffs: (valeurs SIGNÉES)
-    const debuff = {
-      forceFlat: Number(get("etat.debuff.forceFlat") ?? 0) || 0,
-      forcePct: Number(get("etat.debuff.forcePct") ?? 0) || 0,
-      dexFlat: Number(get("etat.debuff.dexFlat") ?? 0) || 0,
-      dexPct: Number(get("etat.debuff.dexPct") ?? 0) || 0,
-      intFlat: Number(get("etat.debuff.intFlat") ?? 0) || 0,
-      intPct: Number(get("etat.debuff.intPct") ?? 0) || 0
-    };
-
-    const dot = (dotFlat !== 0 || dotStat)
-      ? { flat: dotFlat, stat: dotStat || "", div: dotDiv }
-      : null;
-
-    return {
-      id: foundry.utils.randomID(),
-      name,
-      duration: Math.max(1, tours),
-      remaining: Math.max(1, tours),
-      dc: Math.max(0, dc),
-      dot,
-      debuff: {
-        forceFlat: debuff.forceFlat, forcePct: debuff.forcePct,
-        intelligenceFlat: debuff.intFlat, intelligencePct: debuff.intPct,
-        dexteriteFlat: debuff.dexFlat, dexteritePct: debuff.dexPct,
-        acuiteFlat: 0, acuitePct: 0,
-        enduranceFlat: 0, endurancePct: 0
-      }
-    };
-
-  }
-
-  _fillEtatForm(html, etat) {
-    const set = (field, value) => html.find(`[data-field='${field}']`).val(value);
-
-    if (!etat) {
-      set("etat.editId", "");
-      set("etat.name", "");
-      set("etat.duration", 3);
-      set("etat.dc", 0);
-      set("etat.dotFlat", 0);
-      set("etat.dotStat", "");
-      set("etat.dotDiv", 10);
-
-      set("etat.debuff.forceFlat", 0);
-      set("etat.debuff.forcePct", 0);
-      set("etat.debuff.dexFlat", 0);
-      set("etat.debuff.dexPct", 0);
-      set("etat.debuff.intFlat", 0);
-      set("etat.debuff.intPct", 0);
-      return;
-    }
-
-    set("etat.editId", etat.id ?? "");
-    set("etat.name", etat.name ?? "");
-    set("etat.dc", etat.dc ?? 0);
-    set("etat.duration", etat.duration ?? 1);
-    set("etat.dotFlat", etat.dot?.flat ?? 0);
-    set("etat.dotStat", etat.dot?.stat ?? "");
-    set("etat.dotDiv", etat.dot?.div ?? 10);
-
-    const d = etat.debuff ?? {};
-    set("etat.debuff.forceFlat", d.forceFlat ?? 0);
-    set("etat.debuff.forcePct", d.forcePct ?? 0);
-    set("etat.debuff.dexFlat", d.dexFlat ?? 0);
-    set("etat.debuff.dexPct", d.dexPct ?? 0);
-    set("etat.debuff.intFlat", d.intFlat ?? 0);
-    set("etat.debuff.intPct", d.intPct ?? 0);
-  }
-
-  async _stateAdd(list) {
-    const path = this._statePath(list);
-    const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
-    const st = this._stateDefaults(list);
-
-    // ouvre directement la modale d’édition pour le nouvel état
-    const edited = await this._editStateDialog(st, { isActive: list === "etatsActifs" });
-    if (!edited) return;
-
-    arr.push(edited);
-    await this.actor.update({ [path]: arr });
-  }
-
-  async _stateEdit(list, idx) {
-    const path = this._statePath(list);
-    const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
-    const st = arr[idx];
-    if (!st) return;
-
-    const edited = await this._editStateDialog(st, { isActive: list === "etatsActifs" });
-    if (!edited) return;
-
-    arr[idx] = edited;
-    await this.actor.update({ [path]: arr });
-  }
-
-  async _stateDelete(list, idx) {
-    const path = this._statePath(list);
-    const arr = foundry.utils.deepClone(foundry.utils.getProperty(this.actor, path)) || [];
-    if (idx < 0 || idx >= arr.length) return;
-
-    arr.splice(idx, 1);
-    await this.actor.update({ [path]: arr });
   }
 }

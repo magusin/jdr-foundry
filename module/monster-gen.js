@@ -1,3 +1,5 @@
+// systems/rpg/monster-gen.js
+
 function randInt(min, max) {
   min = Math.floor(Number(min));
   max = Math.floor(Number(max));
@@ -31,12 +33,21 @@ function getBand(actor, lvl) {
   return actor.system?.gen?.bands?.[key] ?? null;
 }
 
+// ✅ clamp utilitaires
+function clampMin0(n) {
+  n = Math.floor(Number(n) || 0);
+  return Math.max(0, n);
+}
+function rollClamped(rangeArr, fallbackMin = 0, fallbackMax = 0) {
+  const [mn, mx] = getRange(rangeArr, fallbackMin, fallbackMax);
+  return clampMin0(randInt(mn, mx));
+}
+
 export async function randomizeMonster(actor) {
   if (!actor || actor.type !== "monster") return;
 
   const lvl = pickLevel(actor);
   if (!lvl) {
-    // pas de config => on ne casse pas le token
     console.warn("[RPG] Monster gen: aucun niveau configuré (system.gen.levelsCsv).");
     return;
   }
@@ -50,32 +61,66 @@ export async function randomizeMonster(actor) {
   const s = band.stats ?? {};
   const d = band.defenses ?? {};
 
-  const [pvMin, pvMax] = getRange(band.pv, 30, 30);
-  const pvMaxRoll = randInt(pvMin, pvMax);
-  const [regenMin, regenMax] = getRange(band.regenPv, 0, 0);
-  const valRegenPv = randInt(regenMin, regenMax);
-  const [vitMin, vitMax] = getRange(band.vitesse, 3, 3);
-  const [xpMin, xpMax] = getRange(band.xpReward, 0, 0);
+  // =========================
+  // 1) TIRAGE DES BASES (clamp >= 0)
+  // =========================
+  const baseForce = rollClamped(s.force, 0, 0);
+  const baseInt   = rollClamped(s.intelligence, 0, 0);
+  const baseDex   = rollClamped(s.dexterite, 0, 0);
+  const baseAcu   = rollClamped(s.acuite, 0, 0);
+  const baseEnd   = rollClamped(s.endurance, 0, 0);
 
+  const baseArmFix = rollClamped(d.armureFixe, 0, 0);
+  const baseResFix = rollClamped(d.resistanceFixe, 0, 0);
+  const baseScArm  = rollClamped(d.scoreArmure, 0, 0);
+  const baseScRes  = rollClamped(d.scoreResistance, 0, 0);
+
+  const pvBase = Math.max(1, rollClamped(band.pv, 30, 30));
+  const regenPvBase = rollClamped(band.regenPv, 0, 0);
+  const vitBase = rollClamped(band.vitesse, 3, 3);
+  const xpReward = Math.max(0, rollClamped(band.xpReward, 0, 0));
+
+  // =========================
+  // 2) PV “actuels” au spawn = PV MAX FINAL (base + scaling END)
+  //    ⚠️ doit matcher actor.js (PV_PER_END_STEP=5, PV_PER_END_GAIN=1)
+  // =========================
+  const PV_PER_END_STEP = 5;
+  const pvFromEnd = Math.floor(Math.max(0, baseEnd) / PV_PER_END_STEP) * 1;
+  const pvMaxFinal = Math.max(1, pvBase + pvFromEnd);
+
+  // =========================
+  // 3) UPDATE : on écrit les BASES
+  // =========================
   const updates = {
     "system.niveau": lvl,
 
-    "system.principales.force": randInt(...getRange(s.force, 0, 0)),
-    "system.principales.intelligence": randInt(...getRange(s.intelligence, 0, 0)),
-    "system.principales.dexterite": randInt(...getRange(s.dexterite, 0, 0)),
-    "system.principales.acuite": randInt(...getRange(s.acuite, 0, 0)),
-    "system.principales.endurance": randInt(...getRange(s.endurance, 0, 0)),
-    "system.defenses.armureFixe": randInt(...getRange(d.armureFixe, 0, 0)),
-    "system.defenses.resistanceFixe": randInt(...getRange(d.resistanceFixe, 0, 0)),
-    "system.defenses.scoreArmure": randInt(...getRange(d.scoreArmure, 0, 0)),
-    "system.defenses.scoreResistance": randInt(...getRange(d.scoreResistance, 0, 0)),
+    // stats de base (éditables MJ si besoin)
+    "system.principales.force": baseForce,
+    "system.principales.intelligence": baseInt,
+    "system.principales.dexterite": baseDex,
+    "system.principales.acuite": baseAcu,
+    "system.principales.endurance": baseEnd,
 
-    "system.deplacement.vitesse": randInt(vitMin, vitMax),
+    // défenses de base (les dérivés END seront ajoutés en prepareDerivedData)
+    "system.defenses.armureFixe": baseArmFix,
+    "system.defenses.resistanceFixe": baseResFix,
+    "system.defenses.scoreArmure": baseScArm,
+    "system.defenses.scoreResistance": baseScRes,
 
-    "system.ressources.pv.max": pvMaxRoll,
-    "system.ressources.pv.valeur": pvMaxRoll,
-    "system.regeneration.pv": valRegenPv,
-    "system.recompenses.xp": randInt(xpMin, xpMax),
+    // vit / regen PV de base
+    "system.deplacement.vitesse": vitBase,
+    "system.regeneration.pv": regenPvBase,
+
+    // base immuable (sert de référence comme pour PJ)
+    "system.base.pvMax": pvBase,
+    "system.base.regenPv": regenPvBase,
+    "system.base.vitesse": vitBase,
+
+    // PV du token : full life (sur le max final)
+    "system.ressources.pv.max": pvMaxFinal,
+    "system.ressources.pv.valeur": pvMaxFinal,
+
+    "system.recompenses.xp": xpReward,
 
     // marqueur optionnel
     "system.gen.generated": true

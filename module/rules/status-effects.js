@@ -47,7 +47,7 @@ function ensureBuckets() {
 
 function addBuckets(dst, src) {
   if (!src) return;
-  for (const group of ["principales","defenses","ressources","regen","move","initiative"]) {
+  for (const group of ["principales", "defenses", "ressources", "regen", "move", "initiative"]) {
     const g = src[group] ?? {};
     const d = dst[group] ?? {};
     for (const k of Object.keys(d)) d[k] = n(d[k]) + n(g[k]);
@@ -77,7 +77,7 @@ function computeModsNumeric(mods, snap) {
   const out = ensureBuckets();
   if (!mods) return out;
 
-  for (const group of ["principales","defenses","ressources","regen","move","initiative"]) {
+  for (const group of ["principales", "defenses", "ressources", "regen", "move", "initiative"]) {
     const g = mods[group] ?? {};
     for (const key of Object.keys(out[group])) {
       const v = g[key];
@@ -120,7 +120,7 @@ function legacyToNew(legacy, actorForSnap) {
 
   const dotFlat = n(legacy?.dotFlat ?? 0);
   const dotStat = String(legacy?.dotStat ?? "").trim();
-  const dotDiv  = Math.max(1, n(legacy?.dotDiv ?? 10) || 10);
+  const dotDiv = Math.max(1, n(legacy?.dotDiv ?? 10) || 10);
 
   // Convertit l'ancien DOT: dotFlat + floor(stat/dotDiv)
   // => scaleValue(base=dotFlat, per=dotDiv, perStep=1, snap=statVal)
@@ -135,23 +135,23 @@ function legacyToNew(legacy, actorForSnap) {
   // IMPORTANT: on considère que tes valeurs sont déjà SIGNÉES (ex: -10 = malus)
   const d = legacy?.debuff ?? {};
   const modsFlat = ensureBuckets();
-  const modsPct  = ensureBuckets();
+  const modsPct = ensureBuckets();
 
-  modsFlat.principales.force        += n(d.forceFlat ?? 0);
-  modsPct.principales.force         += n(d.forcePct ?? 0);
+  modsFlat.principales.force += n(d.forceFlat ?? 0);
+  modsPct.principales.force += n(d.forcePct ?? 0);
 
-  modsFlat.principales.dexterite    += n(d.dexFlat ?? 0);
-  modsPct.principales.dexterite     += n(d.dexPct ?? 0);
+  modsFlat.principales.dexterite += n(d.dexFlat ?? 0);
+  modsPct.principales.dexterite += n(d.dexPct ?? 0);
 
   // ancien code: intFlat/intPct
   modsFlat.principales.intelligence += n(d.intFlat ?? 0);
-  modsPct.principales.intelligence  += n(d.intPct ?? 0);
+  modsPct.principales.intelligence += n(d.intPct ?? 0);
 
   // si tu ajoutes acuite/endurance dans la sheet plus tard
-  modsFlat.principales.acuite       += n(d.acuiteFlat ?? 0);
-  modsPct.principales.acuite        += n(d.acuitePct ?? 0);
-  modsFlat.principales.endurance    += n(d.enduranceFlat ?? 0);
-  modsPct.principales.endurance     += n(d.endurancePct ?? 0);
+  modsFlat.principales.acuite += n(d.acuiteFlat ?? 0);
+  modsPct.principales.acuite += n(d.acuitePct ?? 0);
+  modsFlat.principales.endurance += n(d.enduranceFlat ?? 0);
+  modsPct.principales.endurance += n(d.endurancePct ?? 0);
 
   return {
     id: legacy?.id ?? uid(),
@@ -177,7 +177,7 @@ export function normalizeEffectInstance(e, actorForSnap) {
     out.cleanseDC = clamp(n(out.cleanseDC ?? 0), 0, 20);
     out.source = out.source ?? { actorId: null, itemId: null, stat: "intelligence", snap: 0 };
     out.modsFlat = out.modsFlat ?? ensureBuckets();
-    out.modsPct  = out.modsPct  ?? ensureBuckets();
+    out.modsPct = out.modsPct ?? ensureBuckets();
     return out;
   }
 
@@ -309,6 +309,14 @@ function normalizeStateV2(st) {
     out.dot.perTick = Number(out.dot.perTick ?? out.dot.flat) || 0;
 
     out.mods = out.mods ?? {};
+    out.aura = out.aura ?? null;
+    if (out.isAura) {
+      out.aura = out.aura ?? {};
+      out.aura.min = Number(out.aura.min ?? 0) || 0;
+      out.aura.max = Number(out.aura.max ?? 0) || 0;
+      out.aura.target = String(out.aura.target ?? "allies");
+      out.aura.key = String(out.aura.key ?? out.label ?? "aura");
+    }
     return out;
   }
 
@@ -343,12 +351,12 @@ function normalizeStateV2(st) {
     // Convertit modsFlat/modsPct -> mods[key]={flat,pct}
     const groups = ["principales", "defenses", "ressources", "regen", "move", "initiative"];
     const mapBack = {
-      principales: { force:"force", dexterite:"dexterite", intelligence:"intelligence", acuite:"acuite", endurance:"endurance" },
-      defenses: { armureFixe:"armureFixe", resistanceFixe:"resistanceFixe", scoreArmure:"scoreArmure", scoreResistance:"scoreResistance" },
-      ressources: { pvMax:"pvMax", manaMax:"manaMax" },
-      regen: { pv:"regenPv", mana:"regenMana" },
-      move: { vitesse:"vitesse" },
-      initiative: { mod:"initiativeMod" }
+      principales: { force: "force", dexterite: "dexterite", intelligence: "intelligence", acuite: "acuite", endurance: "endurance" },
+      defenses: { armureFixe: "armureFixe", resistanceFixe: "resistanceFixe", scoreArmure: "scoreArmure", scoreResistance: "scoreResistance" },
+      ressources: { pvMax: "pvMax", manaMax: "manaMax" },
+      regen: { pv: "regenPv", mana: "regenMana" },
+      move: { vitesse: "vitesse" },
+      initiative: { mod: "initiativeMod" }
     };
 
     for (const g of groups) {
@@ -356,7 +364,7 @@ function normalizeStateV2(st) {
       const p = st.modsPct?.[g] ?? {};
       for (const [k, v2Key] of Object.entries(mapBack[g] ?? {})) {
         const flat = Number(f?.[k] ?? 0) || 0;
-        const pct  = Number(p?.[k] ?? 0) || 0;
+        const pct = Number(p?.[k] ?? 0) || 0;
         if (flat !== 0 || pct !== 0) out.mods[v2Key] = { flat, pct };
       }
     }
@@ -383,30 +391,31 @@ function normalizeStateV2(st) {
  * IMPORTANT: pas de jets ici, juste les ticks.
  */
 export async function tickActorEffectsAtTurnStart(actor) {
-  const rawList = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
-  if (!rawList.length) return;
+  const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
+  if (!list.length) return;
 
-  // ✅ NORMALISE EN V2 (format de ta sheet)
-  const list = rawList
-    .map(e => normalizeStateV2(e))
-    .filter(Boolean);
-
-  let pv = n(actor.system?.ressources?.pv?.valeur ?? 0);
-  const pvMax = n(actor.system?.ressources?.pv?.max ?? 0);
+  let pv = Number(actor.system?.ressources?.pv?.valeur ?? 0) || 0;
+  const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0) || 0;
 
   const survivors = [];
   let totalDot = 0;
 
   for (const e of list) {
-    const remaining = Math.max(0, n(e.remaining));
+    const remaining = Math.max(0, Number(e?.remaining ?? 0) || 0);
     if (remaining <= 0) continue;
 
-    const raw = Math.max(0, Number(e.dot?.perTick ?? 0) || 0);
-    if (raw > 0) totalDot += raw;
+    // DOT
+    const rawDot = Math.max(0, Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0);
+    if (rawDot > 0) totalDot += rawDot;
 
-    const nextRemaining = remaining - 1;
+    // ✅ auraApplied: ne décrémente jamais (géré par refreshAuras)
+    if (String(e?.type) === "auraApplied") {
+      survivors.push(e);
+      continue;
+    }
 
-    // ✅ on garde tout l’objet, on change seulement remaining
+    // ✅ le reste décrémente normalement (y compris aura source)
+    const nextRemaining = Math.max(0, remaining - 1);
     if (nextRemaining > 0) survivors.push({ ...e, remaining: nextRemaining });
   }
 
@@ -420,7 +429,7 @@ export async function tickActorEffectsAtTurnStart(actor) {
   await actor.update(updates);
 
   if (totalDot > 0) {
-    ChatMessage.create({
+    await ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor }),
       content: `<b>${actor.name}</b> subit <b>${totalDot}</b> dégâts (effets). PV: ${pv}/${pvMax}`
     });
@@ -506,11 +515,11 @@ export function sumActiveEffectMods(actor) {
       if (!map) continue;
 
       const flat = Number(mod?.flat ?? 0) || 0;
-      const pct  = Number(mod?.pct ?? 0) || 0;
+      const pct = Number(mod?.pct ?? 0) || 0;
 
       const pathBase = map[0] + "." + map[1];
       if (flat) add(out.flat, pathBase, flat);
-      if (pct)  add(out.pct,  pathBase, pct);
+      if (pct) add(out.pct, pathBase, pct);
     }
   }
 

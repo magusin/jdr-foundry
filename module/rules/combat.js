@@ -71,19 +71,71 @@ export function isHit(d20, tnFinal) {
 
 // Affichage “0 + 1d6 + …”
 export function damagePreview(attackerActor, item) {
+  const effP = attackerActor.system?.derived?.effective?.principales ?? attackerActor.system?.principales ?? {};
+
+  // --- Nouveau modèle ---
+  const dmg = item?.system?.damage ?? null;
+  if (dmg) {
+    const flat = Number(dmg.flat ?? 0) || 0;
+    const die  = String(dmg.dice ?? "1d6");
+
+    const scalingStat = dmg.scaling?.stat ?? (item.type === "spell" ? "intelligence" : "force");
+    const statVal = Number(effP?.[scalingStat] ?? 0) || 0;
+
+    const per = Math.max(1, Number(dmg.scaling?.per ?? 10) || 10);
+    const perStep = Number(dmg.scaling?.perStep ?? 1) || 1;
+    const statBonus = Math.floor(statVal / per) * perStep;
+
+    return { flat, die, add: 0, statBonus, scalingStat, text: `${flat} + ${die} + stat(${statBonus})` };
+  }
+
+  // --- Ancien modèle (fallback) ---
   const flat = Number(item?.system?.degatsFixes ?? 0) || 0;
   const die = String(item?.system?.degats ?? "1d6");
   const add = Number(item?.system?.degatsAdd ?? 0) || 0;
 
-  // bonus stat = floor(stat/10) (on garde ton système actuel)
-  const effP = attackerActor.system?.derived?.effective?.principales ?? attackerActor.system?.principales ?? {};
   const scalingStat = item?.system?.scaling?.stat ?? (item.type === "spell" ? "intelligence" : "force");
   const statVal = Number(effP?.[scalingStat] ?? 0) || 0;
   const statBonus = Math.floor(Math.max(0, statVal) / 10);
 
-  // => exemple: "0 + 1d6 + 0 + stat(0)"
   return { flat, die, add, statBonus, scalingStat, text: `${flat} + ${die} + ${add} + stat(${statBonus})` };
 }
+
+function getEffStat(actor, stat) {
+  const eff = actor.system?.derived?.effective?.principales ?? actor.system?.principales ?? {};
+  return Number(eff?.[stat] ?? 0) || 0;
+}
+
+function scaleFrom(actor, scaling) {
+  const stat = scaling?.stat ?? "intelligence";
+  const per = Math.max(1, Number(scaling?.per ?? 10) || 10);
+  const perStep = Number(scaling?.perStep ?? 1) || 1;
+  const val = getEffStat(actor, stat);
+  return Math.floor(val / per) * perStep;
+}
+
+export async function computeSpellDamage(actor, item, { crit=false } = {}) {
+  const dmg = item.system?.damage ?? {};
+  const flat = Number(dmg.flat ?? 0) || 0;
+  const dice = String(dmg.dice ?? "1d6");
+  const scaled = scaleFrom(actor, dmg.scaling);
+
+  const baseRoll = await (new Roll(dice)).evaluate({ async: true });
+  let total = flat + scaled + baseRoll.total;
+
+  if (crit) {
+    const critDef = dmg.crit ?? {};
+    const mode = String(critDef.mode ?? "max+die");
+    if (mode === "max+die") {
+      const faces = baseRoll.dice?.[0]?.faces ?? 6;
+      const extra = await (new Roll(String(critDef.extraDice ?? dice))).evaluate({ async: true });
+      total = flat + scaled + faces + extra.total + (Number(critDef.extraFlat ?? 0) || 0);
+    }
+  }
+
+  return { total, flat, scaled, roll: baseRoll.total };
+}
+
 
 // Signature simple: computeTN(attacker, target, item)
 export function computeTN(attacker, target, item) {
@@ -122,10 +174,7 @@ export async function applyFinalDamage({ targetActor, finalDamage }) {
 export function computeFinalDamage({ targetActor, livraison, rawDamage }) {
   const sys = targetActor.system ?? {};
   const effDef = sys.derived?.effective?.defenses ?? sys.defenses ?? {};
-  const red = sys.derived?.reductions ?? sys.derived?.reductions ?? sys.derived?.reductions ?? sys.derived?.reductions;
-
-  // (au cas où certains noms bougent)
-  const reductions = sys.derived?.reductions ?? sys.derived?.reductions ?? {};
+  const reductions = sys.derived?.reductions ?? {};
   const isPhys = livraison === "physique";
 
   const fixe = isPhys
@@ -139,3 +188,4 @@ export function computeFinalDamage({ targetActor, livraison, rawDamage }) {
   const final = mitigateDamage(rawDamage, fixe, pct, 70);
   return { fixe, pct, final };
 }
+

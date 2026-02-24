@@ -93,6 +93,11 @@
       "templates": [
         "base"
       ],
+      "gen": {
+        "levelsCsv": "2,4,6",
+        "bands": {},
+        "generated": false
+      },      
       "regeneration": {
         "pv": 0.0,
         "mana": 0.0
@@ -198,46 +203,28 @@
       "effet": ""
     },
     "spell": {
-      "templates": [
-        "baseItem",
-        "equipBonus",
-        "details"
-      ],
-      "mode": "attaque",
-      "actif": false,
-      "dureeTours": 0,
-      "effects": [], 
-      "bonus": {
-        "force": 0,
-        "intelligence": 0,
-        "dexterite": 0,
-        "acuite": 0,
-        "endurance": 0,
-        "pvMax": 0,
-        "manaMax": 0,
-        "vitesse": 0,
-        "armureFixe": 0,
-        "resistanceFixe": 0,
-        "scoreArmure": 0,
-        "scoreResistance": 0,
-        "regenPvPct": 0,
-        "regenManaPct": 0
-      },
-      "portee": 6,
-      "coutMana": 5,
+      "templates": ["baseItem", "equipBonus", "details"],
+    
+      "speed": "normal",
+      "range": { "min": 0, "max": 6 },
+    
+      "coutMana": 0,
       "difficulte": 0,
-      "degats": "1d6",
       "livraison": "magique",
-      "recharge": {
-        "max": 0,
-        "restant": 0
+    
+      "cooldown": { "max": 0, "restant": 0 },
+      "aura": { "active": false },
+    
+      "damage": {
+        "flat": 0,
+        "dice": "1d6",
+        "scaling": { "stat": "intelligence", "per": 10, "perStep": 1 },
+        "crit": { "mode": "max+die", "extraDice": "1d6", "extraFlat": 0 }
       },
-      "aura": {
-        "active": false,
-        "rayon": 0,
-        "regenPv": 0,
-        "regenMana": 0
-      }
+    
+      "effectsUI": [], 
+      "description": "",
+      "effects": []
     },
     "skill": {
       "templates": [

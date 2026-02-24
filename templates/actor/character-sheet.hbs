@@ -37,8 +37,6 @@
             {{/if}}
           </div>
 
-
-
           <div class="meta">
             <label>Vitesse (cases/tour)</label>
             <input type="number" name="system.deplacement.vitesse" value="{{system.deplacement.vitesse}}" min="0" {{#if
@@ -76,15 +74,25 @@
       <div class="resource">
         <div class="resource-label">
           <span>PV</span>
-          <span class="resource-value">{{system.ressources.pv.valeur}} / {{system.ressources.pv.max}}</span>
+          <span class="resource-value">
+            {{system.ressources.pv.valeur}} /
+            {{#if system.derived.effective.ressources.pvMax}}
+            {{system.derived.effective.ressources.pvMax}}
+            {{else}}
+            {{system.ressources.pv.max}}
+            {{/if}}
+          </span>
         </div>
+
         <div class="resource-grid">
           <input type="number" name="system.ressources.pv.valeur" value="{{system.ressources.pv.valeur}}" min="0" {{#if
             flags.readOnly}}disabled{{/if}} />
           <span>/</span>
-          <input type="number" name="system.ressources.pv.max" value="{{system.ressources.pv.max}}" min="0" {{#if
-            flags.readOnly}}disabled{{/if}} />
+          <input type="number" name="system.ressources.pv.max"
+            value="{{#if system.derived.effective.ressources.pvMax}}{{system.derived.effective.ressources.pvMax}}{{else}}{{system.ressources.pv.max}}{{/if}}"
+            min="0" {{#if flags.readOnly}}disabled{{/if}} />
         </div>
+
         {{#if flags.isGM}}
         <div style="display:flex; gap:6px; margin-top:6px;">
           <button type="button" class="btn small" data-action="adjRes" data-res="pv" data-delta="-5">-5</button>
@@ -99,49 +107,51 @@
           <input type="number" name="system.regeneration.pv" value="{{system.regeneration.pv}}" {{#if
             flags.readOnly}}disabled{{/if}} />
         </div>
+
         <div>
           {{system.derived.hp.pct}}% — {{system.derived.hp.etat}}
         </div>
       </div>
 
       <div class="resource">
-  <div class="resource-label">
-    <span>Mana</span>
-    <span class="resource-value">{{system.ressources.mana.valeur}} / {{system.ressources.mana.max}}</span>
-  </div>
+        <div class="resource-label">
+          <span>Mana</span>
+          <span class="resource-value">
+            {{system.ressources.mana.valeur}} /
+            {{#if system.derived.effective.ressources.manaMax}}
+            {{system.derived.effective.ressources.manaMax}}
+            {{else}}
+            {{system.ressources.mana.max}}
+            {{/if}}
+          </span>
+        </div>
 
-  <div class="resource-grid">
-    <input type="number"
-      name="system.ressources.mana.valeur"
-      value="{{system.ressources.mana.valeur}}"
-      min="0"
-      {{#if flags.readOnly}}disabled{{/if}} />
+        <div class="resource-grid">
+          <input type="number" name="system.ressources.mana.valeur" value="{{system.ressources.mana.valeur}}" min="0"
+            {{#if flags.readOnly}}disabled{{/if}} />
 
-    <span class="sep">/</span>
+          <span class="sep">/</span>
 
-    <input type="number"
-      name="system.ressources.mana.max"
-      value="{{system.ressources.mana.max}}"
-      min="0"
-      {{#if flags.readOnly}}disabled{{/if}} />
-  </div>
+          <input type="number" name="system.ressources.mana.max"
+            value="{{#if system.derived.effective.ressources.manaMax}}{{system.derived.effective.ressources.manaMax}}{{else}}{{system.ressources.mana.max}}{{/if}}"
+            min="0" {{#if flags.readOnly}}disabled{{/if}} />
+        </div>
 
-  {{#if flags.isGM}}
-  <div style="display:flex; gap:6px; margin-top:6px;">
-    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-5">-5</button>
-    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-1">-1</button>
-    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="1">+1</button>
-    <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="5">+5</button>
-  </div>
-  {{/if}}
+        {{#if flags.isGM}}
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-5">-5</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="-1">-1</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="1">+1</button>
+          <button type="button" class="btn small" data-action="adjRes" data-res="mana" data-delta="5">+5</button>
+        </div>
+        {{/if}}
 
-  <div class="resource-sub">
-    <label>Régén Mana</label>
-    <input type="number" name="system.regeneration.mana" value="{{system.regeneration.mana}}"
-      {{#if flags.readOnly}}disabled{{/if}} />
-  </div>
-</div>
-
+        <div class="resource-sub">
+          <label>Régén Mana</label>
+          <input type="number" name="system.regeneration.mana" value="{{system.regeneration.mana}}" {{#if
+            flags.readOnly}}disabled{{/if}} />
+        </div>
+      </div>
 
       {{!-- Classe --}}
       <div class="resource" style="grid-column: 1 / -1;">
@@ -206,68 +216,173 @@
           <h2>Caractéristiques</h2>
 
           <div class="stats-grid">
-            <div class="stat">
+            {{!-- FORCE --}}
+            <div class="stat-row">
               <label>Force</label>
-              <input type="number" class="stat-total" data-stat="force"
-                value="{{system.derived.effective.principales.force}}" {{#unless flags.isGM}}disabled{{/unless}} />
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.principales.force" value="{{system.principales.force}}" {{#unless
+                    flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.principales.force}}" disabled />
+                </div>
+              </div>
             </div>
 
-            <div class="stat">
+            {{!-- INT --}}
+            <div class="stat-row">
               <label>Intelligence</label>
-              <input type="number" class="stat-total" data-stat="intelligence"
-                value="{{system.derived.effective.principales.intelligence}}" {{#unless
-                flags.isGM}}disabled{{/unless}} />
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.principales.intelligence"
+                    value="{{system.principales.intelligence}}" {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.principales.intelligence}}" disabled />
+                </div>
+              </div>
             </div>
 
-            <div class="stat">
+            {{!-- DEX --}}
+            <div class="stat-row">
               <label>Dextérité</label>
-              <input type="number" class="stat-total" data-stat="dexterite"
-                value="{{system.derived.effective.principales.dexterite}}" {{#unless flags.isGM}}disabled{{/unless}} />
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}"
+                    {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.principales.dexterite}}" disabled />
+                </div>
+              </div>
             </div>
 
-            <div class="stat">
+            {{!-- ACUITE --}}
+            <div class="stat-row">
               <label>Acuité</label>
-              <input type="number" class="stat-total" data-stat="acuite"
-                value="{{system.derived.effective.principales.acuite}}" {{#unless flags.isGM}}disabled{{/unless}} />
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" {{#unless
+                    flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.principales.acuite}}" disabled />
+                </div>
+              </div>
             </div>
 
-            <div class="stat">
+            {{!-- ENDURANCE --}}
+            <div class="stat-row">
               <label>Endurance</label>
-              <input type="number" class="stat-total" data-stat="endurance"
-                value="{{system.derived.effective.principales.endurance}}" {{#unless flags.isGM}}disabled{{/unless}} />
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}"
+                    {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.principales.endurance}}" disabled />
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-
         <section class="card">
           <h2>Défenses</h2>
 
-          <label>Armure fixe (physique)</label>
-          <input type="number" class="def-total" data-def="armureFixe"
-            value="{{system.derived.effective.defenses.armureFixe}}" {{#unless flags.isGM}}disabled{{/unless}} />
+          <div class="stats-grid">
+            <div class="stat-row">
+              <label>Armure fixe (physique)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}"
+                    {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.defenses.armureFixe}}" disabled />
+                </div>
+              </div>
+            </div>
 
-          <label>Résistance fixe (magique)</label>
-          <input type="number" class="def-total" data-def="resistanceFixe"
-            value="{{system.derived.effective.defenses.resistanceFixe}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            <div class="stat-row">
+              <label>Résistance fixe (magique)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}"
+                    {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.defenses.resistanceFixe}}" disabled />
+                </div>
+              </div>
+            </div>
 
-          <label>Score Armure (physique)</label>
-          <input type="number" class="def-total" data-def="scoreArmure"
-            value="{{system.derived.effective.defenses.scoreArmure}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            <div class="stat-row">
+              <label>Score Armure (physique)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}"
+                    {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.defenses.scoreArmure}}" disabled />
+                </div>
+              </div>
+            </div>
 
-          <label>Réduction physique (%)</label>
-          <input type="text" class="def-total" data-def="physiquePct" value="{{system.derived.reductions.physiquePct}}%"
-            {{#unless flags.isGM}}disabled{{/unless}} />
+            <div class="stat-row">
+              <label>Réduction physique (%)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="text" value="{{system.derived.reductions.physiquePct}}%" disabled />
+                </div>
+              </div>
+            </div>
 
-          <label>Score Résistance (magique)</label>
-          <input type="number" class="def-total" data-def="scoreResistance"
-            value="{{system.derived.effective.defenses.scoreResistance}}" {{#unless flags.isGM}}disabled{{/unless}} />
+            <div class="stat-row">
+              <label>Score Résistance (magique)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Base</small>
+                  <input type="number" name="system.defenses.scoreResistance"
+                    value="{{system.defenses.scoreResistance}}" {{#unless flags.isGM}}disabled{{/unless}} />
+                </div>
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="number" value="{{system.derived.effective.defenses.scoreResistance}}" disabled />
+                </div>
+              </div>
+            </div>
 
-          <label>Réduction magique (%)</label>
-          <input type="text" class="def-total" data-def="magiquePct" value="{{system.derived.reductions.magiquePct}}%"
-            {{#unless flags.isGM}}disabled{{/unless}} />
+            <div class="stat-row">
+              <label>Réduction magique (%)</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="text" value="{{system.derived.reductions.magiquePct}}%" disabled />
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
-
 
         <section class="panel-states" style="grid-column: 1 / -1;">
           <header class="panel-title">
@@ -306,6 +421,12 @@
                 <div class="muted" style="margin-top:4px;">
                   {{e.summary}}
                 </div>
+                {{else}}
+                {{#if e.dot.flat}}
+                <div class="muted" style="margin-top:4px;">
+                  DOT: {{e.dot.flat}} / tour
+                </div>
+                {{/if}}
                 {{/if}}
               </div>
 
@@ -319,10 +440,7 @@
             </li>
             {{/each}}
           </ul>
-
         </section>
-
-
 
       </div>
     </div>
@@ -499,8 +617,6 @@
       </section>
     </div>
 
-
-
     {{!-- TAB: CONSUMABLES --}}
     <div class="tab" data-group="primary" data-tab="consumables">
       <section class="card">
@@ -548,96 +664,112 @@
         </div>
 
         <ol class="items-list simple">
-          {{#each items.sorts as |it|}}
-          <li class="item" data-item-id="{{it._id}}">
-            <span class="name">
-              <img src="{{it.img}}" alt="" />
-              <a class="item-edit">{{it.name}}</a>
-              <small>Coût: {{it.system.coutMana}} — Recharge:
-                {{it.system.recharge.restant}}/{{it.system.recharge.max}}</small>
-              {{#if ../flags.isOwner}}
-              <button type="button" class="btn small" data-action="useItem" data-item-id="{{it._id}}">
-                Utiliser
-              </button>
-              {{/if}}
-              <small>
-                Coût: {{it.system.coutMana}}
-                — Portée: {{it.system.portee}}
-                — Diff: +{{it.system.difficulte}}
-                — Recharge: {{it.system.recharge.restant}}/{{it.system.recharge.max}}
-                - Durée : {{it.system.duree.restant}}/{{it.system.duree.max}}
-                - Mode : {{it.system.mode}}
+  {{#each items.sorts as |it|}}
+  <li class="item" data-item-id="{{it._id}}">
+    <span class="name">
+      <img src="{{it.img}}" alt="" />
+      <a class="item-edit"><b>{{it.name}}</b></a>
+
+      <div class="spell-meta" style="opacity:.85; font-size:12px; margin-top:4px; display:flex; flex-wrap:wrap; gap:10px;">
+        <span>⚡ {{#if (eq it._ui.speed "rapide")}}Rapide{{else}}Normal{{/if}}</span>
+        <span>💧 Mana: {{it._ui.coutMana}}</span>
+        <span>📏 Sort: {{it._ui.rangeMin}}–{{it._ui.rangeMax}}</span>
+
+        {{#if it._ui.auraEnabled}}
+          <span>🌀 Aura: {{it._ui.auraMin}}–{{it._ui.auraMax}} ({{it._ui.auraTarget}})</span>
+        {{/if}}
+
+        <span>🎯 Diff: +{{it._ui.difficulte}}</span>
+
+        <span>
+          ⏳ CD:
+          <b style="{{#if it._ui.onCooldown}}color:#b00;{{else}}color:#0a0;{{/if}}">
+            {{it._ui.cdRestant}}/{{it._ui.cdMax}}
+          </b>
+        </span>
+
+        {{#if it._ui.modsSummary}}
+          <span>✨ {{it._ui.modsSummary}}</span>
+        {{/if}}
+      </div>
+
+      {{#if it._previewEffects.length}}
+      <div style="margin-top:8px; padding:8px; border:1px solid rgba(255,255,255,.12); border-radius:10px;">
+        <div style="font-size:12px; opacity:.85; margin-bottom:6px;"><b>Effets (preview)</b></div>
+        <ul style="margin:0; padding-left:16px; font-size:12px; opacity:.85;">
+          {{#each it._previewEffects as |fx|}}
+          <li>
+            <b>{{fx.label}}</b>
+            <span style="opacity:.8;">[{{fx.when}} • {{fx.target}}]</span>
+            {{#if fx.duration}} <span style="opacity:.8;">({{fx.duration}} tours)</span>{{/if}}
+          </li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+    </span>
+
+    <span class="actions">
+  {{#if ../flags.isOwner}}
+  <button type="button" class="btn small" data-action="declareSpell" data-item-id="{{it._id}}">
+  Déclarer
+</button>
+  {{/if}}
+
+  {{#if ../flags.isGM}}
+  <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+  {{/if}}
+</span>
+  </li>
+  {{/each}}
+</ol>
+      </section>
+    </div>
+
+    {{!-- TAB: SKILLS (system.skills) --}}
+    <div class="tab" data-group="primary" data-tab="skills">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Compétences</h2>
+
+          <div class="hint" style="margin-left:auto;">
+            Total: <b>{{calc.skillsTotal}}</b> / <b>{{calc.skillsCap}}</b> niveaux
+          </div>
+        </div>
+
+        <ol class="items-list simple">
+          {{#each skills as |s|}}
+          <li class="item" data-skill="{{s.key}}">
+            <span class="name" style="display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <b>{{s.label}}</b>
+                <small style="opacity:.85;">Niv: {{s.level}}</small>
+                <small style="opacity:.85;">XP: {{s.xp}} / {{s.next}} ({{s.pct}}%)</small>
+              </div>
+
+              {{#if s.grants}}
+              <small style="opacity:.8;">
+                Bonus par niveau :
+                {{#each s.grants}}
+                <b>{{@key}}</b> +{{this}}
+                {{/each}}
               </small>
+              {{/if}}
             </span>
 
-            <span class="actions">
-              {{#if ../flags.isOwner}}
-              {{#if (eq it.system.mode "attaque")}}
-              <button type="button" class="btn small" data-action="castSpell">Lancer</button>
-              {{else}}
-              {{#if it.system.actif}}
-              <button type="button" class="btn small" data-action="toggleSpell" data-next="off">Désactiver</button>
-              {{else}}
-              <button type="button" class="btn small" data-action="toggleSpell" data-next="on">Activer</button>
-              {{/if}}
-              {{/if}}
-              {{/if}}
-
+            <span class="actions" style="display:flex; gap:8px; align-items:center;">
               {{#if ../flags.isGM}}
-              <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+              <input class="skill-xp-add" type="number" value="0" style="width:90px;" />
+              <button type="button" class="btn small" data-action="skillAddXp">+ XP</button>
+              <button type="button" class="btn small" data-action="skillRemoveXp">- XP</button>
               {{/if}}
             </span>
           </li>
           {{/each}}
         </ol>
+
       </section>
     </div>
-
-    {{!-- TAB: SKILLS (system.skills) --}}
-<div class="tab" data-group="primary" data-tab="skills">
-  <section class="card">
-    <div class="toolbar">
-      <h2>Compétences</h2>
-
-      <div class="hint" style="margin-left:auto;">
-        Total: <b>{{calc.skillsTotal}}</b> / <b>{{calc.skillsCap}}</b> niveaux
-      </div>
-    </div>
-
-    <ol class="items-list simple">
-      {{#each skills as |s|}}
-      <li class="item" data-skill="{{s.key}}">
-        <span class="name" style="display:flex; flex-direction:column; gap:4px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <b>{{s.label}}</b>
-            <small style="opacity:.85;">Niv: {{s.level}}</small>
-            <small style="opacity:.85;">XP: {{s.xp}} / {{s.next}} ({{s.pct}}%)</small>
-          </div>
-
-          {{#if s.grants}}
-            <small style="opacity:.8;">
-              Bonus par niveau :
-              {{#each s.grants}}
-                <b>{{@key}}</b> +{{this}}
-              {{/each}}
-            </small>
-          {{/if}}
-        </span>
-
-        <span class="actions" style="display:flex; gap:8px; align-items:center;">
-          {{#if ../flags.isGM}}
-            <input class="skill-xp-add" type="number" value="0" style="width:90px;" />
-            <button type="button" class="btn small" data-action="skillAddXp">+ XP</button>
-            <button type="button" class="btn small" data-action="skillRemoveXp">- XP</button>
-          {{/if}}
-        </span>
-      </li>
-      {{/each}}
-    </ol>
-
-  </section>
-</div>
-
 
     {{/unless}}
 

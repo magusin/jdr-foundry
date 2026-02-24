@@ -1,0 +1,939 @@
+// systems/rpg/module/rules/spells.js
+
+/* ------------------------------------------------------------ */
+/* Utils                                                        */
+/* ------------------------------------------------------------ */
+
+function n(v, d = 0) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : d;
+}
+
+async function fromUuidSafe(uuid) {
+  try {
+    if (!uuid) return null;
+    return await fromUuid(uuid);
+  } catch (e) {
+    return null;
+  }
+}
+
+function str(v, d = "") {
+  const s = String(v ?? d).trim();
+  return s;
+}
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function getEffP(actor) {
+  return actor?.system?.derived?.effective?.principales
+    ?? actor?.system?.derived?.effP
+    ?? actor?.system?.principales
+    ?? {};
+}
+
+function normalizeDiceStr(s) {
+  const v = String(s ?? "").trim();
+  if (!v || v === "0" || v === "—" || v.toLowerCase() === "none") return "";
+  return v;
+}
+
+function computeFlatScaling({ actor, scaling }) {
+  const sc = scaling ?? {};
+  const statKey = String(sc.stat ?? "intelligence");
+  const perRaw = n(sc.per, 0);
+  const perStep = n(sc.perStep, 0);
+
+  if (perRaw <= 0 || perStep === 0) return { scaled: 0, statKey, per: perRaw, perStep, statVal: 0 };
+
+  const effP = getEffP(actor);
+  const statVal = n(effP?.[statKey], 0);
+  const per = Math.max(1, perRaw);
+  const steps = Math.floor(Math.max(0, statVal) / per);
+  const scaled = steps * perStep;
+
+  return { scaled, statKey, per, perStep, statVal };
+}
+
+function hasAnyDamageBlock(dmg) {
+  if (!dmg || typeof dmg !== "object") return false;
+
+  const enabled = !!dmg.enabled;
+  const dice = normalizeDiceStr(dmg.dice);
+  const flat = n(dmg.flat, 0);
+
+  const sc = dmg.scaling ?? {};
+  const per = n(sc.per, 0);
+  const perStep = n(sc.perStep, 0);
+
+  // Si pas enabled, on considère "pas de dégâts"
+  if (!enabled) return false;
+
+  // S’il est enabled mais tout vide/0 => on considère pas de dégâts pour affichage
+  const hasDice = !!dice;
+  const hasFlat = flat !== 0;
+  const hasScaling = (per > 0 && perStep !== 0);
+
+  return hasDice || hasFlat || hasScaling;
+}
+
+/**
+ * Retourne { expr, flatTotal } ou null si pas de dégâts à afficher.
+ * - Ne lance PAS les dés, juste une formule lisible.
+ * - Applique le scaling (stat/per/perStep) sur le flat.
+ */
+function computeDamageExpr({ actor, block }) {
+  // block = { enabled, dice, flat, scaling{stat,per,perStep} }
+  if (!block || !block.enabled) return null;
+
+  const dice = String(block.dice ?? "").trim();
+  const flatBase = n(block.flat, 0);
+
+  const scaling = block.scaling ?? {};
+  const statKey = String(scaling.stat ?? "intelligence");
+  const per = Math.max(1, n(scaling.per, 10) || 10);
+  const perStep = n(scaling.perStep, 0);
+
+  const effP = getEffP(actor);
+  const statVal = n(effP?.[statKey], 0);
+  const steps = Math.floor(Math.max(0, statVal) / per);
+  const scaled = steps * perStep;
+
+  const flatTotal = flatBase + scaled;
+
+  // "0", "—", "", etc => pas de dés
+  const diceOk = dice && dice !== "0" && dice !== "—";
+
+  // si rien du tout => null (donc n'affiche pas)
+  if (!diceOk && flatTotal === 0) return null;
+
+  if (!diceOk) return { expr: `${flatTotal}` };
+
+  return { expr: flatTotal ? `${dice} + ${flatTotal}` : `${dice}` };
+}
+
+function summarizeModsWithKind(mods = {}) {
+  const parts = [];
+  let hasPlus = false;
+  let hasMinus = false;
+
+  for (const [k, v] of Object.entries(mods)) {
+    const flat = n(v?.flat, 0);
+    const pct = n(v?.pct, 0);
+
+    if (flat > 0 || pct > 0) hasPlus = true;
+    if (flat < 0 || pct < 0) hasMinus = true;
+
+    if (flat) parts.push(`${labelStat(k)} ${flat > 0 ? "+" : ""}${flat}`);
+    if (pct) parts.push(`${labelStat(k)} ${pct > 0 ? "+" : ""}${pct}%`);
+  }
+
+  const summary = parts.join(" • ");
+  if (!summary) return null;
+
+  let kind = "buff";
+  if (hasMinus && !hasPlus) kind = "debuff";
+  else if (hasPlus && !hasMinus) kind = "buff";
+  else kind = "mixed"; // si tu veux éviter mixed, on le traitera comme buff (ou debuff). Ici on le garde interne.
+
+  return { kind, summary };
+}
+
+function effectsForResult(item, result) {
+  const arr = Array.isArray(item?.system?.effectsUI) ? item.system.effectsUI : [];
+  const res = String(result);
+
+  const allowWhen = new Set();
+  allowWhen.add("cast"); // toujours
+  if (res === "success") allowWhen.add("hit");
+  if (res === "crit") allowWhen.add("crit");
+
+  return arr.filter(fx => allowWhen.has(String(fx?.when ?? "").toLowerCase()));
+}
+
+function classifyMods(mods = {}) {
+  let pos = 0;
+  let neg = 0;
+
+  for (const v of Object.values(mods)) {
+    const flat = n(v?.flat, 0);
+    const pct = n(v?.pct, 0);
+
+    if (flat > 0) pos++;
+    if (flat < 0) neg++;
+    if (pct > 0) pos++;
+    if (pct < 0) neg++;
+  }
+
+  if (pos > 0 && neg === 0) return "buff";
+  if (neg > 0 && pos === 0) return "debuff";
+  if (pos > 0 && neg > 0) return "mixed";
+  return "none";
+}
+
+function labelBuffDebuff(mods) {
+  const k = classifyMods(mods);
+  if (k === "buff") return "Buffs";
+  if (k === "debuff") return "Debuffs";
+  if (k === "mixed") return "Buffs/Debuffs";
+  return "";
+}
+
+function getActorToken(actor) {
+  // prefer controlled token, else first active token
+  return canvas?.tokens?.controlled?.find(t => t.actor?.id === actor.id)
+    ?? actor.getActiveTokens?.()[0]
+    ?? null;
+}
+
+function getTokenById(tokenId) {
+  if (!tokenId) return null;
+  return canvas?.tokens?.get(tokenId) ?? null;
+}
+
+// ✅ devient async et applique le patch
+
+async function ensureSpellDefaults(item) {
+  const sys = item.system ?? {};
+  const patch = {};
+
+  // range
+  if (!sys.range || typeof sys.range !== "object") patch["system.range"] = { min: 0, max: 6 };
+  else {
+    if (sys.range.min === undefined) patch["system.range.min"] = 0;
+    if (sys.range.max === undefined) patch["system.range.max"] = 6;
+  }
+
+  // cooldown
+  if (!sys.cooldown || typeof sys.cooldown !== "object") patch["system.cooldown"] = { max: 0, restant: 0 };
+  else {
+    if (sys.cooldown.max === undefined) patch["system.cooldown.max"] = 0;
+    if (sys.cooldown.restant === undefined) patch["system.cooldown.restant"] = 0;
+  }
+
+  // aura
+  if (!sys.aura || typeof sys.aura !== "object") {
+    patch["system.aura"] = {
+      active: false,
+      enabled: false,
+      target: "allies",
+      key: "",
+      range: { min: 0, max: 3 },
+      dotFlat: 0,
+      cleanseDC: 0
+    };
+  } else {
+    if (sys.aura.active === undefined) patch["system.aura.active"] = false;
+    if (sys.aura.enabled === undefined) patch["system.aura.enabled"] = false;
+    if (sys.aura.target === undefined) patch["system.aura.target"] = "allies";
+    if (sys.aura.key === undefined) patch["system.aura.key"] = "";
+    if (!sys.aura.range || typeof sys.aura.range !== "object") patch["system.aura.range"] = { min: 0, max: 3 };
+    else {
+      if (sys.aura.range.min === undefined) patch["system.aura.range.min"] = 0;
+      if (sys.aura.range.max === undefined) patch["system.aura.range.max"] = 3;
+    }
+    if (sys.aura.dotFlat === undefined) patch["system.aura.dotFlat"] = 0;
+    if (sys.aura.cleanseDC === undefined) patch["system.aura.cleanseDC"] = 0;
+  }
+
+  // --- DAMAGE (success)
+  if (sys.damage === undefined || typeof sys.damage !== "object") {
+    patch["system.damage"] = {
+      enabled: false,
+      flat: 0,
+      dice: "",
+      scaling: { stat: "intelligence", per: 10, perStep: 0 }
+    };
+  } else {
+    if (sys.damage.enabled === undefined) patch["system.damage.enabled"] = false;
+    if (sys.damage.flat === undefined) patch["system.damage.flat"] = 0;
+    if (sys.damage.dice === undefined) patch["system.damage.dice"] = "";
+    if (!sys.damage.scaling || typeof sys.damage.scaling !== "object") patch["system.damage.scaling"] = { stat: "intelligence", per: 10, perStep: 0 };
+    else {
+      if (sys.damage.scaling.stat === undefined) patch["system.damage.scaling.stat"] = "intelligence";
+      if (sys.damage.scaling.per === undefined) patch["system.damage.scaling.per"] = 10;
+      if (sys.damage.scaling.perStep === undefined) patch["system.damage.scaling.perStep"] = 0;
+    }
+  }
+
+  // --- DAMAGE CRIT (separate)
+  if (sys.damageCrit === undefined || typeof sys.damageCrit !== "object") {
+    patch["system.damageCrit"] = {
+      enabled: false,
+      flat: 0,
+      dice: "",
+      scaling: { stat: "intelligence", per: 10, perStep: 0 }
+    };
+  } else {
+    if (sys.damageCrit.enabled === undefined) patch["system.damageCrit.enabled"] = false;
+    if (sys.damageCrit.flat === undefined) patch["system.damageCrit.flat"] = 0;
+    if (sys.damageCrit.dice === undefined) patch["system.damageCrit.dice"] = "";
+    if (!sys.damageCrit.scaling || typeof sys.damageCrit.scaling !== "object") patch["system.damageCrit.scaling"] = { stat: "intelligence", per: 10, perStep: 0 };
+    else {
+      if (sys.damageCrit.scaling.stat === undefined) patch["system.damageCrit.scaling.stat"] = "intelligence";
+      if (sys.damageCrit.scaling.per === undefined) patch["system.damageCrit.scaling.per"] = 10;
+      if (sys.damageCrit.scaling.perStep === undefined) patch["system.damageCrit.scaling.perStep"] = 0;
+    }
+  }
+
+  // effectsUI default
+  if (sys.effectsUI === undefined) patch["system.effectsUI"] = [];
+  if (sys.coutMana === undefined) patch["system.coutMana"] = 0;
+  if (sys.difficulte === undefined) patch["system.difficulte"] = 0;
+  if (sys.speed === undefined) patch["system.speed"] = "normal";
+  if (sys.livraison === undefined) patch["system.livraison"] = "magique";
+
+  if (Object.keys(patch).length) await item.update(patch);
+}
+
+/* ------------------------------------------------------------ */
+/* FX parsing                                                    */
+/* ------------------------------------------------------------ */
+
+const STAT_LABELS = {
+  force: "Force",
+  dexterite: "Dextérité",
+  intelligence: "Intelligence",
+  acuite: "Acuité",
+  endurance: "Endurance",
+  pvMax: "PV max",
+  manaMax: "Mana max",
+  regenPv: "Régén PV",
+  regenMana: "Régén Mana",
+  vitesse: "Vitesse",
+  scoreArmure: "Score Armure",
+  scoreResistance: "Score Résistance",
+  armureFixe: "Armure fixe",
+  resistanceFixe: "Résistance fixe"
+};
+
+function labelStat(k) {
+  return STAT_LABELS[k] ?? k;
+}
+
+function getFxByWhen(item, when) {
+  const arr = Array.isArray(item?.system?.effectsUI) ? item.system.effectsUI : [];
+  return arr.filter(fx => String(fx?.when ?? "").toLowerCase() === String(when).toLowerCase());
+}
+
+function buildModsFromFxMods(fxMods) {
+  const mods = {};
+  const mds = Array.isArray(fxMods) ? fxMods : [];
+  for (const m of mds) {
+    const stat = String(m?.stat ?? "").trim();
+    if (!stat) continue;
+    const mode = (m?.mode === "pct") ? "pct" : "flat";
+    const v = n(m?.value, 0);
+    if (!mods[stat]) mods[stat] = { flat: 0, pct: 0 };
+    mods[stat][mode] += v;
+  }
+  return mods;
+}
+
+function summarizeMods(mods = {}) {
+  const label = (k) => ({
+    force: "Force",
+    dexterite: "Dextérité",
+    intelligence: "Intelligence",
+    acuite: "Acuité",
+    endurance: "Endurance",
+    pvMax: "PV max",
+    manaMax: "Mana max",
+    regenPv: "Régén PV",
+    regenMana: "Régén Mana",
+    vitesse: "Vitesse",
+    scoreArmure: "Score Armure",
+    scoreResistance: "Score Résistance",
+    armureFixe: "Armure fixe",
+    resistanceFixe: "Résistance fixe"
+  }[k] ?? k);
+
+  const parts = [];
+  for (const [k, v] of Object.entries(mods)) {
+    const flat = n(v?.flat, 0);
+    const pct = n(v?.pct, 0);
+    if (flat) parts.push(`${label(k)} ${flat > 0 ? "+" : ""}${flat}`);
+    if (pct) parts.push(`${label(k)} ${pct > 0 ? "+" : ""}${pct}%`);
+  }
+  return parts.join(" • ");
+}
+
+/** hit (success) or crit: pick first matching, fallback to other */
+function pickFx(item, result) {
+  const fxCrit = getFxByWhen(item, "crit")[0] ?? null;
+  const fxHit = getFxByWhen(item, "hit")[0] ?? null;
+  if (result === "crit") return fxCrit ?? fxHit;
+  return fxHit ?? fxCrit;
+}
+
+/* ------------------------------------------------------------ */
+/* Damage preview (no roll)                                      */
+/* ------------------------------------------------------------ */
+
+function computeDamageSimple({ actor, item }) {
+  const sys = item.system ?? {};
+  const dmg = sys.damage ?? {};
+
+  console.log(
+    "[RPG][DMG] computeDamageSimple item=",
+    item?.name,
+    "sys.damage=",
+    foundry.utils?.deepClone?.(sys.damage) ?? sys.damage
+  );
+
+  // ✅ normalise le champ dice : "0" => vide
+  const diceRaw = String(dmg.dice ?? "").trim();
+  const dice = (diceRaw === "0" || diceRaw === "—" || diceRaw.toLowerCase() === "none") ? "" : diceRaw;
+
+  const flatBase = n(dmg.flat, 0);
+
+  const scaling = dmg.scaling ?? {};
+  const statKey = String(scaling.stat ?? "intelligence");
+
+  // ✅ per=0 veut dire "pas de scaling"
+  const perRaw = n(scaling.per, 0);
+  const perStep = n(scaling.perStep, 0);
+
+  const hasScaling = perRaw > 0 && perStep !== 0;
+
+  let scaled = 0;
+  if (hasScaling) {
+    const per = Math.max(1, perRaw);
+    const effP = getEffP(actor);
+    const statVal = n(effP?.[statKey], 0);
+    const steps = Math.floor(Math.max(0, statVal) / per);
+    scaled = steps * perStep;
+  }
+
+  const flatTotal = flatBase + scaled;
+
+  // ✅ "aucun dégât" si :
+  // - pas de dé réel
+  // - ET flatTotal = 0
+  // (et on considère aussi "1d6" comme placeholder)
+  const isNoDice = !dice || dice === "1d6";
+  if (isNoDice && flatTotal === 0) {
+    console.log("[RPG][DMG] -> return null (no real damage)", { diceRaw, dice, flatTotal });
+    return null;
+  }
+
+  // ✅ expr final
+  let expr = "";
+  if (dice && flatTotal) expr = `${dice} + ${flatTotal}`;
+  else if (dice) expr = `${dice}`;
+  else expr = `${flatTotal}`;
+
+  console.log("[RPG][DMG] -> return", { diceRaw, dice, flatTotal, expr });
+  return { dice, flatTotal, expr };
+}
+
+function shouldShowDamagePreview(dmg) {
+  if (!dmg) return false;
+
+  const dice = String(dmg.dice ?? "").trim();
+  const flat = Number(dmg.flatTotal ?? 0) || 0;
+
+  // dé réel = non vide ET pas placeholder
+  const hasRealDice = dice && dice !== "1d6";
+
+  // flat réel
+  const hasRealFlat = flat !== 0;
+
+  return hasRealDice || hasRealFlat;
+}
+
+/* ------------------------------------------------------------ */
+/* UI helpers (sheet)                                            */
+/* ------------------------------------------------------------ */
+
+export function buildSpellUI({ actor, item }) {
+  if (!item || item.type !== "spell") return { text: {} };
+
+  const sys = item.system ?? {};
+  const cdMax = n(sys.cooldown?.max, 0);
+  const cdRest = n(sys.cooldown?.restant, 0);
+
+  const rangeMin = n(sys.range?.min, 0);
+  const rangeMax = n(sys.range?.max, 0);
+
+  const auraEnabled = !!(sys.aura?.enabled || sys.aura?.active);
+  const auraMin = n(sys.aura?.range?.min, 0);
+  const auraMax = n(sys.aura?.range?.max, 0);
+  const auraTarget = str(sys.aura?.target, "allies");
+
+  const manaCost = n(sys.coutMana, 0);
+  const speed = str(sys.speed, "normal");
+  const diff = n(sys.difficulte, 0);
+
+  // IMPORTANT: modsSummary = HIT ONLY (jamais hit+crit)
+  const fxHit = getFxByWhen(item, "hit")[0] ?? null;
+  const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods) : {};
+  const modsSummary = summarizeMods(hitMods);
+
+  return {
+    text: {
+      speed,
+      coutMana: manaCost,
+      difficulte: diff,
+      rangeMin,
+      rangeMax,
+      onCooldown: cdRest > 0,
+      cdRestant: cdRest,
+      cdMax,
+      auraEnabled,
+      auraMin,
+      auraMax,
+      auraTarget,
+      modsSummary
+    }
+  };
+}
+
+/* -------------------------------------------- */
+/* ✅ DECLARE (castSpell)                         */
+/* -------------------------------------------- */
+
+export async function castSpell(actor, item, { targetToken = null, casterToken = null } = {}) {
+  if (!actor || !item) return { ok: false, reason: "Missing actor/item" };
+  if (item.type !== "spell") return { ok: false, reason: "Not a spell" };
+
+  await ensureSpellDefaults(item);
+  const sys = item.system ?? {};
+
+  const cdRest = n(sys.cooldown?.restant, 0);
+  const cdMax = n(sys.cooldown?.max, 0);
+  if (cdRest > 0) return { ok: false, reason: `Sort en recharge : ${cdRest} tour(s)` };
+
+  const casterT = casterToken ?? actor.getActiveTokens()?.[0] ?? canvas.tokens.controlled?.[0] ?? null;
+  const targetT = targetToken ?? Array.from(game.user.targets)[0] ?? null;
+  const targetActor = targetT?.actor ?? null;
+
+  // portée si cible
+  const rmin = n(sys.range?.min, 0);
+  const rmax = n(sys.range?.max, 0);
+  if (casterT && targetT) {
+    const dist = canvas.grid.measureDistance(casterT.center, targetT.center);
+    if (dist < rmin || dist > rmax) return { ok: false, reason: `Hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+  }
+
+  // mana
+  const manaCost = n(sys.coutMana, 0);
+  const manaCur = n(actor.system?.ressources?.mana?.valeur, 0);
+  if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
+  if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
+
+  // CD
+  if (cdMax > 0) await item.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
+
+  const speaker = ChatMessage.getSpeaker({ actor, token: casterT?.document ?? undefined });
+
+  // ✅ stocker des UUID (PJ + monstres + tokens non-linkés)
+  const actorUuid = actor.uuid;
+  const itemUuid = item.uuid;
+  const targetTokenUuid = targetT?.document?.uuid ?? null;
+  const casterTokenUuid = casterT?.document?.uuid ?? null;
+
+  const content = `
+  <div class="rpg-spell-declare">
+    <div><b>${actor.name}</b> déclare le sort <b>${item.name}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""} (mana -${manaCost}, CD=${cdMax}).</div>
+    <div style="opacity:.8;margin-top:4px;"><i>En attente de validation MJ.</i></div>
+    <hr style="margin:8px 0;opacity:.2"/>
+    <div class="rpg-spell-gm" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="rpg-spell-resolve" data-result="fail">Refuser</button>
+      <button type="button" class="rpg-spell-resolve" data-result="success">Valider</button>
+      <button type="button" class="rpg-spell-resolve" data-result="crit">Valider Crit</button>
+    </div>
+  </div>`;
+
+  const msg = await ChatMessage.create({
+    speaker,
+    content,
+    flags: {
+      rpg: {
+        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid }
+      }
+    }
+  });
+
+  return { ok: true, messageId: msg.id };
+}
+
+export function buildSpellEffectsPreview({ actor, item }) {
+  if (!item || item.type !== "spell") return [];
+
+  const sys = item.system ?? {};
+  const auraEnabled = !!(sys.aura?.enabled || sys.aura?.active);
+  const list = [];
+
+  const fxHit = getFxByWhen(item, "hit")[0] ?? null;
+  const fxCrit = getFxByWhen(item, "crit")[0] ?? null;
+
+  if (fxHit) {
+    const mods = buildModsFromFxMods(fxHit.mods);
+    list.push({
+      label: str(fxHit.label, "Effet"),
+      when: "Touché",
+      target: str(fxHit.target, "target"),
+      duration: n(fxHit.duration, 0),
+      summary: summarizeMods(mods)
+    });
+  }
+
+  if (fxCrit) {
+    const mods = buildModsFromFxMods(fxCrit.mods);
+    list.push({
+      label: str(fxCrit.label, "Effet Crit"),
+      when: "Crit",
+      target: str(fxCrit.target, "target"),
+      duration: n(fxCrit.duration, 0),
+      summary: summarizeMods(mods)
+    });
+  }
+
+  if (auraEnabled) {
+    const amin = n(sys.aura?.range?.min, 0);
+    const amax = n(sys.aura?.range?.max, 0);
+    const tgt = str(sys.aura?.target, "allies");
+    const key = str(sys.aura?.key, "") || item.name;
+
+    const dot = n(sys.aura?.dotFlat, 0);
+    const dc = n(sys.aura?.cleanseDC, 0);
+
+    // mods affichés = HIT ONLY
+    const auraMods = fxHit ? summarizeMods(buildModsFromFxMods(fxHit.mods)) : "";
+
+    const parts = [
+      `Portée ${amin}–${amax}`,
+      auraMods ? `Mods: ${auraMods}` : null,
+      dot ? `DOT ${dot}/tour` : null,
+      dc ? `Retrait ${dc}+` : null
+    ].filter(Boolean);
+
+    list.push({
+      label: `Aura (${key})`,
+      when: "—",
+      target: tgt,
+      duration: "—",
+      summary: parts.join(" • ")
+    });
+  }
+
+  if (!list.length) list.push({ label: "Aucun effet", when: "—", target: "—", duration: "—", summary: "" });
+  return list;
+}
+
+/* ------------------------------------------------------------ */
+/* State helpers (v2 format)                                     */
+/* ------------------------------------------------------------ */
+
+function normalizeState(st, forcedId = null) {
+  const out = foundry.utils.deepClone(st ?? {});
+  out.id = String(forcedId || out.id || foundry.utils.randomID());
+
+  out.label = str(out.label, "État");
+  out.type = str(out.type, "custom");
+  out.isAura = !!out.isAura;
+
+  out.duration = Math.max(1, n(out.duration, 1));
+  out.remaining = clamp(n(out.remaining, out.duration), 0, 999999);
+  out.cleanseDC = Math.max(0, n(out.cleanseDC, 0));
+
+  out.dot = out.dot ?? {};
+  out.dot.flat = n(out.dot.flat, 0);
+  out.dot.formula = str(out.dot.formula, "");
+  out.dot.perTick = n(out.dot.perTick, out.dot.flat);
+
+  out.mods = out.mods ?? {};
+
+  if (out.isAura) {
+    out.aura = out.aura ?? {};
+    out.aura.key = str(out.aura.key, out.label);
+    out.aura.min = Math.max(0, n(out.aura.min, 0));
+    out.aura.max = Math.max(0, n(out.aura.max, 0));
+    out.aura.target = str(out.aura.target, "allies");
+    out.aura.linkedItemId = str(out.aura.linkedItemId, "");
+  }
+
+  return out;
+}
+
+async function upsertState(actor, state) {
+  const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
+  const id = String(state.id || foundry.utils.randomID());
+  const idx = list.findIndex(e => String(e.id) === id);
+  const normalized = normalizeState(state, id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
+  else list.push(normalized);
+
+  await actor.update({ "system.etatsActifs": list });
+  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+}
+
+/* ------------------------------------------------------------ */
+/* Distances / range check                                       */
+/* ------------------------------------------------------------ */
+
+function measureSquares(tokenA, tokenB) {
+  try {
+    const d = canvas.grid.measureDistance(tokenA.center, tokenB.center);
+    const unit = Number(canvas.dimensions?.distance ?? 1) || 1;
+    return d / unit;
+  } catch (e) {
+    return 999999;
+  }
+}
+
+/* ------------------------------------------------------------ */
+/* WORKFLOW CENTRALISE : declare -> chat buttons -> resolve      */
+/* ------------------------------------------------------------ */
+
+/**
+ * DECLARE = immédiat après annonce :
+ * - check portée (si cible)
+ * - consomme mana
+ * - lance CD
+ * - poste message chat avec boutons MJ
+ * - n'applique aucun effet ici
+ *
+ * Compatible PJ + monstre (tous sont Actor)
+ */
+export async function declareSpell(actor, item, { casterToken = null, targetToken = null } = {}) {
+  if (!actor || !item) return { ok: false, reason: "Missing actor/item" };
+  if (item.type !== "spell") return { ok: false, reason: "Not a spell" };
+
+  await ensureSpellDefaults(item);
+
+  const sys = item.system ?? {};
+
+  const cdRest = n(sys.cooldown?.restant, 0);
+  const cdMax  = n(sys.cooldown?.max, 0);
+  if (cdRest > 0) return { ok: false, reason: `Sort en recharge : ${cdRest} tour(s)` };
+
+  const casterT = casterToken ?? getActorToken(actor);
+  const targetT = targetToken ?? Array.from(game.user.targets)[0] ?? null;
+  const targetActor = targetT?.actor ?? null;
+
+  // portée si cible
+  if (casterT && targetT) {
+    const rmin = n(sys.range?.min, 0);
+    const rmax = n(sys.range?.max, 0);
+    const dist = measureSquares(casterT, targetT);
+    if (dist < rmin || dist > rmax) {
+      return { ok: false, reason: `Hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+    }
+  }
+
+  // mana
+  const manaCost = n(sys.coutMana, 0);
+  const manaCur  = n(actor.system?.ressources?.mana?.valeur, 0);
+  if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
+  if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
+
+  // CD
+  if (cdMax > 0) await item.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
+
+  // --- Résumés (déclare) : on affiche ce qui existe
+  const dmgHit = computeDamageExpr({ actor, block: sys.damage });
+  const dmgCrit = computeDamageExpr({ actor, block: sys.damageCrit });
+
+  const fxHit = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "hit");
+  const fxCrit = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "crit");
+  const fxCast = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "cast");
+
+  const summarizeFxList = (list) => {
+    if (!list?.length) return null;
+
+    const lines = [];
+    for (const fx of list) {
+      const mods = buildModsFromFxMods(fx.mods);
+      const modInfo = summarizeModsWithKind(mods);
+
+      const fxDmg = computeDamageExpr({ actor, block: fx.damage });
+      const parts = [];
+      if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
+      if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ Debuff" : "⬆️ Buff"}: ${modInfo.summary}`);
+
+      // si l'effet n'a rien, on ne l'affiche pas
+      if (!parts.length) continue;
+
+      lines.push(`<li><b>${str(fx.label, "Effet")}</b> — ${parts.join(" • ")}</li>`);
+    }
+    if (!lines.length) return null;
+    return `<ul style="margin:6px 0 0 18px;">${lines.join("")}</ul>`;
+  };
+
+  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
+  const auraSummary = auraEnabled
+    ? `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b> • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
+    : null;
+
+  const speaker = ChatMessage.getSpeaker({ actor, token: casterT?.document ?? undefined });
+
+  const actorUuid = actor.uuid;
+  const itemUuid = item.uuid;
+  const casterTokenUuid = casterT?.document?.uuid ?? null;
+  const targetTokenUuid = targetT?.document?.uuid ?? null;
+
+  const content = `
+  <div class="rpg-spell-declare">
+    <div>
+      <b>${actor.name}</b> déclare <b>${item.name}</b>
+      ${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}
+      (mana -${manaCost}, CD=${cdMax})
+    </div>
+
+    <div style="opacity:.9;margin-top:4px;">
+      🎯 <b>Jet de touché</b> : fais ton jet (puis MJ coche Échec / Réussite / Crit)
+      ${sys.difficulte ? ` • difficulté +${n(sys.difficulte,0)}` : ``}
+    </div>
+
+    <div style="margin-top:8px;">
+      ${dmgHit?.expr ? `💥 <b>Dégâts (réussite)</b> : ${dmgHit.expr}<br>` : ``}
+      ${dmgCrit?.expr ? `💥 <b>Dégâts (crit)</b> : ${dmgCrit.expr}<br>` : ``}
+      ${auraSummary ? `${auraSummary}<br>` : ``}
+    </div>
+
+    ${summarizeFxList(fxCast) ? `<div style="margin-top:6px;"><b>Effets (au lancement)</b>${summarizeFxList(fxCast)}</div>` : ``}
+    ${summarizeFxList(fxHit)  ? `<div style="margin-top:6px;"><b>Effets (touché)</b>${summarizeFxList(fxHit)}</div>`   : ``}
+    ${summarizeFxList(fxCrit) ? `<div style="margin-top:6px;"><b>Effets (crit)</b>${summarizeFxList(fxCrit)}</div>`     : ``}
+
+    <hr style="margin:8px 0;opacity:.2"/>
+
+    <div style="opacity:.8"><i>En attente de validation MJ.</i></div>
+
+    <div class="rpg-spell-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>
+      <button type="button" class="rpg-spell-resolve" data-result="success">Réussite</button>
+      <button type="button" class="rpg-spell-resolve" data-result="crit">Réussite Crit</button>
+    </div>
+  </div>`;
+
+  const msg = await ChatMessage.create({
+    speaker,
+    content,
+    flags: {
+      rpg: {
+        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuid }
+      }
+    }
+  });
+
+  return { ok: true, messageId: msg.id };
+}
+
+/**
+ * Bind des boutons MJ dans le chat (centralisé)
+ */
+export async function resolveDeclaredSpellFromMessage(message, result) {
+  if (!game.user.isGM) return;
+
+  const data =
+    message?.getFlag?.("rpg", "spellDeclare") ??
+    message?.flags?.rpg?.spellDeclare ??
+    null;
+
+  if (!data) return ui.notifications.warn("Impossible : flags manquants sur le message.");
+
+  const actor = data.actorUuid ? await fromUuidSafe(data.actorUuid) : null;
+  const item  = data.itemUuid ? await fromUuidSafe(data.itemUuid) : null;
+
+  if (!actor || !item) return ui.notifications.warn("Impossible : actor ou sort introuvable (UUID).");
+
+  await ensureSpellDefaults(item);
+
+  const sys = item.system ?? {};
+  const res = String(result ?? "success");
+
+  // cible (si token ciblé par le joueur au moment du cast, on l'utilise)
+  const targetTokenDoc = data.targetTokenUuid ? await fromUuidSafe(data.targetTokenUuid) : null;
+  const targetToken = targetTokenDoc?.object ?? null;
+  const targetActor = targetToken?.actor ?? null;
+
+  // --- construit le message résultat
+  const title =
+    res === "fail" ? `${actor.name} : ÉCHEC sur ${item.name}` :
+    res === "crit" ? `${actor.name} : RÉUSSITE CRIT sur ${item.name}` :
+    `${actor.name} : RÉUSSITE sur ${item.name}`;
+
+  if (res === "fail") {
+    await message.delete(); // on enlève le message avec les boutons
+    await ChatMessage.create({ content: `<b>${title}</b>`, speaker: ChatMessage.getSpeaker({ actor }) });
+    return;
+  }
+
+  const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
+  const dmg = computeDamageExpr({ actor, block: dmgBlock });
+
+  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
+  const auraLine = auraEnabled
+    ? `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b> • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
+    : null;
+
+  // effets concernés par la résolution
+  const fxList = effectsForResult(item, res);
+  const fxLines = [];
+  for (const fx of fxList) {
+    const mods = buildModsFromFxMods(fx.mods);
+    const modInfo = summarizeModsWithKind(mods);
+
+    const fxDmg = computeDamageExpr({ actor, block: fx.damage });
+
+    const parts = [];
+    if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
+    if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ <b>Debuff</b>" : "⬆️ <b>Buff</b>"} : ${modInfo.summary}`);
+
+    if (!parts.length) continue;
+    fxLines.push(`<li><b>${str(fx.label, "Effet")}</b> — ${parts.join(" • ")}</li>`);
+  }
+
+  const rows = [];
+  if (dmg?.expr) rows.push(`💥 <b>Dégâts</b> : ${dmg.expr}`);
+  if (fxLines.length) rows.push(`✨ <b>Effets</b> : <ul style="margin:6px 0 0 18px;">${fxLines.join("")}</ul>`);
+  if (auraLine) rows.push(auraLine);
+
+  // si vraiment rien à afficher, on affiche juste le titre
+  const body = rows.length ? `<br>${rows.join("<br>")}` : "";
+
+  await message.delete();
+
+  await ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ actor }),
+    content: `<b>${title}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}${body}`
+  });
+}
+
+export function bindSpellChatButtons(html, message) {
+  const $html = (html?.find && html?.on) ? html : $(html);
+
+  const data = message?.getFlag?.("rpg", "spellDeclare") ?? message?.flags?.rpg?.spellDeclare;
+  if (!data) return;
+
+  // ✅ Les joueurs voient le message mais pas les boutons
+  if (!game.user.isGM) {
+    $html.find(".rpg-spell-gm").remove();
+    return;
+  }
+
+  $html.off("click.rpgSpellResolve");
+
+  $html.on("click.rpgSpellResolve", ".rpg-spell-resolve", async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const result = ev.currentTarget?.dataset?.result;
+    if (!result) return;
+
+    // lock UI
+    $html.find(".rpg-spell-resolve").prop("disabled", true);
+
+    try {
+      await resolveDeclaredSpellFromMessage(message, result);
+    } catch (err) {
+      console.error("[RPG] resolve error:", err);
+      ui.notifications.error("Erreur résolution sort (voir console).");
+      $html.find(".rpg-spell-resolve").prop("disabled", false);
+    }
+  });
+}
