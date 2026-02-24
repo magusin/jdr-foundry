@@ -364,39 +364,36 @@
   ========================== --}}
 
   <section class="effects-ui">
-    <div class="fx-toolbar">
-      <h2 style="margin:0;">Effets</h2>
-
-      {{#unless isReadOnly}}
+  <div class="fx-toolbar">
+    <h2 style="margin:0;">Effets</h2>
+    {{#unless isReadOnly}}
       <div class="fx-actions">
         <button type="button" class="btn" data-action="addEffect">+ Effet</button>
       </div>
-      {{/unless}}
-    </div>
-
-    {{#unless (lookup system.effectsUI 0)}}
-    <p class="hint">Aucun effet.</p>
     {{/unless}}
+  </div>
 
-    <div class="fx-list">
-      {{#each system.effectsUI as |fx i|}}
+  {{#unless (lookup system.effectsUI 0)}}
+    <p class="hint">Aucun effet.</p>
+  {{/unless}}
+
+  <div class="fx-list">
+    {{#each system.effectsUI as |fx i|}}
       <details class="fx-card" data-fx-index="{{i}}" open>
         <summary class="fx-summary">
           <div class="fx-title">
             <b>{{fx.label}}</b>
             <span class="fx-meta">
-              • {{#if (eq fx.when "hit")}}Touché{{/if}}
-              {{#if (eq fx.when "crit")}}Crit{{/if}}
-              {{#if (eq fx.when "cast")}}Lancement{{/if}}
+              • {{#if (eq fx.when "hit")}}Touché{{/if}}{{#if (eq fx.when "crit")}}Crit{{/if}}{{#if (eq fx.when "cast")}}Lancement{{/if}}
               • {{#if (eq fx.target "target")}}Cible{{else}}Soi{{/if}}
               • {{fx.duration}} tour(s)
             </span>
           </div>
 
           {{#unless isReadOnly}}
-          <div class="fx-right">
-            <button type="button" class="icon" data-action="removeEffect" title="Supprimer">✕</button>
-          </div>
+            <div class="fx-right">
+              <button type="button" class="icon" data-action="removeEffect" title="Supprimer">✕</button>
+            </div>
           {{/unless}}
         </summary>
 
@@ -404,212 +401,207 @@
           <div class="fx-grid">
             <div class="field">
               <label>Nom</label>
-              <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}" {{#if
-                isReadOnly}}disabled{{/if}} />
+              <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}" {{#if isReadOnly}}disabled{{/if}} />
             </div>
 
             <div class="field">
               <label>Quand</label>
-              <select name="system.effectsUI.{{i}}.when" {{#if isReadOnly}}disabled{{/if}}>
-                <option value="hit" {{#if (eq fx.when "hit" )}}selected{{/if}}>Touché</option>
-                <option value="crit" {{#if (eq fx.when "crit" )}}selected{{/if}}>Crit</option>
-                <option value="cast" {{#if (eq fx.when "cast" )}}selected{{/if}}>Au lancement</option>
-              </select>
+              {{#if isReadOnly}}
+                <div><b>
+                  {{#if (eq fx.when "hit")}}Touché{{/if}}
+                  {{#if (eq fx.when "crit")}}Crit{{/if}}
+                  {{#if (eq fx.when "cast")}}Au lancement{{/if}}
+                </b></div>
+              {{else}}
+                <select name="system.effectsUI.{{i}}.when">
+                  <option value="hit"  {{#if (eq fx.when "hit")}}selected{{/if}}>Touché</option>
+                  <option value="crit" {{#if (eq fx.when "crit")}}selected{{/if}}>Crit</option>
+                  <option value="cast" {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement</option>
+                </select>
+              {{/if}}
             </div>
 
             <div class="field">
               <label>Cible</label>
-              <select name="system.effectsUI.{{i}}.target" {{#if isReadOnly}}disabled{{/if}}>
-                <option value="target" {{#if (eq fx.target "target" )}}selected{{/if}}>Cible</option>
-                <option value="self" {{#if (eq fx.target "self" )}}selected{{/if}}>Soi</option>
-              </select>
+              {{#if isReadOnly}}
+                <div><b>{{#if (eq fx.target "target")}}Cible{{else}}Soi{{/if}}</b></div>
+              {{else}}
+                <select name="system.effectsUI.{{i}}.target">
+                  <option value="target" {{#if (eq fx.target "target")}}selected{{/if}}>Cible</option>
+                  <option value="self"   {{#if (eq fx.target "self")}}selected{{/if}}>Soi</option>
+                </select>
+              {{/if}}
             </div>
 
             <div class="field">
               <label>Durée</label>
-              <input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" {{#if
-                isReadOnly}}disabled{{/if}} />
+              <input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" {{#if isReadOnly}}disabled{{/if}} />
             </div>
           </div>
 
           <div class="field" style="margin-top:10px;">
             <label>Détails</label>
-            <textarea name="system.effectsUI.{{i}}.details" rows="2" {{#if
-              isReadOnly}}disabled{{/if}}>{{fx.details}}</textarea>
+            <textarea name="system.effectsUI.{{i}}.details" rows="2" {{#if isReadOnly}}disabled{{/if}}>{{fx.details}}</textarea>
           </div>
 
-          {{!-- Dégâts de l'effet : GM/Owner -> checkbox + toggle ; Joueur -> pas de checkbox, et section seulement si
-          ui.showFxDamage --}}
-          {{#unless isReadOnly}}
-          <hr style="margin:12px 0; opacity:.25" />
-          <h3>Dégâts de l'effet</h3>
+          {{!-- =========================
+          Dégâts de l'effet
+          - GM : toggle (checkbox sans name) + champs si enabled
+          - Joueur : afficher seulement si fx.uiShowDamage + champs non vides
+          ========================= --}}
+          {{#if (or (not isReadOnly) fx.uiShowDamage)}}
+            <hr style="margin:12px 0; opacity:.25" />
+            <h3>Dégâts de l'effet</h3>
 
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" class="fx-dmg-enabled" data-fx-index="{{i}}" {{#if
-              fx.damage.enabled}}checked{{/if}} />
-            Cet effet inflige des dégâts
-          </label>
-
-          {{#if fx.damage.enabled}}
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-            <div>
-              <label>Dés</label>
-              <input type="text" name="system.effectsUI.{{i}}.damage.dice" value="{{fx.damage.dice}}"
-                placeholder="ex: 1d6" />
-            </div>
-            <div>
-              <label>Fixe</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" />
-            </div>
-          </div>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-            <div>
-              <label>Scaling stat</label>
-              <select name="system.effectsUI.{{i}}.damage.scaling.stat">
-                <option value="intelligence" {{#if (eq fx.damage.scaling.stat "intelligence" )}}selected{{/if}}>
-                  Intelligence</option>
-                <option value="force" {{#if (eq fx.damage.scaling.stat "force" )}}selected{{/if}}>Force</option>
-                <option value="dexterite" {{#if (eq fx.damage.scaling.stat "dexterite" )}}selected{{/if}}>Dextérité
-                </option>
-                <option value="acuite" {{#if (eq fx.damage.scaling.stat "acuite" )}}selected{{/if}}>Acuité</option>
-                <option value="endurance" {{#if (eq fx.damage.scaling.stat "endurance" )}}selected{{/if}}>Endurance
-                </option>
-              </select>
-            </div>
-            <div>
-              <label>Par</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.scaling.per" value="{{fx.damage.scaling.per}}"
-                min="1" />
-            </div>
-            <div>
-              <label>Gain / palier</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.scaling.perStep"
-                value="{{fx.damage.scaling.perStep}}" />
-            </div>
-          </div>
-          {{/if}}
-          {{/unless}}
-
-          {{#if isReadOnly}}
-          {{#if fx.uiShowDamage}}
-          <hr style="margin:12px 0; opacity:.25" />
-          <h3>Dégâts de l'effet</h3>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-            <div>
-              <label>Dés</label>
-              <input type="text" name="system.effectsUI.{{i}}.damage.dice" value="{{fx.damage.dice}}" disabled />
-            </div>
-            <div>
-              <label>Fixe</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" disabled />
-            </div>
-          </div>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-            <div>
-              <label>Scaling stat</label>
-              <select name="system.effectsUI.{{i}}.damage.scaling.stat" disabled>
-                <option value="intelligence" {{#if (eq fx.damage.scaling.stat "intelligence" )}}selected{{/if}}>
-                  Intelligence</option>
-                <option value="force" {{#if (eq fx.damage.scaling.stat "force" )}}selected{{/if}}>Force</option>
-                <option value="dexterite" {{#if (eq fx.damage.scaling.stat "dexterite" )}}selected{{/if}}>Dextérité
-                </option>
-                <option value="acuite" {{#if (eq fx.damage.scaling.stat "acuite" )}}selected{{/if}}>Acuité</option>
-                <option value="endurance" {{#if (eq fx.damage.scaling.stat "endurance" )}}selected{{/if}}>Endurance
-                </option>
-              </select>
-            </div>
-            <div>
-              <label>Par</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.scaling.per" value="{{fx.damage.scaling.per}}"
-                disabled />
-            </div>
-            <div>
-              <label>Gain / palier</label>
-              <input type="number" name="system.effectsUI.{{i}}.damage.scaling.perStep"
-                value="{{fx.damage.scaling.perStep}}" disabled />
-            </div>
-          </div>
-          {{/if}}
-          {{/if}}
-
-          <div class="mods-head">
-            <b>Mods</b>
             {{#unless isReadOnly}}
-            <button type="button" class="btn small" data-action="addMod" data-fx-index="{{i}}">+ Mod</button>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" class="fx-dmg-enabled" data-fx-index="{{i}}" {{#if fx.damage.enabled}}checked{{/if}} />
+                Cet effet inflige des dégâts
+              </label>
             {{/unless}}
-          </div>
 
-          {{#unless (lookup fx.mods 0)}}
-          <p class="hint" style="margin-top:6px;">Aucun mod.</p>
+            {{#if (or (and (not isReadOnly) fx.damage.enabled) (and isReadOnly fx.uiShowDamage))}}
+
+              {{#if fx.uiShowDice}}
+                <div style="margin-top:8px;">
+                  <label>Dés</label>
+                  {{#if isReadOnly}}
+                    <div><b>{{fx.damage.dice}}</b></div>
+                  {{else}}
+                    <input type="text" name="system.effectsUI.{{i}}.damage.dice" value="{{fx.damage.dice}}" placeholder="ex: 1d6" />
+                  {{/if}}
+                </div>
+              {{/if}}
+
+              {{#if fx.uiShowFlat}}
+                <div style="margin-top:8px;">
+                  <label>Fixe</label>
+                  {{#if isReadOnly}}
+                    <div><b>{{fx.damage.flat}}</b></div>
+                  {{else}}
+                    <input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" />
+                  {{/if}}
+                </div>
+              {{/if}}
+
+              {{#if fx.uiShowScaling}}
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
+                  <div>
+                    <label>Scaling stat</label>
+                    {{#if isReadOnly}}
+                      <div><b>{{fx.damage.scaling.stat}}</b></div>
+                    {{else}}
+                      <select name="system.effectsUI.{{i}}.damage.scaling.stat">
+                        <option value="intelligence" {{#if (eq fx.damage.scaling.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+                        <option value="force" {{#if (eq fx.damage.scaling.stat "force")}}selected{{/if}}>Force</option>
+                        <option value="dexterite" {{#if (eq fx.damage.scaling.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+                        <option value="acuite" {{#if (eq fx.damage.scaling.stat "acuite")}}selected{{/if}}>Acuité</option>
+                        <option value="endurance" {{#if (eq fx.damage.scaling.stat "endurance")}}selected{{/if}}>Endurance</option>
+                      </select>
+                    {{/if}}
+                  </div>
+                  <div>
+                    <label>Par</label>
+                    {{#if isReadOnly}}
+                      <div><b>{{fx.damage.scaling.per}}</b></div>
+                    {{else}}
+                      <input type="number" name="system.effectsUI.{{i}}.damage.scaling.per" value="{{fx.damage.scaling.per}}" min="1" />
+                    {{/if}}
+                  </div>
+                  <div>
+                    <label>Gain / palier</label>
+                    {{#if isReadOnly}}
+                      <div><b>{{fx.damage.scaling.perStep}}</b></div>
+                    {{else}}
+                      <input type="number" name="system.effectsUI.{{i}}.damage.scaling.perStep" value="{{fx.damage.scaling.perStep}}" />
+                    {{/if}}
+                  </div>
+                </div>
+              {{/if}}
+
+            {{/if}}
+          {{/if}}
+
+          {{!-- =========================
+          Mods
+          - Joueur : visible (important)
+          - Mais cacher le titre "Mods" et le bouton +Mod ? => tu veux cacher le titre et le bouton uniquement côté joueur.
+          ========================= --}}
+          {{#unless isReadOnly}}
+            <div class="mods-head">
+              <b>Mods</b>
+              <button type="button" class="btn small" data-action="addMod" data-fx-index="{{i}}">+ Mod</button>
+            </div>
           {{/unless}}
 
-          <div class="mods-list">
-            {{#each fx.mods as |m j|}}
-            <div class="mod-line" data-mod-index="{{j}}">
-              <select class="mod-stat" name="system.effectsUI.{{i}}.mods.{{j}}.stat" {{#if isReadOnly}}disabled{{/if}}>
-                <optgroup label="Caractéristiques">
-                  <option value="force" {{#if (eq m.stat "force" )}}selected{{/if}}>Force</option>
-                  <option value="intelligence" {{#if (eq m.stat "intelligence" )}}selected{{/if}}>Intelligence</option>
-                  <option value="dexterite" {{#if (eq m.stat "dexterite" )}}selected{{/if}}>Dextérité</option>
-                  <option value="acuite" {{#if (eq m.stat "acuite" )}}selected{{/if}}>Acuité</option>
-                  <option value="endurance" {{#if (eq m.stat "endurance" )}}selected{{/if}}>Endurance</option>
-                </optgroup>
+          {{#if (lookup fx.mods 0)}}
+            {{#if isReadOnly}}
+              <div style="margin-top:12px;"><b>Bonus / Malus</b></div>
+            {{/if}}
 
-                <optgroup label="Défenses">
-                  <option value="armureFixe" {{#if (eq m.stat "armureFixe" )}}selected{{/if}}>Armure fixe</option>
-                  <option value="resistanceFixe" {{#if (eq m.stat "resistanceFixe" )}}selected{{/if}}>Résistance fixe
-                  </option>
-                  <option value="scoreArmure" {{#if (eq m.stat "scoreArmure" )}}selected{{/if}}>Score Armure</option>
-                  <option value="scoreResistance" {{#if (eq m.stat "scoreResistance" )}}selected{{/if}}>Score Résistance
-                  </option>
-                </optgroup>
+            <div class="mods-list">
+              {{#each fx.mods as |m j|}}
+                <div class="mod-line" data-mod-index="{{j}}">
+                  {{#if isReadOnly}}
+                    <div><b>{{m.stat}}</b></div>
+                    <div><b>{{m.mode}}</b></div>
+                    <div><b>{{m.valueType}}</b></div>
+                    <div><b>{{m.value}}</b></div>
+                    <div><b>{{m.formula}}</b></div>
+                    <div></div>
+                  {{else}}
+                    <select class="mod-stat" name="system.effectsUI.{{i}}.mods.{{j}}.stat">
+                      <optgroup label="Caractéristiques">
+                        <option value="force" {{#if (eq m.stat "force")}}selected{{/if}}>Force</option>
+                        <option value="intelligence" {{#if (eq m.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+                        <option value="dexterite" {{#if (eq m.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+                        <option value="acuite" {{#if (eq m.stat "acuite")}}selected{{/if}}>Acuité</option>
+                        <option value="endurance" {{#if (eq m.stat "endurance")}}selected{{/if}}>Endurance</option>
+                      </optgroup>
+                      <optgroup label="Défenses">
+                        <option value="armureFixe" {{#if (eq m.stat "armureFixe")}}selected{{/if}}>Armure fixe</option>
+                        <option value="resistanceFixe" {{#if (eq m.stat "resistanceFixe")}}selected{{/if}}>Résistance fixe</option>
+                        <option value="scoreArmure" {{#if (eq m.stat "scoreArmure")}}selected{{/if}}>Score Armure</option>
+                        <option value="scoreResistance" {{#if (eq m.stat "scoreResistance")}}selected{{/if}}>Score Résistance</option>
+                      </optgroup>
+                      <optgroup label="Ressources">
+                        <option value="pvMax" {{#if (eq m.stat "pvMax")}}selected{{/if}}>PV max</option>
+                        <option value="manaMax" {{#if (eq m.stat "manaMax")}}selected{{/if}}>Mana max</option>
+                        <option value="regenPv" {{#if (eq m.stat "regenPv")}}selected{{/if}}>Régén PV</option>
+                        <option value="regenMana" {{#if (eq m.stat "regenMana")}}selected{{/if}}>Régén Mana</option>
+                      </optgroup>
+                      <optgroup label="Autres">
+                        <option value="vitesse" {{#if (eq m.stat "vitesse")}}selected{{/if}}>Vitesse</option>
+                        <option value="podsMax" {{#if (eq m.stat "podsMax")}}selected{{/if}}>Pods max</option>
+                      </optgroup>
+                    </select>
 
-                <optgroup label="Ressources">
-                  <option value="pvMax" {{#if (eq m.stat "pvMax" )}}selected{{/if}}>PV max</option>
-                  <option value="manaMax" {{#if (eq m.stat "manaMax" )}}selected{{/if}}>Mana max</option>
-                  <option value="regenPv" {{#if (eq m.stat "regenPv" )}}selected{{/if}}>Régén PV</option>
-                  <option value="regenMana" {{#if (eq m.stat "regenMana" )}}selected{{/if}}>Régén Mana</option>
-                </optgroup>
+                    <select class="mod-mode" name="system.effectsUI.{{i}}.mods.{{j}}.mode">
+                      <option value="flat" {{#if (eq m.mode "flat")}}selected{{/if}}>+ Flat</option>
+                      <option value="pct"  {{#if (eq m.mode "pct")}}selected{{/if}}>%</option>
+                    </select>
 
-                <optgroup label="Autres">
-                  <option value="vitesse" {{#if (eq m.stat "vitesse" )}}selected{{/if}}>Vitesse</option>
-                  <option value="podsMax" {{#if (eq m.stat "podsMax" )}}selected{{/if}}>Pods max</option>
-                </optgroup>
-              </select>
+                    <select class="mod-type" name="system.effectsUI.{{i}}.mods.{{j}}.valueType">
+                      <option value="fixed"   {{#if (eq m.valueType "fixed")}}selected{{/if}}>Fixe</option>
+                      <option value="formula" {{#if (eq m.valueType "formula")}}selected{{/if}}>Formule</option>
+                    </select>
 
-              <select class="mod-mode" name="system.effectsUI.{{i}}.mods.{{j}}.mode" {{#if isReadOnly}}disabled{{/if}}>
-                <option value="flat" {{#if (eq m.mode "flat" )}}selected{{/if}}>+ Flat</option>
-                <option value="pct" {{#if (eq m.mode "pct" )}}selected{{/if}}>%</option>
-              </select>
+                    <input class="mod-value" type="number" name="system.effectsUI.{{i}}.mods.{{j}}.value" value="{{m.value}}" placeholder="Valeur" />
+                    <input class="mod-formula" type="text" name="system.effectsUI.{{i}}.mods.{{j}}.formula" value="{{m.formula}}" placeholder="ex: floor(@effP.intelligence/10)" />
 
-              <select class="mod-type" name="system.effectsUI.{{i}}.mods.{{j}}.valueType" {{#if
-                isReadOnly}}disabled{{/if}}>
-                <option value="fixed" {{#if (eq m.valueType "fixed" )}}selected{{/if}}>Fixe</option>
-                <option value="formula" {{#if (eq m.valueType "formula" )}}selected{{/if}}>Formule</option>
-              </select>
-
-              <input class="mod-value" type="number" name="system.effectsUI.{{i}}.mods.{{j}}.value" value="{{m.value}}"
-                placeholder="Valeur" {{#if isReadOnly}}disabled{{/if}} />
-
-              <input class="mod-formula" type="text" name="system.effectsUI.{{i}}.mods.{{j}}.formula"
-                value="{{m.formula}}" placeholder="ex: floor(@effP.intelligence/10)" {{#if
-                isReadOnly}}disabled{{/if}} />
-
-              {{#unless isReadOnly}}
-              <button type="button" class="icon" data-action="removeMod" data-fx-index="{{i}}" data-mod-index="{{j}}"
-                title="Supprimer">✕</button>
-              {{/unless}}
+                    <button type="button" class="icon" data-action="removeMod" data-fx-index="{{i}}" data-mod-index="{{j}}" title="Supprimer">✕</button>
+                  {{/if}}
+                </div>
+              {{/each}}
             </div>
-            {{/each}}
-          </div>
+          {{else}}
+            <p class="hint" style="margin-top:6px;">{{#if isReadOnly}}Aucun bonus/malus.{{else}}Aucun mod.{{/if}}</p>
+          {{/if}}
         </div>
       </details>
-      {{/each}}
-    </div>
-  </section>
+    {{/each}}
+  </div>
+</section>
 
   <style>
     .effects-ui .fx-toolbar {
