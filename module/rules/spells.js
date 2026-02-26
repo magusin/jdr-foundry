@@ -1,4 +1,5 @@
 // systems/rpg/module/rules/spells.js
+import { manhattanDistanceTokens } from "../utils/grid.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -514,8 +515,10 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
   const rmin = n(sys.range?.min, 0);
   const rmax = n(sys.range?.max, 0);
   if (casterT && targetT) {
-    const dist = canvas.grid.measureDistance(casterT.center, targetT.center);
-    if (dist < rmin || dist > rmax) return { ok: false, reason: `Hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+    const dist = measureSquares(casterT, targetT); // ✅ Manhattan
+    if (dist < rmin || dist > rmax) {
+      return { ok: false, reason: `Hors portée (${dist} cases, ${rmin}–${rmax})` };
+    }
   }
 
   // mana
@@ -677,9 +680,7 @@ async function upsertState(actor, state) {
 
 function measureSquares(tokenA, tokenB) {
   try {
-    const d = canvas.grid.measureDistance(tokenA.center, tokenB.center);
-    const unit = Number(canvas.dimensions?.distance ?? 1) || 1;
-    return d / unit;
+    return manhattanDistanceTokens(tokenA, tokenB); // ✅ diagonale=2
   } catch (e) {
     return 999999;
   }
