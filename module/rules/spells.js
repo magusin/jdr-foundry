@@ -905,36 +905,44 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   });
 }
 
-export function bindSpellChatButtons(html, message) {
-  const $html = (html?.find && html?.on) ? html : $(html);
+export function bindSpellChatButtons(htmlEl, message) {
+  const data =
+    message?.getFlag?.("rpg", "spellDeclare") ??
+    message?.flags?.rpg?.spellDeclare ??
+    null;
 
-  const data = message?.getFlag?.("rpg", "spellDeclare") ?? message?.flags?.rpg?.spellDeclare;
   if (!data) return;
 
-  // ✅ Les joueurs voient le message mais pas les boutons
+  // Joueurs : on retire la zone GM
   if (!game.user.isGM) {
-    $html.find(".rpg-spell-gm").remove();
+    htmlEl.querySelector(".rpg-spell-gm")?.remove();
     return;
   }
 
-  $html.off("click.rpgSpellResolve");
+  // IMPORTANT: éviter de binder 20 fois si Foundry re-render
+  // -> on marque le message DOM comme déjà bindé
+  if (htmlEl.dataset.rpgSpellBound === "1") return;
+  htmlEl.dataset.rpgSpellBound = "1";
 
-  $html.on("click.rpgSpellResolve", ".rpg-spell-resolve", async (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
+  const buttons = htmlEl.querySelectorAll(".rpg-spell-resolve");
+  for (const btn of buttons) {
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
 
-    const result = ev.currentTarget?.dataset?.result;
-    if (!result) return;
+      const result = btn.dataset.result;
+      if (!result) return;
 
-    // lock UI
-    $html.find(".rpg-spell-resolve").prop("disabled", true);
+      // lock UI
+      for (const b of buttons) b.disabled = true;
 
-    try {
-      await resolveDeclaredSpellFromMessage(message, result);
-    } catch (err) {
-      console.error("[RPG] resolve error:", err);
-      ui.notifications.error("Erreur résolution sort (voir console).");
-      $html.find(".rpg-spell-resolve").prop("disabled", false);
-    }
-  });
+      try {
+        await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result);
+      } catch (err) {
+        console.error("[RPG] resolve error:", err);
+        ui.notifications.error("Erreur résolution sort (voir console).");
+        for (const b of buttons) b.disabled = false;
+      }
+    });
+  }
 }

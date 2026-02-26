@@ -1,232 +1,506 @@
-.rpg-spell-menu {
+/* =========================================================
+   RPG - Menu Sorts (macro-menu.css)
+   Thèmes: .rpg-theme-dark / .rpg-theme-light
+   ========================================================= */
+
+   .rpg-spell-menu {
     font-family: inherit;
-}
-
-.rpg-spell-menu * {
     box-sizing: border-box;
-}
-
-.rpg-spell-menu .rpg-head {
+  }
+  .rpg-spell-menu * { box-sizing: border-box; }
+  
+  /* -------------------------
+     STRUCTURE
+  ------------------------- */
+  .rpg-spell-menu .rpg-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     margin-bottom: 10px;
-}
-
-.rpg-spell-menu .rpg-sub {
-    opacity: .85;
+  }
+  
+  .rpg-spell-menu .rpg-sub {
     font-size: 12px;
-}
-
-.rpg-spell-menu .rpg-mana {
+    font-weight: 600;
+  }
+  
+  .rpg-spell-menu .rpg-mana {
     font-size: 14px;
-    opacity: .9;
-}
-
-/* ✅ nouveau layout filtres */
-.rpg-spell-menu .rpg-filterbar {
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  
+  .rpg-spell-menu .rpg-filterbar {
     display: flex;
     flex-direction: column;
     gap: 10px;
     margin-bottom: 12px;
-}
-
-.rpg-spell-menu .rpg-search {
+  }
+  
+  .rpg-spell-menu .rpg-search {
     width: 100%;
-    padding: 8px 10px;
+    padding: 10px 12px;
     border-radius: 999px;
-}
-
-/* ✅ BOUTONS TOUS SUR 1 LIGNE */
-.rpg-spell-menu .rpg-tabs {
+    outline: none;
+  }
+  
+  .rpg-spell-menu .rpg-tabs {
     display: flex;
     flex-wrap: nowrap;
-    /* PAS de retour à la ligne */
     gap: 10px;
     align-items: center;
     justify-content: flex-start;
     overflow-x: auto;
-    /* si trop de boutons -> scroll horizontal */
     padding-bottom: 2px;
-}
-
-.rpg-spell-menu .tab {
+  }
+  
+  .rpg-spell-menu .tab {
     flex: 0 0 auto;
-    /* empêche de prendre toute la largeur */
     width: auto !important;
-    /* écrase les styles Foundry */
     display: inline-flex;
-    /* empêche le mode block */
     align-items: center;
     justify-content: center;
     white-space: nowrap;
-    /* texte sur une ligne */
-    padding: 6px 12px;
+    padding: 7px 14px;
     border-radius: 999px;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, .18);
-    background: rgba(255, 255, 255, .06);
-}
-
-.rpg-spell-menu .tab.active {
-    outline: 2px solid rgba(80, 160, 255, .35);
-    background: rgba(80, 160, 255, .10);
-}
-
-.rpg-spell-menu .rpg-list {
+    font-weight: 700;
+    transition: transform .06s ease, background .12s ease, border-color .12s ease;
+  }
+  .rpg-spell-menu .tab:active { transform: scale(.98); }
+  
+  .rpg-spell-menu .rpg-list {
     max-height: 520px;
     overflow: auto;
     padding-right: 6px;
-}
-
-.rpg-spell-menu .rpg-spell-row {
+  }
+  
+  .rpg-spell-menu .rpg-spell-row {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    border: 1px solid rgba(255, 255, 255, .14);
     border-radius: 14px;
-    background: rgba(255, 255, 255, .03);
     margin-bottom: 10px;
-}
-
-.rpg-spell-menu .rpg-icon {
+  }
+  
+  .rpg-spell-menu .rpg-icon {
     width: 46px;
     height: 46px;
     border-radius: 12px;
     object-fit: cover;
-    border: 1px solid rgba(255, 255, 255, .15);
     flex: 0 0 auto;
-}
-
-.rpg-spell-menu .rpg-mid {
-    flex: 1;
-    min-width: 0;
-}
-
-.rpg-spell-menu .rpg-topline {
+  }
+  
+  .rpg-spell-menu .rpg-mid { flex: 1; min-width: 0; }
+  
+  .rpg-spell-menu .rpg-topline {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 4px;
-}
-
-.rpg-spell-menu .rpg-name {
-    font-weight: 800;
+  }
+  
+  .rpg-spell-menu .rpg-name {
+    font-weight: 900;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 420px;
-}
-
-.rpg-spell-menu .rpg-badges {
+  }
+  
+  .rpg-spell-menu .rpg-badges {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     justify-content: flex-end;
-}
-
-.rpg-spell-menu .badge {
+  }
+  
+  .rpg-spell-menu .badge {
     font-size: 11px;
     padding: 4px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, .18);
-    background: rgba(255, 255, 255, .05);
-    opacity: .95;
-}
-
-.rpg-spell-menu .b-ok {
-    background: rgba(40, 170, 90, .16);
-    border-color: rgba(40, 170, 90, .35);
-}
-
-.rpg-spell-menu .b-bad {
-    background: rgba(200, 60, 60, .14);
-    border-color: rgba(200, 60, 60, .35);
-}
-
-.rpg-spell-menu .b-warn {
-    background: rgba(220, 160, 40, .14);
-    border-color: rgba(220, 160, 40, .35);
-}
-
-.rpg-spell-menu .b-aura {
-    background: rgba(120, 80, 220, .14);
-    border-color: rgba(120, 80, 220, .35);
-}
-
-.rpg-spell-menu .rpg-stats {
+    font-weight: 800;
+    border: 1px solid transparent;
+  }
+  
+  .rpg-spell-menu .rpg-stats {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
     font-size: 12px;
-    opacity: .9;
-}
-
-.rpg-spell-menu .cd-ok {
-    color: #16c172;
-}
-
-.rpg-spell-menu .cd-bad {
-    color: #d14c4c;
-}
-
-.rpg-spell-menu .bad {
-    color: #d14c4c;
-}
-
-.rpg-spell-menu .rpg-right {
+    font-weight: 700;
+  }
+  
+  .rpg-spell-menu .rpg-right {
     display: flex;
     align-items: center;
     gap: 10px;
     flex: 0 0 auto;
-}
-
-.rpg-spell-menu .rpg-open {
+  }
+  
+  .rpg-spell-menu .rpg-open {
     width: 40px;
     height: 40px;
     border-radius: 12px;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, .18);
-    background: rgba(255, 255, 255, .06);
-}
-
-.rpg-spell-menu .rpg-declare {
+    font-weight: 900;
+    transition: transform .06s ease, background .12s ease, border-color .12s ease;
+  }
+  .rpg-spell-menu .rpg-open:active { transform: scale(.98); }
+  
+  .rpg-spell-menu .rpg-declare {
     min-width: 170px;
     height: 44px;
     border-radius: 14px;
-    font-weight: 800;
+    font-weight: 900;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, .18);
-    background: rgba(255, 255, 255, .06);
-}
-
-.rpg-spell-menu .btn-ok {
-    background: rgba(40, 170, 90, .18);
-    border-color: rgba(40, 170, 90, .35);
-}
-
-.rpg-spell-menu .btn-off {
+    transition: transform .06s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+  }
+  .rpg-spell-menu .rpg-declare:active { transform: scale(.99); }
+  
+  .rpg-spell-menu .btn-off {
     opacity: .45;
     cursor: not-allowed;
-}
-
-.rpg-spell-menu .rpg-empty {
-    opacity: .75;
+  }
+  
+  .rpg-spell-menu .rpg-empty {
     padding: 10px;
-}
-
-.rpg-spell-menu .rpg-hint {
+    font-weight: 700;
+  }
+  
+  .rpg-spell-menu .rpg-hint {
     margin-top: 10px;
     font-size: 12px;
-    opacity: .75;
+    font-weight: 700;
+  }
+  
+  /* Scrollbar tabs */
+  .rpg-spell-menu .rpg-tabs::-webkit-scrollbar { height: 6px; }
+  .rpg-spell-menu .rpg-tabs::-webkit-scrollbar-thumb { border-radius: 999px; }
+  
+  /* -------------------------
+     BADGES (communs)
+  ------------------------- */
+  .rpg-spell-menu .b-ok   { background: rgba(40, 170, 90, .16);  border-color: rgba(40, 170, 90, .40); }
+  .rpg-spell-menu .b-bad  { background: rgba(200, 60, 60, .14);  border-color: rgba(200, 60, 60, .40); }
+  .rpg-spell-menu .b-warn { background: rgba(220, 160, 40, .14); border-color: rgba(220, 160, 40, .45); }
+  .rpg-spell-menu .b-aura { background: rgba(120, 80, 220, .14); border-color: rgba(120, 80, 220, .40); }
+  
+  .rpg-spell-menu .cd-ok  { color: #16c172; }
+  .rpg-spell-menu .cd-bad { color: #d14c4c; }
+  .rpg-spell-menu .bad    { color: #d14c4c; }
+  
+  /* =========================================================
+     THEME DARK (comme ta macro dégâts)
+     ========================================================= */
+  .rpg-spell-menu.rpg-theme-dark {
+    color: rgba(255,255,255,.92);
+    padding: 10px;
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-sub { opacity: .85; }
+  .rpg-spell-menu.rpg-theme-dark .rpg-mana { opacity: .95; }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-search {
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.92);
+  }
+  .rpg-spell-menu.rpg-theme-dark .rpg-search::placeholder { color: rgba(255,255,255,.55); }
+  
+  .rpg-spell-menu.rpg-theme-dark .tab {
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.90);
+  }
+  .rpg-spell-menu.rpg-theme-dark .tab.active {
+    outline: 2px solid rgba(80, 160, 255, .35);
+    background: rgba(80, 160, 255, .12);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-spell-row {
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.03);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-icon {
+    border: 1px solid rgba(255,255,255,.15);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .badge {
+    background: rgba(255,255,255,.05);
+    border-color: rgba(255,255,255,.18);
+    color: rgba(255,255,255,.92);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-stats { opacity: .92; }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-open,
+  .rpg-spell-menu.rpg-theme-dark .rpg-declare {
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.92);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .btn-ok {
+    background: rgba(40, 170, 90, .18);
+    border-color: rgba(40, 170, 90, .40);
+  }
+  
+  .rpg-spell-menu.rpg-theme-dark .rpg-empty,
+  .rpg-spell-menu.rpg-theme-dark .rpg-hint { opacity: .78; }
+  
+  /* =========================================================
+     THEME LIGHT (parchemin lisible)
+     ========================================================= */
+  .rpg-spell-menu.rpg-theme-light {
+    background: url(/ui/parchment.jpg) repeat;
+    padding: 8px;
+    color: var(--color-text-dark-primary);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-sub { opacity: 1; }
+  .rpg-spell-menu.rpg-theme-light .rpg-mana { opacity: 1; }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-search {
+    border: 1px solid rgba(0,0,0,.25);
+    background: rgba(255,255,255,.70);
+    color: var(--color-text-dark-primary);
+  }
+  .rpg-spell-menu.rpg-theme-light .rpg-search::placeholder { color: rgba(0,0,0,.55); }
+  
+  .rpg-spell-menu.rpg-theme-light .tab {
+    border: 1px solid rgba(0,0,0,.22);
+    background: rgba(255,255,255,.55);
+    color: var(--color-text-dark-primary);
+  }
+  .rpg-spell-menu.rpg-theme-light .tab.active {
+    outline: 2px solid rgba(80, 160, 255, .35);
+    background: rgba(80, 160, 255, .18);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-spell-row {
+    border: 1px solid rgba(0,0,0,.18);
+    background: rgba(255,255,255,.42);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-icon {
+    border: 1px solid rgba(0,0,0,.18);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .badge {
+    background: rgba(255,255,255,.65);
+    border-color: rgba(0,0,0,.20);
+    color: var(--color-text-dark-primary);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-stats { opacity: 1; }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-open,
+  .rpg-spell-menu.rpg-theme-light .rpg-declare {
+    border: 1px solid rgba(0,0,0,.22);
+    background: rgba(255, 255, 255, 0.65);
+    color: var(--color-text-dark-primary);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .btn-ok {
+    background: rgba(40, 170, 90, .22);
+    border-color: rgba(40, 170, 90, .45);
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .btn-off {
+    opacity: .55; /* un peu plus lisible en clair */
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-empty { opacity: .85; }
+  .rpg-spell-menu.rpg-theme-light .rpg-hint { opacity: .85; }
+
+  /* =========================================================
+   PATCH THEME LIGHT (anti-texte invisible + bordures parchemin)
+   À COLLER EN BAS DU FICHIER
+   ========================================================= */
+
+.rpg-spell-menu.rpg-theme-light{
+    background: url(/ui/parchment.jpg) repeat !important;
+    padding: 10px !important;
+    color: var(--color-text-dark-primary) !important;
+  }
+  
+  /* Force la couleur sur tout (Foundry peut garder du blanc/gris pâle) */
+  .rpg-spell-menu.rpg-theme-light,
+  .rpg-spell-menu.rpg-theme-light *{
+    color: var(--color-text-dark-primary) !important;
+    text-shadow: none !important;
+  }
+  
+  /* Variables "parchemin" */
+  .rpg-spell-menu.rpg-theme-light{
+    --rpg-parch-border: rgba(120, 90, 60, .45);
+    --rpg-parch-border-strong: rgba(120, 90, 60, .65);
+    --rpg-parch-panel: rgba(255,255,255,.58);
+    --rpg-parch-panel-strong: rgba(255,255,255,.72);
+  }
+  
+  /* Barre de recherche */
+  .rpg-spell-menu.rpg-theme-light .rpg-search{
+    background: var(--rpg-parch-panel-strong) !important;
+    border: 1px solid var(--rpg-parch-border-strong) !important;
+    color: var(--color-text-dark-primary) !important;
+  }
+  .rpg-spell-menu.rpg-theme-light .rpg-search::placeholder{
+    color: rgba(40, 30, 20, .55) !important;
+  }
+  
+  /* Tabs */
+  .rpg-spell-menu.rpg-theme-light .tab{
+    background: var(--rpg-parch-panel) !important;
+    border: 1px solid var(--rpg-parch-border) !important;
+    color: var(--color-text-dark-primary) !important;
+  }
+  .rpg-spell-menu.rpg-theme-light .tab.active{
+    background: rgba(120, 80, 40, .16) !important;
+    border-color: var(--rpg-parch-border-strong) !important;
+    outline: 2px solid rgba(120, 80, 40, .18) !important;
+  }
+  
+  /* Lignes sorts */
+  .rpg-spell-menu.rpg-theme-light .rpg-spell-row{
+    background: var(--rpg-parch-panel) !important;
+    border: 1px solid var(--rpg-parch-border) !important;
+  }
+  
+  /* Icon */
+  .rpg-spell-menu.rpg-theme-light .rpg-icon{
+    border: 1px solid var(--rpg-parch-border) !important;
+  }
+  
+  /* Badges (fond clair + bordure parchemin + texte foncé) */
+  .rpg-spell-menu.rpg-theme-light .badge{
+    background: rgba(255,255,255,.62) !important;
+    border: 1px solid var(--rpg-parch-border) !important;
+    color: rgba(35, 25, 15, .95) !important;
+  }
+  
+  /* Boutons */
+  .rpg-spell-menu.rpg-theme-light .rpg-open,
+  .rpg-spell-menu.rpg-theme-light .rpg-declare{
+    background: rgba(255,255,255,.68) !important;
+    border: 1px solid var(--rpg-parch-border-strong) !important;
+    color: var(--color-text-dark-primary) !important;
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .btn-ok{
+    background: rgba(70, 160, 90, .22) !important;
+    border-color: rgba(70, 160, 90, .45) !important;
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .btn-off{
+    opacity: .55 !important;
+  }
+  
+  /* Textes "secondaires" : on évite les opacités trop faibles */
+  .rpg-spell-menu.rpg-theme-light .rpg-sub,
+  .rpg-spell-menu.rpg-theme-light .rpg-hint,
+  .rpg-spell-menu.rpg-theme-light .rpg-empty{
+    opacity: 1 !important;
+    color: rgba(35, 25, 15, .92) !important;
+  }
+  
+  /* Couleurs CD */
+  .rpg-spell-menu.rpg-theme-light .cd-ok{ color: #0b8b4a !important; }
+  .rpg-spell-menu.rpg-theme-light .cd-bad{ color: #b12e2e !important; }
+  .rpg-spell-menu.rpg-theme-light .bad{ color: #b12e2e !important; }
+
+  /* =========================================================
+   PATCH LIGHT #2 : rendre le contenu des lignes lisible
+   À COLLER EN BAS DU FICHIER (après le patch light précédent)
+   ========================================================= */
+
+.rpg-spell-menu.rpg-theme-light .rpg-spell-row{
+    background: rgba(255,255,255,.72) !important;
+    border: 1px solid rgba(120, 90, 60, .55) !important;
+  }
+  
+  /* Noms & stats : on annule les opacités / couleurs trop pâles */
+  .rpg-spell-menu.rpg-theme-light .rpg-name{
+    color: rgba(25, 18, 10, 1) !important;
+    opacity: 1 !important;
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-stats{
+    opacity: 1 !important;
+    color: rgba(35, 25, 15, .98) !important;
+  }
+  
+  .rpg-spell-menu.rpg-theme-light .rpg-stats span,
+  .rpg-spell-menu.rpg-theme-light .rpg-stats b{
+    color: rgba(35, 25, 15, .98) !important;
+  }
+  
+  /* Petits textes (mana / portée / cd) parfois héritent d’un gris clair */
+  .rpg-spell-menu.rpg-theme-light .rpg-mid,
+  .rpg-spell-menu.rpg-theme-light .rpg-topline{
+    opacity: 1 !important;
+  }
+  
+  /* Tabs : texte plus lisible */
+  .rpg-spell-menu.rpg-theme-light .tab{
+    color: rgba(25, 18, 10, .95) !important;
+    background: rgba(255,255,255,.78) !important;
+    border-color: rgba(120, 90, 60, .50) !important;
+  }
+  .rpg-spell-menu.rpg-theme-light .tab.active{
+    background: rgba(120, 80, 40, .22) !important;
+    border-color: rgba(120, 80, 40, .65) !important;
+  }
+  
+  /* Bouton Déclarer / Loupe : un peu plus contrastés */
+  .rpg-spell-menu.rpg-theme-light .rpg-open,
+  .rpg-spell-menu.rpg-theme-light .rpg-declare{
+    background: rgba(255,255,255,.82) !important;
+    border-color: rgba(120, 90, 60, .60) !important;
+    color: rgba(25, 18, 10, .98) !important;
+  }
+
+  /* --- FIX padding Foundry (window-content) uniquement pour Menu Sorts --- */
+.application:has(.rpg-spell-menu) .window-content{
+    padding: 0 !important;
+  }
+
+  /* --- Mana lisible en thème clair --- */
+.rpg-spell-menu.rpg-theme-light .rpg-mana,
+.rpg-spell-menu.rpg-theme-light .rpg-mana b,
+.rpg-spell-menu.rpg-theme-light .rpg-mana-val{
+  color: rgba(25, 18, 10, 1) !important;
+  opacity: 1 !important;
 }
 
-.rpg-spell-menu .rpg-tabs::-webkit-scrollbar {
-    height: 6px;
-}
+/* ✅ Bouton Déclarer "utilisable" en vert (LIGHT MODE) */
+.rpg-spell-menu.rpg-theme-light .rpg-declare.btn-ok:not(:disabled){
+    background: rgba(40, 170, 90, .22) !important;
+    border-color: rgba(40, 170, 90, .55) !important;
+    color: rgba(25, 18, 10, 1) !important; /* texte lisible sur parchemin */
+  }
+  
+  /* Hover un peu plus marqué */
+  .rpg-spell-menu.rpg-theme-light .rpg-declare.btn-ok:not(:disabled):hover{
+    background: rgba(40, 170, 90, .30) !important;
+    border-color: rgba(40, 170, 90, .75) !important;
+  }
+  
+  /* Disabled reste "gris" */
+  .rpg-spell-menu.rpg-theme-light .rpg-declare.btn-off,
+  .rpg-spell-menu.rpg-theme-light .rpg-declare:disabled{
+    background: rgba(255, 255, 255, .55) !important;
+    border-color: rgba(0, 0, 0, .18) !important;
+    color: rgba(0, 0, 0, .35) !important;
+    opacity: 1 !important; /* évite qu'il devienne trop pâle */
+  }
 
-.rpg-spell-menu .rpg-tabs::-webkit-scrollbar-thumb {
-    border-radius: 999px;
+  /* ✅ Cache les boutons bas du Dialog (on garde la croix) */
+.form-footer {
+  display: none !important;
 }

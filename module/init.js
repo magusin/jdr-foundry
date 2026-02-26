@@ -277,10 +277,11 @@ Hooks.once("init", async () => {
     globalThis.RPG_SPELLS = { ...RPG_SPELLS, castSpell: RPG_SPELLS.declareSpell };
     game.rpg.spells = globalThis.RPG_SPELLS;
 
-    // ✅ Boutons MJ dans les messages chat de déclaration
-    Hooks.on("renderChatMessage", (message, html) => {
-      RPG_SPELLS.bindSpellChatButtons(html, message);
-    });
+    // ✅ Boutons MJ dans les messages chat de déclaration (Foundry v13+)
+Hooks.on("renderChatMessageHTML", (message, html) => {
+  // html = HTMLElement (li.chat-message)
+  RPG_SPELLS.bindSpellChatButtons(html, message);
+});
 
     Hooks.on("updateToken", (tokenDoc, changes) => {
       if (!("x" in changes || "y" in changes)) return;

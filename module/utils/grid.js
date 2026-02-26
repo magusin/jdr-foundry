@@ -1,22 +1,24 @@
 export function gridPosFromToken(token) {
-    const t = token?.document ? token : canvas.tokens?.get(token?.id) ?? token;
-    if (!t) return null;
-  
-    const g = canvas.grid.grid;
-    const { x, y } = t.center;
-  
-    if (g?.getGridPositionFromPixels) {
-      const [gx, gy] = g.getGridPositionFromPixels(x, y);
-      return { gx, gy };
-    }
-  
-    const size = canvas.grid.size;
-    return { gx: Math.floor(x / size), gy: Math.floor(y / size) };
+  if (!token?.center || !canvas?.grid) return { gx: 0, gy: 0 };
+
+  const { x, y } = token.center;
+
+  // v12+ : canvas.grid.getOffset({x,y}) => {i,j}
+  if (typeof canvas.grid.getOffset === "function") {
+    const o = canvas.grid.getOffset({ x, y });
+    // Foundry renvoie souvent {i, j}
+    const gx = Number(o?.i ?? o?.x ?? 0);
+    const gy = Number(o?.j ?? o?.y ?? 0);
+    return { gx, gy };
   }
-  
-  export function manhattanDistanceTokens(tokenA, tokenB) {
-    const a = gridPosFromToken(tokenA);
-    const b = gridPosFromToken(tokenB);
-    if (!a || !b) return 0;
-    return Math.abs(a.gx - b.gx) + Math.abs(a.gy - b.gy);
-  }
+
+  // fallback ancien (devrait être rare)
+  const size = canvas.grid.size || 100;
+  return { gx: Math.floor(x / size), gy: Math.floor(y / size) };
+}
+
+export function manhattanDistanceTokens(a, b) {
+  const A = gridPosFromToken(a);
+  const B = gridPosFromToken(b);
+  return Math.abs(A.gx - B.gx) + Math.abs(A.gy - B.gy);
+}
