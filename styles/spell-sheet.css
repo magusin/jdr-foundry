@@ -1,0 +1,18 @@
+/*  =========================================================
+   RPG Spell Sheet — Light / Parchment readable
+   Cible: fiches Item type "spell" (V2)
+   =========================================================*/ 
+
+
+.rpg.sheet.item.spell .window-content{
+    overflow-y: auto !important;
+    overflow-x: hidden;
+  }
+  
+  
+  /* .rpg.sheet.item.spell .rpg-sheet,
+  .rpg.sheet.item.spell form{
+    background: transparent !important;
+    color: var(--color-text-dark-primary);
+  } */
+  

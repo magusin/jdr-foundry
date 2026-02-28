@@ -2,7 +2,7 @@
   "id": "rpg",
   "title": "RPG",
   "description": "Système maison (MMO-tabletop)",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "compatibility": { "minimum": "13", "verified": "13" },
   "template": "template.json",
   "templateVersion": 2,
@@ -10,7 +10,11 @@
   "esmodules": ["module/init.js"],
   "styles": [
     "styles/character-sheet.css",
-    "styles/menu-macro.css"
+    "styles/menu-macro.css",
+    "styles/spell-sheet.css",
+    "styles/armor-sheet.css",
+    "styles/item-sheet.css",
+    "styles/weapon-sheet.css"
   ],
   "languages": [{ "lang": "fr", "name": "Français", "path": "lang/fr.json" }],
   "documentTypes": {

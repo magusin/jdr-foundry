@@ -1,53 +1,69 @@
-<form class="rpg-sheet" autocomplete="off">
+{{!-- systems/rpg/templates/item/item-generic-sheet.hbs --}}
+<div class="rpg-sheet generic-sheet" autocomplete="off">
+
   <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
-    <img class="item-img" src="{{item.img}}" data-edit="img" title="{{item.name}}" />
+    <img class="item-img" src="{{item.img}}" data-edit="img" title="{{item.name}}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;" />
     <div style="flex:1;">
-      <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;"/>
+      {{#if isReadOnly}}
+        <div style="width:100%; font-size:20px;"><b>{{item.name}}</b></div>
+      {{else}}
+        <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;" />
+      {{/if}}
       <small>{{item.type}}</small>
     </div>
   </header>
 
-  <hr/>
-
-  <section>
-    <h2>Détails</h2>
-
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-      <div>
-        <label>Quantité</label>
-        <input type="number" name="system.qte" value="{{system.qte}}" min="0"/>
-      </div>
-
-      <div>
-        <label>Poids (unité)</label>
-        <input type="number" name="system.poids" value="{{system.poids}}" min="0" step="0.1"/>
-      </div>
-    </div>
-
-    {{#if isGM}}
+  <div class="sheet-body">
     <hr/>
-    <h3>Prix (MJ uniquement)</h3>
-    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-      <div>
-        <label>Cuivre</label>
-        <input type="number" name="system.prix.cuivre" value="{{system.prix.cuivre}}" min="0"/>
-      </div>
-      <div>
-        <label>Argent</label>
-        <input type="number" name="system.prix.argent" value="{{system.prix.argent}}" min="0"/>
-      </div>
-      <div>
-        <label>Or</label>
-        <input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/>
-      </div>
-    </div>
-    {{/if}}
-  </section>
 
-  <hr/>
+    <section>
+      <h2>Détails</h2>
 
-  <section>
-    <h2>Description</h2>
-    <textarea name="system.description" rows="5">{{system.description}}</textarea>
-  </section>
-</form>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label>Poids (unité)</label>
+          {{#if canEdit}}
+            <input type="number" name="system.poids" value="{{system.poids}}" min="0" step="0.1"/>
+          {{else}}
+            <div><b>{{system.poids}}</b></div>
+          {{/if}}
+        </div>
+      </div>
+
+      {{#if canEdit}}
+        <hr/>
+        <h3>Prix (MJ uniquement)</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+          <div>
+            <label>Cuivre</label>
+            <input type="number" name="system.prix.cuivre" value="{{system.prix.cuivre}}" min="0"/>
+          </div>
+          <div>
+            <label>Argent</label>
+            <input type="number" name="system.prix.argent" value="{{system.prix.argent}}" min="0"/>
+          </div>
+          <div>
+            <label>Or</label>
+            <input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/>
+          </div>
+        </div>
+        <small style="opacity:0.8;">100 cuivre = 1 argent • 100 argent = 1 or</small>
+      {{/if}}
+    </section>
+
+    <hr/>
+
+    <section>
+      <h2>Description</h2>
+      {{#if canEdit}}
+        <textarea name="system.description" rows="5">{{system.description}}</textarea>
+      {{else}}
+        {{#if system.description}}
+          <div style="white-space:pre-wrap;"><b>{{system.description}}</b></div>
+        {{else}}
+          <small style="opacity:.8;">—</small>
+        {{/if}}
+      {{/if}}
+    </section>
+  </div>
+</div>

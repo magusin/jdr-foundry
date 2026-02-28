@@ -500,7 +500,19 @@
     opacity: 1 !important; /* évite qu'il devienne trop pâle */
   }
 
-  /* ✅ Cache les boutons bas du Dialog (on garde la croix) */
-.form-footer {
-  display: none !important;
+  /* 1) Enlever le padding 1rem UNIQUEMENT pour ce dialog */
+.window-content:has(.rpg-spell-menu) {
+  padding: 0 !important;
+  overflow: hidden; /* évite les bords moches */
+}
+
+/* 3) Footer uniquement pour ce dialog */
+.window-content form.dialog-form.standard-form:has(.rpg-spell-menu) > footer.form-footer {
+  display: none !important; /* si tu veux virer le bouton Fermer du bas */
+  /* OU si tu veux le garder, commente la ligne au-dessus et style-le: */
+  /*
+  padding: 10px 12px !important;
+  background: transparent !important;
+  border-top: 1px solid rgba(0,0,0,.12) !important;
+  */
 }

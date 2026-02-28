@@ -1,3 +1,5 @@
+// systems/rpg/module/sheets/item-armor-sheet.js
+
 export class RPGArmorSheet extends ItemSheet {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {

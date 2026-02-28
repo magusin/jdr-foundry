@@ -1,4 +1,6 @@
-<form class="rpg-sheet" autocomplete="off">
+{{!-- systems/rpg/module/templates/item/spell-sheet.hbs --}}
+
+<div class="rpg-sheet" autocomplete="off">
   <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
     <img src="{{item.img}}" data-edit="img" title="{{item.name}}" width="64" height="64" />
     <div style="flex:1;">
@@ -122,8 +124,9 @@
     <h2>Dégâts</h2>
 
     <label style="display:flex; gap:8px; align-items:center;">
-      <input type="checkbox" name="system.damage.enabled" {{#if system.damage.enabled}}checked{{/if}} />
-      Ce sort inflige des dégâts
+<input type="hidden" name="system.damage.enabled" value="0" />
+<input type="checkbox" name="system.damage.enabled" value="1" {{#if system.damage.enabled}}checked{{/if}} />      
+Ce sort inflige des dégâts
     </label>
 
     {{#if system.damage.enabled}}
@@ -166,7 +169,8 @@
     <h3>Dégâts Crit</h3>
 
     <label style="display:flex; gap:8px; align-items:center;">
-      <input type="checkbox" name="system.damageCrit.enabled" {{#if system.damageCrit.enabled}}checked{{/if}} />
+<input type="hidden" name="system.damageCrit.enabled" value="0" />
+<input type="checkbox" name="system.damageCrit.enabled" value="1" {{#if system.damageCrit.enabled}}checked{{/if}} />
       Le critique a une formule différente
     </label>
 
@@ -268,7 +272,8 @@
     <h2>Aura</h2>
 
     <label style="display:flex; gap:8px; align-items:center;">
-      <input type="checkbox" name="system.aura.active" {{#if system.aura.active}}checked{{/if}} />
+<input type="hidden" name="system.aura.active" value="0" />
+<input type="checkbox" name="system.aura.active" value="1" {{#if system.aura.active}}checked{{/if}} />
       Ce sort active une aura (après réussite/crit)
     </label>
 
@@ -703,4 +708,4 @@ EFFETS (GM = inputs/select, Joueur = texte gras)
     <h2>Description</h2>
     <textarea name="system.description" rows="6" {{#if isReadOnly}}disabled{{/if}}>{{system.description}}</textarea>
   </section>
-</form>
+</div>

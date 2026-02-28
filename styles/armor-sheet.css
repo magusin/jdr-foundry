@@ -1,0 +1,14 @@
+/* le conteneur principal occupe la hauteur de la fenêtre */
+.armor-sheet {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* le body prend la hauteur restante et devient scrollable */
+  .armor-sheet .sheet-body {
+    flex: 1;
+    min-height: 0;     /* 🔥 indispensable en flex, sinon pas de scroll */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }

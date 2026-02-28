@@ -3,9 +3,13 @@
 import { RPGCharacterSheet } from "./sheets/character-sheet.js";
 import { RPGMonsterSheet } from "./sheets/monster-sheet.js";
 import { RPGWeaponSheet } from "./sheets/item-weapon-sheet.js";
+import { RPGWeaponSheetV2 } from "./sheets/item-weapon-sheet-v2.js";
 import { RPGArmorSheet } from "./sheets/item-armor-sheet.js";
+import { RPGArmorSheetV2 } from "./sheets/item-armor-sheet-v2.js";
 import { RPGSpellSheet } from "./sheets/item-spell-sheet.js";
+import { RPGSpellSheetV2 } from "./sheets/item-spell-sheet-v2.js";
 import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
+import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
 
@@ -160,10 +164,14 @@ Hooks.once("init", async () => {
   Actors.registerSheet("rpg", RPGCharacterSheet, { types: ["character"], makeDefault: true });
   Actors.registerSheet("rpg", RPGMonsterSheet, { types: ["monster"], makeDefault: true });
 
-  Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
-  Items.registerSheet("rpg", RPGArmorSheet, { types: ["armor"], makeDefault: true });
-  Items.registerSheet("rpg", RPGSpellSheet, { types: ["spell"], makeDefault: true });
-  Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
+  // Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
+  Items.registerSheet("rpg", RPGWeaponSheetV2, { types: ["weapon"], makeDefault: true });
+  // Items.registerSheet("rpg", RPGArmorSheet, { types: ["armor"], makeDefault: true });
+  Items.registerSheet("rpg", RPGArmorSheetV2, { types: ["armor"], makeDefault: true });
+  // Items.registerSheet("rpg", RPGSpellSheet, { types: ["spell"], makeDefault: true });
+  Items.registerSheet("rpg", RPGSpellSheetV2, { types: ["spell"], makeDefault: true });
+  // Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
+  Items.registerSheet("rpg", RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
 
   // Initiative (compat avec @effP.*)
   CONFIG.Combat.initiative = {
@@ -272,6 +280,7 @@ Hooks.once("init", async () => {
   let _auraRefreshTimeout = null;
 
   Hooks.once("ready", () => {
+    console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
     globalThis.RPG_AURAS = RPG_AURAS;
     // ✅ API globale + game.rpg.spells (pour macros / debug)
     globalThis.RPG_SPELLS = { ...RPG_SPELLS, castSpell: RPG_SPELLS.declareSpell };

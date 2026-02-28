@@ -1,116 +1,143 @@
-<form class="rpg-sheet" autocomplete="off">
+{{!-- systems/rpg/templates/item/item-armor-sheet.hbs --}}
+<div class="rpg-sheet armor-sheet" autocomplete="off">
+
+  {{!-- HEADER --}}
   <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
     <img
       class="item-profile"
       src="{{item.img}}"
       data-edit="img"
       title="{{item.name}}"
-      style="
-        width: 128px;
-        height: 128px;
-        object-fit: cover;
-        border-radius: 10px;
-        flex: 0 0 128px;
-        max-width: none;
-      "
+      style="width:128px;height:128px;object-fit:cover;border-radius:10px;flex:0 0 128px;max-width:none;"
     />
 
     <div style="flex:1;">
-      <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;"/>
+      {{#if isReadOnly}}
+        <div style="width:100%; font-size:20px;"><b>{{item.name}}</b></div>
+      {{else}}
+        <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;" />
+      {{/if}}
       <small>Armure</small>
     </div>
   </header>
 
-  <hr/>
+  {{!-- BODY SCROLL --}}
+  <div class="sheet-body">
 
-  <section>
-    <h2>Équipement</h2>
-    <label>Emplacement</label>
+    <hr/>
 
-    {{!-- SELECTEUR D'EMPLACEMENT --}}
-    <select name="system.emplacement" style="width:100%;">
-      <option value="">— Choisir —</option>
+    {{!-- ÉQUIPEMENT --}}
+    <section>
+      <h2>Équipement</h2>
+      <label>Emplacement</label>
 
-      {{!-- Slots armure (cohérents avec tes slots PJ) --}}
-      <option value="tete"  {{#if (eq system.emplacement "tete")}}selected{{/if}}>Tête</option>
-      <option value="torse" {{#if (eq system.emplacement "torse")}}selected{{/if}}>Torse</option>
-      <option value="taille" {{#if (eq system.emplacement "taille")}}selected{{/if}}>Taille</option>
-      <option value="bras"  {{#if (eq system.emplacement "bras")}}selected{{/if}}>Bras</option>
-      <option value="mains" {{#if (eq system.emplacement "mains")}}selected{{/if}}>Mains</option>
-      <option value="jambes" {{#if (eq system.emplacement "jambes")}}selected{{/if}}>Jambes</option>
-      <option value="pieds" {{#if (eq system.emplacement "pieds")}}selected{{/if}}>Pieds</option>
-    </select>
+      {{#if canEdit}}
+        <select name="system.emplacement" style="width:100%;">
+          <option value="">— Choisir —</option>
+          <option value="tete"   {{#if (eq system.emplacement "tete")}}selected{{/if}}>Tête</option>
+          <option value="torse"  {{#if (eq system.emplacement "torse")}}selected{{/if}}>Torse</option>
+          <option value="taille" {{#if (eq system.emplacement "taille")}}selected{{/if}}>Taille</option>
+          <option value="bras"   {{#if (eq system.emplacement "bras")}}selected{{/if}}>Bras</option>
+          <option value="mains"  {{#if (eq system.emplacement "mains")}}selected{{/if}}>Mains</option>
+          <option value="jambes" {{#if (eq system.emplacement "jambes")}}selected{{/if}}>Jambes</option>
+          <option value="pieds"  {{#if (eq system.emplacement "pieds")}}selected{{/if}}>Pieds</option>
+        </select>
+      {{else}}
+        <div style="margin-top:4px;">
+          <b>
+            {{#if (eq system.emplacement "tete")}}Tête{{/if}}
+            {{#if (eq system.emplacement "torse")}}Torse{{/if}}
+            {{#if (eq system.emplacement "taille")}}Taille{{/if}}
+            {{#if (eq system.emplacement "bras")}}Bras{{/if}}
+            {{#if (eq system.emplacement "mains")}}Mains{{/if}}
+            {{#if (eq system.emplacement "jambes")}}Jambes{{/if}}
+            {{#if (eq system.emplacement "pieds")}}Pieds{{/if}}
+            {{#unless system.emplacement}}—{{/unless}}
+          </b>
+        </div>
+      {{/if}}
+    </section>
 
-  
-  </section>
+    <hr/>
 
-  <hr/>
+    {{!-- BONUS --}}
+    <section>
+      <h2>Bonus (si équipé)</h2>
 
-  <section>
-  <h2>Bonus (si équipé)</h2>
+      {{#if canEdit}}
+        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+          <div><label>Force</label><input type="number" name="system.bonus.force" value="{{system.bonus.force}}"/></div>
+          <div><label>Intelligence</label><input type="number" name="system.bonus.intelligence" value="{{system.bonus.intelligence}}"/></div>
+          <div><label>Dextérité</label><input type="number" name="system.bonus.dexterite" value="{{system.bonus.dexterite}}"/></div>
+          <div><label>Acuité</label><input type="number" name="system.bonus.acuite" value="{{system.bonus.acuite}}"/></div>
+          <div><label>Endurance</label><input type="number" name="system.bonus.endurance" value="{{system.bonus.endurance}}"/></div>
 
-  {{#if flags.isGM}}
-    {{!-- MJ : tout éditable --}}
-    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
-      <div><label>Armure fixe</label><input type="number" name="system.bonus.armureFixe" value="{{system.bonus.armureFixe}}"/></div>
-      <div><label>Résistance fixe</label><input type="number" name="system.bonus.resistanceFixe" value="{{system.bonus.resistanceFixe}}"/></div>
-      <div><label>Score Armure</label><input type="number" name="system.bonus.scoreArmure" value="{{system.bonus.scoreArmure}}"/></div>
-      <div><label>Score Résistance</label><input type="number" name="system.bonus.scoreResistance" value="{{system.bonus.scoreResistance}}"/></div>
+          <div><label>Armure fixe</label><input type="number" name="system.bonus.armureFixe" value="{{system.bonus.armureFixe}}"/></div>
+          <div><label>Résistance fixe</label><input type="number" name="system.bonus.resistanceFixe" value="{{system.bonus.resistanceFixe}}"/></div>
+          <div><label>Score Armure</label><input type="number" name="system.bonus.scoreArmure" value="{{system.bonus.scoreArmure}}"/></div>
+          <div><label>Score Résistance</label><input type="number" name="system.bonus.scoreResistance" value="{{system.bonus.scoreResistance}}"/></div>
 
-      <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
-      <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
-      <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
-    </div>
-  {{else}}
-    {{!-- Joueur : seulement ce qui est non-zéro --}}
-    {{#if displayBonuses.length}}
-      <ul style="margin:0; padding-left:18px;">
-        {{#each displayBonuses as |b|}}
-          <li><b>{{b.label}}</b> : {{#if (gt b.value 0)}}+{{/if}}{{b.value}}</li>
-        {{/each}}
-      </ul>
-    {{else}}
-      <small style="opacity:.8;">Aucun bonus.</small>
+          <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
+          <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
+          <div><label>Régén PV</label><input type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}"/></div>
+          <div><label>Régén Mana</label><input type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}"/></div>
+
+          <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
+          <div><label>Pods max</label><input type="number" name="system.bonus.podsMax" value="{{system.bonus.podsMax}}"/></div>
+        </div>
+      {{else}}
+        {{#if displayBonuses.length}}
+          <ul style="margin:0; padding-left:18px;">
+            {{#each displayBonuses as |b|}}
+              <li><b>{{b.label}}</b> : {{#if (gt b.value 0)}}+{{/if}}{{b.value}}</li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <small style="opacity:.8;">Aucun bonus.</small>
+        {{/if}}
+      {{/if}}
+
+      <div style="margin-top:10px;">
+        <label>Poids</label>
+        {{#if canEdit}}
+          <input type="number" name="system.poids" value="{{system.poids}}" min="0" step="0.1" />
+        {{else}}
+          <div><b>{{system.poids}}</b></div>
+        {{/if}}
+      </div>
+    </section>
+
+    {{!-- PRIX (MJ ONLY) --}}
+    {{#if canEdit}}
+      <hr/>
+      <section>
+        <h2>Prix (MJ)</h2>
+        <div class="resource-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+          <div><label>Cuivre</label><input type="number" name="system.prix.cuivre" value="{{system.prix.cuivre}}" min="0"/></div>
+          <div><label>Argent</label><input type="number" name="system.prix.argent" value="{{system.prix.argent}}" min="0"/></div>
+          <div><label>Or</label><input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/></div>
+        </div>
+        <small style="opacity:0.8;">100 cuivre = 1 argent • 100 argent = 1 or</small>
+      </section>
     {{/if}}
-  {{/if}}
 
-  <div style="margin-top:10px;">
-    <label>Poids</label>
-    <input type="number" name="system.poids" value="{{system.poids}}" min="0" step="0.1" />
+    <hr/>
+
+    {{!-- DESCRIPTION --}}
+    <section>
+      <h2>Description</h2>
+      <label>Description</label>
+
+      {{#if canEdit}}
+        <textarea name="system.description" rows="4">{{system.description}}</textarea>
+      {{else}}
+        {{#if system.description}}
+          <div style="white-space:pre-wrap;"><b>{{system.description}}</b></div>
+        {{else}}
+          <small style="opacity:.8;">—</small>
+        {{/if}}
+      {{/if}}
+    </section>
+
   </div>
-</section>
-
-
-  <hr/>
-
-    {{!-- ✅ PRIX : MJ ONLY --}}
-  {{#if flags.isGM}}
-  <hr/>
-  <section>
-    <h2>Prix (MJ)</h2>
-    <div class="resource-grid" style="grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-      <div>
-        <label>Cuivre</label>
-        <input type="number" name="system.prix.cuivre" value="{{system.prix.cuivre}}" min="0"/>
-      </div>
-      <div>
-        <label>Argent</label>
-        <input type="number" name="system.prix.argent" value="{{system.prix.argent}}" min="0"/>
-      </div>
-      <div>
-        <label>Or</label>
-        <input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/>
-      </div>
-    </div>
-    <small style="opacity:0.8;">100 cuivre = 1 argent • 100 argent = 1 or</small>
-  </section>
-  {{/if}}
-
-  <hr/>
-
-  <section>
-    <h2>Description</h2>
-    <label>Description</label>
-    <textarea name="system.description" rows="4">{{system.description}}</textarea>
-  </section>
-</form>
+</div>

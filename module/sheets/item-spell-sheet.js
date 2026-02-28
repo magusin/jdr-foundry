@@ -1,4 +1,4 @@
-function deepClone(o) { return foundry.utils.deepClone(o ?? {}); }
+// systems/rpg/module/sheets/item-spell-sheet.js
 
 export class RPGSpellSheet extends ItemSheet {
   static get defaultOptions() {

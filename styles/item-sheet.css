@@ -1,0 +1,44 @@
+.generic-sheet {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .generic-sheet .sheet-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* 1) Le container de contenu de la fenêtre doit être en flex et limiter la hauteur */
+.rpg-sheet-window {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* important: on évite que le parent scroll */
+  }
+  
+  /* 2) Le <form> V2 (créé par DocumentSheetV2) doit prendre toute la place */
+  .rpg-sheet-window > form {
+    flex: 1;
+    min-height: 0;    /* LE détail qui rend le scroll possible */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* 3) Ton root de template doit prendre la place dispo */
+  .rpg-sheet {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* 4) Zone scrollable interne */
+  .rpg-sheet .sheet-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
