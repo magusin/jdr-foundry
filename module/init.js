@@ -33,7 +33,9 @@ function xpPalierForLevel(level) {
 }
 
 const MODULE_ID = "Fanatsy";
-
+const Actors = foundry.documents.collections.Actors;
+const Items  = foundry.documents.collections.Items;
+const { ItemSheet } = foundry.appv1.sheets;
 // ---------------------------
 // États init -> états actifs (token)
 // ---------------------------

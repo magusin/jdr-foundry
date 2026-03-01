@@ -1,4 +1,5 @@
 // systems/rpg/module/sheets/item-spell-sheet.js
+const { ItemSheet } = foundry.appv1.sheets;
 
 export class RPGSpellSheet extends ItemSheet {
   static get defaultOptions() {

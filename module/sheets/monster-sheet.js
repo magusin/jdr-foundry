@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/monster-sheet.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+const { ActorSheet } = foundry.appv1.sheets;
 
 function parseLevels(csv) {
   return String(csv ?? "")

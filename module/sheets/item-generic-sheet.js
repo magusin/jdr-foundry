@@ -1,3 +1,5 @@
+const { ItemSheet } = foundry.appv1.sheets;
+
 export class RPGGenericItemSheet extends ItemSheet {
     static get defaultOptions() {
       return foundry.utils.mergeObject(super.defaultOptions, {

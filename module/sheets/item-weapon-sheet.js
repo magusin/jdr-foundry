@@ -1,4 +1,5 @@
 // systems/rpg/module/sheets/item-weapon-sheet.js
+const { ItemSheet } = foundry.appv1.sheets;
 
 export class RPGWeaponSheet extends ItemSheet {
   static get defaultOptions() {

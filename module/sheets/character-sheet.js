@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/character-sheet.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
-
+const { ActorSheet } = foundry.appv1.sheets;
 /* -------------------------------------------- */
 /* Utils XP / Skills                            */
 /* -------------------------------------------- */
