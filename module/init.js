@@ -1,14 +1,15 @@
 // systems/rpg/module/init.js
 
-import { RPGCharacterSheet } from "./sheets/character-sheet.js";
+// import { RPGCharacterSheet } from "./sheets/character-sheet.js";
+import { RPGCharacterSheetV2 } from "./sheets/character-sheet-v2.js";
 import { RPGMonsterSheet } from "./sheets/monster-sheet.js";
-import { RPGWeaponSheet } from "./sheets/item-weapon-sheet.js";
+// import { RPGWeaponSheet } from "./sheets/item-weapon-sheet.js";
 import { RPGWeaponSheetV2 } from "./sheets/item-weapon-sheet-v2.js";
-import { RPGArmorSheet } from "./sheets/item-armor-sheet.js";
+// import { RPGArmorSheet } from "./sheets/item-armor-sheet.js";
 import { RPGArmorSheetV2 } from "./sheets/item-armor-sheet-v2.js";
-import { RPGSpellSheet } from "./sheets/item-spell-sheet.js";
+// import { RPGSpellSheet } from "./sheets/item-spell-sheet.js";
 import { RPGSpellSheetV2 } from "./sheets/item-spell-sheet-v2.js";
-import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
+// import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
 import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
@@ -23,6 +24,7 @@ import { GM_AURA } from "./rules/gm-aura.js";
 import * as Combat from "./rules/combat.js";
 import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
+import { setTokenPosOverride } from "./rules/auras.js";
 // ---------------------------
 // XP palier
 // ---------------------------
@@ -34,7 +36,7 @@ function xpPalierForLevel(level) {
 
 const MODULE_ID = "Fanatsy";
 const Actors = foundry.documents.collections.Actors;
-const Items  = foundry.documents.collections.Items;
+const Items = foundry.documents.collections.Items;
 const { ItemSheet } = foundry.appv1.sheets;
 // ---------------------------
 // États init -> états actifs (token)
@@ -163,7 +165,8 @@ Hooks.once("init", async () => {
 
   Items.unregisterSheet("core", ItemSheet);
 
-  Actors.registerSheet("rpg", RPGCharacterSheet, { types: ["character"], makeDefault: true });
+  // Actors.registerSheet("rpg", RPGCharacterSheet, { types: ["character"], makeDefault: true });
+  Actors.registerSheet("rpg", RPGCharacterSheetV2, { types: ["character"], makeDefault: true });
   Actors.registerSheet("rpg", RPGMonsterSheet, { types: ["monster"], makeDefault: true });
 
   // Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
@@ -283,28 +286,49 @@ Hooks.once("init", async () => {
 
   Hooks.once("ready", () => {
     console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
+
+    // Globals
     globalThis.RPG_AURAS = RPG_AURAS;
+
     // ✅ API globale + game.rpg.spells (pour macros / debug)
     globalThis.RPG_SPELLS = { ...RPG_SPELLS, castSpell: RPG_SPELLS.declareSpell };
+    game.rpg = game.rpg ?? {};
     game.rpg.spells = globalThis.RPG_SPELLS;
 
     // ✅ Boutons MJ dans les messages chat de déclaration (Foundry v13+)
-Hooks.on("renderChatMessageHTML", (message, html) => {
-  // html = HTMLElement (li.chat-message)
-  RPG_SPELLS.bindSpellChatButtons(html, message);
-});
+    Hooks.on("renderChatMessageHTML", (message, html) => {
+      try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
+    });
 
+    // ---------- Aura refresh debounce (centralisé) ----------
+    let _auraRefreshTimeout = null;
+    const requestAuraRefresh = (delay = 50) => {
+      clearTimeout(_auraRefreshTimeout);
+      _auraRefreshTimeout = setTimeout(() => {
+        try { globalThis.RPG_AURAS?.refreshAuras?.(); } catch (e) { console.error(e); }
+      }, delay);
+    };
+
+    // ---------- Token move : refresh auras + déplacer template GM ----------
+    // ✅ Seulement updateToken (mouvement réel)
     Hooks.on("updateToken", (tokenDoc, changes) => {
       if (!("x" in changes || "y" in changes)) return;
 
-      try { RPG_AURAS?.moveAuraTemplate?.(tokenDoc); } catch (e) { }
+      // ✅ pousse la position "exacte" de CET update dans l'override
+      const x = ("x" in changes) ? changes.x : tokenDoc.x;
+      const y = ("y" in changes) ? changes.y : tokenDoc.y;
+      setTokenPosOverride(tokenDoc.id, x, y);
 
-      clearTimeout(_auraRefreshTimeout);
-      _auraRefreshTimeout = setTimeout(() => {
-        try { RPG_AURAS?.refreshAuras?.(); } catch (e) { }
-      }, 150);
+      requestAuraRefresh(0); // ✅ immédiat
     });
 
+    // (Optionnel) si tu veux aussi quand on drop un token / téléport
+    Hooks.on("createToken", () => requestAuraRefresh(200));
+
+    // First refresh
+    requestAuraRefresh(500);
+
+    // ---------- Item changes : refresh auras si sort/aura modifié ----------
     Hooks.on("updateItem", (item, changed) => {
       const actor = item?.parent;
       if (!actor) return;
@@ -321,14 +345,11 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
       );
 
       if (!relevant) return;
-
-      clearTimeout(_auraRefreshTimeout);
-      _auraRefreshTimeout = setTimeout(() => {
-        try { RPG_AURAS?.refreshAuras?.(); } catch (e) { }
-      }, 150);
+      requestAuraRefresh(150);
     });
 
-    setTimeout(() => RPG_AURAS?.refreshAuras?.(), 500);
+    // ---------- First refresh ----------
+    requestAuraRefresh(500);
   });
 
   let _lastTurnKey = null;
@@ -337,11 +358,12 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
   // Tick tour combat (cooldowns + effets + auras + regen)
   // ---------------------------
   Hooks.on("updateCombat", async (combat, changed) => {
+    if (!game.user.isGM) return;
     if (!("turn" in changed) && !("round" in changed)) return;
     if (!canvas?.ready) return;
 
-    // key unique par round/turn
-    const key = `${combat.round}-${combat.turn}`;
+    // ✅ clé unique plus robuste (combat.id inclus)
+    const key = `${combat.id}:${combat.round}:${combat.turn}`;
     if (key === _lastTurnKey) return;
     _lastTurnKey = key;
 
@@ -349,9 +371,10 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
     const actor = combatant?.actor ?? null;
     if (!actor) return;
 
-    await onTurnStartForActor(actor);
+    // ✅ UNIQUE tick: cooldowns + états (-1) + suppression à 0 + recompute
+    await onTurnStartForActor(actor, { combat });
 
-    if (Status?.tickActorEffectsAtTurnStart) await Status.tickActorEffectsAtTurnStart(actor);
+    // ✅ refresh auras après tick (si aura source expire, auraApplied disparaît)
     await RPG_AURAS?.refreshAuras?.();
 
     // ✅ Regen (PV/Mana uniquement)

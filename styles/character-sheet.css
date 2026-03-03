@@ -550,7 +550,48 @@
 .spell-row.spell-ready { border-left: 4px solid rgba(40,180,120,.9); }
 .spell-row.spell-cd    { border-left: 4px solid rgba(220,80,80,.9); opacity: .8; }
 
+/* ===== Actor sheet : 1 stat par ligne (Caractéristiques + Défenses) ===== */
 
+/* la section qui contient la liste */
+.rpg-sheet.actor .stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* chaque ligne = label + colonnes base/total */
+.rpg-sheet.actor .stats-grid .stat-row {
+  display: grid;
+  grid-template-columns: 200px 1fr; /* label fixe, inputs à droite */
+  gap: 14px;
+  align-items: center;
+}
+
+/* base/total sur la même ligne à droite */
+.rpg-sheet.actor .stats-grid .stat-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* chaque bloc base/total */
+.rpg-sheet.actor .stats-grid .stat-col {
+  min-width: 0;
+}
+
+/* inputs full width pour que Base/Total aient la même longueur */
+.rpg-sheet.actor .stats-grid .stat-col input,
+.rpg-sheet.actor .stats-grid .stat-col select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* si une stat n'a qu'une seule colonne (ex: Réduction %), elle prend toute la largeur */
+.rpg-sheet.actor .stats-grid .stat-cols:has(.stat-col:only-child) {
+  grid-template-columns: 1fr;
+}
 
 
 
