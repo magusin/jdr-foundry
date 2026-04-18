@@ -6,26 +6,20 @@
     </h1>
   </header>
 
-  <nav class="sheet-tabs tabs" data-group="primary">
-    <a class="item" data-tab="main">Monstre</a>
-
+  <nav class="sheet-tabs tabs">
+    <a class="item active" data-tab="main">Monstre</a>
     {{#if canSeeStats}}
     <a class="item" data-tab="attacks">Attaques</a>
     {{/if}}
-
     {{#if showGenConfig}}
     <a class="item" data-tab="gen">Génération (MJ)</a>
     {{/if}}
   </nav>
 
-  <section class="sheet-body" data-group="primary">
+  <section class="sheet-body">
 
-    {{!-- =========================
-    TAB MAIN
-    ========================== --}}
-    <div class="tab" data-group="primary" data-tab="main">
+    <div class="tab" data-tab="main" style="display:block;">
 
-      {{!-- VUE JOUEUR : RP-only --}}
       {{#unless canSeeStats}}
       <section class="card">
         <h2>Description</h2>
@@ -33,12 +27,9 @@
       </section>
       {{/unless}}
 
-      {{!-- VUE MJ : STATS --}}
       {{#if canSeeStats}}
-
       <div class="rpg-grid-2">
 
-        {{!-- COLONNE GAUCHE --}}
         <section class="card">
           <h2>Informations</h2>
           <div class="grid-mm">
@@ -46,29 +37,23 @@
               <span>Niveau</span>
               <input type="number" name="system.niveau" value="{{system.niveau}}" min="1" />
             </div>
-
             <div class="mm-line">
               <span>XP donnée</span>
               <input type="number" name="system.recompenses.xp" value="{{system.recompenses.xp}}" min="0" />
             </div>
-
             <div class="mm-line">
               <span>Butin (RollTable UUID)</span>
               <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}" placeholder="..." />
             </div>
-
             <div class="mm-line">
               <span>Vitesse (base)</span>
               <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
               <span class="muted" style="margin-left:8px;">eff: {{system.deplacement.vitesse}}</span>
             </div>
-
         </section>
 
-        {{!-- COLONNE DROITE : PV --}}
         <section class="card">
           <h2>Ressources</h2>
-
           <div class="resource-block">
             <div class="resource-head">
               <div class="resource-title">PV</div>
@@ -76,7 +61,6 @@
                 {{system.derived.hp.pct}}% — {{system.derived.hp.etat}}
               </div>
             </div>
-
             <div class="resource-row">
               <input class="num sm" type="number" name="system.ressources.pv.valeur"
                 value="{{system.ressources.pv.valeur}}" min="0" />
@@ -84,14 +68,11 @@
               <input class="num sm" type="number" name="system.base.pvMax" value="{{system.base.pvMax}}" min="1" />
               <span class="muted" style="margin-left:8px;">eff max: {{system.ressources.pv.max}}</span>
             </div>
-
             <div class="mm-line">
               <span>Régén PV (base)</span>
               <input class="regen-input" type="number" name="system.base.regenPv" value="{{system.base.regenPv}}" />
               <span class="muted" style="margin-left:8px;">eff: {{system.regeneration.pv}}</span>
             </div>
-
-
             <div class="hp-btn-row">
               <button type="button" class="btn" data-action="hpPlus" data-delta="5">+5 PV</button>
               <button type="button" class="btn" data-action="hpPlus" data-delta="1">+1 PV</button>
@@ -101,7 +82,6 @@
           </div>
         </section>
 
-        {{!-- COLONNE GAUCHE --}}
         <section class="card">
           <h2>Caractéristiques</h2>
           <div class="grid-mm">
@@ -110,128 +90,81 @@
               <input type="number" name="system.principales.force" value="{{system.principales.force}}" min="0" />
               <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.force}}</span>
             </div>
-
             <div class="stat-total" data-stat="intelligence">
               <span>Intelligence</span>
-              <input type="number" name="system.principales.intelligence" value="{{system.principales.intelligence}}"
-                min="0" />
-              <span class="muted" style="margin-left:8px;">eff:
-                {{system.derived.effective.principales.intelligence}}</span>
+              <input type="number" name="system.principales.intelligence" value="{{system.principales.intelligence}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.intelligence}}</span>
             </div>
-
             <div class="stat-total" data-stat="dexterite">
               <span>Dextérité</span>
-              <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}"
-                min="0" />
-              <span class="muted" style="margin-left:8px;">eff:
-                {{system.derived.effective.principales.dexterite}}</span>
+              <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.dexterite}}</span>
             </div>
-
             <div class="stat-total" data-stat="acuite">
               <span>Acuité</span>
               <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" min="0" />
               <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.acuite}}</span>
             </div>
-
             <div class="stat-total" data-stat="endurance">
               <span>Endurance</span>
-              <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}"
-                min="0" />
-              <span class="muted" style="margin-left:8px;">eff:
-                {{system.derived.effective.principales.endurance}}</span>
+              <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.endurance}}</span>
             </div>
-
         </section>
 
-        {{!-- COLONNE DROITE --}}
         <section class="card">
           <h2>Défenses</h2>
           <div class="grid-mm">
-
             <div class="mm-line">
               <span>Armure fixe (base)</span>
               <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}" min="0" />
               <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.armureFixe}}</span>
             </div>
-
             <div class="mm-line">
               <span>Résistance fixe (base)</span>
-              <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}"
-                min="0" />
-              <span class="muted" style="margin-left:8px;">eff:
-                {{system.derived.effective.defenses.resistanceFixe}}</span>
+              <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.resistanceFixe}}</span>
             </div>
-
             <div class="mm-line">
               <span>Score Armure (base)</span>
               <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}" min="0" />
               <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.scoreArmure}}</span>
             </div>
-
             <div class="mm-line">
               <span>Réduction phys.</span>
               <input type="text" value="{{system.derived.reductions.physiquePct}}%" disabled />
             </div>
-
             <div class="mm-line">
               <span>Score Résistance (base)</span>
-              <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}"
-                min="0" />
-              <span class="muted" style="margin-left:8px;">eff:
-                {{system.derived.effective.defenses.scoreResistance}}</span>
+              <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.scoreResistance}}</span>
             </div>
-
             <div class="mm-line">
               <span>Réduction mag.</span>
               <input type="text" value="{{system.derived.reductions.magiquePct}}%" disabled />
             </div>
-
           </div>
         </section>
-
-
-        {{!-- ÉTATS (pleine largeur) --}}
 
         <section class="panel-states" style="grid-column: 1 / -1;">
           <header class="panel-title">
             <h2>États</h2>
-
             {{#if flags.isGM}}
             <button type="button" data-action="stateAdd">+ Ajouter</button>
             {{/if}}
           </header>
-
           <ul class="state-list">
             {{#each system.etatsActifs as |e|}}
             <li class="state-row" data-state-id="{{e.id}}">
               <div class="state-main">
                 <b>{{e.label}}</b>
-
-                {{#if e.isAura}}
-                <span class="muted" style="margin-left:6px;">🌀</span>
-                {{/if}}
-
-                {{#if e.isBeneficial}}
-                <span class="muted" style="margin-left:6px;">✨</span>
-                {{/if}}
-
-                {{#if e.isHarmful}}
-                <span class="muted" style="margin-left:6px;">☠️</span>
-                {{/if}}
-
+                {{#if e.isAura}}<span class="muted" style="margin-left:6px;">🌀</span>{{/if}}
+                {{#if e.isBeneficial}}<span class="muted" style="margin-left:6px;">✨</span>{{/if}}
+                {{#if e.isHarmful}}<span class="muted" style="margin-left:6px;">☠️</span>{{/if}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
-
-                {{#if e.cleanseDC}}
-                <span class="muted">Retrait: {{e.cleanseDC}}+</span>
-                {{/if}}
-
-                {{#if e.summary}}
-                <div class="muted" style="margin-top:4px;">
-                  {{e.summary}}
-                </div>
-                {{/if}}
+                {{#if e.cleanseDC}}<span class="muted">Retrait: {{e.cleanseDC}}+</span>{{/if}}
+                {{#if e.summary}}<div class="muted" style="margin-top:4px;">{{e.summary}}</div>{{/if}}
               </div>
-
               <div class="state-actions">
                 {{#if ../flags.isGM}}
                 <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
@@ -242,29 +175,22 @@
             </li>
             {{/each}}
           </ul>
-
         </section>
 
-
-        {{!-- DESCRIPTION (pleine largeur) --}}
-        <section class="card" style="grid-column: 1 / -1;">
-          <h2>Description</h2>
-          {{editor system.description target="system.description" button=true owner=owner editable=editable}}
-        </section>
+          <section class="card" style="grid-column: 1 / -1;">
+  <h2>Description</h2>
+  <textarea name="system.description" rows="6" style="width:100%; resize:vertical; box-sizing:border-box;">{{system.description}}</textarea>
+</section>
 
       </div>
       {{/if}}
     </div>
 
-    {{!-- =========================
-    TAB ATTAQUES (MJ only)
-    ========================== --}}
     {{#if canSeeStats}}
-    <div class="tab" data-group="primary" data-tab="attacks">
+    <div class="tab" data-tab="attacks" style="display:none;">
       <section class="card">
         <h2>Armes & Sorts du monstre</h2>
         <p class="hint">Astuce : glisse-dépose une arme/sort depuis ton compendium vers cette fiche.</p>
-
         {{#if itemsAttaques.length}}
         <ol class="items-list simple">
           {{#each itemsAttaques as |it|}}
@@ -275,29 +201,20 @@
               <small>
                 {{#if it._ui.kindIcon}}{{it._ui.kindIcon}}{{/if}}
                 {{#if it._ui.livraison}}({{it._ui.livraison}}){{/if}}
-
                 {{#if it._ui.coutMana}} — Mana: {{it._ui.coutMana}}{{/if}}
                 {{#if it._ui.rangeMax}} — Portée: {{it._ui.rangeMin}}–{{it._ui.rangeMax}}{{/if}}
                 {{#if it._ui.difficulte}} — Diff: +{{it._ui.difficulte}}{{/if}}
                 {{#if it._ui.cdMax}} — CD: {{it._ui.cdRestant}}/{{it._ui.cdMax}}{{/if}}
-
                 {{#if it._ui.damageDice}} — Dégâts: {{it._ui.damageDice}}{{/if}}
               </small>
-
             </span>
-
             <div class="item-controls">
-              {{!-- Preview TN/Dégâts (tu as déjà useItem) --}}
               <a class="btn" data-action="useItem" data-item-id="{{it._id}}">Déclarer</a>
-
-              {{!-- ✅ Cast (cooldown, aura on/off). Pour les monstres mana ignoré --}}
               {{#if (eq it.type "spell")}}
               <a class="btn" data-action="castSpell" data-item-id="{{it._id}}">
                 {{#if it.system.aura.active}}Désactiver{{else}}Lancer{{/if}}
               </a>
               {{/if}}
-
-              {{!-- ✅ Supprimer (GM only) --}}
               <a class="btn" data-action="deleteItem" data-item-id="{{it._id}}">🗑</a>
             </div>
           </li>
@@ -310,188 +227,79 @@
     </div>
     {{/if}}
 
-    {{!-- =========================
-    TAB GEN (MJ only) — 1 ligne par niveau
-    ========================== --}}
     {{#if showGenConfig}}
-    <div class="tab" data-group="primary" data-tab="gen">
+    <div class="tab" data-tab="gen" style="display:none;">
       <section class="card">
         <h2>Configuration aléatoire</h2>
-
         <div class="mm-line" style="margin-bottom:10px;">
           <span>Niveaux possibles</span>
           <input type="text" name="system.gen.levelsCsv" value="{{system.gen.levelsCsv}}" placeholder="Ex: 2,4,6" />
-          <button type="button" class="btn small" data-action="genInitBands" style="margin-left:8px;">Init
-            bands</button>
+          <button type="button" class="btn small" data-action="genInitBands" style="margin-left:8px;">Init bands</button>
         </div>
-
         {{#if genBands.length}}
         <div style="overflow:auto;">
           <table class="gen-table" style="width:100%; border-collapse:collapse;">
             <thead>
               <tr>
                 <th style="text-align:left; padding:6px;">Niv</th>
-
                 <th style="text-align:left; padding:6px;">FOR min</th>
                 <th style="text-align:left; padding:6px;">FOR max</th>
-
                 <th style="text-align:left; padding:6px;">INT min</th>
                 <th style="text-align:left; padding:6px;">INT max</th>
-
                 <th style="text-align:left; padding:6px;">DEX min</th>
                 <th style="text-align:left; padding:6px;">DEX max</th>
-
                 <th style="text-align:left; padding:6px;">ACU min</th>
                 <th style="text-align:left; padding:6px;">ACU max</th>
-
                 <th style="text-align:left; padding:6px;">END min</th>
                 <th style="text-align:left; padding:6px;">END max</th>
-
                 <th style="text-align:left; padding:6px;">PV min</th>
                 <th style="text-align:left; padding:6px;">PV max</th>
-
                 <th style="text-align:left; padding:6px;">RegPV min</th>
                 <th style="text-align:left; padding:6px;">RegPV max</th>
-
                 <th style="text-align:left; padding:6px;">Vit min</th>
                 <th style="text-align:left; padding:6px;">Vit max</th>
-
                 <th style="text-align:left; padding:6px;">ArmFix min</th>
                 <th style="text-align:left; padding:6px;">ArmFix max</th>
-
                 <th style="text-align:left; padding:6px;">ResFix min</th>
                 <th style="text-align:left; padding:6px;">ResFix max</th>
-
                 <th style="text-align:left; padding:6px;">ScArm min</th>
                 <th style="text-align:left; padding:6px;">ScArm max</th>
-
                 <th style="text-align:left; padding:6px;">ScRes min</th>
                 <th style="text-align:left; padding:6px;">ScRes max</th>
-
                 <th style="text-align:left; padding:6px;">XP min</th>
                 <th style="text-align:left; padding:6px;">XP max</th>
               </tr>
             </thead>
-
             <tbody>
               {{#each genBands as |b|}}
               <tr>
                 <td style="padding:6px;"><b>{{b.lvl}}</b></td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.force.0"
-                    value="{{b.force.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.force.1"
-                    value="{{b.force.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.intelligence.0"
-                    value="{{b.intelligence.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.intelligence.1"
-                    value="{{b.intelligence.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.dexterite.0"
-                    value="{{b.dexterite.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.dexterite.1"
-                    value="{{b.dexterite.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.acuite.0"
-                    value="{{b.acuite.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.acuite.1"
-                    value="{{b.acuite.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.endurance.0"
-                    value="{{b.endurance.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.endurance.1"
-                    value="{{b.endurance.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.pv.0" value="{{b.pv.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.pv.1" value="{{b.pv.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.regenPv.0"
-                    value="{{b.regenPv.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.regenPv.1"
-                    value="{{b.regenPv.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.vitesse.0"
-                    value="{{b.vitesse.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.vitesse.1"
-                    value="{{b.vitesse.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.armureFixe.0"
-                    value="{{b.armureFixe.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.armureFixe.1"
-                    value="{{b.armureFixe.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.resistanceFixe.0"
-                    value="{{b.resistanceFixe.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.resistanceFixe.1"
-                    value="{{b.resistanceFixe.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreArmure.0"
-                    value="{{b.scoreArmure.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreArmure.1"
-                    value="{{b.scoreArmure.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreResistance.0"
-                    value="{{b.scoreResistance.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreResistance.1"
-                    value="{{b.scoreResistance.max}}" />
-                </td>
-
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.xpReward.0"
-                    value="{{b.xpReward.min}}" />
-                </td>
-                <td style="padding:6px;">
-                  <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.xpReward.1"
-                    value="{{b.xpReward.max}}" />
-                </td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.force.0" value="{{b.force.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.force.1" value="{{b.force.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.intelligence.0" value="{{b.intelligence.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.intelligence.1" value="{{b.intelligence.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.dexterite.0" value="{{b.dexterite.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.dexterite.1" value="{{b.dexterite.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.acuite.0" value="{{b.acuite.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.acuite.1" value="{{b.acuite.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.endurance.0" value="{{b.endurance.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.stats.endurance.1" value="{{b.endurance.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.pv.0" value="{{b.pv.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.pv.1" value="{{b.pv.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.regenPv.0" value="{{b.regenPv.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.regenPv.1" value="{{b.regenPv.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.vitesse.0" value="{{b.vitesse.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.vitesse.1" value="{{b.vitesse.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.armureFixe.0" value="{{b.armureFixe.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.armureFixe.1" value="{{b.armureFixe.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.resistanceFixe.0" value="{{b.resistanceFixe.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.resistanceFixe.1" value="{{b.resistanceFixe.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreArmure.0" value="{{b.scoreArmure.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreArmure.1" value="{{b.scoreArmure.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreResistance.0" value="{{b.scoreResistance.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.defenses.scoreResistance.1" value="{{b.scoreResistance.max}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.xpReward.0" value="{{b.xpReward.min}}" /></td>
+                <td style="padding:6px;"><input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.xpReward.1" value="{{b.xpReward.max}}" /></td>
               </tr>
               {{/each}}
             </tbody>

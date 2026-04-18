@@ -2,7 +2,8 @@
 
 // import { RPGCharacterSheet } from "./sheets/character-sheet.js";
 import { RPGCharacterSheetV2 } from "./sheets/character-sheet-v2.js";
-import { RPGMonsterSheet } from "./sheets/monster-sheet.js";
+// import { RPGMonsterSheet } from "./sheets/monster-sheet.js";
+import { RPGMonsterSheetV2 } from "./sheets/monster-sheet-v2.js";
 // import { RPGWeaponSheet } from "./sheets/item-weapon-sheet.js";
 import { RPGWeaponSheetV2 } from "./sheets/item-weapon-sheet-v2.js";
 // import { RPGArmorSheet } from "./sheets/item-armor-sheet.js";
@@ -167,7 +168,8 @@ Hooks.once("init", async () => {
 
   // Actors.registerSheet("rpg", RPGCharacterSheet, { types: ["character"], makeDefault: true });
   Actors.registerSheet("rpg", RPGCharacterSheetV2, { types: ["character"], makeDefault: true });
-  Actors.registerSheet("rpg", RPGMonsterSheet, { types: ["monster"], makeDefault: true });
+  // Actors.registerSheet("rpg", RPGMonsterSheet, { types: ["monster"], makeDefault: true });
+  Actors.registerSheet("rpg", RPGMonsterSheetV2, { types: ["monster"], makeDefault: true });
 
   // Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
   Items.registerSheet("rpg", RPGWeaponSheetV2, { types: ["weapon"], makeDefault: true });
