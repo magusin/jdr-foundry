@@ -492,18 +492,23 @@ export function sumActiveEffectMods(actor) {
     pct: {
       principales: {}, defenses: {}, ressources: {}, regen: {}, move: {}, initiative: {}
     },
-    // utile si tu veux afficher / tick
     dot: {
       flatTotal: 0,
-      formulas: [] // optionnel
+      formulas: []
     }
   };
 
-  for (const st of states) {
+  for (const stRaw of states) {
+    // ── Normalise vers format V2 si besoin ──────────────────────
+    let st = stRaw;
+    if (!st?.mods && (st?.debuff || st?.modsFlat || st?.modsPct)) {
+      st = normalizeStateV2(stRaw) ?? stRaw;
+    }
+
     const mods = st?.mods ?? {};
 
     // DOT
-    const dotFlat = Number(st?.dot?.flat ?? 0) || 0;
+    const dotFlat = Number(st?.dot?.flat ?? st?.dot?.perTick ?? 0) || 0;
     if (dotFlat) out.dot.flatTotal += dotFlat;
 
     const dotFormula = String(st?.dot?.formula ?? "").trim();
@@ -515,11 +520,11 @@ export function sumActiveEffectMods(actor) {
       if (!map) continue;
 
       const flat = Number(mod?.flat ?? 0) || 0;
-      const pct = Number(mod?.pct ?? 0) || 0;
+      const pct  = Number(mod?.pct  ?? 0) || 0;
 
       const pathBase = map[0] + "." + map[1];
       if (flat) add(out.flat, pathBase, flat);
-      if (pct) add(out.pct, pathBase, pct);
+      if (pct)  add(out.pct,  pathBase, pct);
     }
   }
 

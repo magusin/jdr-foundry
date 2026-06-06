@@ -174,7 +174,7 @@
       "degatsAdd": 0,
       "crit": {
         "mode": "max+die",
-        "extraDie": "1d6",
+        "extraDice": "1d6",
         "extraFlat": 0
       },
       "scaling": {

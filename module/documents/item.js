@@ -1,122 +1,151 @@
 // systems/rpg/module/documents/item.js
 
 function ceil(n) {
-    return Math.ceil(Number(n) || 0);
-  }
-  
-  function sqrtStatBonus(stat, coef) {
-    const s = Math.max(0, Number(stat) || 0);
-    const c = Math.max(0, Number(coef) || 0);
-    return ceil(Math.sqrt(s) * c);
-  }
-  
-  export class RPGItem extends Item {
-    prepareDerivedData() {
-      super.prepareDerivedData();
-  
-      const sys = this.system ?? {};
-      sys.derived = sys.derived ?? {};
-  
-      // Dégâts affichables / pré-calcul (facultatif, mais pratique)
-      if (this.type === "weapon") {
-        const dmg = sys.damage ?? {};
-        const scale = sys.scaling ?? {};
-        const crit = sys.crit ?? {};
-  
-        const die = (dmg.die || "1d6").trim();
-        const flat = Number(dmg.flat) || 0;
-        const addFlat = Number(dmg.addFlat) || 0;
-  
-        const statKey = scale.stat || "force";
-        const coef = Number(scale.coef) || 0;
-  
-        sys.derived.damage = {
-          die,
-          flat,
-          addFlat,
-          statKey,
-          coef,
-          // texte résumé (sans cible)
-          summary: `${die} + ${flat} + (√${statKey}×${coef}) + ${addFlat}`
-        };
-  
-        sys.derived.crit = {
-          multiplier: Number(crit.multiplier) || 2,
-          die: (crit.die || "").trim(),
-          flat: Number(crit.flat) || 0
-        };
-      }
-    }
-  
-    /**
-     * Calcul utilitaire (appelé par tes macros / mécanique d'attaque)
-     * attackerActor: Actor qui attaque
-     * targetActor: Actor cible
-     * isCrit: bool
-     * type: "physique" | "magique" (pour choisir armure vs résistance)
-     */
-    async rollDamage({ attackerActor, targetActor, isCrit = false, type = "physique" } = {}) {
-      if (this.type !== "weapon") throw new Error("rollDamage: item non-weapon");
-  
-      const w = this.system ?? {};
-      const dmg = w.damage ?? {};
-      const scale = w.scaling ?? {};
-      const crit = w.crit ?? {};
-  
-      const die = (dmg.die || "1d6").trim();
-      const roll = await (new Roll(die)).roll();
-      await roll.toMessage({ flavor: `${this.name} — Dé de dégâts (${die})` });
-  
+  return Math.ceil(Number(n) || 0);
+}
+
+export class RPGItem extends Item {
+  prepareDerivedData() {
+    super.prepareDerivedData();
+
+    const sys = this.system ?? {};
+    sys.derived = sys.derived ?? {};
+
+    if (this.type === "weapon") {
+      const dmg   = sys.damage ?? {};
+      const crit  = sys.crit   ?? {};
+
+      // ── Champ principal ──────────────────────────────────────────
+      const die  = String(dmg.dice ?? dmg.die ?? "1d6").trim();
       const flat = Number(dmg.flat) || 0;
-      const addFlat = Number(dmg.addFlat) || 0;
-  
-      const statKey = scale.stat || "force";
-      const coef = Number(scale.coef) || 0;
-      const attackerStat = attackerActor?.system?.principales?.[statKey] ?? 0;
-      const statBonus = sqrtStatBonus(attackerStat, coef);
-  
-      let brut = flat + roll.total + statBonus + addFlat;
-  
-      // Défenses cible
-      const tSys = targetActor?.system ?? {};
-      const def = tSys.defenses ?? {};
-      const red = tSys.derived?.reductions ?? {};
-  
-      const fixe = (type === "magique")
-        ? Number(def.resistanceFixe) || 0
-        : Number(def.armureFixe) || 0;
-  
-      const pct = (type === "magique")
-        ? Number(red.magiquePct) || 0
-        : Number(red.physiquePct) || 0;
-  
-      // Application fixe puis %
-      const afterFixe = Math.max(0, brut - fixe);
-      let final = ceil(afterFixe * (1 - pct / 100));
-      final = Math.max(1, final);
-  
-      // Crit après réduction
-      if (isCrit) {
-        const mult = Number(crit.multiplier) || 2;
-        final = ceil(final * mult);
-  
-        const critDie = (crit.die || "").trim();
-        if (critDie) {
-          const rCrit = await (new Roll(critDie)).roll();
-          await rCrit.toMessage({ flavor: `${this.name} — Dé critique (${critDie})` });
-          final += rCrit.total;
-        }
-  
-        final += Number(crit.flat) || 0;
-      }
-  
-      return {
-        brut,
-        fixe,
-        pct,
-        final,
-        statBonus
+
+      const sc       = dmg.scaling ?? {};
+      const statKey  = String(sc.stat ?? "force");
+      const per      = Math.max(1, Number(sc.per ?? 10) || 10);
+      const perStep  = Number(sc.perStep ?? 1) || 1;
+
+      sys.derived.damage = {
+        die,
+        flat,
+        statKey,
+        per,
+        perStep,
+        summary: `${die} + ${flat} (stat/${per}×${perStep})`
+      };
+
+      // ── Crit ──────────────────────────────────────────────────────
+      // Normalise extraDice / extraDie → un seul champ "extraDice"
+      const critDie   = String(crit.extraDice ?? crit.extraDie ?? crit.die ?? "").trim();
+      const critFlat  = Number(crit.extraFlat ?? 0) || 0;
+      const critMode  = String(crit.mode ?? "max+die");
+
+      sys.derived.crit = {
+        mode:       critMode,
+        extraDice:  critDie,
+        extraFlat:  critFlat
       };
     }
   }
-  
+
+  /**
+   * Calcule et retourne les dégâts finaux d'une attaque physique avec une arme.
+   *
+   * Pipeline :
+   *   1. Tire le dé de dégâts
+   *   2. Ajoute flat + scaling (stat effective / per × perStep)
+   *   3. Sur crit : rerolls + bonus crit AVANT mitigation
+   *   4. Mitigation : armure fixe, puis % (cap 70%)
+   *   5. Minimum 1
+   *
+   * @param {object} opts
+   * @param {Actor}   opts.attackerActor  - Actor qui attaque
+   * @param {Actor}   [opts.targetActor]  - Actor cible (pour mitigation)
+   * @param {boolean} [opts.isCrit=false]
+   * @param {"physique"|"magique"} [opts.type="physique"]
+   * @returns {Promise<{brut, critBonus, beforeMitigation, fixe, pct, final, statBonus, rollTotal}>}
+   */
+  async rollDamage({ attackerActor, targetActor = null, isCrit = false, type = "physique" } = {}) {
+    if (this.type !== "weapon") throw new Error("rollDamage: item non-weapon");
+
+    const w    = this.system ?? {};
+    const dmg  = w.damage ?? {};
+    const crit = w.crit   ?? {};
+
+    // ── 1) Dé ─────────────────────────────────────────────────────
+    const die = String(dmg.dice ?? dmg.die ?? "1d6").trim();
+    const roll = await (new Roll(die)).evaluate();
+
+    const flat = Number(dmg.flat) || 0;
+
+    // ── 2) Scaling depuis STATS EFFECTIVES ────────────────────────
+    const sc      = dmg.scaling ?? {};
+    const statKey = String(sc.stat ?? "force");
+    const per     = Math.max(1, Number(sc.per ?? 10) || 10);
+    const perStep = Number(sc.perStep ?? 1) || 1;
+
+    // ✅ toujours lire les stats effectives (derived.effective.principales)
+    const effP       = attackerActor?.system?.derived?.effective?.principales
+                    ?? attackerActor?.system?.principales
+                    ?? {};
+    const statVal    = Number(effP?.[statKey] ?? 0) || 0;
+    const statBonus  = Math.floor(Math.max(0, statVal) / per) * perStep;
+
+    let rawBrut = flat + roll.total + statBonus;
+
+    // ── 3) Crit AVANT mitigation ──────────────────────────────────
+    let critBonus = 0;
+    if (isCrit) {
+      const mode      = String(crit.mode ?? crit.extraDice ? "max+die" : "max");
+      const critDie   = String(crit.extraDice ?? crit.extraDie ?? "").trim();
+      const critFlat  = Number(crit.extraFlat ?? 0) || 0;
+
+      if (mode === "max+die") {
+        // On remplace le dé par son max + on tire un dé bonus
+        const faces    = roll.dice?.[0]?.faces ?? 6;
+        const critRoll = critDie
+          ? await (new Roll(critDie)).evaluate()
+          : await (new Roll(die)).evaluate();
+
+        critBonus = (faces - roll.total) + critRoll.total + critFlat;
+      } else {
+        // mode "double" ou autre : on double le brut
+        critBonus = rawBrut + critFlat;
+      }
+    }
+
+    const beforeMitigation = rawBrut + critBonus;
+
+    // ── 4) Mitigation cible ───────────────────────────────────────
+    let fixe = 0;
+    let pct  = 0;
+
+    if (targetActor) {
+      const tSys = targetActor.system ?? {};
+      // toujours lire les défenses effectives
+      const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+      const red  = tSys.derived?.reductions ?? {};
+
+      fixe = type === "magique"
+        ? (Number(effD.resistanceFixe) || 0)
+        : (Number(effD.armureFixe) || 0);
+
+      pct = type === "magique"
+        ? (Number(red.magiquePct) || 0)
+        : (Number(red.physiquePct) || 0);
+    }
+
+    const afterFixe = Math.max(0, beforeMitigation - fixe);
+    const final     = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+
+    return {
+      brut:             rawBrut,
+      critBonus,
+      beforeMitigation,
+      fixe,
+      pct,
+      final,
+      statBonus,
+      rollTotal:        roll.total
+    };
+  }
+}

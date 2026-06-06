@@ -35,7 +35,7 @@ function xpPalierForLevel(level) {
   return Math.round(100 + 40 * x + 15 * x * x);
 }
 
-const MODULE_ID = "Fanatsy";
+const MODULE_ID = "Fantasy";
 const Actors = foundry.documents.collections.Actors;
 const Items = foundry.documents.collections.Items;
 const { ItemSheet } = foundry.appv1.sheets;
@@ -284,8 +284,6 @@ Hooks.once("init", async () => {
     return Object.keys(flat).every(k => allowed.has(k));
   });
 
-  let _auraRefreshTimeout = null;
-
   Hooks.once("ready", () => {
     console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
 
@@ -296,6 +294,12 @@ Hooks.once("init", async () => {
     globalThis.RPG_SPELLS = { ...RPG_SPELLS, castSpell: RPG_SPELLS.declareSpell };
     game.rpg = game.rpg ?? {};
     game.rpg.spells = globalThis.RPG_SPELLS;
+
+    // ✅ game.rpg.combat : API utilisée par les sheets (monster, character)
+    game.rpg.combat = Combat;
+
+    // ✅ game.rpg.status : force recompute d'un acteur
+    game.rpg.status = { recompute: async (actor) => { if (actor) { actor.reset(); actor.sheet?.render(false); } } };
 
     // ✅ Boutons MJ dans les messages chat de déclaration (Foundry v13+)
     Hooks.on("renderChatMessageHTML", (message, html) => {
@@ -349,9 +353,6 @@ Hooks.once("init", async () => {
       if (!relevant) return;
       requestAuraRefresh(150);
     });
-
-    // ---------- First refresh ----------
-    requestAuraRefresh(500);
   });
 
   let _lastTurnKey = null;
