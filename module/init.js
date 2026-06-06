@@ -26,6 +26,7 @@ import * as Combat from "./rules/combat.js";
 import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
+import { resolveEndOfCombat } from "./rules/combat-end.js";
 // ---------------------------
 // XP palier
 // ---------------------------
@@ -35,7 +36,7 @@ function xpPalierForLevel(level) {
   return Math.round(100 + 40 * x + 15 * x * x);
 }
 
-const MODULE_ID = "Fantasy";
+const MODULE_ID = "Fanatsy";
 const Actors = foundry.documents.collections.Actors;
 const Items = foundry.documents.collections.Items;
 const { ItemSheet } = foundry.appv1.sheets;
@@ -470,5 +471,17 @@ Hooks.once("init", async () => {
 
   Hooks.on("combatStart", async () => {
     if (game.user.isGM) await RPG_AURAS.refreshAuras();
+  });
+
+  // ---------------------------
+  // Fin de combat → XP + Loot
+  // ---------------------------
+  Hooks.on("deleteCombat", async (combat) => {
+    if (!game.user.isGM) return;
+    try {
+      await resolveEndOfCombat(combat);
+    } catch (e) {
+      console.error("[RPG] Erreur fin de combat (XP/Loot) :", e);
+    }
   });
 });

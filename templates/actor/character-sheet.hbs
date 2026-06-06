@@ -220,11 +220,13 @@
             <div class="stat-row">
               <label>Force</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.force" value="{{system.principales.force}}" {{#unless
                     flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.principales.force}}" disabled />
@@ -236,11 +238,13 @@
             <div class="stat-row">
               <label>Intelligence</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.intelligence"
                     value="{{system.principales.intelligence}}" {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.principales.intelligence}}" disabled />
@@ -252,11 +256,13 @@
             <div class="stat-row">
               <label>Dextérité</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}"
                     {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.principales.dexterite}}" disabled />
@@ -268,11 +274,13 @@
             <div class="stat-row">
               <label>Acuité</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" {{#unless
                     flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.principales.acuite}}" disabled />
@@ -284,11 +292,13 @@
             <div class="stat-row">
               <label>Endurance</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}"
                     {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.principales.endurance}}" disabled />
@@ -305,11 +315,13 @@
             <div class="stat-row">
               <label>Armure fixe (physique)</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}"
                     {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.defenses.armureFixe}}" disabled />
@@ -320,11 +332,13 @@
             <div class="stat-row">
               <label>Résistance fixe (magique)</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}"
                     {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.defenses.resistanceFixe}}" disabled />
@@ -335,11 +349,13 @@
             <div class="stat-row">
               <label>Score Armure (physique)</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}"
                     {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.defenses.scoreArmure}}" disabled />
@@ -360,11 +376,13 @@
             <div class="stat-row">
               <label>Score Résistance (magique)</label>
               <div class="stat-cols">
+                {{#if flags.isGM}}
                 <div class="stat-col">
                   <small class="muted">Base</small>
                   <input type="number" name="system.defenses.scoreResistance"
                     value="{{system.defenses.scoreResistance}}" {{#unless flags.isGM}}disabled{{/unless}} />
                 </div>
+                {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
                   <input type="number" value="{{system.derived.effective.defenses.scoreResistance}}" disabled />
