@@ -377,12 +377,6 @@ function computeDamageSimple({ actor, item }) {
   const sys = item.system ?? {};
   const dmg = sys.damage ?? {};
 
-  console.log(
-    "[RPG][DMG] computeDamageSimple item=",
-    item?.name,
-    "sys.damage=",
-    foundry.utils?.deepClone?.(sys.damage) ?? sys.damage
-  );
 
   // ✅ normalise le champ dice : "0" => vide
   const diceRaw = String(dmg.dice ?? "").trim();
@@ -416,8 +410,7 @@ function computeDamageSimple({ actor, item }) {
   // (et on considère aussi "1d6" comme placeholder)
   const isNoDice = !dice || dice === "1d6";
   if (isNoDice && flatTotal === 0) {
-    console.log("[RPG][DMG] -> return null (no real damage)", { diceRaw, dice, flatTotal });
-    return null;
+      return null;
   }
 
   // ✅ expr final
@@ -426,7 +419,6 @@ function computeDamageSimple({ actor, item }) {
   else if (dice) expr = `${dice}`;
   else expr = `${flatTotal}`;
 
-  console.log("[RPG][DMG] -> return", { diceRaw, dice, flatTotal, expr });
   return { dice, flatTotal, expr };
 }
 
@@ -838,7 +830,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   if (!data) return ui.notifications.warn("Impossible : flags manquants sur le message.");
 
   const actor = data.actorUuid ? await fromUuidSafe(data.actorUuid) : null;
-  const item  = data.itemUuid ? await fromUuidSafe(data.itemUuid) : null;
+  const item  = data.itemUuid  ? await fromUuidSafe(data.itemUuid)  : null;
 
   if (!actor || !item) return ui.notifications.warn("Impossible : actor ou sort introuvable (UUID).");
 
@@ -847,58 +839,146 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   const sys = item.system ?? {};
   const res = String(result ?? "success");
 
-  // cible (si token ciblé par le joueur au moment du cast, on l'utilise)
   const targetTokenDoc = data.targetTokenUuid ? await fromUuidSafe(data.targetTokenUuid) : null;
-  const targetToken = targetTokenDoc?.object ?? null;
-  const targetActor = targetToken?.actor ?? null;
+  const targetToken    = targetTokenDoc?.object ?? null;
+  const targetActor    = targetToken?.actor ?? null;
 
-  // --- construit le message résultat
   const title =
     res === "fail" ? `${actor.name} : ÉCHEC sur ${item.name}` :
     res === "crit" ? `${actor.name} : RÉUSSITE CRIT sur ${item.name}` :
     `${actor.name} : RÉUSSITE sur ${item.name}`;
 
+  // ── Échec ────────────────────────────────────────────────────────────
   if (res === "fail") {
-    await message.delete(); // on enlève le message avec les boutons
+    await message.delete();
     await ChatMessage.create({ content: `<b>${title}</b>`, speaker: ChatMessage.getSpeaker({ actor }) });
     return;
   }
 
+  const rows = [];
+
+  // ── Dégâts principaux ────────────────────────────────────────────────
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
-  const dmg = computeDamageExpr({ actor, block: dmgBlock });
+  if (dmgBlock?.enabled) {
+    const diceStr  = String(dmgBlock.dice ?? "").trim();
+    const flatBase = n(dmgBlock.flat, 0);
+    const scaling  = dmgBlock.scaling ?? {};
+    const statKey  = String(scaling.stat ?? "intelligence");
+    const per      = Math.max(1, n(scaling.per, 10) || 10);
+    const perStep  = n(scaling.perStep, 0);
+    const effP     = getEffP(actor);
+    const statVal  = n(effP?.[statKey], 0);
+    const scaled   = Math.floor(statVal / per) * perStep;
+    const flatTotal = flatBase + scaled;
 
-  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
-  const auraLine = auraEnabled
-    ? `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b> • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
-    : null;
+    let rawDmg = flatTotal;
+    let rollLine = "";
 
-  // effets concernés par la résolution
-  const fxList = effectsForResult(item, res);
-  const fxLines = [];
-  for (const fx of fxList) {
-    const mods = buildModsFromFxMods(fx.mods);
-    const modInfo = summarizeModsWithKind(mods);
+    if (diceStr && diceStr !== "0" && diceStr !== "—") {
+      try {
+        const roll = await (new Roll(diceStr)).evaluate();
+        rawDmg += roll.total;
+        rollLine = ` (🎲 ${diceStr} → ${roll.total})`;
+      } catch (e) {
+        console.warn("[RPG][Spell] Roll failed:", e);
+      }
+    }
 
-    const fxDmg = computeDamageExpr({ actor, block: fx.damage });
+    // Crit : mode max+die → on replace le dé par son max + dé bonus
+    if (res === "crit" && diceStr && diceStr !== "0") {
+      try {
+        const critDef  = sys.damageCrit?.crit ?? sys.damage?.crit ?? {};
+        const extraDie = String(critDef.extraDice ?? critDef.extraDie ?? diceStr).trim();
+        const extra    = await (new Roll(extraDie)).evaluate();
+        rawDmg += extra.total;
+        rollLine += ` + crit 🎲 (${extraDie} → ${extra.total})`;
+      } catch (e) { /* ignore */ }
+    }
 
-    const parts = [];
-    if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
-    if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ <b>Debuff</b>" : "⬆️ <b>Buff</b>"} : ${modInfo.summary}`);
+    // Applique mitigation si cible
+    let finalDmg = rawDmg;
+    let mitigLine = "";
+    if (targetActor && rawDmg > 0) {
+      const livraison = String(sys.livraison ?? "magique");
+      const isPhys    = livraison === "physique";
+      const tSys      = targetActor.system ?? {};
+      const effD      = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+      const red       = tSys.derived?.reductions ?? {};
+      const fixe      = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
+      const pct       = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
+      const afterFixe = Math.max(0, rawDmg - fixe);
+      finalDmg        = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+      mitigLine       = fixe || pct ? ` (−${fixe} fixe, −${pct}% → <b>${finalDmg}</b>)` : ` → <b>${finalDmg}</b>`;
 
-    if (!parts.length) continue;
-    fxLines.push(`<li><b>${str(fx.label, "Effet")}</b> — ${parts.join(" • ")}</li>`);
+      const pvCur = n(targetActor.system?.ressources?.pv?.valeur, 0);
+      const pvMax = n(targetActor.system?.ressources?.pv?.max, 0);
+      const pvNew = Math.max(0, pvCur - finalDmg);
+      await targetActor.update({ "system.ressources.pv.valeur": pvNew });
+      rows.push(`💥 <b>Dégâts</b> : ${rawDmg}${rollLine}${mitigLine} — ${targetActor.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`);
+    } else if (rawDmg > 0) {
+      rows.push(`💥 <b>Dégâts</b> : <b>${rawDmg}</b>${rollLine}`);
+    }
   }
 
-  const rows = [];
-  if (dmg?.expr) rows.push(`💥 <b>Dégâts</b> : ${dmg.expr}`);
-  if (fxLines.length) rows.push(`✨ <b>Effets</b> : <ul style="margin:6px 0 0 18px;">${fxLines.join("")}</ul>`);
-  if (auraLine) rows.push(auraLine);
+  // ── Effets (buffs / debuffs / DOT) ───────────────────────────────────
+  const fxList = effectsForResult(item, res);
+  for (const fx of fxList) {
+    const mods = buildModsFromFxMods(fx.mods);
 
-  // si vraiment rien à afficher, on affiche juste le titre
+    // Détermine la cible de l'effet
+    const fxTarget = String(fx.target ?? "target").toLowerCase();
+    const applyTo  =
+      (fxTarget === "self" || fxTarget === "caster")  ? actor :
+      (fxTarget === "target" && targetActor)           ? targetActor :
+      null;
+
+    if (!applyTo) continue;
+
+    // Construit l'état V2 à partir du fx
+    const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}`;
+    const dotFlat  = n(fx.damage?.flat, 0);
+    const dotDice  = String(fx.damage?.dice ?? "").trim();
+
+    const state = {
+      id:        stateId,
+      label:     String(fx.label ?? item.name),
+      type:      "spellEffect",
+      isAura:    false,
+      duration:  Math.max(1, n(fx.duration, 1)),
+      remaining: Math.max(1, n(fx.duration, 1)),
+      dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice },
+      mods:      mods
+    };
+
+    await upsertState(applyTo, state);
+
+    const modSummary = summarizeMods(mods);
+    const parts = [];
+    if (modSummary) parts.push(modSummary);
+    if (dotFlat || dotDice) parts.push(`DOT ${dotFlat || dotDice}/tour`);
+
+    rows.push(
+      `✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}` +
+      (parts.length ? ` (${parts.join(", ")}, ${n(fx.duration, 1)} tours)` : "")
+    );
+  }
+
+  // ── Aura ─────────────────────────────────────────────────────────────
+  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
+  if (auraEnabled) {
+    rows.push(
+      `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b>` +
+      ` • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b>` +
+      ` • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
+    );
+    if (globalThis.RPG_AURAS?.refreshAuras) {
+      setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
+    }
+  }
+
   const body = rows.length ? `<br>${rows.join("<br>")}` : "";
 
   await message.delete();
-
   await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
     content: `<b>${title}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}${body}`
