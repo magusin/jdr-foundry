@@ -27,6 +27,7 @@ import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
 import { resolveEndOfCombat } from "./rules/combat-end.js";
+import { autoInstallMacros } from "./macro/auto-install.js";
 // ---------------------------
 // XP palier
 // ---------------------------
@@ -301,6 +302,9 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.status : force recompute d'un acteur
     game.rpg.status = { recompute: async (actor) => { if (actor) { actor.reset(); actor.sheet?.render(false); } } };
+
+    // ✅ Auto-installation des macros système (GM uniquement)
+    autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
     // ✅ Boutons MJ dans les messages chat de déclaration (Foundry v13+)
     Hooks.on("renderChatMessageHTML", (message, html) => {

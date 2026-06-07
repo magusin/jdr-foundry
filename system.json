@@ -17,6 +17,15 @@
     "styles/weapon-sheet.css"
   ],
   "languages": [{ "lang": "fr", "name": "Français", "path": "lang/fr.json" }],
+  "packs": [
+    {
+      "name": "macros-rpg",
+      "label": "RPG — Macros système",
+      "path": "packs/macros/macros.db",
+      "type": "Macro",
+      "system": "rpg"
+    }
+  ],
   "documentTypes": {
     "Actor": {
       "character": {},
