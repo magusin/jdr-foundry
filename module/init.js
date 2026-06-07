@@ -28,6 +28,7 @@ import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
 import { resolveEndOfCombat } from "./rules/combat-end.js";
 import { autoInstallMacros } from "./macro/auto-install.js";
+import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 // ---------------------------
 // XP palier
 // ---------------------------
@@ -306,9 +307,10 @@ Hooks.once("init", async () => {
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
-    // ✅ Boutons MJ dans les messages chat de déclaration (Foundry v13+)
+    // ✅ Boutons MJ dans les messages chat (sorts + attaques)
     Hooks.on("renderChatMessageHTML", (message, html) => {
       try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
+      try { bindAttackChatButtons(html, message); } catch (e) { }
     });
 
     // ---------- Aura refresh debounce (centralisé) ----------
@@ -473,8 +475,28 @@ Hooks.once("init", async () => {
     await actor.update({ "system.xp.palier": xpPalierForLevel(lvl) }, { rpgXpSync: true });
   });
 
-  Hooks.on("combatStart", async () => {
+  Hooks.on("combatStart", async (combat) => {
     if (game.user.isGM) await RPG_AURAS.refreshAuras();
+
+    // Message d'instruction initiative pour tous les joueurs
+    if (game.user.isGM) {
+      // Construit la liste des PJ participants
+      const pjLines = combat.combatants
+        .filter(c => c.actor?.type === "character")
+        .map(c => {
+          const ini = c.actor?.system?.derived?.initiativeMod ?? 0;
+          return `<li><b>${c.name}</b> — bonus initiative : <b>+${ini}</b></li>`;
+        }).join("");
+
+      await ChatMessage.create({
+        content:
+          `<h3>⚔️ Début du combat — Jetez votre initiative !</h3>` +
+          `<p>Chaque joueur doit cliquer sur son token dans le <b>Tracker de combat</b> ` +
+          `et cliquer sur le dé 🎲 pour lancer son initiative (1d100 + bonus).</p>` +
+          (pjLines ? `<ul>${pjLines}</ul>` : "") +
+          `<p style="font-size:11px;opacity:0.7">Formule : 1d100 + (Dextérité + Acuité) / 2</p>`
+      });
+    }
   });
 
   // ---------------------------

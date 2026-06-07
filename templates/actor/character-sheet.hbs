@@ -59,12 +59,14 @@
         </div>
 
         <div class="encumbrance">
-          <div class="enc-label">
-            <span>Charge</span>
-            <span>{{charge.podsActuels}} / {{charge.podsMax}} ({{charge.pct}}%) — {{charge.etat}}</span>
+          <div class="enc-label {{charge.cssSurcharge}}">
+            <span>Charge
+              <span class="enc-badge {{charge.cssBadge}}">{{charge.etat}}</span>
+            </span>
+            <span>{{charge.podsActuels}} / {{charge.podsMax}} ({{charge.pct}}%)</span>
           </div>
           <div class="enc-bar">
-            <div class="enc-fill" style="width: {{charge.pct}}%;"></div>
+            <div class="enc-fill {{charge.cssFill}}" style="width: {{charge.pctCapped}}%;"></div>
           </div>
         </div>
       </div>

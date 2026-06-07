@@ -325,10 +325,10 @@
       actor.items.get(itemId)?.sheet?.render(true);
     });
 
-    // ── Attaque avec arme ──────────────────────────────────────────────────
+    // ── Attaque avec arme (flow : joueur déclare → MJ valide) ───────────────
     $root.on("click.rpgMenu", "[data-action='attack']", async (ev) => {
       ev.preventDefault();
-      const btn    = ev.currentTarget;
+      const btn = ev.currentTarget;
       if (btn.disabled) return;
       btn.disabled = true;
 
@@ -343,55 +343,78 @@
       }
 
       try {
-        // 1. Jet d20
+        // 1. Jet d20 du joueur (visible dans le chat)
         const roll20 = await (new Roll("1d20")).evaluate();
-        const d20    = roll20.total;
+        await roll20.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          flavor: `⚔️ <b>${actor.name}</b> attaque <b>${targetToken.actor.name}</b> avec <b>${weapon.name}</b>`
+        });
+        const d20 = roll20.total;
 
-        // 2. TN
+        // 2. TN calculé
         const tnData = combatAPI?.computeTN
           ? combatAPI.computeTN(actor, targetToken.actor, weapon)
           : { tnFinal: 11, tnBase: 11, diff: 0, livraison: "physique" };
 
-        const { hit, crit } = combatAPI?.isHit
-          ? combatAPI.isHit(d20, tnData.tnFinal)
-          : { hit: d20 >= tnData.tnFinal, crit: d20 === 20 };
+        // 3. Pré-calcul des dégâts (sans les appliquer)
+        const dmgResult = await weapon.rollDamage({
+          attackerActor: actor,
+          targetActor:   targetToken.actor,
+          isCrit:        d20 === 20,
+          type:          tnData.livraison
+        });
 
-        // 3. Message de toucher
-        let content =
-          `<b>${actor.name}</b> attaque <b>${targetToken.actor.name}</b> avec <b>${weapon.name}</b><br>` +
-          `Jet : <b>${d20}</b> (TN ${tnData.tnFinal}+) — ` +
-          `<b style="color:${hit ? (crit ? "gold" : "green") : "red"}">${crit ? "CRITIQUE !" : hit ? "TOUCHÉ !" : "RATÉ"}</b>`;
-
-        // 4. Si touché → dégâts
-        if (hit) {
-          const dmgResult = await weapon.rollDamage({
-            attackerActor: actor,
-            targetActor:   targetToken.actor,
-            isCrit:        crit,
-            type:          tnData.livraison
-          });
-
-          content +=
-            `<br>Dégâts bruts : ${dmgResult.beforeMitigation}` +
-            (dmgResult.critBonus ? ` (<b>+${dmgResult.critBonus} crit</b>)` : "") +
-            `<br>Après mitigation (−${dmgResult.fixe} fixe, −${dmgResult.pct}%) : <b>${dmgResult.final}</b>`;
-
-          // 5. Applique les PV si API disponible
-          if (combatAPI?.applyFinalDamage) {
-            const pvRes = await combatAPI.applyFinalDamage({
-              targetActor:  targetToken.actor,
-              finalDamage:  dmgResult.final
-            });
-            content += `<br>${targetToken.actor.name} : ${pvRes.pvBefore} → <b>${pvRes.pvAfter}</b> PV`;
+        // 4. Encode les données dans le message pour que le MJ puisse les utiliser
+        const msgFlags = {
+          rpg: {
+            type:         "attackDeclaration",
+            actorId:      actor.id,
+            weaponId:     weapon.id,
+            targetId:     targetToken.actor.id,
+            d20,
+            tnFinal:      tnData.tnFinal,
+            livraison:    tnData.livraison,
+            dmgBrut:      dmgResult.beforeMitigation,
+            dmgFinal:     dmgResult.final,
+            dmgFixe:      dmgResult.fixe,
+            dmgPct:       dmgResult.pct,
+            critBonus:    dmgResult.critBonus,
           }
-        }
+        };
+
+        const isCrit  = d20 === 20;
+        const isAutoF = d20 <= 5;
+        const isAutoS = d20 >= 16;
+
+        const dmgSummary = `${dmgResult.beforeMitigation}${dmgResult.critBonus ? ` (+${dmgResult.critBonus} crit)` : ""} → <b>${dmgResult.final}</b> après mitigation`;
+
+        const msgContent = `
+          <div style="font-size:13px;line-height:1.6">
+            <b>${htmlEscape(actor.name)}</b> attaque <b>${htmlEscape(targetToken.actor.name)}</b>
+            avec <b>${htmlEscape(weapon.name)}</b><br>
+            🎲 Jet : <b>${d20}</b> — TN : <b>${tnData.tnFinal}+</b>
+            ${isAutoF ? `<span style="color:#c0392b">(Échec automatique ≤5)</span>` : ""}
+            ${isAutoS ? `<span style="color:#27ae60">(Succès automatique ≥16)</span>` : ""}
+            ${isCrit  ? `<span style="color:gold">✦ CRITIQUE</span>` : ""}<br>
+            💥 Dégâts calculés : ${dmgSummary}<br>
+            <div style="margin-top:6px;display:flex;gap:6px">
+              <button type="button" class="rpg-attack-resolve" data-result="fail"
+                style="flex:1;padding:4px;cursor:pointer">Échec</button>
+              <button type="button" class="rpg-attack-resolve" data-result="hit"
+                style="flex:1;padding:4px;cursor:pointer">Touché</button>
+              <button type="button" class="rpg-attack-resolve" data-result="crit"
+                style="flex:1;padding:4px;cursor:pointer;font-weight:700;color:gold">Critique !</button>
+            </div>
+          </div>`;
 
         await ChatMessage.create({
           speaker: ChatMessage.getSpeaker({ actor }),
-          content
+          content: msgContent,
+          flags:   msgFlags
         });
 
         rerenderWeapons();
+        notify("info", "Attaque déclarée — en attente de validation MJ.");
       } catch (e) {
         console.error("[RPG][Menu] Erreur attaque :", e);
         notify("error", `Erreur attaque : ${e?.message ?? e}`);

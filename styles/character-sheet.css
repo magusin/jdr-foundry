@@ -67,8 +67,38 @@
   
   .rpg-sheet .enc-fill {
     height: 100%;
-    background: rgba(255,255,255,0.35);
+    background: #4caf7d;
+    transition: background 0.3s, width 0.3s;
   }
+
+  .rpg-sheet .enc-fill.enc-charge   { background: #e0a020; }
+  .rpg-sheet .enc-fill.enc-lourd    { background: #e06820; }
+  .rpg-sheet .enc-fill.enc-surcharge{ background: #c0392b; width: 100% !important; }
+
+  .rpg-sheet .enc-label.enc-lourd    { color: #e06820; }
+  .rpg-sheet .enc-label.enc-surcharge {
+    color: #c0392b;
+    animation: rpg-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes rpg-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.55; }
+  }
+
+  .rpg-sheet .enc-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .rpg-sheet .enc-badge.badge-normal   { background: rgba(76,175,125,0.18); color: #2e7d52; }
+  .rpg-sheet .enc-badge.badge-charge   { background: rgba(224,160,32,0.18); color: #a06010; }
+  .rpg-sheet .enc-badge.badge-lourd    { background: rgba(224,104,32,0.18); color: #a04010; }
+  .rpg-sheet .enc-badge.badge-surcharge{ background: rgba(192,57,43,0.18);  color: #8b1a12; }
   
   .rpg-sheet .enc-actions {
     margin-top: 8px;

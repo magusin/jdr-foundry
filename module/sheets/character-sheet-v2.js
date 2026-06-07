@@ -666,7 +666,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       else if (pct >= 60) etat = "Chargé";
     }
 
-    return { podsActuels: Number(podsActuels.toFixed(2)), podsMax, pct, etat };
+    const cssFill = pct >= 120 ? "enc-surcharge" : pct >= 90 ? "enc-lourd" : pct >= 60 ? "enc-charge" : "";
+    const cssBadge = pct >= 120 ? "badge-surcharge" : pct >= 90 ? "badge-lourd" : pct >= 60 ? "badge-charge" : "badge-normal";
+    const cssSurcharge = pct >= 120 ? "enc-surcharge" : pct >= 90 ? "enc-lourd" : "";
+    const pctCapped = Math.min(100, pct);
+
+    return { podsActuels: Number(podsActuels.toFixed(2)), podsMax, pct, pctCapped, etat, cssFill, cssBadge, cssSurcharge };
   }
 
   /* -------------------------------------------- */
