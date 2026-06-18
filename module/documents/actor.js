@@ -42,7 +42,8 @@ function sumBonuses(actor) {
     const isEquip = !isMonster && (t === "weapon" || t === "armor") && !!sys.equipe;
 
     // ✅ PJ + Monstres: sorts passifs (buff/aura) actifs => pris en compte
-    const isPassiveSpell = (t === "spell") && !!sys?.aura?.active;
+    // Sort passif : speed="passif" OU aura.active (rétrocompat)
+    const isPassiveSpell = (t === "spell") && (sys?.speed === "passif" || !!sys?.aura?.active);
 
     if (!isEquip && !isPassiveSpell) continue;
 

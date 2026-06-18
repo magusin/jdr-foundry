@@ -5,6 +5,7 @@ import {
   getBudget, saveBudget, confirmSlot, releaseSlot,
   updateLogEntry, findLogEntry, undoAction
 } from "./action-budget.js";
+import { undoMovement } from "./movement-tracker.js";
 import { resolveDeclaredSpellFromMessage } from "./spells.js";
 import { resolveAttack } from "./attack-resolve.js";
 
@@ -39,13 +40,30 @@ export function bindActionChatButtons(html, message) {
         ev.stopPropagation();
         if (!game.user.isGM) return;
 
-        const result   = btn.dataset.actionResolve;   // "confirm" | "reject" | "correct"
+        const result   = btn.dataset.actionResolve;   // "confirm" | "reject" | "correct" | "undo_move"
         const actionId = btn.dataset.actionId;
 
         for (const b of container.querySelectorAll("[data-action-resolve]"))
           b.disabled = true;
 
         try {
+          // Cas spécial : undo_move → replacement token
+          if (result === "undo_move") {
+            const combat = game.combat;
+            if (!combat) throw new Error("Aucun combat actif");
+            const res = await undoMovement(combat, actionId);
+            if (!res.ok) {
+              ui.notifications?.warn?.(res.reason ?? "Impossible d'annuler le déplacement");
+              for (const b of container.querySelectorAll("[data-action-resolve]")) b.disabled = false;
+              return;
+            }
+            await message.delete().catch(() => {});
+            await ChatMessage.create({
+              content: `<span style="color:#888">↩️ Déplacement annulé par le MJ : <b>${res.label}</b></span>`
+            });
+            return;
+          }
+
           await handlePendingAction(message, result, actionId);
         } catch (e) {
           console.error("[RPG][ActionConfirm]", e);
@@ -124,6 +142,26 @@ async function handlePendingAction(message, result, actionId) {
     // Confirme le slot → passe pending → used
     const newBudget = confirmSlot(budget, entry.slot);
     await saveBudget(combat, combatantId, newBudget);
+
+    // Cas déplacement : juste confirmer le slot, pas d'effet à appliquer
+    if (flags.pendingAction.type === "move") {
+      await updateLogEntry(combat, actionId, { status: "confirmed" });
+      await message.update({
+        content: `<div style="font-size:13px;color:var(--color-text-secondary)">
+          ✅ Déplacement confirmé — <b>${entry?.label ?? ""}</b>
+          <div style="margin-top:6px;text-align:right">
+            <button type="button" data-action-undo data-action-id="${actionId}"
+              style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">
+              ↩️ Annuler ce déplacement
+            </button>
+          </div>
+        </div>`,
+        "flags.rpg.pendingAction": null,
+        "flags.rpg.confirmedAction": true,
+        "flags.rpg.actionId": actionId
+      });
+      return;
+    }
 
     // Applique l'action selon son type
     let resolutionContent = "";

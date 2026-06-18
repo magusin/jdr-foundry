@@ -700,6 +700,9 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
   const sys = item.system ?? {};
 
+  // Sort passif : ne passe jamais par declareSpell — toujours actif
+  if (sys.speed === "passif") return { ok: false, reason: "Sort passif — toujours actif, pas de déclaration" };
+
   const cdRest = n(sys.cooldown?.restant, 0);
   const cdMax  = n(sys.cooldown?.max, 0);
   if (cdRest > 0) return { ok: false, reason: `Sort en recharge : ${cdRest} tour(s)` };

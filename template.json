@@ -206,6 +206,7 @@
       "templates": ["baseItem", "equipBonus", "details"],
     
       "speed": "normal",
+      "alwaysActive": false,
       "range": { "min": 0, "max": 6 },
     
       "coutMana": 0,

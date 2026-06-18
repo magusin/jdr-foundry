@@ -226,6 +226,30 @@ export async function undoAction(combat, actionId) {
     }
   }
 
+  // 2b. Restaure position token (déplacement)
+  if (snap.tokenId !== undefined && snap.oldX !== undefined && snap.oldY !== undefined) {
+    try {
+      const tokenDoc = canvas?.scene?.tokens?.get(snap.tokenId)
+                    ?? game.scenes.active?.tokens?.get(snap.tokenId);
+      if (tokenDoc) {
+        await tokenDoc.update({ x: snap.oldX, y: snap.oldY });
+      } else {
+        errors.push("Token introuvable pour restaurer la position");
+      }
+    } catch (e) {
+      errors.push(`Erreur restauration position : ${e?.message}`);
+    }
+  }
+
+  // 2c. Restaure état passif (toggle)
+  if (snap.passifItemId !== undefined && snap.casterId !== undefined) {
+    const caster = game.actors.get(snap.casterId);
+    const passifItem = caster?.items.get(snap.passifItemId);
+    if (passifItem) {
+      await passifItem.update({ "system.aura.active": !!snap.oldAuraActive });
+    }
+  }
+
   // 3. Supprime les états ajoutés
   if (snap.addedStateIds?.length) {
     const actorId  = snap.statesAppliedTo ?? snap.targetId ?? snap.casterId;

@@ -30,6 +30,7 @@ import { resolveEndOfCombat } from "./rules/combat-end.js";
 import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
+import { onPreUpdateToken, onUpdateToken } from "./rules/movement-tracker.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -339,17 +340,24 @@ Hooks.once("init", async () => {
       }, delay);
     };
 
-    // ---------- Token move : refresh auras + déplacer template GM ----------
-    // ✅ Seulement updateToken (mouvement réel)
-    Hooks.on("updateToken", (tokenDoc, changes) => {
+    // ---------- Token move : budget + refresh auras ----------
+    Hooks.on("preUpdateToken", (tokenDoc, changes) => {
+      try { onPreUpdateToken(tokenDoc, changes); } catch (e) {}
+    });
+
+    Hooks.on("updateToken", async (tokenDoc, changes) => {
       if (!("x" in changes || "y" in changes)) return;
 
-      // ✅ pousse la position "exacte" de CET update dans l'override
+      // Pousse la position dans l'override aura
       const x = ("x" in changes) ? changes.x : tokenDoc.x;
       const y = ("y" in changes) ? changes.y : tokenDoc.y;
       setTokenPosOverride(tokenDoc.id, x, y);
+      requestAuraRefresh(0);
 
-      requestAuraRefresh(0); // ✅ immédiat
+      // Suivi budget déplacement (GM seulement)
+      try { await onUpdateToken(tokenDoc, changes); } catch (e) {
+        console.warn("[RPG] movement-tracker:", e);
+      }
     });
 
     // (Optionnel) si tu veux aussi quand on drop un token / téléport

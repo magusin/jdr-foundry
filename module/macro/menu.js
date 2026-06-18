@@ -81,11 +81,21 @@
     .filter((i) => i.type === "spell")
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"));
 
+  const spellsPassif  = spellsAll.filter(s => s.system?.speed === "passif");
+  const spellsActive  = spellsAll.filter(s => s.system?.speed !== "passif");
+  const spellsRapide  = spellsActive.filter(s => s.system?.speed === "rapide" || s.system?.speed === "quick");
+  const spellsNormal  = spellsActive.filter(s => s.system?.speed !== "rapide" && s.system?.speed !== "quick");
+
   if (!weaponsEquipped.length && !spellsAll.length)
     return notify("info", `${actor.name} n'a ni arme équipée ni sort.`);
 
   // ── état UI ────────────────────────────────────────────────────────────────
-  const state = { q: "", tab: "all", section: spellsAll.length ? "spells" : "weapons" };
+  const defaultSection = weaponsEquipped.length ? "weapons"
+    : spellsNormal.length ? "spells_normal"
+    : spellsRapide.length ? "spells_rapide"
+    : spellsPassif.length ? "spells_passif"
+    : "weapons";
+  const state = { q: "", tab: "all", section: defaultSection };
 
   const THEME_SCOPE = "rpg";
   const THEME_FLAG  = "menuSpellsTheme";
@@ -93,9 +103,9 @@
   if (theme !== "dark") theme = "light";
 
   // ── filtrage sorts ─────────────────────────────────────────────────────────
-  const computeFilteredSpells = () => {
+  const computeFilteredSpells = (src = null) => {
     const q = state.q.trim().toLowerCase();
-    return spellsAll.filter((s) => {
+    return (src ?? spellsActive).filter((s) => {
       if (q && !(s.name ?? "").toLowerCase().includes(q)) return false;
       const cd      = getCD(s);
       const ready   = cd.restant <= 0;
@@ -182,9 +192,9 @@
   };
 
   // ── section SORTS ──────────────────────────────────────────────────────────
-  const buildSpellsHTML = () => {
+  const buildSpellsHTML = (spellsList = null) => {
     const manaNow  = getManaNow(actor);
-    const filtered = computeFilteredSpells();
+    const filtered = computeFilteredSpells(spellsList ?? spellsActive);
     if (!filtered.length)
       return `<div class="rpg-empty">Aucun sort ne correspond aux filtres.</div>`;
 
@@ -243,7 +253,6 @@
     const manaNow   = getManaNow(actor);
     const themeIcon = theme === "light" ? "☀︎" : "🌙";
     const secWeapon = state.section === "weapons";
-    const secSpell  = state.section === "spells";
 
     return `
       <div class="rpg-spell-menu ${theme === "light" ? "rpg-theme-light" : "rpg-theme-dark"}">
@@ -293,23 +302,31 @@
           <button type="button" class="section-tab ${secWeapon ? "active" : ""}" data-section="weapons">
             ⚔️ Armes (${weaponsEquipped.length})
           </button>` : ""}
-          ${spellsAll.length ? `
-          <button type="button" class="section-tab ${secSpell ? "active" : ""}" data-section="spells">
-            ✨ Sorts (${spellsAll.length})
+          ${spellsNormal.length ? `
+          <button type="button" class="section-tab ${state.section === "spells_normal" ? "active" : ""}" data-section="spells_normal">
+            ✨ Normaux (${spellsNormal.length})
+          </button>` : ""}
+          ${spellsRapide.length ? `
+          <button type="button" class="section-tab ${state.section === "spells_rapide" ? "active" : ""}" data-section="spells_rapide">
+            ⚡ Rapides (${spellsRapide.length})
+          </button>` : ""}
+          ${spellsPassif.length ? `
+          <button type="button" class="section-tab ${state.section === "spells_passif" ? "active" : ""}" data-section="spells_passif">
+            🔮 Passifs (${spellsPassif.length})
           </button>` : ""}
         </div>
 
         <!-- Section ARMES -->
-        <div class="rpg-section" id="sec-weapons" ${secWeapon ? "" : 'style="display:none"'}>
+        <div class="rpg-section" id="sec-weapons" ${state.section === "weapons" ? "" : 'style="display:none"'}>
           <div class="rpg-list rpg-weapons-list">
             ${buildWeaponsHTML()}
           </div>
         </div>
 
-        <!-- Section SORTS -->
-        <div class="rpg-section" id="sec-spells" ${secSpell ? "" : 'style="display:none"'}>
+        <!-- Section SORTS NORMAUX -->
+        <div class="rpg-section" id="sec-spells_normal" ${state.section === "spells_normal" ? "" : 'style="display:none"'}>
           <div class="rpg-filterbar">
-            <input class="rpg-search" type="text" placeholder="Rechercher un sort..." value="${htmlEscape(state.q)}" />
+            <input class="rpg-search" type="text" placeholder="Rechercher..." value="${htmlEscape(state.q)}" />
             <div class="rpg-tabs">
               ${["all","ready","cd","auras","target"].map(t =>
                 `<button type="button" class="tab ${state.tab === t ? "active" : ""}" data-tab="${t}">${
@@ -318,16 +335,101 @@
               ).join("")}
             </div>
           </div>
-          <div class="rpg-list rpg-spells-list">
-            ${buildSpellsHTML()}
+          <div style="font-size:11px;color:var(--color-text-secondary);padding:2px 0 6px">
+            <b>1 sort normal</b> par tour • Coûte 1 slot
           </div>
-          <div class="rpg-hint">
-            Cible une cible (T) avant de déclarer si le sort indique <b>CIBLE</b>.
+          <div class="rpg-list rpg-spells-list">
+            ${buildSpellsHTML(spellsNormal)}
           </div>
         </div>
 
+        <!-- Section SORTS RAPIDES -->
+        <div class="rpg-section" id="sec-spells_rapide" ${state.section === "spells_rapide" ? "" : 'style="display:none"'}>
+          <div class="rpg-filterbar">
+            <input class="rpg-search" type="text" placeholder="Rechercher..." value="${htmlEscape(state.q)}" />
+            <div class="rpg-tabs">
+              ${["all","ready","cd","auras","target"].map(t =>
+                `<button type="button" class="tab ${state.tab === t ? "active" : ""}" data-tab="${t}">${
+                  {all:"Tous",ready:"Prêts",cd:"En CD",auras:"Auras",target:"Cible"}[t]
+                }</button>`
+              ).join("")}
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--color-text-secondary);padding:2px 0 6px">
+            <b>2 sorts rapides</b> par tour • 1 slot chacun
+          </div>
+          <div class="rpg-list rpg-spells-list">
+            ${buildSpellsHTML(spellsRapide)}
+          </div>
+        </div>
+
+        <!-- Section SORTS PASSIFS -->
+        <div class="rpg-section" id="sec-spells_passif" ${state.section === "spells_passif" ? "" : 'style="display:none"'}>
+          <div style="font-size:11px;color:var(--color-text-secondary);padding:2px 0 6px">
+            🔮 <b>Passifs</b> — toujours actifs, aucun slot requis. Toggle on/off.
+          </div>
+          <div class="rpg-list rpg-passif-list">
+            ${buildPassifHTML()}
+          </div>
+        </div>
+
+        <div class="rpg-hint">Cible un token (T) avant d'attaquer ou de lancer un sort ciblé.</div>
+
       </div>
     `;
+  };
+
+  // ── section PASSIFS ───────────────────────────────────────────────────────
+  const buildPassifHTML = () => {
+    if (!spellsPassif.length)
+      return `<div class="rpg-empty">Aucun sort passif.</div>`;
+
+    return spellsPassif.map((s) => {
+      const sys      = s.system ?? {};
+      const isActive = sys.speed === "passif"; // toujours actif par défaut
+      // Le toggle contrôle si le passif est inclus dans sumBonuses via aura.active
+      const toggled  = sys.aura?.active !== false; // true par défaut
+      const color    = toggled ? "#1d9e75" : "#888";
+
+      // Résumé des bonus du passif
+      const bonuses  = sys.bonus ?? {};
+      const bonusParts = [];
+      for (const [k,v] of Object.entries(bonuses)) {
+        if (Number(v) !== 0) bonusParts.push(`${k} ${v > 0 ? "+" : ""}${v}`);
+      }
+      const bonusTxt = bonusParts.slice(0,4).join(", ") || "Aucun bonus configuré";
+
+      return `
+        <div class="rpg-spell-row" data-item-id="${s.id}" data-item-type="passif"
+          style="opacity:${toggled ? "1" : "0.5"}">
+          <img class="rpg-icon" src="${htmlEscape(s.img)}" />
+          <div class="rpg-mid">
+            <div class="rpg-topline">
+              <div class="rpg-name" title="${htmlEscape(s.name)}">${htmlEscape(s.name)}</div>
+              <div class="rpg-badges">
+                <span class="badge" style="background:${color}20;color:${color};font-weight:600">
+                  ${toggled ? "ACTIF" : "INACTIF"}
+                </span>
+              </div>
+            </div>
+            <div class="rpg-stats" style="font-size:11px;color:var(--color-text-secondary)">
+              ${bonusTxt}
+            </div>
+          </div>
+          <div class="rpg-right">
+            <button type="button" class="rpg-open" data-action="open" title="Ouvrir la fiche">🔎</button>
+            <button type="button"
+              class="rpg-declare"
+              data-action="toggle-passif"
+              data-toggled="${toggled}"
+              style="background:${toggled ? "#888" : "#1d9e75"};color:#fff;border:none;border-radius:5px;
+                     padding:3px 8px;cursor:pointer;font-size:11px">
+              ${toggled ? "Désactiver" : "Activer"}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
   };
 
   // ── bind UI ────────────────────────────────────────────────────────────────
@@ -346,18 +448,19 @@
     const rerenderAll    = () =>
       $root.find(".window-content, .content, .dialog-content").first().html(buildContent());
     const rerenderWeapons = () => $root.find(".rpg-weapons-list").html(buildWeaponsHTML());
-    const rerenderSpells  = () => $root.find(".rpg-spells-list").html(buildSpellsHTML());
+    const rerenderSpells  = (src) => $root.find(".rpg-spells-list").html(buildSpellsHTML(src));
+    const rerenderPassif  = () => $root.find(".rpg-passif-list").html(buildPassifHTML());
     const rerenderMana    = () => $root.find(".rpg-mana-val").text(String(getManaNow(actor)));
 
     $root.off(".rpgMenu");
 
     // Section tabs
     $root.on("click.rpgMenu", ".section-tab", (ev) => {
-      state.section = ev.currentTarget.dataset.section ?? "spells";
+      state.section = ev.currentTarget.dataset.section ?? "weapons";
       $root.find(".section-tab").removeClass("active");
       $(ev.currentTarget).addClass("active");
-      $root.find("#sec-weapons").toggle(state.section === "weapons");
-      $root.find("#sec-spells").toggle(state.section === "spells");
+      $root.find(".rpg-section").hide();
+      $root.find(`#sec-${state.section.replace("_", "\\-")}`).show();
     });
 
     // Filtre sorts
@@ -652,6 +755,71 @@
       } catch (e) {
         console.error(e);
         notify("error", `Erreur déplacement : ${e?.message ?? e}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Toggle sort passif ────────────────────────────────────────────────
+    $root.on("click.rpgMenu", "[data-action='toggle-passif']", async (ev) => {
+      ev.preventDefault();
+      const btn    = ev.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      const row    = btn.closest("[data-item-id]");
+      const item   = actor.items.get(row?.dataset?.itemId);
+      if (!item) { btn.disabled = false; return; }
+
+      const waToggled = btn.dataset.toggled === "true";
+      const newState  = !waToggled;
+
+      try {
+        // Logue le changement pour que le MJ puisse annuler
+        const actionId = foundry.utils.randomID();
+        const combat   = getCombat();
+        const cbt      = getCombatant(actor);
+        const budgetAPI = getBudgetAPI();
+
+        if (budgetAPI && combat && cbt) {
+          await budgetAPI.addLogEntry(combat, cbt.id, {
+            id: actionId, slot: "sortPassif", status: "confirmed",
+            label: `Passif ${newState ? "activé" : "désactivé"} : ${item.name}`,
+            actorId: actor.id,
+            snapshot: {
+              casterId: actor.id,
+              passifItemId: item.id,
+              oldAuraActive: waToggled
+            },
+            timestamp: Date.now()
+          });
+        }
+
+        // Toggle l'état
+        await item.update({ "system.aura.active": newState });
+
+        // Message dans le chat (logué pour MJ)
+        await ChatMessage.create({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          content: `<div style="font-size:13px">
+            🔮 <b>${item.name}</b> (passif) : <b style="color:${newState ? "#1d9e75" : "#888"}">${newState ? "Activé" : "Désactivé"}</b>
+            ${budgetAPI && combat && cbt ? `<div style="margin-top:4px;text-align:right">
+              <button type="button" data-action-undo data-action-id="${actionId}"
+                style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">
+                ↩️ Annuler
+              </button>
+            </div>` : ""}
+          </div>`,
+          flags: budgetAPI && combat && cbt
+            ? { rpg: { confirmedAction: true, actionId } }
+            : {}
+        });
+
+        rerenderPassif();
+        rerenderAll();
+      } catch (e) {
+        console.error("[RPG][Passif]", e);
+        notify("error", `Erreur toggle passif : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;
       }
