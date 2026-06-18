@@ -45,6 +45,49 @@ function xpPalierForLevel(level) {
   return Math.round(100 + 40 * x + 15 * x * x);
 }
 
+// ---------------------------
+// Level up automatique : +1 Force/Int/Dex/Acu/End par niveau gagné
+// ---------------------------
+async function applyLevelUps(actor) {
+  let niveau = Math.max(1, Number(actor.system?.niveau ?? 1) || 1);
+  const xpVal = Number(actor.system?.xp?.valeur ?? 0) || 0;
+  let palier  = Number(actor.system?.xp?.palier ?? xpPalierForLevel(niveau)) || xpPalierForLevel(niveau);
+
+  let levelsGained = 0;
+  let iter = 0;
+  const MAX_ITER = 50; // garde-fou anti-boucle infinie
+
+  while (xpVal >= palier && iter < MAX_ITER) {
+    niveau += 1;
+    levelsGained += 1;
+    palier = xpPalierForLevel(niveau);
+    iter += 1;
+  }
+
+  if (levelsGained === 0) return;
+
+  const p = actor.system?.principales ?? {};
+  const updates = {
+    "system.niveau":    niveau,
+    "system.xp.palier":  palier,
+    "system.principales.force":        Number(p.force ?? 0)        + levelsGained,
+    "system.principales.intelligence": Number(p.intelligence ?? 0) + levelsGained,
+    "system.principales.dexterite":    Number(p.dexterite ?? 0)    + levelsGained,
+    "system.principales.acuite":       Number(p.acuite ?? 0)       + levelsGained,
+    "system.principales.endurance":    Number(p.endurance ?? 0)    + levelsGained
+  };
+
+  await actor.update(updates, { rpgLevelSync: true });
+
+  await ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ actor }),
+    content:
+      `🎉 <b>${actor.name}</b> passe ${levelsGained > 1 ? `${levelsGained} niveaux` : "niveau"} ` +
+      `! Niveau <b>${niveau}</b>.<br>` +
+      `+${levelsGained} en Force, Intelligence, Dextérité, Acuité, Endurance.`
+  });
+}
+
 const MODULE_ID = "Fanatsy";
 const Actors = foundry.documents.collections.Actors;
 const Items = foundry.documents.collections.Items;
@@ -502,10 +545,26 @@ Hooks.once("init", async () => {
   Hooks.on("updateActor", async (actor, changed, options) => {
     if (!game.user.isGM) return;
     if (!("system" in changed) || !("niveau" in (changed.system ?? {}))) return;
-    if (options.rpgXpSync) return;
+    if (options.rpgXpSync || options.rpgLevelSync) return;
 
     const lvl = Math.max(1, Number(actor.system?.niveau ?? 1) || 1);
     await actor.update({ "system.xp.palier": xpPalierForLevel(lvl) }, { rpgXpSync: true });
+  });
+
+  // ---------------------------
+  // Level up automatique dès qu'un PJ gagne de l'XP
+  // ---------------------------
+  Hooks.on("updateActor", async (actor, changed, options) => {
+    if (!game.user.isGM) return;
+    if (actor.type !== "character") return;
+    if (options.rpgXpSync || options.rpgLevelSync) return;
+    if (changed?.system?.xp?.valeur === undefined) return;
+
+    try {
+      await applyLevelUps(actor);
+    } catch (e) {
+      console.error("[RPG] Erreur level up automatique :", e);
+    }
   });
 
   Hooks.on("combatStart", async (combat) => {
