@@ -1,0 +1,50 @@
+<form class="rpg-sheet rpg-recipe-sheet">
+  <header class="sheet-header">
+    <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}" />
+    <div class="header-fields">
+      <input name="name" type="text" value="{{item.name}}" placeholder="Nom de la recette" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+  </header>
+
+  <section class="sheet-body">
+
+    <div class="form-group">
+      <label>Difficulté (réduit la chance de réussite)</label>
+      <input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="100" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+
+    <h3>Ingrédients requis</h3>
+    <div class="recipe-ingredients">
+      {{#each system.ingredients as |ing idx|}}
+      <div class="ingredient-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <input type="text" name="system.ingredients.{{idx}}.name" value="{{ing.name}}"
+          placeholder="Nom de l'objet (loot/consommable)" style="flex:2" {{#unless canEdit}}disabled{{/unless}} />
+        <input type="number" name="system.ingredients.{{idx}}.qty" value="{{ing.qty}}" min="1"
+          style="width:60px" {{#unless canEdit}}disabled{{/unless}} />
+        {{#if canEdit}}
+        <button type="button" class="rpg-remove-ingredient" data-idx="{{idx}}" data-action="removeIngredient" title="Retirer">✕</button>
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" data-action="addIngredient" style="margin-top:4px">+ Ajouter un ingrédient</button>
+    {{/if}}
+
+    <h3 style="margin-top:14px">Résultat</h3>
+    <div class="form-group">
+      <label>UUID de l'objet à créer (clic droit sur un item → "Copy UUID")</label>
+      <input type="text" name="system.result.uuid" value="{{system.result.uuid}}"
+        placeholder="Item.xxxxxxxx ou Compendium.rpg.xxx.Item.xxx" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+    <div class="form-group">
+      <label>Nom affiché du résultat (optionnel, pour info)</label>
+      <input type="text" name="system.result.name" value="{{system.result.name}}"
+        placeholder="ex: Épée en fer +1" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+
+    <h3 style="margin-top:14px">Description</h3>
+    <textarea name="system.description" rows="4" {{#unless canEdit}}disabled{{/unless}}>{{system.description}}</textarea>
+
+  </section>
+</form>

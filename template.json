@@ -121,7 +121,8 @@
       "armor",
       "consumable",
       "spell",
-      "skill"
+      "skill",
+      "recipe"
     ],
     "templates": {
       "baseItem": {
@@ -234,6 +235,17 @@
       ],
       "rang": 0,
       "statLiee": "dexterite",
+      "difficulte": 0
+    },
+    "recipe": {
+      "templates": [
+        "details"
+      ],
+      "ingredients": [],
+      "result": {
+        "uuid": "",
+        "name": ""
+      },
       "difficulte": 0
     }
   }

@@ -37,7 +37,8 @@
       "armor": {},
       "consumable": {},
       "spell": {},
-      "skill": {}
+      "skill": {},
+      "recipe": {}
     }
   }
 }

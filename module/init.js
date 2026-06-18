@@ -12,6 +12,7 @@ import { RPGArmorSheetV2 } from "./sheets/item-armor-sheet-v2.js";
 import { RPGSpellSheetV2 } from "./sheets/item-spell-sheet-v2.js";
 // import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
 import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
+import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
 
@@ -31,6 +32,7 @@ import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken } from "./rules/movement-tracker.js";
+import { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty } from "./rules/forge.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -232,6 +234,7 @@ Hooks.once("init", async () => {
   Items.registerSheet("rpg", RPGSpellSheetV2, { types: ["spell"], makeDefault: true });
   // Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
   Items.registerSheet("rpg", RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
+  Items.registerSheet("rpg", RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
 
   // Initiative (compat avec @effP.*)
   CONFIG.Combat.initiative = {
@@ -363,6 +366,9 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.actionConfirm : API messages de confirmation
     game.rpg.actionConfirm = { buildPendingMessage: (await import("./rules/action-confirm.js")).buildPendingMessage, postConfirmedMessage };
+
+    // ✅ game.rpg.forge : API de craft
+    game.rpg.forge = { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty };
 
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
