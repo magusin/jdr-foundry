@@ -29,6 +29,12 @@ import { setTokenPosOverride } from "./rules/auras.js";
 import { resolveEndOfCombat } from "./rules/combat-end.js";
 import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
+import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
+import {
+  getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
+  releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
+  SLOT_DEFS
+} from "./rules/action-budget.js";
 // ---------------------------
 // XP palier
 // ---------------------------
@@ -304,6 +310,16 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.status : force recompute d'un acteur
     game.rpg.status = { recompute: async (actor) => { if (actor) { actor.reset(); actor.sheet?.render(false); } } };
 
+    // ✅ game.rpg.budget : API budget d'actions
+    game.rpg.budget = {
+      getBudget, saveBudget, resetBudget, canUseSlot,
+      reserveSlot, confirmSlot, releaseSlot, budgetHTML,
+      addLogEntry, updateLogEntry, findLogEntry, undoAction, SLOT_DEFS
+    };
+
+    // ✅ game.rpg.actionConfirm : API messages de confirmation
+    game.rpg.actionConfirm = { buildPendingMessage: (await import("./rules/action-confirm.js")).buildPendingMessage, postConfirmedMessage };
+
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
@@ -311,6 +327,7 @@ Hooks.once("init", async () => {
     Hooks.on("renderChatMessageHTML", (message, html) => {
       try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
       try { bindAttackChatButtons(html, message); } catch (e) { }
+      try { bindActionChatButtons(html, message); } catch (e) { }
     });
 
     // ---------- Aura refresh debounce (centralisé) ----------
@@ -382,6 +399,14 @@ Hooks.once("init", async () => {
     if (!actor) return;
 
     // ✅ UNIQUE tick: cooldowns + états (-1) + suppression à 0 + recompute
+    // Reset du budget d'actions au début du tour
+    if (game.user.isGM) {
+      const combatant = combat.combatants.find(c => c.actorId === actor.id);
+      if (combatant) {
+        await resetBudget(combat, combatant.id).catch(e => console.warn("[RPG] resetBudget:", e));
+      }
+    }
+
     await onTurnStartForActor(actor, { combat });
 
     // ✅ refresh auras après tick (si aura source expire, auraApplied disparaît)

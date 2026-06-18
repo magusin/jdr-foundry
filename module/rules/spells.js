@@ -547,7 +547,7 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
     content,
     flags: {
       rpg: {
-        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid }
+        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid, actionId: actionId ?? null }
       }
     }
   });
@@ -692,7 +692,7 @@ function measureSquares(tokenA, tokenB) {
  *
  * Compatible PJ + monstre (tous sont Actor)
  */
-export async function declareSpell(actor, item, { casterToken = null, targetToken = null } = {}) {
+export async function declareSpell(actor, item, { casterToken = null, targetToken = null, actionId = null } = {}) {
   if (!actor || !item) return { ok: false, reason: "Missing actor/item" };
   if (item.type !== "spell") return { ok: false, reason: "Not a spell" };
 
@@ -808,7 +808,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     content,
     flags: {
       rpg: {
-        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuid }
+        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuid, actionId: actionId ?? null }
       }
     }
   });
@@ -979,9 +979,29 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   const body = rows.length ? `<br>${rows.join("<br>")}` : "";
 
   await message.delete();
-  await ChatMessage.create({
+
+  // Met à jour le log budget si actionId présent
+  const actionId = data.actionId ?? null;
+  if (actionId && game.combat) {
+    try {
+      const { updateLogEntry, confirmSlot, getBudget, saveBudget, findLogEntry } = await import("./action-budget.js");
+      const found = findLogEntry(game.combat, actionId);
+      if (found) {
+        const { combatantId } = found;
+        const budget    = getBudget(game.combat, combatantId);
+        const slot      = found.entry.slot ?? "sortNormal";
+        const newBudget = confirmSlot(budget, slot);
+        await saveBudget(game.combat, combatantId, newBudget);
+        await updateLogEntry(game.combat, actionId, { status: "confirmed" });
+      }
+    } catch(e) { /* ignore si pas de budget actif */ }
+  }
+
+  const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
-    content: `<b>${title}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}${body}`
+    content: `<b>${title}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}${body}` +
+      (actionId ? `<div style="margin-top:6px;text-align:right"><button type="button" data-action-undo data-action-id="${actionId}" style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">↩️ Annuler</button></div>` : ""),
+    flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
   });
 }
 

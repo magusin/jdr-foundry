@@ -42,7 +42,7 @@ export function bindAttackChatButtons(html, message) {
 /**
  * Résout l'attaque : applique ou non les dégâts, poste un message de résolution.
  */
-async function resolveAttack(message, result) {
+export async function resolveAttack(message, result, { actionId = null } = {}) {
   if (!game.user.isGM) return;
 
   const f = message?.flags?.rpg ?? {};
@@ -99,8 +99,5 @@ async function resolveAttack(message, result) {
   // Marque le message comme résolu pour désactiver les boutons
   await message.update({ "flags.rpg.resolved": true, "flags.rpg.resolvedResult": result });
 
-  await ChatMessage.create({
-    speaker: { alias: "MJ" },
-    content
-  });
+  return { content, pvLine };
 }

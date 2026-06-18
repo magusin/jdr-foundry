@@ -17,8 +17,26 @@
   const isV2 = DialogClass === foundry?.applications?.api?.DialogV2;
 
   const getControlledToken = () => canvas?.tokens?.controlled?.[0] ?? null;
-  const getSpellAPI = () => globalThis.RPG_SPELLS ?? game.rpg?.spells ?? null;
-  const getCombatAPI = () => game.rpg?.combat ?? null;
+  const getSpellAPI    = () => globalThis.RPG_SPELLS ?? game.rpg?.spells ?? null;
+  const getCombatAPI   = () => game.rpg?.combat ?? null;
+  const getBudgetAPI   = () => game.rpg?.budget ?? null;
+  const getConfirmAPI  = () => game.rpg?.actionConfirm ?? null;
+
+  // Helpers budget
+  const getCombat       = () => game.combat ?? null;
+  const getCombatant    = (a) => getCombat()?.combatants?.find(c => c.actorId === a?.id) ?? null;
+  const getBudget       = (a) => {
+    const api = getBudgetAPI();
+    const cbt = getCombatant(a);
+    if (!api || !cbt || !getCombat()) return null;
+    return api.getBudget(getCombat(), cbt.id);
+  };
+  const canUseSlot      = (a, slot) => {
+    const api = getBudgetAPI();
+    const b   = getBudget(a);
+    if (!api || !b) return true; // pas de combat → pas de restriction
+    return api.canUseSlot(b, slot);
+  };
 
   const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -124,6 +142,11 @@
           })()
         : "TN <i>—</i>";
 
+      // Vérification du budget
+      const hasAtkSlot = canUseSlot(actor, "attaque");
+      const atkBlocked = !hasAtkSlot;
+      const atkTitle   = atkBlocked ? "Slot Attaque épuisé pour ce tour" : "";
+
       return `
         <div class="rpg-spell-row" data-item-id="${w.id}" data-item-type="weapon">
           <img class="rpg-icon" src="${htmlEscape(w.img)}" />
@@ -134,7 +157,7 @@
               <div class="rpg-badges">
                 <span class="badge b-ok">${livr}</span>
                 <span class="badge b-info">${twoH}</span>
-                ${hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
+                ${atkBlocked ? `<span class="badge b-bad">SLOT ✗</span>` : hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
               </div>
             </div>
             <div class="rpg-stats">
@@ -146,9 +169,10 @@
           <div class="rpg-right">
             <button type="button" class="rpg-open" data-action="open" title="Ouvrir la fiche">🔎</button>
             <button type="button"
-              class="rpg-declare ${hasTarget ? "btn-ok" : "btn-off"}"
+              class="rpg-declare ${hasTarget && !atkBlocked ? "btn-ok" : "btn-off"}"
               data-action="attack"
-              ${hasTarget ? "" : "disabled"}>
+              title="${atkTitle}"
+              ${hasTarget && !atkBlocked ? "" : "disabled"}>
               Attaquer
             </button>
           </div>
@@ -176,7 +200,9 @@
       const needTgt  = requiresTarget(s);
       const okMana   = manaNow >= manaCost;
       const okTarget = !needTgt || hasTarget;
-      const canUse   = ready && okMana && okTarget;
+      const slotKey  = sys?.speed === "rapide" || sys?.speed === "quick" ? "sortRapide" : "sortNormal";
+      const hasSlot  = canUseSlot(actor, slotKey);
+      const canUse   = ready && okMana && okTarget && hasSlot;
       const cdTxt    = cd.max > 0 ? `${cd.restant}/${cd.max}` : "—";
 
       return `
@@ -187,6 +213,7 @@
               <div class="rpg-name" title="${htmlEscape(s.name)}">${htmlEscape(s.name)}</div>
               <div class="rpg-badges">
                 <span class="badge ${ready ? "b-ok" : "b-bad"}">${ready ? "PRÊT" : "EN CD"}</span>
+                ${!hasSlot ? `<span class="badge b-bad">SLOT ✗</span>` : ""}
                 ${needTgt ? `<span class="badge ${hasTarget ? "b-ok" : "b-warn"}">CIBLE${hasTarget ? " ✓" : ""}</span>` : ""}
                 ${aura ? `<span class="badge b-aura">AURA</span>` : ""}
               </div>
@@ -232,6 +259,33 @@
             <div class="rpg-mana">💧 Mana: <b class="rpg-mana-val">${manaNow}</b></div>
           </div>
         </div>
+
+        <!-- Budget d'actions -->
+        <div class="rpg-budget-widget">
+          ${(() => {
+            const budgetAPI = getBudgetAPI();
+            const combat    = getCombat();
+            const cbt       = getCombatant(actor);
+            if (!budgetAPI || !combat || !cbt) {
+              return `<div style="font-size:11px;color:var(--color-text-secondary);padding:4px 0">Hors combat — aucune restriction d'actions</div>`;
+            }
+            const b = budgetAPI.getBudget(combat, cbt.id);
+            return budgetAPI.budgetHTML(b);
+          })()}
+        </div>
+
+        <!-- Bouton déplacement rapide -->
+        ${(() => {
+          const hasDepl = canUseSlot(actor, "deplacement");
+          return `<div style="margin-bottom:6px">
+            <button type="button" data-action="move"
+              style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
+                     background:${hasDepl ? "#1d9e75" : "#888"};color:#fff;border:none;opacity:${hasDepl ? "1" : "0.5"}"
+              ${hasDepl ? "" : "disabled"}>
+              🏃 Déclarer Déplacement (${actor.system?.deplacement?.vitesse ?? "?"} cases)
+            </button>
+          </div>`;
+        })()}
 
         <!-- Section tabs -->
         <div class="rpg-section-tabs">
@@ -325,7 +379,7 @@
       actor.items.get(itemId)?.sheet?.render(true);
     });
 
-    // ── Attaque avec arme (flow : joueur déclare → MJ valide) ───────────────
+    // ── Attaque avec arme (flow : joueur déclare → snapshot → pending → MJ valide) ────
     $root.on("click.rpgMenu", "[data-action='attack']", async (ev) => {
       ev.preventDefault();
       const btn = ev.currentTarget;
@@ -342,8 +396,40 @@
         return notify("warn", "Cible un ennemi (T) avant d'attaquer.");
       }
 
+      // Vérification budget
+      const budgetAPI = getBudgetAPI();
+      const combat    = getCombat();
+      const cbt       = getCombatant(actor);
+      if (budgetAPI && combat && cbt && !budgetAPI.canUseSlot(budgetAPI.getBudget(combat, cbt.id), "attaque")) {
+        btn.disabled = false;
+        return notify("warn", "Slot Attaque épuisé pour ce tour.");
+      }
+
       try {
-        // 1. Jet d20 du joueur (visible dans le chat)
+        // 1. Snapshot AVANT action
+        const snapshot = {
+          casterId:  actor.id,
+          casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
+          targetId:   targetToken.actor.id,
+          targetPv:   n(targetToken.actor.system?.ressources?.pv?.valeur, 0),
+          addedStateIds: [],
+          cooldown:   null
+        };
+
+        // 2. Réserve le slot (pending)
+        const actionId = foundry.utils.randomID();
+        if (budgetAPI && combat && cbt) {
+          const budget    = budgetAPI.getBudget(combat, cbt.id);
+          const newBudget = budgetAPI.reserveSlot(budget, "attaque");
+          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+          await budgetAPI.addLogEntry(combat, cbt.id, {
+            id: actionId, slot: "attaque", status: "pending",
+            label: `Attaque ${weapon.name} → ${targetToken.actor.name}`,
+            actorId: actor.id, snapshot, timestamp: Date.now()
+          });
+        }
+
+        // 3. Jet d20 du joueur (visible dans le chat)
         const roll20 = await (new Roll("1d20")).evaluate();
         await roll20.toMessage({
           speaker: ChatMessage.getSpeaker({ actor }),
@@ -351,12 +437,11 @@
         });
         const d20 = roll20.total;
 
-        // 2. TN calculé
+        // 4. TN + pré-calcul dégâts
         const tnData = combatAPI?.computeTN
           ? combatAPI.computeTN(actor, targetToken.actor, weapon)
           : { tnFinal: 11, tnBase: 11, diff: 0, livraison: "physique" };
 
-        // 3. Pré-calcul des dégâts (sans les appliquer)
         const dmgResult = await weapon.rollDamage({
           attackerActor: actor,
           targetActor:   targetToken.actor,
@@ -364,93 +449,209 @@
           type:          tnData.livraison
         });
 
-        // 4. Encode les données dans le message pour que le MJ puisse les utiliser
-        const msgFlags = {
-          rpg: {
-            type:         "attackDeclaration",
-            actorId:      actor.id,
-            weaponId:     weapon.id,
-            targetId:     targetToken.actor.id,
-            d20,
-            tnFinal:      tnData.tnFinal,
-            livraison:    tnData.livraison,
-            dmgBrut:      dmgResult.beforeMitigation,
-            dmgFinal:     dmgResult.final,
-            dmgFixe:      dmgResult.fixe,
-            dmgPct:       dmgResult.pct,
-            critBonus:    dmgResult.critBonus,
-          }
-        };
-
         const isCrit  = d20 === 20;
         const isAutoF = d20 <= 5;
         const isAutoS = d20 >= 16;
-
         const dmgSummary = `${dmgResult.beforeMitigation}${dmgResult.critBonus ? ` (+${dmgResult.critBonus} crit)` : ""} → <b>${dmgResult.final}</b> après mitigation`;
 
-        const msgContent = `
-          <div style="font-size:13px;line-height:1.6">
-            <b>${htmlEscape(actor.name)}</b> attaque <b>${htmlEscape(targetToken.actor.name)}</b>
-            avec <b>${htmlEscape(weapon.name)}</b><br>
-            🎲 Jet : <b>${d20}</b> — TN : <b>${tnData.tnFinal}+</b>
-            ${isAutoF ? `<span style="color:#c0392b">(Échec automatique ≤5)</span>` : ""}
-            ${isAutoS ? `<span style="color:#27ae60">(Succès automatique ≥16)</span>` : ""}
-            ${isCrit  ? `<span style="color:gold">✦ CRITIQUE</span>` : ""}<br>
-            💥 Dégâts calculés : ${dmgSummary}<br>
-            <div style="margin-top:6px;display:flex;gap:6px">
-              <button type="button" class="rpg-attack-resolve" data-result="fail"
-                style="flex:1;padding:4px;cursor:pointer">Échec</button>
-              <button type="button" class="rpg-attack-resolve" data-result="hit"
-                style="flex:1;padding:4px;cursor:pointer">Touché</button>
-              <button type="button" class="rpg-attack-resolve" data-result="crit"
-                style="flex:1;padding:4px;cursor:pointer;font-weight:700;color:gold">Critique !</button>
-            </div>
-          </div>`;
+        // 5. Message pending (boutons MJ : Confirmer / Corriger / Refuser)
+        const confirmAPI   = getConfirmAPI();
+        const pendingLabel = `Attaque : <b>${htmlEscape(weapon.name)}</b> → <b>${htmlEscape(targetToken.actor.name)}</b>`;
+        const detail       = `🎲 d20 = <b>${d20}</b> (TN ${tnData.tnFinal}+) — ${
+          isAutoF ? "Échec auto" : isAutoS ? "Succès auto" : isCrit ? "CRITIQUE !" : "résultat normal"
+        } — ${dmgSummary}`;
 
-        await ChatMessage.create({
+        const msgContent = confirmAPI
+          ? confirmAPI.buildPendingMessage({
+              actor: actor.name, label: pendingLabel, detail,
+              slotLabel: "Attaque", slotIcon: "⚔️",
+              actionId, type: "attack",
+              outcome: isCrit ? "crit" : isAutoF ? "fail" : "hit"
+            })
+          : `<div>${pendingLabel}<br>${detail}</div>`;
+
+        const msg = await ChatMessage.create({
           speaker: ChatMessage.getSpeaker({ actor }),
           content: msgContent,
-          flags:   msgFlags
+          flags: {
+            rpg: {
+              pendingAction: {
+                type: "attack", actionId, outcome: isCrit ? "crit" : isAutoF ? "fail" : "hit"
+              },
+              attackDeclaration: {
+                actorId: actor.id, weaponId: weapon.id, targetId: targetToken.actor.id,
+                d20, tnFinal: tnData.tnFinal, livraison: tnData.livraison,
+                dmgBrut: dmgResult.beforeMitigation, dmgFinal: dmgResult.final,
+                dmgFixe: dmgResult.fixe, dmgPct: dmgResult.pct, critBonus: dmgResult.critBonus
+              }
+            }
+          }
         });
 
+        // Enregistre l'id du message dans le log
+        if (budgetAPI && combat && cbt) {
+          await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+        }
+
         rerenderWeapons();
-        notify("info", "Attaque déclarée — en attente de validation MJ.");
+        rerenderAll();  // met à jour le widget budget
+        notify("info", "Attaque déclarée — en attente du MJ.");
       } catch (e) {
         console.error("[RPG][Menu] Erreur attaque :", e);
+        // Libère le slot en cas d'erreur
+        if (budgetAPI && combat && cbt) {
+          const b = budgetAPI.getBudget(combat, cbt.id);
+          await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, "attaque", false));
+        }
         notify("error", `Erreur attaque : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;
       }
     });
 
-    // ── Déclarer sort ──────────────────────────────────────────────────────
+    // ── Déclarer sort (flow : snapshot → budget → pending → MJ valide) ──────
     $root.on("click.rpgMenu", "[data-action='declare']", async (ev) => {
       ev.preventDefault();
       const btn  = ev.currentTarget;
       if (btn.disabled) return;
       btn.disabled = true;
 
-      const row    = btn.closest("[data-item-id]");
-      const item   = actor.items.get(row?.dataset?.itemId);
+      const row  = btn.closest("[data-item-id]");
+      const item = actor.items.get(row?.dataset?.itemId);
       if (!item) { btn.disabled = false; return notify("warn", "Sort introuvable."); }
 
       const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;
+      const sys         = item.system ?? {};
+      const speed       = String(sys.speed ?? "normal");
+      const slot        = (speed === "rapide" || speed === "quick") ? "sortRapide" : "sortNormal";
+      const manaCost    = n(sys.coutMana, 0);
+
+      // Vérification budget
+      const budgetAPI = getBudgetAPI();
+      const combat    = getCombat();
+      const cbt       = getCombatant(actor);
+      if (budgetAPI && combat && cbt && !budgetAPI.canUseSlot(budgetAPI.getBudget(combat, cbt.id), slot)) {
+        btn.disabled = false;
+        return notify("warn", `Slot "${slot === "sortRapide" ? "Sort rapide" : "Sort normal"}" épuisé pour ce tour.`);
+      }
 
       try {
+        // 1. Snapshot AVANT (mana + cooldown)
+        const snapshot = {
+          casterId:  actor.id,
+          casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
+          targetId:   targetToken?.actor?.id ?? null,
+          targetPv:   n(targetToken?.actor?.system?.ressources?.pv?.valeur, undefined),
+          addedStateIds: [],
+          cooldown: {
+            itemId:     item.id,
+            oldRestant: n(sys.cooldown?.restant, 0)
+          }
+        };
+
+        // 2. Réserve slot pending
+        const actionId = foundry.utils.randomID();
+        if (budgetAPI && combat && cbt) {
+          const budget    = budgetAPI.getBudget(combat, cbt.id);
+          const newBudget = budgetAPI.reserveSlot(budget, slot);
+          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+          await budgetAPI.addLogEntry(combat, cbt.id, {
+            id: actionId, slot, status: "pending",
+            label: `${item.name}${targetToken ? " → " + targetToken.actor.name : ""}`,
+            actorId: actor.id, snapshot, timestamp: Date.now()
+          });
+        }
+
+        // 3. Déclare via spellAPI (inclut actionId pour que le resolve puisse update le log)
         const res = await spellAPI.declareSpell(actor, item, {
           casterToken: token ?? null,
-          targetToken: targetToken ?? null
+          targetToken: targetToken ?? null,
+          actionId
         });
+
         if (!res?.ok) {
+          // Libère le slot en cas d'échec de déclaration
+          if (budgetAPI && combat && cbt) {
+            const b = budgetAPI.getBudget(combat, cbt.id);
+            await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
+            await budgetAPI.updateLogEntry(combat, actionId, { status: "rejected" });
+          }
           btn.disabled = false;
           return notify("warn", res?.reason ?? "Déclaration impossible.");
         }
-        notify("info", `Sort déclaré : ${item.name}`);
+
+        notify("info", `Sort déclaré : ${item.name} — en attente du MJ.`);
         rerenderMana();
         rerenderSpells();
+        rerenderAll();
       } catch (e) {
         console.error(e);
+        if (budgetAPI && combat && cbt) {
+          const b = budgetAPI.getBudget(combat, cbt.id);
+          await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
+        }
         notify("error", `Erreur déclaration : ${e?.message ?? e}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Déclarer Déplacement ──────────────────────────────────────────────
+    $root.on("click.rpgMenu", "[data-action='move']", async (ev) => {
+      ev.preventDefault();
+      const btn = ev.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      const budgetAPI = getBudgetAPI();
+      const combat    = getCombat();
+      const cbt       = getCombatant(actor);
+
+      if (!budgetAPI || !combat || !cbt) {
+        btn.disabled = false;
+        return notify("info", "Hors combat — déplacement libre.");
+      }
+
+      if (!budgetAPI.canUseSlot(budgetAPI.getBudget(combat, cbt.id), "deplacement")) {
+        btn.disabled = false;
+        return notify("warn", "Slot Déplacement déjà utilisé ce tour.");
+      }
+
+      try {
+        const actionId = foundry.utils.randomID();
+        const budget    = budgetAPI.getBudget(combat, cbt.id);
+        const newBudget = budgetAPI.reserveSlot(budget, "deplacement");
+        await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+        await budgetAPI.addLogEntry(combat, cbt.id, {
+          id: actionId, slot: "deplacement", status: "pending",
+          label: `Déplacement — ${actor.name}`,
+          actorId: actor.id,
+          snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
+          timestamp: Date.now()
+        });
+
+        const confirmAPI = getConfirmAPI();
+        const msgContent = confirmAPI
+          ? confirmAPI.buildPendingMessage({
+              actor: actor.name, label: `Se déplace (vitesse : <b>${actor.system?.deplacement?.vitesse ?? "?"}</b> cases)`,
+              slotLabel: "Déplacement", slotIcon: "🏃",
+              detail: "Le déplacement est libre sur la carte.",
+              actionId, type: "move", outcome: "confirm"
+            })
+          : `<b>${actor.name}</b> se déplace.`;
+
+        const msg = await ChatMessage.create({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          content: msgContent,
+          flags: { rpg: { pendingAction: { type: "move", actionId, outcome: "confirm" } } }
+        });
+        await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+
+        rerenderAll();
+        notify("info", "Déplacement déclaré — en attente du MJ.");
+      } catch (e) {
+        console.error(e);
+        notify("error", `Erreur déplacement : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;
       }
