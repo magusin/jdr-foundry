@@ -340,7 +340,7 @@ Hooks.once("init", async () => {
     return Object.keys(flat).every(k => allowed.has(k));
   });
 
-  Hooks.once("ready", () => {
+  Hooks.once("ready", async () => {
     console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
 
     // Globals
