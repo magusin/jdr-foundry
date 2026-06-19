@@ -1,5 +1,6 @@
 // systems/rpg/module/rules/spells.js
 import { manhattanDistanceTokens } from "../utils/grid.js";
+import { applyResistances } from "./resistances.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -655,15 +656,20 @@ function normalizeState(st, forcedId = null) {
 }
 
 async function upsertState(actor, state) {
+  const adjusted = applyResistances(actor, state);
+  if (!adjusted) return { resisted: true };
+
   const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
-  const id = String(state.id || foundry.utils.randomID());
+  const id = String(adjusted.id || foundry.utils.randomID());
   const idx = list.findIndex(e => String(e.id) === id);
-  const normalized = normalizeState(state, id);
+  const normalized = normalizeState(adjusted, id);
   if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
   else list.push(normalized);
 
   await actor.update({ "system.etatsActifs": list });
   if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+
+  return { resisted: false };
 }
 
 /* ------------------------------------------------------------ */
@@ -942,10 +948,13 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const dotFlat  = n(fx.damage?.flat, 0);
     const dotDice  = String(fx.damage?.dice ?? "").trim();
 
+    const tag = String(fx.tag ?? "").trim() || null;
+
     const state = {
       id:        stateId,
       label:     String(fx.label ?? item.name),
       type:      "spellEffect",
+      tag,
       isAura:    false,
       duration:  Math.max(1, n(fx.duration, 1)),
       remaining: Math.max(1, n(fx.duration, 1)),
@@ -953,7 +962,11 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       mods:      mods
     };
 
-    await upsertState(applyTo, state);
+    const resistResult = await upsertState(applyTo, state);
+    if (resistResult?.resisted) {
+      rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté !`);
+      continue;
+    }
 
     const modSummary = summarizeMods(mods);
     const parts = [];

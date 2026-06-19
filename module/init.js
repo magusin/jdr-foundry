@@ -33,6 +33,8 @@ import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken } from "./rules/movement-tracker.js";
 import { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty } from "./rules/forge.js";
+import * as EffectLibrary from "./rules/effect-library.js";
+import * as Resistances from "./rules/resistances.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -372,6 +374,12 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.turnEffects : API mécaniques de tour (debug / macro)
     game.rpg.turnEffects = { onTurnStartForActor };
+
+    // ✅ game.rpg.effectLibrary : catalogue d'effets nommés (brûlure, poison...)
+    game.rpg.effectLibrary = EffectLibrary;
+
+    // ✅ game.rpg.resistances : calcul résistance équipement/buffs
+    game.rpg.resistances = Resistances;
 
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));

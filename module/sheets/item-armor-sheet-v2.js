@@ -23,6 +23,11 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         handler: async function (event, form, formData, options) {
           await this._onFormSubmitV2(event, form, formData, options);
         }
+      },
+
+      actions: {
+        addResistance:    async function (event) { await this._actionAddResistance(event); },
+        removeResistance: async function (event) { await this._actionRemoveResistance(event); }
       }
     },
     { inplace: false }
@@ -102,6 +107,13 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       .map(([key, label]) => ({ key, label, value: n(ctx.system.bonus?.[key], 0) }))
       .filter((row) => row.value !== 0);
 
+    // ✅ résistances (tag, durationReduction, dotReductionPct, immune)
+    ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
+    ctx.EFFECT_TAGS = {
+      feu: "Feu", poison: "Poison", glace: "Glace", electrique: "Électrique",
+      physique: "Physique", mental: "Mental", sacre: "Sacré", tenebres: "Ténèbres"
+    };
+
     return ctx;
   }
 
@@ -127,8 +139,37 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       expanded.system.prix.or = n(expanded.system.prix.or, 0);
     }
 
+    // résistances : normalise Object -> Array + types
+    const resRaw = expanded?.system?.resistances;
+    if (resRaw && !Array.isArray(resRaw)) expanded.system.resistances = Object.values(resRaw);
+    if (Array.isArray(expanded?.system?.resistances)) {
+      for (const r of expanded.system.resistances) {
+        if (!r) continue;
+        r.tag = String(r.tag ?? "").trim();
+        r.durationReduction = n(r.durationReduction, 0);
+        r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
+        r.immune = !!r.immune;
+      }
+    }
+
     await this.document.update(expanded, { render: false });
     await this.render({ force: true });
+  }
+
+  async _actionAddResistance(event) {
+    event?.preventDefault?.();
+    const list = foundry.utils.deepClone(this.document.system?.resistances ?? []);
+    list.push({ tag: "feu", durationReduction: 0, dotReductionPct: 0, immune: false });
+    await this.document.update({ "system.resistances": list }, { render: true });
+  }
+
+  async _actionRemoveResistance(event) {
+    event?.preventDefault?.();
+    const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
+    if (!Number.isFinite(idx)) return;
+    const list = foundry.utils.deepClone(this.document.system?.resistances ?? []);
+    list.splice(idx, 1);
+    await this.document.update({ "system.resistances": list }, { render: true });
   }
 
   async _onRender(context, options) {

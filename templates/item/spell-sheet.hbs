@@ -431,6 +431,25 @@ EFFETS (GM = inputs/select, Joueur = texte gras)
               <div><b>{{fx.duration}}</b></div>
             {{/if}}
           </div>
+
+          <div class="field">
+            <label>Tag (résistance)</label>
+            {{#if @root.canEdit}}
+              <select name="system.effectsUI.{{i}}.tag">
+                <option value="" {{#unless fx.tag}}selected{{/unless}}>— Aucun —</option>
+                <option value="feu"        {{#if (eq fx.tag "feu")}}selected{{/if}}>Feu</option>
+                <option value="poison"     {{#if (eq fx.tag "poison")}}selected{{/if}}>Poison</option>
+                <option value="glace"      {{#if (eq fx.tag "glace")}}selected{{/if}}>Glace</option>
+                <option value="electrique" {{#if (eq fx.tag "electrique")}}selected{{/if}}>Électrique</option>
+                <option value="physique"   {{#if (eq fx.tag "physique")}}selected{{/if}}>Physique</option>
+                <option value="mental"     {{#if (eq fx.tag "mental")}}selected{{/if}}>Mental</option>
+                <option value="sacre"      {{#if (eq fx.tag "sacre")}}selected{{/if}}>Sacré</option>
+                <option value="tenebres"   {{#if (eq fx.tag "tenebres")}}selected{{/if}}>Ténèbres</option>
+              </select>
+            {{else}}
+              <div><b>{{fx.tag}}</b></div>
+            {{/if}}
+          </div>
         </div>
 
         <div class="field" style="margin-top:10px;">

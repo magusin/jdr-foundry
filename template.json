@@ -132,6 +132,7 @@
       "equipBonus": {
         "equipe": false,
         "effects": [],
+        "resistances": [],
         "bonus": {
           "force": 0,
           "intelligence": 0,
