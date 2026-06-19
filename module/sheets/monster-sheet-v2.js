@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/monster-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+import { setupActorItemDrop } from "./drop-helper.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -154,6 +155,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
     const root = this.element;
     if (!root) return;
+
+    // Drag & drop d'item (GM only)
+    setupActorItemDrop(this, root);
 
     const qsAll = (sel) => Array.from(root.querySelectorAll(sel));
 

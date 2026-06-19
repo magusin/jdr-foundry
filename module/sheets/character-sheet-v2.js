@@ -233,6 +233,8 @@ async function removeXpFromSkill(actor, skillKey, amount) {
 /* Sheet Class (V2)                             */
 /* -------------------------------------------- */
 
+import { setupActorItemDrop } from "./drop-helper.js";
+
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
 
@@ -445,6 +447,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     this._tabs.bind(root);
 
     if (!root) return;
+
+    // Drag & drop d'item (GM only) — doit être branché AVANT le early-return non-GM
+    setupActorItemDrop(this, root);
 
     // Player: disable everything
     if (!game.user.isGM) {
