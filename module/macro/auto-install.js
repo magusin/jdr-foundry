@@ -6,7 +6,7 @@
 // Appelé depuis init.js > hook "ready" (GM uniquement).
 
 const PACK_NAME    = "rpg.macros-rpg";
-const FOLDER_NAME  = "RPG — Macros système";
+const FOLDER_NAME  = "JDR — Macros système";
 const FLAG_SCOPE   = "rpg";
 const FLAG_VERSION = "macroVersion";
 
@@ -35,8 +35,16 @@ export async function autoInstallMacros() {
     const packDoc  = await pack.getDocument(entry._id);
     const packVer  = String(packDoc.flags?.rpg?.version ?? "1.0.0");
 
-    // Cherche si une macro du même nom existe déjà dans le monde
-    const existing = game.macros.find((m) => m.name === packDoc.name);
+    // Dédoublonnage : si plusieurs macros du même nom existent, on garde la première
+    // et on supprime les copies en trop (peuvent apparaître après un drag manuel répété)
+    const allMatching = game.macros.filter((m) => m.name === packDoc.name);
+    if (allMatching.length > 1) {
+      const [keep, ...extras] = allMatching;
+      await Promise.all(extras.map((m) => m.delete().catch(() => {})));
+      console.log(`[RPG] ${extras.length} doublon(s) supprimé(s) pour "${packDoc.name}"`);
+    }
+
+    const existing = allMatching[0] ?? null;
 
     if (!existing) {
       // Crée la macro

@@ -20,7 +20,7 @@
   "packs": [
     {
       "name": "macros-rpg",
-      "label": "RPG — Macros système",
+      "label": "JDR — Macros système",
       "path": "packs/macros/macros.db",
       "type": "Macro",
       "system": "rpg"

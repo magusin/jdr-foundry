@@ -370,6 +370,9 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.forge : API de craft
     game.rpg.forge = { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty };
 
+    // ✅ game.rpg.turnEffects : API mécaniques de tour (debug / macro)
+    game.rpg.turnEffects = { onTurnStartForActor };
+
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
