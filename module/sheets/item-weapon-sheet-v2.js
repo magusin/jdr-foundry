@@ -136,8 +136,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.EFFECT_TAGS = {
-      feu: "Feu", poison: "Poison", glace: "Glace", electrique: "Électrique",
-      physique: "Physique", mental: "Mental", sacre: "Sacré", tenebres: "Ténèbres"
+      feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
     };
 
     // ---- Defaults infos

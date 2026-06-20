@@ -110,8 +110,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // ✅ résistances (tag, durationReduction, dotReductionPct, immune)
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.EFFECT_TAGS = {
-      feu: "Feu", poison: "Poison", glace: "Glace", electrique: "Électrique",
-      physique: "Physique", mental: "Mental", sacre: "Sacré", tenebres: "Ténèbres"
+      feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
     };
 
     return ctx;
