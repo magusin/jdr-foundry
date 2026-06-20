@@ -92,8 +92,8 @@ export function applyResistances(actor, state) {
 
   const reducedRaw = basePerTick * (1 - res.dotReductionPct / 100);
   const finalDot = basePerTick < 0
-    ? Math.min(0, Math.round(reducedRaw))   // soin (négatif) : ne pas inverser le signe
-    : Math.max(0, Math.round(reducedRaw));
+    ? -Math.ceil(Math.abs(reducedRaw))      // soin (négatif) : arrondi au sup en magnitude
+    : Math.ceil(Math.max(0, reducedRaw));   // dégâts : arrondi au sup, jamais négatif
 
   const resistanceInfo = {
     tag: state.tag, immune: false,

@@ -62,6 +62,25 @@
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
       <div>
+        <label>Cibles min</label>
+        {{#if isReadOnly}}
+        <div><b>{{system.targetCount.min}}</b></div>
+        {{else}}
+        <input type="number" name="system.targetCount.min" value="{{system.targetCount.min}}" min="0" />
+        {{/if}}
+      </div>
+      <div>
+        <label>Cibles max</label>
+        {{#if isReadOnly}}
+        <div><b>{{system.targetCount.max}}</b></div>
+        {{else}}
+        <input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" />
+        {{/if}}
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+      <div>
         <label>Type</label>
         {{#if isReadOnly}}
         <div><b>{{system.livraison}}</b></div>

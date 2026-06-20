@@ -208,6 +208,13 @@ async function ensureSpellDefaults(item) {
     if (sys.range.max === undefined) patch["system.range.max"] = 6;
   }
 
+  // targetCount
+  if (!sys.targetCount || typeof sys.targetCount !== "object") patch["system.targetCount"] = { min: 1, max: 1 };
+  else {
+    if (sys.targetCount.min === undefined) patch["system.targetCount.min"] = 1;
+    if (sys.targetCount.max === undefined) patch["system.targetCount.max"] = 1;
+  }
+
   // cooldown
   if (!sys.cooldown || typeof sys.cooldown !== "object") patch["system.cooldown"] = { max: 0, restant: 0 };
   else {
@@ -717,16 +724,36 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   if (cdRest > 0) return { ok: false, reason: `Sort en recharge : ${cdRest} tour(s)` };
 
   const casterT = casterToken ?? getActorToken(actor);
-  const targetT = targetToken ?? Array.from(game.user.targets)[0] ?? null;
-  const targetActor = targetT?.actor ?? null;
 
-  // portée si cible
-  if (casterT && targetT) {
+  // ✅ Multi-cible : si targetToken explicite, une seule cible (compat menu.js attaque) ;
+  // sinon on prend TOUS les tokens actuellement ciblés (game.user.targets)
+  const targetTokens = targetToken ? [targetToken] : Array.from(game.user.targets);
+  const targetActors = targetTokens.map(t => t.actor).filter(Boolean);
+  const targetActor  = targetActors[0] ?? null; // rétrocompat (effets self/caster n'en ont pas besoin)
+
+  // ── Validation nombre de cibles ───────────────────────────────────────
+  const tcMin = n(sys.targetCount?.min, 1);
+  const tcMax = n(sys.targetCount?.max, 1);
+  const tcCount = targetTokens.length;
+
+  if (tcMin > 0 || tcMax > 0) {
+    if (tcCount < tcMin) {
+      return { ok: false, reason: `Ce sort nécessite au moins ${tcMin} cible(s) — ${tcCount} sélectionnée(s)` };
+    }
+    if (tcMax > 0 && tcCount > tcMax) {
+      return { ok: false, reason: `Ce sort ne prend que ${tcMax} cible(s) maximum — ${tcCount} sélectionnée(s)` };
+    }
+  }
+
+  // ── Portée : vérifie TOUTES les cibles ────────────────────────────────
+  if (casterT && targetTokens.length) {
     const rmin = n(sys.range?.min, 0);
     const rmax = n(sys.range?.max, 0);
-    const dist = measureSquares(casterT, targetT);
-    if (dist < rmin || dist > rmax) {
-      return { ok: false, reason: `Hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+    for (const tT of targetTokens) {
+      const dist = measureSquares(casterT, tT);
+      if (dist < rmin || dist > rmax) {
+        return { ok: false, reason: `${tT.actor?.name ?? tT.name} hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+      }
     }
   }
 
@@ -779,13 +806,14 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const actorUuid = actor.uuid;
   const itemUuid = item.uuid;
   const casterTokenUuid = casterT?.document?.uuid ?? null;
-  const targetTokenUuid = targetT?.document?.uuid ?? null;
+  const targetTokenUuids = targetTokens.map(t => t?.document?.uuid).filter(Boolean);
+  const targetNamesList = targetActors.map(a => a.name).join(", ");
 
   const content = `
   <div class="rpg-spell-declare">
     <div>
       <b>${actor.name}</b> déclare <b>${item.name}</b>
-      ${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}
+      ${targetNamesList ? ` sur <b>${targetNamesList}</b>` : ""}
       (mana -${manaCost}, CD=${cdMax})
     </div>
 
@@ -820,7 +848,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     content,
     flags: {
       rpg: {
-        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuid, actionId: actionId ?? null }
+        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuids, actionId: actionId ?? null }
       }
     }
   });
@@ -851,9 +879,24 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   const sys = item.system ?? {};
   const res = String(result ?? "success");
 
-  const targetTokenDoc = data.targetTokenUuid ? await fromUuidSafe(data.targetTokenUuid) : null;
-  const targetToken    = targetTokenDoc?.object ?? null;
-  const targetActor    = targetToken?.actor ?? null;
+  // ✅ Support multi-cible : targetTokenUuids (array) avec fallback targetTokenUuid (legacy, 1 seule cible)
+  const uuidList = Array.isArray(data.targetTokenUuids) && data.targetTokenUuids.length
+    ? data.targetTokenUuids
+    : (data.targetTokenUuid ? [data.targetTokenUuid] : []);
+
+  const targetTokens = [];
+  for (const uuid of uuidList) {
+    const doc = await fromUuidSafe(uuid);
+    const tok = doc?.object ?? null;
+    if (tok) targetTokens.push(tok);
+  }
+  const targetActors = targetTokens.map(t => t.actor).filter(Boolean);
+
+  // Rétrocompat : variables singulières utilisées pour les effets "self/caster"
+  const targetToken = targetTokens[0] ?? null;
+  const targetActor = targetActors[0] ?? null;
+
+  const targetNames = targetActors.map(a => a.name).join(", ") || null;
 
   const title =
     res === "fail" ? `${actor.name} : ÉCHEC sur ${item.name}` :
@@ -907,26 +950,27 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       } catch (e) { /* ignore */ }
     }
 
-    // Applique mitigation si cible
-    let finalDmg = rawDmg;
-    let mitigLine = "";
-    if (targetActor && rawDmg > 0) {
+    // Applique mitigation par cible (multi-cible : même jet, mitigation propre à chacune)
+    if (targetActors.length && rawDmg > 0) {
       const livraison = String(sys.livraison ?? "magique");
       const isPhys    = livraison === "physique";
-      const tSys      = targetActor.system ?? {};
-      const effD      = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
-      const red       = tSys.derived?.reductions ?? {};
-      const fixe      = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
-      const pct       = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
-      const afterFixe = Math.max(0, rawDmg - fixe);
-      finalDmg        = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
-      mitigLine       = fixe || pct ? ` (−${fixe} fixe, −${pct}% → <b>${finalDmg}</b>)` : ` → <b>${finalDmg}</b>`;
 
-      const pvCur = n(targetActor.system?.ressources?.pv?.valeur, 0);
-      const pvMax = n(targetActor.system?.ressources?.pv?.max, 0);
-      const pvNew = Math.max(0, pvCur - finalDmg);
-      await targetActor.update({ "system.ressources.pv.valeur": pvNew });
-      rows.push(`💥 <b>Dégâts</b> : ${rawDmg}${rollLine}${mitigLine} — ${targetActor.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`);
+      for (const tActor of targetActors) {
+        const tSys = tActor.system ?? {};
+        const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+        const red  = tSys.derived?.reductions ?? {};
+        const fixe = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
+        const pct  = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
+        const afterFixe = Math.max(0, rawDmg - fixe);
+        const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+        const mitigLine = fixe || pct ? ` (−${fixe} fixe, −${pct}% → <b>${finalDmg}</b>)` : ` → <b>${finalDmg}</b>`;
+
+        const pvCur = n(tActor.system?.ressources?.pv?.valeur, 0);
+        const pvMax = n(tActor.system?.ressources?.pv?.max, 0);
+        const pvNew = Math.max(0, pvCur - finalDmg);
+        await tActor.update({ "system.ressources.pv.valeur": pvNew });
+        rows.push(`💥 <b>Dégâts</b> : ${rawDmg}${rollLine}${mitigLine} — ${tActor.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`);
+      }
     } else if (rawDmg > 0) {
       rows.push(`💥 <b>Dégâts</b> : <b>${rawDmg}</b>${rollLine}`);
     }
@@ -937,70 +981,72 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   for (const fx of fxList) {
     const mods = buildModsFromFxMods(fx.mods);
 
-    // Détermine la cible de l'effet
+    // Détermine la/les cible(s) de l'effet
     const fxTarget = String(fx.target ?? "target").toLowerCase();
-    const applyTo  =
-      (fxTarget === "self" || fxTarget === "caster")  ? actor :
-      (fxTarget === "target" && targetActor)           ? targetActor :
-      null;
+    const applyToList =
+      (fxTarget === "self" || fxTarget === "caster") ? [actor] :
+      (fxTarget === "target") ? targetActors :
+      [];
 
-    if (!applyTo) continue;
+    for (const applyTo of applyToList) {
+      if (!applyTo) continue;
 
-    // Construit l'état V2 à partir du fx
-    const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}`;
-    const dotFlat  = n(fx.damage?.flat, 0);
-    const dotDice  = String(fx.damage?.dice ?? "").trim();
+      // Construit l'état V2 à partir du fx
+      const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
+      const dotFlat  = n(fx.damage?.flat, 0);
+      const dotDice  = String(fx.damage?.dice ?? "").trim();
 
-    const tag = String(fx.tag ?? "").trim() || null;
+      const tag = String(fx.tag ?? "").trim() || null;
 
-    const state = {
-      id:        stateId,
-      label:     String(fx.label ?? item.name),
-      type:      "spellEffect",
-      tag,
-      isAura:    false,
-      duration:  Math.max(1, n(fx.duration, 1)),
-      remaining: Math.max(1, n(fx.duration, 1)),
-      dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice },
-      mods:      mods
-    };
+      const state = {
+        id:        stateId,
+        label:     String(fx.label ?? item.name),
+        type:      "spellEffect",
+        tag,
+        isAura:    false,
+        duration:  Math.max(1, n(fx.duration, 1)),
+        remaining: Math.max(1, n(fx.duration, 1)),
+        dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice },
+        mods:      mods
+      };
 
-    const resistResult = await upsertState(applyTo, state);
-    const info = resistResult?.resistanceInfo;
+      const resistResult = await upsertState(applyTo, state);
+      const info = resistResult?.resistanceInfo;
 
-    if (resistResult?.resisted) {
-      const reason = info?.immune ? "immunité" : "durée ramenée à 0";
-      rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté (${reason}) !`);
-      continue;
-    }
-
-    const modSummary = summarizeMods(mods);
-    const parts = [];
-    if (modSummary) parts.push(modSummary);
-
-    // Détail dégâts/durée avant-après résistance si une résistance est en jeu
-    let durTxt = `${n(fx.duration, 1)} tours`;
-    let dotTxt = "";
-
-    if (info) {
-      durTxt = info.durationReduction > 0
-        ? `${info.baseDuration} → <b>${info.finalDuration}</b> tours (−${info.durationReduction})`
-        : `${info.finalDuration} tours`;
-
-      if (info.baseDot) {
-        dotTxt = info.dotReductionPct > 0
-          ? `, DOT ${Math.abs(info.baseDot)} → <b>${Math.abs(info.finalDot)}</b>/tour (−${info.dotReductionPct}%)`
-          : `, DOT ${Math.abs(info.baseDot)}/tour`;
+      if (resistResult?.resisted) {
+        const reason = info?.immune ? "immunité" : "durée ramenée à 0";
+        rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté (${reason}) !`);
+        continue;
       }
-    } else if (dotFlat || dotDice) {
-      dotTxt = `, DOT ${dotFlat || dotDice}/tour`;
-    }
 
-    rows.push(
-      `✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}` +
-      (parts.length ? ` (${parts.join(", ")})` : "") +
-      ` — Durée : ${durTxt}${dotTxt}`
-    );
+      const modSummary = summarizeMods(mods);
+      const parts = [];
+      if (modSummary) parts.push(modSummary);
+
+      // Détail dégâts/durée avant-après résistance si une résistance est en jeu
+      let durTxt = `${n(fx.duration, 1)} tours`;
+      let dotTxt = "";
+
+      if (info) {
+        durTxt = info.durationReduction > 0
+          ? `${info.baseDuration} → <b>${info.finalDuration}</b> tours (−${info.durationReduction})`
+          : `${info.finalDuration} tours`;
+
+        if (info.baseDot) {
+          dotTxt = info.dotReductionPct > 0
+            ? `, DOT ${Math.abs(info.baseDot)} → <b>${Math.abs(info.finalDot)}</b>/tour (−${info.dotReductionPct}%)`
+            : `, DOT ${Math.abs(info.baseDot)}/tour`;
+        }
+      } else if (dotFlat || dotDice) {
+        dotTxt = `, DOT ${dotFlat || dotDice}/tour`;
+      }
+
+      rows.push(
+        `✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}` +
+        (parts.length ? ` (${parts.join(", ")})` : "") +
+        ` — Durée : ${durTxt}${dotTxt}`
+      );
+    }
   }
 
   // ── Aura ─────────────────────────────────────────────────────────────
@@ -1039,7 +1085,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
-    content: `<b>${title}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""}${body}` +
+    content: `<b>${title}</b>${targetNames ? ` sur <b>${targetNames}</b>` : ""}${body}` +
       (actionId ? `<div style="margin-top:6px;text-align:right"><button type="button" data-action-undo data-action-id="${actionId}" style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">↩️ Annuler</button></div>` : ""),
     flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
   });

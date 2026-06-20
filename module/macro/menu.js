@@ -155,7 +155,27 @@
       // Vérification du budget
       const hasAtkSlot = canUseSlot(actor, "attaque");
       const atkBlocked = !hasAtkSlot;
-      const atkTitle   = atkBlocked ? "Slot Attaque épuisé pour ce tour" : "";
+
+      // Vérification de portée (distance case caster -> cible)
+      const portee = n(w.system?.portee, 1);
+      let distCases = null;
+      let outOfRange = false;
+      if (token && targetToken && game.rpg?.measureDistance) {
+        distCases = game.rpg.measureDistance(token.center, targetToken.center);
+        outOfRange = distCases > portee;
+      }
+
+      const targets = Array.from(game.user.targets ?? []);
+      const tooManyTargets = targets.length > 1;
+
+      const reasons = [];
+      if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
+      if (!hasTarget) reasons.push("Sélectionne une cible (T)");
+      if (outOfRange) reasons.push(`Hors portée (${distCases} cases, portée ${portee})`);
+      if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
+
+      const canAttack = hasTarget && !atkBlocked && !outOfRange;
+      const atkTitle  = reasons.join(" • ");
 
       return `
         <div class="rpg-spell-row" data-item-id="${w.id}" data-item-type="weapon">
@@ -167,22 +187,26 @@
               <div class="rpg-badges">
                 <span class="badge b-ok">${livr}</span>
                 <span class="badge b-info">${twoH}</span>
-                ${atkBlocked ? `<span class="badge b-bad">SLOT ✗</span>` : hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
+                ${atkBlocked ? `<span class="badge b-bad">SLOT ✗</span>` :
+                  outOfRange ? `<span class="badge b-bad">PORTÉE ✗</span>` :
+                  hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
               </div>
             </div>
             <div class="rpg-stats">
               <span>⚔️ Dégâts <b>${dmgTxt}</b></span>
               <span>${tnTxt}</span>
+              <span>📏 Portée <b>${portee}</b>${distCases !== null ? ` (cible à ${distCases})` : ""}</span>
             </div>
+            ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>
 
           <div class="rpg-right">
             <button type="button" class="rpg-open" data-action="open" title="Ouvrir la fiche">🔎</button>
             <button type="button"
-              class="rpg-declare ${hasTarget && !atkBlocked ? "btn-ok" : "btn-off"}"
+              class="rpg-declare ${canAttack ? "btn-ok" : "btn-off"}"
               data-action="attack"
-              title="${atkTitle}"
-              ${hasTarget && !atkBlocked ? "" : "disabled"}>
+              title="${htmlEscape(atkTitle)}"
+              ${canAttack ? "" : "disabled"}>
               Attaquer
             </button>
           </div>
@@ -198,10 +222,12 @@
     if (!filtered.length)
       return `<div class="rpg-empty">Aucun sort ne correspond aux filtres.</div>`;
 
-    const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;
-    const hasTarget   = !!targetToken;
+    const targets     = Array.from(game.user.targets ?? []);
+    const targetToken = targets[0] ?? null;
+    const hasTarget    = targets.length > 0;
 
     return filtered.map((s) => {
+      const sSys     = s.system ?? {};
       const cd       = getCD(s);
       const r        = getRange(s);
       const manaCost = getManaCost(s);
@@ -209,11 +235,52 @@
       const aura     = isAura(s);
       const needTgt  = requiresTarget(s);
       const okMana   = manaNow >= manaCost;
-      const okTarget = !needTgt || hasTarget;
-      const slotKey  = sys?.speed === "rapide" || sys?.speed === "quick" ? "sortRapide" : "sortNormal";
+
+      // ── Nombre de cibles requis ──────────────────────────────────────
+      const tcMin = n(sSys.targetCount?.min, 1);
+      const tcMax = n(sSys.targetCount?.max, 1);
+      const tcCount = targets.length;
+      let okTargetCount = true;
+      let targetCountMsg = "";
+      if (needTgt && (tcMin > 0 || tcMax > 0)) {
+        if (tcCount < tcMin) {
+          okTargetCount = false;
+          targetCountMsg = `Nécessite au moins ${tcMin} cible(s) — ${tcCount} sélectionnée(s)`;
+        } else if (tcMax > 0 && tcCount > tcMax) {
+          okTargetCount = false;
+          targetCountMsg = `Ne prend que ${tcMax} cible(s) max — ${tcCount} sélectionnée(s)`;
+        }
+      }
+
+      // ── Portée : vérifie chaque cible sélectionnée ───────────────────
+      let okRange = true;
+      let rangeMsg = "";
+      if (needTgt && token && targets.length && game.rpg?.measureDistance) {
+        for (const t of targets) {
+          const dist = game.rpg.measureDistance(token.center, t.center);
+          if (dist < r.min || dist > r.max) {
+            okRange = false;
+            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${dist} cases, ${r.min}–${r.max})`;
+            break;
+          }
+        }
+      }
+
+      const okTarget = !needTgt || (hasTarget && okTargetCount && okRange);
+      const slotKey  = sSys.speed === "rapide" || sSys.speed === "quick" ? "sortRapide" : "sortNormal";
       const hasSlot  = canUseSlot(actor, slotKey);
       const canUse   = ready && okMana && okTarget && hasSlot;
       const cdTxt    = cd.max > 0 ? `${cd.restant}/${cd.max}` : "—";
+
+      const reasons = [];
+      if (!ready) reasons.push(`En recharge (${cd.restant} tour(s))`);
+      if (!okMana) reasons.push(`Mana insuffisant (${manaNow}/${manaCost})`);
+      if (!hasSlot) reasons.push("Slot épuisé pour ce tour");
+      if (needTgt && !hasTarget) reasons.push("Sélectionne une cible (T)");
+      if (needTgt && !okTargetCount) reasons.push(targetCountMsg);
+      if (needTgt && !okRange) reasons.push(rangeMsg);
+
+      const tcTxt = (tcMin > 0 || tcMax > 0) ? `${tcMin}${tcMax !== tcMin ? `–${tcMax}` : ""}` : "—";
 
       return `
         <div class="rpg-spell-row" data-item-id="${s.id}" data-item-type="spell">
@@ -224,15 +291,17 @@
               <div class="rpg-badges">
                 <span class="badge ${ready ? "b-ok" : "b-bad"}">${ready ? "PRÊT" : "EN CD"}</span>
                 ${!hasSlot ? `<span class="badge b-bad">SLOT ✗</span>` : ""}
-                ${needTgt ? `<span class="badge ${hasTarget ? "b-ok" : "b-warn"}">CIBLE${hasTarget ? " ✓" : ""}</span>` : ""}
+                ${needTgt ? `<span class="badge ${(hasTarget && okTargetCount && okRange) ? "b-ok" : "b-warn"}">CIBLE${(hasTarget && okTargetCount && okRange) ? " ✓" : ""}</span>` : ""}
                 ${aura ? `<span class="badge b-aura">AURA</span>` : ""}
               </div>
             </div>
             <div class="rpg-stats">
               <span>💧 Mana <b class="${okMana ? "" : "bad"}">${manaCost}</b></span>
               <span>📏 Portée <b>${r.min}–${r.max}</b></span>
+              <span>🎯 Cibles <b>${tcTxt}</b></span>
               <span>⏳ CD <b class="${ready ? "cd-ok" : "cd-bad"}">${cdTxt}</b></span>
             </div>
+            ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(reasons.join(" • "))}</div>` : ""}
           </div>
           <div class="rpg-right">
             <button type="button" class="rpg-open" data-action="open" title="Ouvrir la fiche">🔎</button>
@@ -639,7 +708,8 @@
       }
 
       try {
-        // 1. Snapshot AVANT (mana + cooldown)
+        // 1. Snapshot AVANT (mana + cooldown) — best-effort : ne restaure que la
+        // 1ère cible en cas d'annulation MJ si le sort touche plusieurs cibles
         const snapshot = {
           casterId:  actor.id,
           casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
@@ -665,10 +735,11 @@
           });
         }
 
-        // 3. Déclare via spellAPI (inclut actionId pour que le resolve puisse update le log)
+        // 3. Déclare via spellAPI (targetToken:null → lit lui-même TOUTES les cibles
+        //    sélectionnées via game.user.targets, supporte le multi-cible)
         const res = await spellAPI.declareSpell(actor, item, {
           casterToken: token ?? null,
-          targetToken: targetToken ?? null,
+          targetToken: null,
           actionId
         });
 
