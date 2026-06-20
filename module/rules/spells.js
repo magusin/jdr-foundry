@@ -657,7 +657,10 @@ function normalizeState(st, forcedId = null) {
 
 async function upsertState(actor, state) {
   const adjusted = applyResistances(actor, state);
-  if (!adjusted) return { resisted: true };
+
+  if (adjusted?._resisted) {
+    return { resisted: true, resistanceInfo: adjusted.resistanceInfo };
+  }
 
   const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
   const id = String(adjusted.id || foundry.utils.randomID());
@@ -669,7 +672,7 @@ async function upsertState(actor, state) {
   await actor.update({ "system.etatsActifs": list });
   if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
 
-  return { resisted: false };
+  return { resisted: false, resistanceInfo: adjusted.resistanceInfo };
 }
 
 /* ------------------------------------------------------------ */
@@ -963,19 +966,40 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     };
 
     const resistResult = await upsertState(applyTo, state);
+    const info = resistResult?.resistanceInfo;
+
     if (resistResult?.resisted) {
-      rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté !`);
+      const reason = info?.immune ? "immunité" : "durée ramenée à 0";
+      rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté (${reason}) !`);
       continue;
     }
 
     const modSummary = summarizeMods(mods);
     const parts = [];
     if (modSummary) parts.push(modSummary);
-    if (dotFlat || dotDice) parts.push(`DOT ${dotFlat || dotDice}/tour`);
+
+    // Détail dégâts/durée avant-après résistance si une résistance est en jeu
+    let durTxt = `${n(fx.duration, 1)} tours`;
+    let dotTxt = "";
+
+    if (info) {
+      durTxt = info.durationReduction > 0
+        ? `${info.baseDuration} → <b>${info.finalDuration}</b> tours (−${info.durationReduction})`
+        : `${info.finalDuration} tours`;
+
+      if (info.baseDot) {
+        dotTxt = info.dotReductionPct > 0
+          ? `, DOT ${Math.abs(info.baseDot)} → <b>${Math.abs(info.finalDot)}</b>/tour (−${info.dotReductionPct}%)`
+          : `, DOT ${Math.abs(info.baseDot)}/tour`;
+      }
+    } else if (dotFlat || dotDice) {
+      dotTxt = `, DOT ${dotFlat || dotDice}/tour`;
+    }
 
     rows.push(
       `✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}` +
-      (parts.length ? ` (${parts.join(", ")}, ${n(fx.duration, 1)} tours)` : "")
+      (parts.length ? ` (${parts.join(", ")})` : "") +
+      ` — Durée : ${durTxt}${dotTxt}`
     );
   }
 

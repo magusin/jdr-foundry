@@ -71,31 +71,56 @@ export function applyResistances(actor, state) {
   if (!state?.tag) return state; // pas de tag = pas concerné
 
   const res = computeResistanceFor(actor, state.tag);
-  if (res.immune) return null;
 
   const baseDuration = n(state.duration, 1);
+  const basePerTick  = n(state.dot?.perTick, 0);
+
+  if (res.immune) {
+    return {
+      ...foundry.utils.deepClone(state),
+      _resisted: true,
+      resistanceInfo: {
+        tag: state.tag, immune: true,
+        baseDuration, finalDuration: 0,
+        baseDot: basePerTick, finalDot: 0,
+        durationReduction: baseDuration, dotReductionPct: 100
+      }
+    };
+  }
+
   const newDuration = Math.max(0, baseDuration - res.durationReduction);
-  if (newDuration <= 0) return null; // entièrement résisté
+
+  const reducedRaw = basePerTick * (1 - res.dotReductionPct / 100);
+  const finalDot = basePerTick < 0
+    ? Math.min(0, Math.round(reducedRaw))   // soin (négatif) : ne pas inverser le signe
+    : Math.max(0, Math.round(reducedRaw));
+
+  const resistanceInfo = {
+    tag: state.tag, immune: false,
+    baseDuration, finalDuration: Math.max(0, newDuration),
+    baseDot: basePerTick, finalDot,
+    durationReduction: res.durationReduction, dotReductionPct: res.dotReductionPct
+  };
+
+  if (newDuration <= 0) {
+    return {
+      ...foundry.utils.deepClone(state),
+      _resisted: true,
+      resistanceInfo: { ...resistanceInfo, finalDuration: 0 }
+    };
+  }
 
   const adjusted = foundry.utils.deepClone(state);
   adjusted.duration = newDuration;
   adjusted.remaining = newDuration;
 
-  const perTick = n(adjusted.dot?.perTick, 0);
-  if (perTick) {
-    const reduced = perTick * (1 - res.dotReductionPct / 100);
-    const reducedRounded = perTick < 0
-      ? Math.min(0, Math.round(reduced))   // soin (négatif) : ne pas inverser le signe
-      : Math.max(0, Math.round(reduced));
-    adjusted.dot.perTick = reducedRounded;
-    adjusted.dot.flat = reducedRounded;
+  if (adjusted.dot) {
+    adjusted.dot.perTick = finalDot;
+    adjusted.dot.flat = finalDot;
   }
 
-  adjusted.resistanceApplied = {
-    tag: state.tag,
-    durationReduced: res.durationReduction,
-    dotReductionPct: res.dotReductionPct
-  };
+  adjusted._resisted = false;
+  adjusted.resistanceInfo = resistanceInfo;
 
   return adjusted;
 }
@@ -109,7 +134,10 @@ export function applyResistances(actor, state) {
  */
 export async function addStateWithResistance(actor, state) {
   const adjusted = applyResistances(actor, state);
-  if (!adjusted) return { applied: false, resisted: true };
+
+  if (adjusted?._resisted) {
+    return { applied: false, resisted: true, resistanceInfo: adjusted.resistanceInfo };
+  }
 
   const list = Array.isArray(actor.system?.etatsActifs)
     ? foundry.utils.deepClone(actor.system.etatsActifs)
@@ -124,5 +152,5 @@ export async function addStateWithResistance(actor, state) {
 
   if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
 
-  return { applied: true, resisted: false, state: adjusted };
+  return { applied: true, resisted: false, state: adjusted, resistanceInfo: adjusted.resistanceInfo };
 }

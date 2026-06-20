@@ -92,15 +92,37 @@
             results.push({
               name: actor.name,
               resisted: res.resisted,
+              info: res.resistanceInfo ?? null,
               duration: res.state?.duration ?? duration ?? def.defaultDuration
             });
           }
 
-          const lines = results.map(r =>
-            r.resisted
-              ? `<li>🛡️ <b>${htmlEscape(r.name)}</b> a résisté à l'effet</li>`
-              : `<li>${htmlEscape(r.name)} : <b>${htmlEscape(def.label)}</b> (${r.duration} tours)</li>`
-          ).join("");
+          const fmtLine = (r) => {
+            const info = r.info;
+            if (!info) {
+              // pas de résistance en jeu (aucun gear/buff sur ce tag)
+              return `<li>${htmlEscape(r.name)} : <b>${htmlEscape(def.label)}</b> (${r.duration} tours)</li>`;
+            }
+
+            const durLine = info.durationReduction > 0
+              ? `Durée ${info.baseDuration} → <b>${info.finalDuration}</b> tour(s) (−${info.durationReduction})`
+              : `Durée ${info.finalDuration} tour(s)`;
+
+            const dotLine = info.baseDot
+              ? (info.dotReductionPct > 0
+                  ? ` • Dégâts/tour ${Math.abs(info.baseDot)} → <b>${Math.abs(info.finalDot)}</b> (−${info.dotReductionPct}%)`
+                  : ` • Dégâts/tour ${Math.abs(info.baseDot)}`)
+              : "";
+
+            if (r.resisted) {
+              return `<li>🛡️ <b>${htmlEscape(r.name)}</b> a résisté à <b>${htmlEscape(def.label)}</b> ` +
+                     `(${info.immune ? "immunité" : `durée ramenée à 0`})</li>`;
+            }
+
+            return `<li>${htmlEscape(r.name)} : <b>${htmlEscape(def.label)}</b> — ${durLine}${dotLine}</li>`;
+          };
+
+          const lines = results.map(fmtLine).join("");
 
           await ChatMessage.create({
             content: `
