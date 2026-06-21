@@ -6,8 +6,6 @@ import {
   updateLogEntry, findLogEntry, undoAction
 } from "./action-budget.js";
 import { undoMovement } from "./movement-tracker.js";
-import { resolveDeclaredSpellFromMessage } from "./spells.js";
-import { resolveAttack } from "./attack-resolve.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -144,6 +142,8 @@ async function handlePendingAction(message, result, actionId) {
     await saveBudget(combat, combatantId, newBudget);
 
     // Cas déplacement : juste confirmer le slot, pas d'effet à appliquer
+    // (seul type encore géré par ce système générique — sorts et attaques
+    // utilisent désormais leurs propres boutons dédiés Échec/Réussite/Crit)
     if (flags.pendingAction.type === "move") {
       await updateLogEntry(combat, actionId, { status: "confirmed" });
       await message.update({
@@ -163,31 +163,8 @@ async function handlePendingAction(message, result, actionId) {
       return;
     }
 
-    // Applique l'action selon son type
-    let resolutionContent = "";
-
-    if (flags.pendingAction.type === "spell") {
-      const outcome = flags.pendingAction.outcome ?? "success";
-      await resolveDeclaredSpellFromMessage(message, outcome, { actionId });
-      // resolveDeclaredSpellFromMessage supprime lui-même le message — on ne poste pas de confirmation ici
-      return;
-
-    } else if (flags.pendingAction.type === "attack") {
-      const outcome = flags.pendingAction.outcome ?? "hit";
-      const res     = await resolveAttack(message, outcome, { actionId });
-      resolutionContent = res?.content ?? "";
-    }
-
-    // Marque le log "confirmed"
+    // Type inconnu : on confirme juste le slot sans action spécifique
     await updateLogEntry(combat, actionId, { status: "confirmed" });
-
-    // Supprime le message pending
-    await message.delete().catch(() => {});
-
-    // Poste le message de résolution avec bouton Annuler
-    if (resolutionContent) {
-      await postConfirmedMessage(resolutionContent, actionId);
-    }
 
   } else {
     // Refus ou correction → libère le slot pending

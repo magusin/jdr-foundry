@@ -25,6 +25,14 @@
   // Helpers budget
   const getCombat       = () => game.combat ?? null;
   const getCombatant    = (a) => getCombat()?.combatants?.find(c => c.actorId === a?.id) ?? null;
+  const isMyTurn        = (a) => {
+    const combat = getCombat();
+    if (!combat || !combat.started) return true; // hors combat : pas de restriction
+    const current = combat.combatant;
+    if (!current) return true;
+    if (game.user.isGM) return true; // le MJ peut toujours agir pour débogage/correction
+    return current.actorId === a?.id;
+  };
   const getBudget       = (a) => {
     const api = getBudgetAPI();
     const cbt = getCombatant(a);
@@ -174,7 +182,9 @@
       if (outOfRange) reasons.push(`Hors portée (${distCases} cases, portée ${portee})`);
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
-      const canAttack = hasTarget && !atkBlocked && !outOfRange;
+      const myTurn = isMyTurn(actor);
+      const canAttack = myTurn && hasTarget && !atkBlocked && !outOfRange;
+      if (!myTurn) reasons.unshift("Pas ton tour");
       const atkTitle  = reasons.join(" • ");
 
       return `
@@ -269,10 +279,12 @@
       const okTarget = !needTgt || (hasTarget && okTargetCount && okRange);
       const slotKey  = sSys.speed === "rapide" || sSys.speed === "quick" ? "sortRapide" : "sortNormal";
       const hasSlot  = canUseSlot(actor, slotKey);
-      const canUse   = ready && okMana && okTarget && hasSlot;
+      const myTurn   = isMyTurn(actor);
+      const canUse   = myTurn && ready && okMana && okTarget && hasSlot;
       const cdTxt    = cd.max > 0 ? `${cd.restant}/${cd.max}` : "—";
 
       const reasons = [];
+      if (!myTurn) reasons.push("Pas ton tour");
       if (!ready) reasons.push(`En recharge (${cd.restant} tour(s))`);
       if (!okMana) reasons.push(`Mana insuffisant (${manaNow}/${manaCost})`);
       if (!hasSlot) reasons.push("Slot épuisé pour ce tour");
@@ -338,6 +350,17 @@
           </div>
         </div>
 
+        <!-- Bannière tour actif -->
+        ${(() => {
+          const combat = getCombat();
+          if (!combat || !combat.started || isMyTurn(actor)) return "";
+          const currentName = combat.combatant?.actor?.name ?? combat.combatant?.name ?? "?";
+          return `<div style="background:#c0392b;color:#fff;padding:6px 10px;border-radius:8px;
+                       font-size:12px;font-weight:600;margin-bottom:8px;text-align:center">
+                    ⏳ Ce n'est pas ton tour — c'est à <b>${htmlEscape(currentName)}</b> d'agir
+                  </div>`;
+        })()}
+
         <!-- Budget d'actions -->
         <div class="rpg-budget-widget">
           ${(() => {
@@ -354,7 +377,7 @@
 
         <!-- Bouton déplacement rapide -->
         ${(() => {
-          const hasDepl = canUseSlot(actor, "deplacement");
+          const hasDepl = isMyTurn(actor) && canUseSlot(actor, "deplacement");
           return `<div style="margin-bottom:6px">
             <button type="button" data-action="move"
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
@@ -558,6 +581,11 @@
       if (btn.disabled) return;
       btn.disabled = true;
 
+      if (!isMyTurn(actor)) {
+        btn.disabled = false;
+        return notify("warn", "Ce n'est pas ton tour.");
+      }
+
       const row    = btn.closest("[data-item-id]");
       const weapon = actor.items.get(row?.dataset?.itemId);
       if (!weapon) { btn.disabled = false; return notify("warn", "Arme introuvable."); }
@@ -601,60 +629,58 @@
           });
         }
 
-        // 3. Jet d20 du joueur (visible dans le chat)
-        const roll20 = await (new Roll("1d20")).evaluate();
-        await roll20.toMessage({
-          speaker: ChatMessage.getSpeaker({ actor }),
-          flavor: `⚔️ <b>${actor.name}</b> attaque <b>${targetToken.actor.name}</b> avec <b>${weapon.name}</b>`
-        });
-        const d20 = roll20.total;
-
-        // 4. TN + pré-calcul dégâts
+        // 3. TN calculé AVANT le jet, pour que le joueur sache combien il doit faire
         const tnData = combatAPI?.computeTN
           ? combatAPI.computeTN(actor, targetToken.actor, weapon)
           : { tnFinal: 11, tnBase: 11, diff: 0, livraison: "physique" };
 
-        const dmgResult = await weapon.rollDamage({
-          attackerActor: actor,
-          targetActor:   targetToken.actor,
-          isCrit:        d20 === 20,
-          type:          tnData.livraison
+        // 4. Jet d20 du joueur (visible dans le chat) — UNIQUEMENT le jet de touché,
+        //    les dégâts ne sont lancés qu'après décision du MJ (cf. attack-resolve.js)
+        const roll20 = await (new Roll("1d20")).evaluate();
+        await roll20.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          flavor: `⚔️ <b>${actor.name}</b> attaque <b>${targetToken.actor.name}</b> avec <b>${weapon.name}</b> — il faut faire <b>${tnData.tnFinal}+</b>`
         });
+        const d20 = roll20.total;
 
         const isCrit  = d20 === 20;
         const isAutoF = d20 <= 5;
         const isAutoS = d20 >= 16;
-        const dmgSummary = `${dmgResult.beforeMitigation}${dmgResult.critBonus ? ` (+${dmgResult.critBonus} crit)` : ""} → <b>${dmgResult.final}</b> après mitigation`;
+        const suggested = isCrit ? "crit" : isAutoF ? "fail" : (isAutoS || d20 >= tnData.tnFinal) ? "hit" : "fail";
 
-        // 5. Message pending (boutons MJ : Confirmer / Corriger / Refuser)
-        const confirmAPI   = getConfirmAPI();
+        // 5. Message pending — boutons DÉDIÉS Échec / Touché / Critique
+        //    (même pattern que les sorts : le MJ choisit librement, pas d'auto-confirm)
         const pendingLabel = `Attaque : <b>${htmlEscape(weapon.name)}</b> → <b>${htmlEscape(targetToken.actor.name)}</b>`;
         const detail       = `🎲 d20 = <b>${d20}</b> (TN ${tnData.tnFinal}+) — ${
-          isAutoF ? "Échec auto" : isAutoS ? "Succès auto" : isCrit ? "CRITIQUE !" : "résultat normal"
-        } — ${dmgSummary}`;
+          isAutoF ? "Échec automatique (≤5)" : isAutoS ? "Succès automatique (≥16)" : isCrit ? "CRITIQUE !" : "résultat normal"
+        }`;
 
-        const msgContent = confirmAPI
-          ? confirmAPI.buildPendingMessage({
-              actor: actor.name, label: pendingLabel, detail,
-              slotLabel: "Attaque", slotIcon: "⚔️",
-              actionId, type: "attack",
-              outcome: isCrit ? "crit" : isAutoF ? "fail" : "hit"
-            })
-          : `<div>${pendingLabel}<br>${detail}</div>`;
+        const msgContent = `
+          <div class="rpg-attack-declare" style="font-size:13px;line-height:1.6">
+            <div>${pendingLabel}</div>
+            <div style="opacity:.85;margin-top:2px">${detail}</div>
+            <div class="rpg-attack-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button type="button" class="rpg-attack-resolve" data-result="critfail"
+                style="flex:1;padding:4px 8px;cursor:pointer;color:#8b1a12;font-weight:700">Échec Critique</button>
+              <button type="button" class="rpg-attack-resolve" data-result="fail"
+                style="flex:1;padding:4px 8px;cursor:pointer">Échec</button>
+              <button type="button" class="rpg-attack-resolve" data-result="hit"
+                style="flex:1;padding:4px 8px;cursor:pointer">Touché</button>
+              <button type="button" class="rpg-attack-resolve" data-result="crit"
+                style="flex:1;padding:4px 8px;cursor:pointer;font-weight:700;color:gold">Critique !</button>
+            </div>
+          </div>`;
 
         const msg = await ChatMessage.create({
           speaker: ChatMessage.getSpeaker({ actor }),
           content: msgContent,
           flags: {
             rpg: {
-              pendingAction: {
-                type: "attack", actionId, outcome: isCrit ? "crit" : isAutoF ? "fail" : "hit"
-              },
+              type: "attackDeclaration",
+              actionId,
               attackDeclaration: {
                 actorId: actor.id, weaponId: weapon.id, targetId: targetToken.actor.id,
-                d20, tnFinal: tnData.tnFinal, livraison: tnData.livraison,
-                dmgBrut: dmgResult.beforeMitigation, dmgFinal: dmgResult.final,
-                dmgFixe: dmgResult.fixe, dmgPct: dmgResult.pct, critBonus: dmgResult.critBonus
+                d20, tnFinal: tnData.tnFinal, livraison: tnData.livraison
               }
             }
           }
@@ -688,15 +714,21 @@
       if (btn.disabled) return;
       btn.disabled = true;
 
+      if (!isMyTurn(actor)) {
+        btn.disabled = false;
+        return notify("warn", "Ce n'est pas ton tour.");
+      }
+
       const row  = btn.closest("[data-item-id]");
       const item = actor.items.get(row?.dataset?.itemId);
       if (!item) { btn.disabled = false; return notify("warn", "Sort introuvable."); }
 
-      const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;
-      const sys         = item.system ?? {};
-      const speed       = String(sys.speed ?? "normal");
-      const slot        = (speed === "rapide" || speed === "quick") ? "sortRapide" : "sortNormal";
-      const manaCost    = n(sys.coutMana, 0);
+      const targets      = Array.from(game.user.targets ?? []);
+      const targetToken  = targets[0] ?? null; // rétrocompat affichage label
+      const sys          = item.system ?? {};
+      const speed        = String(sys.speed ?? "normal");
+      const slot         = (speed === "rapide" || speed === "quick") ? "sortRapide" : "sortNormal";
+      const manaCost     = n(sys.coutMana, 0);
 
       // Vérification budget
       const budgetAPI = getBudgetAPI();
@@ -708,13 +740,18 @@
       }
 
       try {
-        // 1. Snapshot AVANT (mana + cooldown) — best-effort : ne restaure que la
-        // 1ère cible en cas d'annulation MJ si le sort touche plusieurs cibles
+        // 1. Snapshot AVANT (mana + cooldown + PV de TOUTES les cibles sélectionnées)
         const snapshot = {
           casterId:  actor.id,
           casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
+          // Rétrocompat (1ère cible) — utilisé par l'ancien format d'undo mono-cible
           targetId:   targetToken?.actor?.id ?? null,
           targetPv:   n(targetToken?.actor?.system?.ressources?.pv?.valeur, undefined),
+          // ✅ Multi-cible : tableau de snapshots, un par cible touchée
+          targetsSnapshot: targets
+            .map(t => t.actor)
+            .filter(Boolean)
+            .map(a => ({ targetId: a.id, targetPv: n(a.system?.ressources?.pv?.valeur, 0) })),
           addedStateIds: [],
           cooldown: {
             itemId:     item.id,
@@ -730,7 +767,7 @@
           await budgetAPI.saveBudget(combat, cbt.id, newBudget);
           await budgetAPI.addLogEntry(combat, cbt.id, {
             id: actionId, slot, status: "pending",
-            label: `${item.name}${targetToken ? " → " + targetToken.actor.name : ""}`,
+            label: `${item.name}${targets.length ? " → " + targets.map(t => t.actor?.name ?? t.name).join(", ") : ""}`,
             actorId: actor.id, snapshot, timestamp: Date.now()
           });
         }
@@ -776,6 +813,11 @@
       const btn = ev.currentTarget;
       if (btn.disabled) return;
       btn.disabled = true;
+
+      if (!isMyTurn(actor)) {
+        btn.disabled = false;
+        return notify("warn", "Ce n'est pas ton tour.");
+      }
 
       const budgetAPI = getBudgetAPI();
       const combat    = getCombat();

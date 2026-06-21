@@ -11,6 +11,47 @@ function n(v, d = 0) {
   return Number.isFinite(x) ? x : d;
 }
 
+const SPELL_FAIL_MESSAGES = [
+  "{target} résiste au sort de {actor} !",
+  "Le sort de {actor} est bloqué par {target} !",
+  "La magie de {actor} se dissipe sans effet !",
+  "{actor} perd le contrôle du sort au dernier moment !",
+  "{target} esquive le sort de justesse !",
+  "L'incantation de {actor} échoue à se former !"
+];
+
+function pickSpellFailMessage(actorName, targetName) {
+  const list = SPELL_FAIL_MESSAGES;
+  const tpl = list[Math.floor(Math.random() * list.length)];
+  return tpl.replace("{actor}", actorName).replace("{target}", targetName || "la cible");
+}
+
+/**
+ * Confirme le slot de budget (pending -> confirmed) pour un actionId donné.
+ * Utilisé pour réussite ET échec — l'action a été tentée, le slot doit
+ * sortir de l'état "pending" dans tous les cas.
+ * extraSnapshot (optionnel) : fusionné dans le snapshot du log (ex: addedStates
+ * pour permettre le retrait des effets posés lors d'une annulation MJ).
+ */
+async function confirmBudgetSlot(actionId, extraSnapshot = null) {
+  if (!actionId || !game.combat) return;
+  try {
+    const { updateLogEntry, confirmSlot, getBudget, saveBudget, findLogEntry } = await import("./action-budget.js");
+    const found = findLogEntry(game.combat, actionId);
+    if (found) {
+      const { combatantId } = found;
+      const budget    = getBudget(game.combat, combatantId);
+      const slot      = found.entry.slot ?? "sortNormal";
+      const newBudget = confirmSlot(budget, slot);
+      await saveBudget(game.combat, combatantId, newBudget);
+
+      const updates = { status: "confirmed" };
+      if (extraSnapshot) updates.snapshot = { ...(found.entry.snapshot ?? {}), ...extraSnapshot };
+      await updateLogEntry(game.combat, actionId, updates);
+    }
+  } catch (e) { /* ignore si pas de budget actif */ }
+}
+
 async function fromUuidSafe(uuid) {
   try {
     if (!uuid) return null;
@@ -837,6 +878,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     <div style="opacity:.8"><i>En attente de validation MJ.</i></div>
 
     <div class="rpg-spell-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="rpg-spell-resolve" data-result="critfail" style="color:#8b1a12;font-weight:700">Échec Critique</button>
       <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>
       <button type="button" class="rpg-spell-resolve" data-result="success">Réussite</button>
       <button type="button" class="rpg-spell-resolve" data-result="crit">Réussite Crit</button>
@@ -898,6 +940,33 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   const targetNames = targetActors.map(a => a.name).join(", ") || null;
 
+  // ── Échec Critique ───────────────────────────────────────────────────
+  // Le MJ choisit toujours lui-même la conséquence (jamais de hasard ici)
+  if (res === "critfail") {
+    const { promptCritFailConsequence } = await import("./critfail-dialog.js");
+    const choice = await promptCritFailConsequence({ kind: "spell", actorName: actor.name });
+    if (!choice) return false; // MJ a annulé — message conservé, boutons réactivés
+
+    const actionId = data.actionId ?? null;
+    await confirmBudgetSlot(actionId);
+    await message.delete();
+
+    let selfDmgLine = "";
+    if (choice.selfDamage > 0) {
+      const pvCur = n(actor.system?.ressources?.pv?.valeur, 0);
+      const pvMax = n(actor.system?.ressources?.pv?.max, 0);
+      const pvNew = Math.max(0, pvCur - choice.selfDamage);
+      await actor.update({ "system.ressources.pv.valeur": pvNew });
+      selfDmgLine = `<br>${actor.name} subit <b>${choice.selfDamage}</b> dégâts (${pvCur} → <b>${pvNew}</b>/${pvMax} PV)`;
+    }
+
+    await ChatMessage.create({
+      content: `<b style="color:#8b1a12">☠ ÉCHEC CRITIQUE</b> — ${choice.label}${selfDmgLine}`,
+      speaker: ChatMessage.getSpeaker({ actor })
+    });
+    return true;
+  }
+
   const title =
     res === "fail" ? `${actor.name} : ÉCHEC sur ${item.name}` :
     res === "crit" ? `${actor.name} : RÉUSSITE CRIT sur ${item.name}` :
@@ -905,12 +974,19 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   // ── Échec ────────────────────────────────────────────────────────────
   if (res === "fail") {
+    const actionId = data.actionId ?? null;
+    await confirmBudgetSlot(actionId);
     await message.delete();
-    await ChatMessage.create({ content: `<b>${title}</b>`, speaker: ChatMessage.getSpeaker({ actor }) });
+    const failMsg = pickSpellFailMessage(actor.name, targetNames);
+    await ChatMessage.create({
+      content: `<b style="color:#c0392b">✗ ÉCHEC</b> — ${failMsg}`,
+      speaker: ChatMessage.getSpeaker({ actor })
+    });
     return;
   }
 
   const rows = [];
+  const addedStatesTracker = []; // [{actorId, stateId}] — pour l'undo (retrait des effets posés)
 
   // ── Dégâts principaux ────────────────────────────────────────────────
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
@@ -1019,6 +1095,8 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         continue;
       }
 
+      addedStatesTracker.push({ actorId: applyTo.id, stateId });
+
       const modSummary = summarizeMods(mods);
       const parts = [];
       if (modSummary) parts.push(modSummary);
@@ -1066,22 +1144,10 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   await message.delete();
 
-  // Met à jour le log budget si actionId présent
+  // Confirme le slot de budget (l'action a été tentée, qu'elle réussisse ou non)
+  // + enregistre les états ajoutés (multi-cible inclus) pour permettre le retrait à l'undo
   const actionId = data.actionId ?? null;
-  if (actionId && game.combat) {
-    try {
-      const { updateLogEntry, confirmSlot, getBudget, saveBudget, findLogEntry } = await import("./action-budget.js");
-      const found = findLogEntry(game.combat, actionId);
-      if (found) {
-        const { combatantId } = found;
-        const budget    = getBudget(game.combat, combatantId);
-        const slot      = found.entry.slot ?? "sortNormal";
-        const newBudget = confirmSlot(budget, slot);
-        await saveBudget(game.combat, combatantId, newBudget);
-        await updateLogEntry(game.combat, actionId, { status: "confirmed" });
-      }
-    } catch(e) { /* ignore si pas de budget actif */ }
-  }
+  await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
 
   const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
@@ -1123,7 +1189,11 @@ export function bindSpellChatButtons(htmlEl, message) {
       for (const b of buttons) b.disabled = true;
 
       try {
-        await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result);
+        const res = await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result);
+        if (res === false) {
+          // Annulé (ex: MJ a fermé le dialog Échec Critique sans valider) -> on réactive
+          for (const b of buttons) b.disabled = false;
+        }
       } catch (err) {
         console.error("[RPG] resolve error:", err);
         ui.notifications.error("Erreur résolution sort (voir console).");

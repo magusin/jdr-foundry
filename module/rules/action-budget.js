@@ -216,8 +216,19 @@ export async function undoAction(combat, actionId) {
     }
   }
 
-  // 2. Restaure PV de la cible
-  if (snap.targetId !== undefined && snap.targetPv !== undefined) {
+  // 2. Restaure PV de la/des cible(s)
+  if (Array.isArray(snap.targetsSnapshot) && snap.targetsSnapshot.length) {
+    // ✅ Multi-cible : restaure les PV de CHAQUE cible touchée par le sort
+    for (const ts of snap.targetsSnapshot) {
+      const target = game.actors.get(ts.targetId);
+      if (target) {
+        await target.update({ "system.ressources.pv.valeur": ts.targetPv });
+      } else {
+        errors.push(`Cible introuvable pour restaurer les PV (${ts.targetId})`);
+      }
+    }
+  } else if (snap.targetId !== undefined && snap.targetPv !== undefined) {
+    // Rétrocompat : ancien format mono-cible
     const target = game.actors.get(snap.targetId);
     if (target) {
       await target.update({ "system.ressources.pv.valeur": snap.targetPv });
@@ -250,8 +261,23 @@ export async function undoAction(combat, actionId) {
     }
   }
 
-  // 3. Supprime les états ajoutés
-  if (snap.addedStateIds?.length) {
+  // 3. Supprime les états ajoutés (multi-cible : un retrait par {actorId, stateId})
+  if (Array.isArray(snap.addedStates) && snap.addedStates.length) {
+    // Regroupe par acteur pour ne mettre à jour chaque acteur qu'une fois
+    const byActor = new Map();
+    for (const { actorId, stateId } of snap.addedStates) {
+      if (!byActor.has(actorId)) byActor.set(actorId, []);
+      byActor.get(actorId).push(stateId);
+    }
+    for (const [actorId, stateIds] of byActor.entries()) {
+      const affected = game.actors.get(actorId);
+      if (!affected) { errors.push(`Acteur introuvable pour retirer un effet (${actorId})`); continue; }
+      const next = (affected.system?.etatsActifs ?? [])
+        .filter(s => !stateIds.includes(s.id));
+      await affected.update({ "system.etatsActifs": next });
+    }
+  } else if (snap.addedStateIds?.length) {
+    // Rétrocompat (ancien format mono-acteur, jamais réellement rempli historiquement)
     const actorId  = snap.statesAppliedTo ?? snap.targetId ?? snap.casterId;
     const affected = game.actors.get(actorId);
     if (affected) {
