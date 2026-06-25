@@ -1,0 +1,64 @@
+<form class="rpg-sheet rpg-quest-sheet">
+  <header class="sheet-header">
+    <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}" />
+    <div class="header-fields">
+      <input name="name" type="text" value="{{item.name}}" placeholder="Nom de la quête" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+  </header>
+
+  <section class="sheet-body">
+
+    <div class="form-group">
+      <label>Statut</label>
+      <select name="system.statut" {{#unless canEdit}}disabled{{/unless}}>
+        <option value="active" {{#if (eq system.statut "active")}}selected{{/if}}>En cours</option>
+        <option value="reussie" {{#if (eq system.statut "reussie")}}selected{{/if}}>Réussie</option>
+        <option value="echouee" {{#if (eq system.statut "echouee")}}selected{{/if}}>Échouée</option>
+      </select>
+    </div>
+
+    <h3>Objectifs</h3>
+    <div class="quest-objectifs">
+      {{#each system.objectifs as |obj idx|}}
+      <div class="objectif-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <input type="checkbox" name="system.objectifs.{{idx}}.fait" {{#if obj.fait}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}} />
+        <input type="text" name="system.objectifs.{{idx}}.text" value="{{obj.text}}" placeholder="Description de l'objectif" style="flex:1" {{#unless canEdit}}disabled{{/unless}} />
+        {{#if canEdit}}
+        <button type="button" data-action="removeObjectif" data-idx="{{idx}}" title="Retirer">✕</button>
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" data-action="addObjectif" style="margin-top:4px">+ Ajouter un objectif</button>
+    {{/if}}
+
+    <h3 style="margin-top:14px">Récompense</h3>
+    <div class="form-group">
+      <label>XP</label>
+      <input type="number" name="system.recompense.xp" value="{{system.recompense.xp}}" min="0" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+
+    <div class="quest-reward-items">
+      {{#each system.recompense.items as |ri idx|}}
+      <div class="reward-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <input type="text" name="system.recompense.items.{{idx}}.uuid" value="{{ri.uuid}}"
+          placeholder="UUID de l'objet (clic droit -> Copy UUID)" style="flex:2" {{#unless canEdit}}disabled{{/unless}} />
+        <input type="text" name="system.recompense.items.{{idx}}.name" value="{{ri.name}}"
+          placeholder="Nom affiché" style="flex:1" {{#unless canEdit}}disabled{{/unless}} />
+        <input type="number" name="system.recompense.items.{{idx}}.qty" value="{{ri.qty}}" min="1" style="width:50px" {{#unless canEdit}}disabled{{/unless}} />
+        {{#if canEdit}}
+        <button type="button" data-action="removeRewardItem" data-idx="{{idx}}" title="Retirer">✕</button>
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" data-action="addRewardItem" style="margin-top:4px">+ Ajouter un objet en récompense</button>
+    {{/if}}
+
+    <h3 style="margin-top:14px">Description</h3>
+    <textarea name="system.description" rows="5" {{#unless canEdit}}disabled{{/unless}}>{{system.description}}</textarea>
+
+  </section>
+</form>

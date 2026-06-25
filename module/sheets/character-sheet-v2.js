@@ -404,6 +404,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.calc.skillsTotal = skillsTotalLevels(ctx.system.skills);
     ctx.calc.skillsCap = skillsLevelCap(actor);
 
+    // Quêtes
+    const STATUT_LABELS = { active: "En cours", reussie: "Réussie", echouee: "Échouée" };
+    ctx.quests = actor.items
+      .filter(i => i.type === "quest")
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"))
+      .map(q => ({
+        id: q.id,
+        name: q.name,
+        statut: String(q.system?.statut ?? "active"),
+        statutLabel: STATUT_LABELS[q.system?.statut ?? "active"] ?? "En cours",
+        isActive: (q.system?.statut ?? "active") === "active",
+        objectifs: Array.isArray(q.system?.objectifs) ? q.system.objectifs : []
+      }));
+
     // effP
     ctx.effP = actor.system?.derived?.effP
       ?? actor.system?.derived?.effective?.principales
@@ -543,6 +557,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       if (action === "stateEdit") { await this._stateEdit?.(btn.dataset.id); return; }
       if (action === "stateDelete") { await this._stateDelete?.(btn.dataset.id); return; }
       if (action === "stateShow") { await this._stateShow?.(btn.dataset.id); return; }
+
+      if (action === "questComplete" || action === "questFail") {
+        if (!game.user.isGM) return;
+        const itemId = btn.dataset.itemId || btn.closest(".item")?.dataset?.itemId;
+        const quest  = this.document.items.get(itemId);
+        if (!quest) return;
+        const { resolveQuest } = await import("../rules/quest-resolve.js");
+        await resolveQuest(this.document, quest, { success: action === "questComplete" });
+        await this.render({ force: true });
+        return;
+      }
 
       if (action === "skillAddXp" || action === "skillRemoveXp") {
         const li = btn.closest("[data-skill]");

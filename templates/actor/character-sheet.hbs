@@ -221,6 +221,7 @@
     <a class="item" data-tab="consumables">Consommables</a>
     <a class="item" data-tab="spells">Sorts</a>
     <a class="item" data-tab="skills">Compétences</a>
+    <a class="item" data-tab="quests">Quêtes</a>
     {{/unless}}
   </nav>
 
@@ -806,6 +807,46 @@
           {{/each}}
         </ol>
 
+      </section>
+    </div>
+
+    <div class="tab" data-group="primary" data-tab="quests">
+      <section class="card">
+        <div class="toolbar">
+          <h2>Quêtes</h2>
+        </div>
+
+        <ol class="items-list simple">
+          {{#each quests as |q|}}
+          <li class="item" data-item-id="{{q.id}}">
+            <span class="name" style="display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <b class="item-edit" style="cursor:pointer">{{q.name}}</b>
+                <small style="opacity:.85;
+                  {{#if (eq q.statut "reussie")}}color:#1d9e75;{{/if}}
+                  {{#if (eq q.statut "echouee")}}color:#c0392b;{{/if}}">
+                  {{q.statutLabel}}
+                </small>
+              </div>
+              <small style="opacity:.8;">
+                {{#each q.objectifs}}
+                  {{#if this.fait}}✅{{else}}⬜{{/if}} {{this.text}}<br>
+                {{/each}}
+              </small>
+            </span>
+
+            <span class="actions" style="display:flex; gap:6px; align-items:center;">
+              <button type="button" class="btn small item-edit" title="Ouvrir / éditer">🔎</button>
+              {{#if ../flags.isGM}}
+              {{#if q.isActive}}
+              <button type="button" class="btn small" data-action="questComplete" data-item-id="{{q.id}}">Réussite</button>
+              <button type="button" class="btn small" data-action="questFail" data-item-id="{{q.id}}">Échec</button>
+              {{/if}}
+              {{/if}}
+            </span>
+          </li>
+          {{/each}}
+        </ol>
       </section>
     </div>
 

@@ -13,6 +13,7 @@ import { RPGSpellSheetV2 } from "./sheets/item-spell-sheet-v2.js";
 // import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
 import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
 import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
+import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
 
@@ -254,6 +255,7 @@ Hooks.once("init", async () => {
   // Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
   Items.registerSheet("rpg", RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
   Items.registerSheet("rpg", RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
+  Items.registerSheet("rpg", RPGQuestSheetV2, { types: ["quest"], makeDefault: true });
 
   // Initiative (compat avec @effP.*)
   CONFIG.Combat.initiative = {

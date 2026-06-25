@@ -130,12 +130,18 @@
       "consumable",
       "spell",
       "skill",
-      "recipe"
+      "recipe",
+      "quest"
     ],
     "templates": {
       "baseItem": {
         "qte": 1,
-        "poids": 0
+        "poids": 0,
+        "prix": {
+          "cuivre": 0,
+          "argent": 0,
+          "or": 0
+        }
       },
       "equipBonus": {
         "equipe": false,
@@ -257,6 +263,17 @@
         "name": ""
       },
       "difficulte": 0
+    },
+    "quest": {
+      "templates": [
+        "details"
+      ],
+      "statut": "active",
+      "objectifs": [],
+      "recompense": {
+        "xp": 0,
+        "items": []
+      }
     }
   }
 }

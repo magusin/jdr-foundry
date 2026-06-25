@@ -23,7 +23,8 @@
     consumable: "🧪 Consommable",
     loot:       "🎁 Objet",
     recipe:     "📖 Recette",
-    skill:      "📚 Compétence"
+    skill:      "📚 Compétence",
+    quest:      "📜 Quête"
   };
 
   const allItems = game.items
