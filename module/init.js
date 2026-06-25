@@ -38,6 +38,7 @@ import * as EffectLibrary from "./rules/effect-library.js";
 import * as Resistances from "./rules/resistances.js";
 import { appendToCampaignJournal } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
+import * as WeatherLibrary from "./rules/weather-library.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -209,6 +210,15 @@ async function tickActorCooldowns(actor) {
 // ---------------------------
 Hooks.once("init", async () => {
   console.log("RPG init chargé");
+
+  // ✅ Setting météo courante (monde) — influence la magie élémentaire
+  game.settings.register("rpg", "currentWeather", {
+    name: "Météo actuelle",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "clair"
+  });
 
   game.rpg = game.rpg ?? {};
   game.rpg.randomizeMonster = randomizeMonster;
@@ -390,6 +400,12 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.wounds : catalogue de blessures localisées permanentes
     game.rpg.wounds = WoundLibrary;
+
+    // ✅ game.rpg.weather : météo courante, influence la magie élémentaire
+    game.rpg.weather = WeatherLibrary;
+
+    // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
+    game.rpg.journal = { appendToCampaignJournal };
 
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));

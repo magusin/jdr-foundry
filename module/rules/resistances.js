@@ -7,6 +7,8 @@
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
+import { getWeatherModifierFor } from "./weather-library.js";
+
 /**
  * Résistances fournies par l'équipement équipé (arme/armure).
  * Format attendu sur l'item : system.resistances = [{tag, durationReduction, dotReductionPct, immune}]
@@ -54,7 +56,14 @@ export function computeResistanceFor(actor, tag) {
     if (r.immune) immune = true;
   }
 
-  dotReductionPct = Math.min(100, Math.max(0, dotReductionPct));
+  // ✅ Météo : favorise ou défavorise certains éléments (s'ajoute aux
+  // résistances d'équipement/buffs, peut amplifier au lieu de réduire)
+  const weatherMod = getWeatherModifierFor(tag);
+  durationReduction += weatherMod.durationReduction;
+  dotReductionPct += weatherMod.dotReductionPct;
+
+  // Plafond élargi pour permettre l'amplification météo (-100% = dégâts doublés)
+  dotReductionPct = Math.min(100, Math.max(-100, dotReductionPct));
   return { durationReduction, dotReductionPct, immune };
 }
 

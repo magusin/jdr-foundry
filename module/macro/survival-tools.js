@@ -112,6 +112,7 @@
         const next = Math.max(0, cur - amount);
         await actor.update({ "system.ressources.fatigue.valeur": next });
         await ChatMessage.create({ content: `😴 <b>${actor.name}</b> se repose : fatigue ${cur} → <b>${next}</b>.` });
+        game.rpg?.journal?.appendToCampaignJournal(`<b>${actor.name}</b> se repose (fatigue ${cur} → ${next}).`).catch(() => {});
         ui.notifications.info(`Fatigue de ${actor.name} réduite.`);
       });
 
@@ -121,6 +122,7 @@
         const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
         await actor.update({ "system.ressources.fatigue.valeur": 0 });
         await ChatMessage.create({ content: `😴 <b>${actor.name}</b> prend un repos complet : fatigue ${cur} → <b>0</b>.` });
+        game.rpg?.journal?.appendToCampaignJournal(`<b>${actor.name}</b> prend un repos complet.`).catch(() => {});
         ui.notifications.info(`${actor.name} entièrement reposé.`);
       });
 
@@ -137,6 +139,7 @@
         await actor.update({ "system.etatsActifs": list });
 
         await ChatMessage.create({ content: `🩸 <b>${actor.name}</b> subit : <b>${state.label}</b> (permanent, jusqu'à soin).` });
+        game.rpg?.journal?.appendToCampaignJournal(`<b>${actor.name}</b> subit une blessure : ${state.label}.`).catch(() => {});
         ui.notifications.info(`Blessure appliquée à ${actor.name}.`);
         refreshWounds();
       });
@@ -152,6 +155,7 @@
         await actor.update({ "system.etatsActifs": list });
 
         await ChatMessage.create({ content: `💊 <b>${actor.name}</b> est soigné de ${checks.length} blessure(s).` });
+        game.rpg?.journal?.appendToCampaignJournal(`<b>${actor.name}</b> est soigné de ${checks.length} blessure(s).`).catch(() => {});
         ui.notifications.info(`${actor.name} soigné.`);
         refreshWounds();
       });
