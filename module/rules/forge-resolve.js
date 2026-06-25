@@ -6,6 +6,7 @@
 // Rien n'est consommé ni créé avant cette validation.
 
 import { resolveCraft } from "./forge.js";
+import { appendToCampaignJournal } from "./campaign-journal.js";
 
 export function bindForgeChatButtons(htmlEl, message) {
   const flags = message?.flags?.rpg ?? {};
@@ -54,6 +55,10 @@ export function bindForgeChatButtons(htmlEl, message) {
 
         await message.delete();
         await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
+
+        appendToCampaignJournal(
+          `<b>${actor.name}</b> ${result === "success" ? "a forgé avec succès" : "a échoué à forger"} <b>${recipe.name}</b>.`
+        ).catch(() => {});
       } catch (e) {
         console.error("[RPG][ForgeResolve]", e);
         ui.notifications?.error?.(`Erreur résolution forge : ${e?.message ?? e}`);

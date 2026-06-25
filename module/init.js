@@ -36,6 +36,8 @@ import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getIn
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
 import * as Resistances from "./rules/resistances.js";
+import { appendToCampaignJournal } from "./rules/campaign-journal.js";
+import * as WoundLibrary from "./rules/wound-library.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -91,6 +93,10 @@ async function applyLevelUps(actor) {
       `! Niveau <b>${niveau}</b>.<br>` +
       `+${levelsGained} en Force, Intelligence, Dextérité, Acuité, Endurance.`
   });
+
+  appendToCampaignJournal(
+    `<b>${actor.name}</b> passe ${levelsGained > 1 ? `${levelsGained} niveaux` : "niveau"} et atteint le niveau <b>${niveau}</b>.`
+  ).catch(() => {});
 }
 
 const MODULE_ID = "Fanatsy";
@@ -382,6 +388,9 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.resistances : calcul résistance équipement/buffs
     game.rpg.resistances = Resistances;
 
+    // ✅ game.rpg.wounds : catalogue de blessures localisées permanentes
+    game.rpg.wounds = WoundLibrary;
+
     // ✅ Auto-installation des macros système (GM uniquement)
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
@@ -584,6 +593,26 @@ Hooks.once("init", async () => {
     } catch (e) {
       console.error("[RPG] Erreur level up automatique :", e);
     }
+  });
+
+  // ---------------------------
+  // Journal : note quand un PJ ou monstre tombe à 0 PV (une seule fois)
+  // ---------------------------
+  const _downLogged = new Set();
+  Hooks.on("updateActor", async (actor, changed, options) => {
+    if (!game.user.isGM) return;
+    const newPv = changed?.system?.ressources?.pv?.valeur;
+    if (newPv === undefined) return;
+
+    if (Number(newPv) > 0) {
+      _downLogged.delete(actor.id); // remonté au-dessus de 0 -> peut re-logger une future chute
+      return;
+    }
+    if (_downLogged.has(actor.id)) return; // déjà loggé, évite le spam
+    _downLogged.add(actor.id);
+
+    const label = actor.type === "character" ? "tombe inconscient" : "est vaincu";
+    appendToCampaignJournal(`<b>${actor.name}</b> ${label} (PV à 0).`).catch(() => {});
   });
 
   Hooks.on("combatStart", async (combat) => {

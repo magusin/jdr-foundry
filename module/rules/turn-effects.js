@@ -52,6 +52,16 @@ function tickStates(actor) {
       continue;
     }
 
+    // ✅ Blessures/effets permanents : ne s'estompent jamais seuls,
+    // seul un soin explicite (macro MJ) les retire. Le DOT (ex: saignement)
+    // continue de s'appliquer chaque tour tant que la blessure est active.
+    if (st?.permanent) {
+      const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
+      if (dot > 0) totalDot += dot;
+      next.push(st);
+      continue;
+    }
+
     const remaining    = n(st?.remaining, n(st?.duration, 0));
     const newRemaining = Math.max(0, remaining - 1);
 

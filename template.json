@@ -86,6 +86,10 @@
         "mana": {
           "valeur": 5,
           "max": 5
+        },
+        "fatigue": {
+          "valeur": 0,
+          "max": 10
         }
       }
     },
@@ -110,6 +114,10 @@
         "mana": {
           "valeur": 0,
           "max": 0
+        },
+        "fatigue": {
+          "valeur": 0,
+          "max": 10
         }
       }
     }

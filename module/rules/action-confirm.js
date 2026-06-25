@@ -3,7 +3,7 @@
 
 import {
   getBudget, saveBudget, confirmSlot, releaseSlot,
-  updateLogEntry, findLogEntry, undoAction
+  updateLogEntry, findLogEntry, undoAction, incrementFatigue
 } from "./action-budget.js";
 import { undoMovement } from "./movement-tracker.js";
 
@@ -146,6 +146,10 @@ async function handlePendingAction(message, result, actionId) {
     // utilisent désormais leurs propres boutons dédiés Échec/Réussite/Crit)
     if (flags.pendingAction.type === "move") {
       await updateLogEntry(combat, actionId, { status: "confirmed" });
+
+      const moverActor = combat.combatants.get(combatantId)?.actor;
+      if (moverActor) await incrementFatigue(moverActor, 1);
+
       await message.update({
         content: `<div style="font-size:13px;color:var(--color-text-secondary)">
           ✅ Déplacement confirmé — <b>${entry?.label ?? ""}</b>

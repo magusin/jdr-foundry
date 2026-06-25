@@ -5,6 +5,20 @@ const SCOPE       = "rpg";
 const FLAG_BUDGET = "actionBudget";
 const FLAG_LOG    = "actionLog";
 
+/**
+ * Augmente la fatigue d'un acteur de `amount` (clampée au max courant).
+ * Appelée à chaque action confirmée par le MJ (attaque, sort, déplacement) —
+ * c'est la fatigue physique/mentale de l'effort, pas un coût "magique".
+ */
+export async function incrementFatigue(actor, amount = 1) {
+  if (!actor) return;
+  const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
+  const max = Number(actor.system?.ressources?.fatigue?.max ?? 10) || 10;
+  const next = Math.min(max, cur + amount);
+  if (next === cur) return;
+  await actor.update({ "system.ressources.fatigue.valeur": next });
+}
+
 // ── Définition des slots ──────────────────────────────────────────────────
 export const SLOT_DEFS = {
   deplacement: { label: "Déplacement", icon: "🏃", max: 1 },

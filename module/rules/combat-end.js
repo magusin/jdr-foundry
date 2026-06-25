@@ -3,6 +3,8 @@
 // Géré via le hook "deleteCombat" dans init.js.
 // Distribue XP + loot entre les PJ qui participaient au combat.
 
+import { appendToCampaignJournal } from "./campaign-journal.js";
+
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 /**
@@ -96,4 +98,10 @@ export async function resolveEndOfCombat(combat) {
   }
 
   await ChatMessage.create({ content, type: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
+
+  const pjNames = pjs.map(p => p.name).join(", ");
+  appendToCampaignJournal(
+    `Combat contre <b>${monsterNames}</b> remporté par <b>${pjNames}</b>. XP distribué : ${totalXP}.` +
+    (lootLines.length ? " Butin récupéré." : "")
+  ).catch(() => {});
 }

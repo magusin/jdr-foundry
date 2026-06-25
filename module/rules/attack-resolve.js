@@ -49,6 +49,17 @@ async function confirmBudgetSlot(actionId) {
 }
 
 /**
+ * Augmente la fatigue de l'attaquant (action confirmée = effort physique).
+ */
+async function bumpFatigue(actor) {
+  if (!actor) return;
+  try {
+    const { incrementFatigue } = await import("./action-budget.js");
+    await incrementFatigue(actor, 1);
+  } catch (e) { /* ignore */ }
+}
+
+/**
  * Appelée dans renderChatMessageHTML. Branche les 3 boutons Échec/Touché/Critique
  * directement (même pattern que bindSpellChatButtons) — masqués pour les joueurs,
  * désactivés une fois la résolution faite.
@@ -186,6 +197,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
 
   // Confirme le slot de budget (échec compris : l'action a été tentée)
   await confirmBudgetSlot(realActionId);
+  await bumpFatigue(attacker);
 
   await message.delete();
 

@@ -338,6 +338,29 @@ export class RPGActor extends Actor {
       sys.ressources.mana.valeur = clamp(Number(sys.ressources.mana.valeur) || 0, -9999, manaMax);
     }
 
+    // FATIGUE : max = 10 + bonus d'Endurance (tous les 20 points -> +1), + bonus états/équipement
+    sys.ressources.fatigue = sys.ressources.fatigue ?? { valeur: 0, max: 10 };
+    const FATIGUE_PER_END_STEP = 20;
+    const fatigueFromEnd = Math.floor((Number(effP.endurance) || 0) / FATIGUE_PER_END_STEP);
+    let fatigueMax = 10 + fatigueFromEnd + (Number(bonus.ressources.fatigueMax ?? 0) || 0);
+    fatigueMax += Number(flat?.ressources?.fatigueMax ?? 0) || 0;
+    fatigueMax = applyPct(fatigueMax, pct?.ressources?.fatigueMax);
+    fatigueMax = Math.max(1, Math.floor(fatigueMax));
+
+    sys.ressources.fatigue.max = fatigueMax;
+    sys.ressources.fatigue.valeur = clamp(Number(sys.ressources.fatigue.valeur) || 0, 0, fatigueMax);
+    sys.ressources.fatigue.pct = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
+
+    // ✅ Épuisement : si fatigue au max, -20% sur les stats principales effectives
+    // (appliqué APRÈS tous les autres mods, donc toujours visible même avec buffs)
+    const isEpuise = sys.ressources.fatigue.valeur >= fatigueMax;
+    sys.derived.epuise = isEpuise;
+    if (isEpuise) {
+      for (const s of Object.keys(effP)) {
+        effP[s] = Math.max(0, Math.floor(Number(effP[s] ?? 0) * 0.8));
+      }
+    }
+
 
     // move
     sys.deplacement = sys.deplacement ?? {};

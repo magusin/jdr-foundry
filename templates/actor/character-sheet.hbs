@@ -155,6 +155,24 @@
         </div>
       </div>
 
+      {{!-- Fatigue --}}
+      <div class="resource" style="grid-column: 1 / -1;">
+        <div class="resource-label">
+          <span>😴 Fatigue</span>
+          <span class="resource-value">
+            {{system.ressources.fatigue.valeur}} / {{system.ressources.fatigue.max}}
+            {{#if system.derived.epuise}}<b style="color:#c0392b">— ÉPUISÉ (−20% stats)</b>{{/if}}
+          </span>
+        </div>
+        <div class="enc-bar">
+          <div class="enc-fill {{#if system.derived.epuise}}enc-surcharge{{/if}}"
+               style="width: {{system.ressources.fatigue.pct}}%;"></div>
+        </div>
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">
+          Augmente à chaque action en combat. Le MJ la réduit via repos (macro Survie).
+        </div>
+      </div>
+
       {{!-- Classe --}}
       <div class="resource" style="grid-column: 1 / -1;">
         <div class="resource-label">
