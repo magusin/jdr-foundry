@@ -1,5 +1,6 @@
 // module/rules/forge.js
-// Logique de craft : vérification ingrédients, jet de chance, consommation, création résultat
+// Logique de craft : vérification ingrédients, jet de chance, déclaration,
+// puis validation MJ avant consommation/création (le MJ garde le contrôle).
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -116,10 +117,11 @@ async function createResultItem(actor, recipe) {
 }
 
 /**
- * Pipeline complet de craft.
- * Retourne { ok, success, content } — content = HTML à poster dans le chat.
+ * ÉTAPE 1 — Déclaration : vérifie les ingrédients, lance le d100, calcule
+ * la chance, mais NE CONSOMME RIEN et NE CRÉE RIEN. Retourne le nécessaire
+ * pour poster un message de déclaration que le MJ devra valider.
  */
-export async function craftRecipe(actor, recipe) {
+export async function declareCraft(actor, recipe) {
   const check = checkIngredients(actor, recipe);
   if (!check.allOk) {
     const missing = check.results.filter(r => !r.ok)
@@ -129,28 +131,38 @@ export async function craftRecipe(actor, recipe) {
 
   const chance = computeForgeChance(actor, recipe);
   const roll = await (new Roll("1d100")).evaluate();
-  const success = roll.total <= chance;
+  const suggestedSuccess = roll.total <= chance;
 
-  // Consomme toujours les ingrédients (risque de l'échec)
+  return { ok: true, chance, roll: roll.total, suggestedSuccess };
+}
+
+/**
+ * ÉTAPE 2 — Résolution (MJ) : applique réellement la conséquence — consomme
+ * les ingrédients (toujours, qu'il y ait réussite ou non), crée l'objet si
+ * succès, octroie l'XP de Forge. Le MJ choisit success=true/false ; il peut
+ * suivre la suggestion du jet ou la corriger librement.
+ *
+ * Retourne { content } — HTML à poster dans le chat.
+ */
+export async function resolveCraft(actor, recipe, { success, roll = null, chance = null } = {}) {
   await consumeIngredients(actor, recipe);
 
-  // XP Forge : plus généreux en cas de succès
   const xpGain = success ? 15 : 5;
   const xpResult = await grantForgeXp(actor, xpGain);
 
   let resultLine = "";
   if (success) {
     const res = await createResultItem(actor, recipe);
-    if (res.ok) {
-      resultLine = `<br>🛠️ <b>${res.item.name}</b> ajouté à l'inventaire.`;
-    } else {
-      resultLine = `<br>⚠️ Craft réussi mais impossible de créer l'objet : ${res.reason}`;
-    }
+    resultLine = res.ok
+      ? `<br>🛠️ <b>${res.item.name}</b> ajouté à l'inventaire.`
+      : `<br>⚠️ Réussite validée mais impossible de créer l'objet : ${res.reason}`;
   }
 
   const levelUpLine = xpResult.leveledUp
     ? `<br>📈 Compétence <b>Forge</b> niveau <b>${xpResult.newLevel}</b> !`
     : "";
+
+  const rollLine = (roll !== null && chance !== null) ? `🎲 Jet : <b>${roll}</b> / chance ${chance}%<br>` : "";
 
   const content = `
     <div style="font-size:13px;line-height:1.6">
@@ -158,13 +170,12 @@ export async function craftRecipe(actor, recipe) {
         <span style="background:${success ? "#1d9e75" : "#c0392b"};color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">
           ${success ? "✅ RÉUSSI" : "❌ ÉCHEC"}
         </span>
-        <span>🔨 Forge — <b>${recipe.name}</b></span>
+        <span>🔨 Forge — <b>${recipe.name}</b> (validé par le MJ)</span>
       </div>
-      <b>${actor.name}</b> tente de forger <b>${recipe.name}</b><br>
-      🎲 Jet : <b>${roll.total}</b> / chance ${chance}%
-      ${resultLine}${levelUpLine}
+      <b>${actor.name}</b> forge <b>${recipe.name}</b><br>
+      ${rollLine}${resultLine}${levelUpLine}
       <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">+${xpGain} XP Forge</div>
     </div>`;
 
-  return { ok: true, success, content, chance, roll: roll.total };
+  return { content };
 }

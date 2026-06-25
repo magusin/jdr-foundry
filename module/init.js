@@ -32,7 +32,8 @@ import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken } from "./rules/movement-tracker.js";
-import { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty } from "./rules/forge.js";
+import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
+import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
 import * as Resistances from "./rules/resistances.js";
 import {
@@ -369,8 +370,8 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.actionConfirm : API messages de confirmation
     game.rpg.actionConfirm = { buildPendingMessage: (await import("./rules/action-confirm.js")).buildPendingMessage, postConfirmedMessage };
 
-    // ✅ game.rpg.forge : API de craft
-    game.rpg.forge = { checkIngredients, computeForgeChance, craftRecipe, getInventoryQty };
+    // ✅ game.rpg.forge : API de craft (déclaration + résolution MJ)
+    game.rpg.forge = { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty };
 
     // ✅ game.rpg.turnEffects : API mécaniques de tour (debug / macro)
     game.rpg.turnEffects = { onTurnStartForActor };
@@ -389,6 +390,7 @@ Hooks.once("init", async () => {
       try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
       try { bindAttackChatButtons(html, message); } catch (e) { }
       try { bindActionChatButtons(html, message); } catch (e) { }
+      try { bindForgeChatButtons(html, message); } catch (e) { }
     });
 
     // ---------- Aura refresh debounce (centralisé) ----------

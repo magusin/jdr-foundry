@@ -106,23 +106,52 @@
     if (!recipe) { btn.disabled = false; return; }
 
     try {
-      const result = await forgeAPI.craftRecipe(actor, recipe);
-      if (!result.ok) {
-        notify("warn", result.reason ?? "Échec de la préparation du craft.");
+      const decl = await forgeAPI.declareCraft(actor, recipe);
+      if (!decl.ok) {
+        notify("warn", decl.reason ?? "Impossible de déclarer ce craft.");
         btn.disabled = false;
         return;
       }
 
+      const htmlEscape2 = (s) =>
+        String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+
+      const suggestedTxt = decl.suggestedSuccess
+        ? `<span style="color:#1d9e75">Réussite suggérée</span>`
+        : `<span style="color:#c0392b">Échec suggéré</span>`;
+
+      const content = `
+        <div style="font-size:13px;line-height:1.6">
+          <div>🔨 <b>${htmlEscape2(actor.name)}</b> tente de forger <b>${htmlEscape2(recipe.name)}</b></div>
+          <div style="margin-top:2px">🎲 Jet : <b>${decl.roll}</b> / chance ${decl.chance}% — ${suggestedTxt}</div>
+          <div style="opacity:.8;margin-top:4px"><i>En attente de validation MJ — les ingrédients ne sont pas encore consommés.</i></div>
+          <div class="rpg-forge-gm" style="display:flex;gap:8px;margin-top:8px">
+            <button type="button" class="rpg-forge-resolve" data-result="fail"
+              style="flex:1;padding:4px;cursor:pointer">Échec</button>
+            <button type="button" class="rpg-forge-resolve" data-result="success"
+              style="flex:1;padding:4px;cursor:pointer">Réussite</button>
+          </div>
+        </div>`;
+
       await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: result.content
+        content,
+        flags: {
+          rpg: {
+            type: "forgeDeclaration",
+            actorId: actor.id,
+            recipeId: recipe.id,
+            roll: decl.roll,
+            chance: decl.chance
+          }
+        }
       });
 
-      notify(result.success ? "info" : "warn", result.success ? "Craft réussi !" : "Craft échoué.");
-      rerender();
+      notify("info", "Tentative de forge déclarée — en attente du MJ.");
+      btn.disabled = false;
     } catch (e) {
       console.error("[RPG][Forge]", e);
-      notify("error", `Erreur craft : ${e?.message ?? e}`);
+      notify("error", `Erreur déclaration craft : ${e?.message ?? e}`);
       btn.disabled = false;
     }
   });
