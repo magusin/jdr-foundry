@@ -1084,6 +1084,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
       const dotFlat  = n(fx.damage?.flat, 0);
       const dotDice  = String(fx.damage?.dice ?? "").trim();
+      const fatigueDotFlat = n(fx.fatigueDot, 0);
 
       const tag = String(fx.tag ?? "").trim() || null;
 
@@ -1095,7 +1096,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         isAura:    false,
         duration:  Math.max(1, n(fx.duration, 1)),
         remaining: Math.max(1, n(fx.duration, 1)),
-        dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice },
+        dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: fatigueDotFlat },
         mods:      mods
       };
 

@@ -398,7 +398,7 @@
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
                      background:${hasRecup ? "#3a7bd5" : "#888"};color:#fff;border:none;opacity:${hasRecup ? "1" : "0.5"}"
               ${hasRecup ? "" : "disabled"}
-              title="Réduit la fatigue de 3 (coûte 1 action)">
+              title="Réduit la fatigue de 3 (+1 par 20 Endurance) — coûte 1 action">
               🧘 Récupération — Fatigue ${fatigueCur}/${fatigueMax}
             </button>
           </div>`;

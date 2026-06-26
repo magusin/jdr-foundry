@@ -36,18 +36,20 @@ function tickStates(actor) {
     ? foundry.utils.deepClone(actor.system.etatsActifs)
     : [];
 
-  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalDot: 0 };
+  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalDot: 0, totalFatigueDot: 0 };
 
   let removedAuraSource = false;
   let totalDot = 0;
+  let totalFatigueDot = 0;
   const next = [];
 
   for (const st of cur) {
     // auraApplied : ne décrémente jamais (suivi par refreshAuras)
     if (String(st?.type) === "auraApplied") {
-      // Les DOT des auras s'appliquent quand même
+      // Les DOT des auras s'appliquent quand même (soin négatif inclus)
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      if (dot > 0) totalDot += dot;
+      if (dot !== 0) totalDot += dot;
+      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
       next.push(st);
       continue;
     }
@@ -57,7 +59,8 @@ function tickStates(actor) {
     // continue de s'appliquer chaque tour tant que la blessure est active.
     if (st?.permanent) {
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      if (dot > 0) totalDot += dot;
+      if (dot !== 0) totalDot += dot;
+      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
       next.push(st);
       continue;
     }
@@ -65,9 +68,10 @@ function tickStates(actor) {
     const remaining    = n(st?.remaining, n(st?.duration, 0));
     const newRemaining = Math.max(0, remaining - 1);
 
-    // Collecte DOT avant suppression
+    // Collecte DOT avant suppression (soin négatif inclus)
     const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-    if (dot > 0 && remaining > 0) totalDot += dot;
+    if (dot !== 0 && remaining > 0) totalDot += dot;
+    if (remaining > 0) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
 
     if (st?.isAura && newRemaining <= 0) removedAuraSource = true;
 
@@ -75,7 +79,7 @@ function tickStates(actor) {
   }
 
   const changed = JSON.stringify(cur) !== JSON.stringify(next);
-  return { changed, next, removedAuraSource, totalDot };
+  return { changed, next, removedAuraSource, totalDot, totalFatigueDot };
 }
 
 /**
@@ -113,23 +117,42 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   await decCooldowns(actor);
 
   // 2) États + collecte DOT
-  const { changed, next, removedAuraSource, totalDot } = tickStates(actor);
+  const { changed, next, removedAuraSource, totalDot, totalFatigueDot } = tickStates(actor);
 
   // 3) Applique DOT avant la mise à jour des états
   const updates = {};
   if (changed) updates["system.etatsActifs"] = next;
 
-  if (totalDot > 0) {
+  const lines = [];
+
+  if (totalDot !== 0) {
     const pvCur  = Number(actor.system?.ressources?.pv?.valeur ?? 0) || 0;
     const pvMax  = Number(actor.system?.ressources?.pv?.max    ?? 0) || 0;
-    const newPv  = Math.max(0, pvCur - totalDot);
+    // totalDot positif = dégâts, négatif = soin (clampé au max dans les deux sens)
+    const newPv  = Math.min(pvMax, Math.max(0, pvCur - totalDot));
     updates["system.ressources.pv.valeur"] = newPv;
 
-    await actor.update(updates);
+    lines.push(totalDot > 0
+      ? `subit <b>${totalDot}</b> dégâts (DOT). PV: ${newPv}/${pvMax}`
+      : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour). PV: ${newPv}/${pvMax}`);
+  }
 
+  if (totalFatigueDot !== 0) {
+    const fatCur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
+    const fatMax = Number(actor.system?.ressources?.fatigue?.max    ?? 10) || 10;
+    const newFat = Math.min(fatMax, Math.max(0, fatCur + totalFatigueDot));
+    updates["system.ressources.fatigue.valeur"] = newFat;
+
+    lines.push(totalFatigueDot > 0
+      ? `s'épuise de <b>${totalFatigueDot}</b> (effet). Fatigue: ${newFat}/${fatMax}`
+      : `récupère <b>${Math.abs(totalFatigueDot)}</b> fatigue (effet). Fatigue: ${newFat}/${fatMax}`);
+  }
+
+  if (lines.length) {
+    await actor.update(updates);
     await ChatMessage.create({
       speaker:  ChatMessage.getSpeaker({ actor }),
-      content:  `<b>${actor.name}</b> subit <b>${totalDot}</b> dégâts (DOT). PV: ${newPv}/${pvMax}`
+      content:  `<b>${actor.name}</b> ${lines.join(" — ")}`
     });
   } else if (changed) {
     await actor.update(updates);

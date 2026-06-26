@@ -533,6 +533,11 @@ EFFETS (GM = inputs/select, Joueur = texte gras)
             </div>
           {{/if}}
 
+          <div style="margin-top:10px">
+            <label>Fatigue / tour (négatif = repos, positif = épuise la cible)</label>
+            <input type="number" name="system.effectsUI.{{i}}.fatigueDot" value="{{fx.fatigueDot}}" placeholder="ex: 2 ou -2" />
+          </div>
+
         {{else}}
           {{!-- JOUEUR : n'affiche la section que si il y a des valeurs utiles --}}
           {{#if (or fx.uiHasDice fx.uiHasFlat fx.uiHasScaling)}}

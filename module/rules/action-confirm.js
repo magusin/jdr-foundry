@@ -81,7 +81,12 @@ export function bindActionChatButtons(html, message) {
             }
 
             const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
-            const next = Math.max(0, cur - 3);
+            // Réduction de base équilibrée par simulation (-3 = montant minimum qui
+            // stabilise la fatigue si le joueur alterne offensive/récupération un
+            // tour sur deux) + bonus d'Endurance (cohérent avec fatigueMax)
+            const endurance = Number(actor.system?.derived?.effective?.principales?.endurance ?? 0) || 0;
+            const reduction = 3 + Math.floor(endurance / 20);
+            const next = Math.max(0, cur - reduction);
             await actor.update({ "system.ressources.fatigue.valeur": next });
 
             await message.delete().catch(() => {});

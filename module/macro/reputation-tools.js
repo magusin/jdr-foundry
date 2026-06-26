@@ -1,10 +1,13 @@
 /**
  * Macro "JDR — Réputation & Marché Régional (MJ)"
  *
- * Permet au MJ d'ajuster la réputation d'un PJ avec une région ou un
- * vendeur précis, et la tendance générale du marché d'une région
+ * Permet au MJ d'ajuster la réputation d'un PJ avec une région OU avec
+ * n'importe quelle entité sociale (un PNJ précis, une faction, une
+ * guilde, un vendeur...) — le champ est libre, pas limité aux marchands.
+ * Sert aussi à fixer la tendance générale du marché d'une région
  * (pénurie/abondance). Ces valeurs ne sont jamais montrées aux joueurs —
- * elles servent uniquement au MJ pour calculer le prix qu'il annonce.
+ * elles servent uniquement au MJ pour calculer le prix ou la réaction
+ * qu'il annonce en jeu.
  */
 (async () => {
   if (!game.user.isGM) {
@@ -61,9 +64,9 @@
       <hr/>
 
       <div>
-        <label style="font-weight:600;display:block;margin-bottom:4px">Réputation — Vendeur / PNJ</label>
+        <label style="font-weight:600;display:block;margin-bottom:4px">Réputation — Entité (PNJ / Faction / Vendeur)</label>
         <div style="display:flex;gap:8px;margin-bottom:4px">
-          <input id="rep-vendor" type="text" list="rep-vendor-list" placeholder="Nom du vendeur/PNJ" style="flex:1" />
+          <input id="rep-vendor" type="text" list="rep-vendor-list" placeholder="Nom du PNJ, de la faction ou du vendeur" style="flex:1" />
           <datalist id="rep-vendor-list">${knownVendors.map(v => `<option value="${htmlEscape(v)}">`).join("")}</datalist>
           <span id="rep-vendor-val" style="min-width:60px;text-align:center;font-weight:600">—</span>
         </div>

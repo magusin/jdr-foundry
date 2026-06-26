@@ -77,8 +77,8 @@
           <datalist id="mk-region-list">${knownRegions.map(r => `<option value="${htmlEscape(r)}">`).join("")}</datalist>
         </div>
         <div style="flex:1">
-          <label style="font-weight:600;display:block;margin-bottom:4px">Vendeur</label>
-          <input id="mk-vendor" type="text" list="mk-vendor-list" placeholder="Nom du vendeur" style="width:100%" />
+          <label style="font-weight:600;display:block;margin-bottom:4px">Entité (PNJ/Faction)</label>
+          <input id="mk-vendor" type="text" list="mk-vendor-list" placeholder="Nom du PNJ, de la faction ou du vendeur" style="width:100%" />
           <datalist id="mk-vendor-list">${knownVendors.map(v => `<option value="${htmlEscape(v)}">`).join("")}</datalist>
         </div>
       </div>
