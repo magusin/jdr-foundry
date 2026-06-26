@@ -409,14 +409,34 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.quests = actor.items
       .filter(i => i.type === "quest")
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"))
-      .map(q => ({
-        id: q.id,
-        name: q.name,
-        statut: String(q.system?.statut ?? "active"),
-        statutLabel: STATUT_LABELS[q.system?.statut ?? "active"] ?? "En cours",
-        isActive: (q.system?.statut ?? "active") === "active",
-        objectifs: Array.isArray(q.system?.objectifs) ? q.system.objectifs : []
-      }));
+      .map(q => {
+        const etapes = Array.isArray(q.system?.etapes) ? q.system.etapes : [];
+        const etapeActuelle = Math.max(0, Math.min(Number(q.system?.etapeActuelle ?? 0) || 0, Math.max(0, etapes.length - 1)));
+
+        // ✅ Toutes les étapes sont exposées avec un flag 'hidden' (étapes futures
+        // pour un joueur) — le template masque selon qui regarde (MJ voit tout)
+        const allEtapes = etapes.map((e, i) => ({
+          num: i + 1,
+          label: e?.label ?? `Étape ${i + 1}`,
+          isCurrent: i === etapeActuelle,
+          isPast: i < etapeActuelle,
+          isFuture: i > etapeActuelle,
+          hidden: i > etapeActuelle, // masqué aux joueurs uniquement
+          objectifs: Array.isArray(e?.objectifs) ? e.objectifs : []
+        }));
+
+        return {
+          id: q.id,
+          name: q.name,
+          statut: String(q.system?.statut ?? "active"),
+          statutLabel: STATUT_LABELS[q.system?.statut ?? "active"] ?? "En cours",
+          isActive: (q.system?.statut ?? "active") === "active",
+          etapeActuelleNum: etapes.length ? etapeActuelle + 1 : 0,
+          totalEtapes: etapes.length,
+          hasMoreEtapes: etapeActuelle < etapes.length - 1,
+          allEtapes
+        };
+      });
 
     // effP
     ctx.effP = actor.system?.derived?.effP
@@ -565,6 +585,27 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         if (!quest) return;
         const { resolveQuest } = await import("../rules/quest-resolve.js");
         await resolveQuest(this.document, quest, { success: action === "questComplete" });
+        await this.render({ force: true });
+        return;
+      }
+
+      if (action === "questNextEtape") {
+        if (!game.user.isGM) return;
+        const itemId = btn.dataset.itemId || btn.closest(".item")?.dataset?.itemId;
+        const quest  = this.document.items.get(itemId);
+        if (!quest) return;
+        const etapes = Array.isArray(quest.system?.etapes) ? quest.system.etapes : [];
+        const cur = Math.max(0, Number(quest.system?.etapeActuelle ?? 0) || 0);
+        const next = Math.min(etapes.length - 1, cur + 1);
+        if (next === cur) return;
+        await quest.update({ "system.etapeActuelle": next });
+        const label = etapes[next]?.label ? ` — ${etapes[next].label}` : "";
+        await ChatMessage.create({
+          content: `📜 <b>${this.document.name}</b> avance dans <b>${quest.name}</b> : Étape ${next + 1}${label}`
+        });
+        if (game.rpg?.journal) {
+          game.rpg.journal.appendToCampaignJournal(`<b>${this.document.name}</b> avance dans la quête <b>${quest.name}</b> (étape ${next + 1}).`).catch(() => {});
+        }
         await this.render({ force: true });
         return;
       }

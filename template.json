@@ -272,7 +272,8 @@
         "details"
       ],
       "statut": "active",
-      "objectifs": [],
+      "etapeActuelle": 0,
+      "etapes": [],
       "recompense": {
         "xp": 0,
         "items": []

@@ -818,29 +818,53 @@
 
         <ol class="items-list simple">
           {{#each quests as |q|}}
-          <li class="item" data-item-id="{{q.id}}">
-            <span class="name" style="display:flex; flex-direction:column; gap:4px;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <b class="item-edit" style="cursor:pointer">{{q.name}}</b>
-                <small style="opacity:.85;
-                  {{#if (eq q.statut "reussie")}}color:#1d9e75;{{/if}}
-                  {{#if (eq q.statut "echouee")}}color:#c0392b;{{/if}}">
-                  {{q.statutLabel}}
-                </small>
-              </div>
-              <small style="opacity:.8;">
-                {{#each q.objectifs}}
-                  {{#if this.fait}}✅{{else}}⬜{{/if}} {{this.text}}<br>
-                {{/each}}
+          <li class="item" data-item-id="{{q.id}}" style="flex-direction:column;align-items:stretch;gap:6px">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <b class="item-edit" style="cursor:pointer">{{q.name}}</b>
+              <small style="opacity:.85;
+                {{#if (eq q.statut "reussie")}}color:#1d9e75;{{/if}}
+                {{#if (eq q.statut "echouee")}}color:#c0392b;{{/if}}">
+                {{q.statutLabel}}
               </small>
-            </span>
+              {{#if q.totalEtapes}}
+              <small style="opacity:.7;margin-left:auto">Étape {{q.etapeActuelleNum}} / {{q.totalEtapes}}</small>
+              {{/if}}
+            </div>
+
+            {{#each q.allEtapes as |etape|}}
+              {{#if (or ../../flags.isGM (not etape.hidden))}}
+              <div style="font-size:12px;padding:4px 6px;border-radius:6px;
+                          {{#if etape.isCurrent}}background:rgba(29,158,117,0.1);{{/if}}
+                          {{#if etape.hidden}}opacity:.5;border:1px dashed var(--color-border-tertiary);{{/if}}">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <b>Étape {{etape.num}}{{#if etape.label}} — {{etape.label}}{{/if}}</b>
+                  {{#if etape.isCurrent}}<span style="color:#1d9e75;font-size:10px">EN COURS</span>{{/if}}
+                  {{#if etape.isPast}}<span style="color:var(--color-text-secondary);font-size:10px">terminée</span>{{/if}}
+                  {{#if etape.hidden}}<span style="color:var(--color-text-secondary);font-size:10px">(caché du joueur)</span>{{/if}}
+                </div>
+                {{#if etape.isCurrent}}
+                  {{#each etape.objectifs}}
+                    <div style="padding-left:14px">{{#if this.fait}}✅{{else}}⬜{{/if}} {{this.text}}</div>
+                  {{/each}}
+                {{/if}}
+                {{#if (and ../../flags.isGM etape.isPast)}}
+                  {{#each etape.objectifs}}
+                    <div style="padding-left:14px;opacity:.7">{{#if this.fait}}✅{{else}}⬜{{/if}} {{this.text}}</div>
+                  {{/each}}
+                {{/if}}
+              </div>
+              {{/if}}
+            {{/each}}
 
             <span class="actions" style="display:flex; gap:6px; align-items:center;">
               <button type="button" class="btn small item-edit" title="Ouvrir / éditer">🔎</button>
               {{#if ../flags.isGM}}
               {{#if q.isActive}}
-              <button type="button" class="btn small" data-action="questComplete" data-item-id="{{q.id}}">Réussite</button>
-              <button type="button" class="btn small" data-action="questFail" data-item-id="{{q.id}}">Échec</button>
+                {{#if q.hasMoreEtapes}}
+                <button type="button" class="btn small" data-action="questNextEtape" data-item-id="{{q.id}}">Étape suivante ▶</button>
+                {{/if}}
+                <button type="button" class="btn small" data-action="questComplete" data-item-id="{{q.id}}">Réussite</button>
+                <button type="button" class="btn small" data-action="questFail" data-item-id="{{q.id}}">Échec</button>
               {{/if}}
               {{/if}}
             </span>

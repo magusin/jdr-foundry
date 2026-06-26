@@ -81,6 +81,13 @@
       <hr/>
 
       <div>
+        <label style="font-weight:600;display:block;margin-bottom:4px">📊 Compteur — toutes les réputations de ce PJ</label>
+        <div id="rep-summary" style="max-height:180px;overflow-y:auto;font-size:12px;border:1px solid var(--color-border-tertiary);border-radius:6px;padding:6px"></div>
+      </div>
+
+      <hr/>
+
+      <div>
         <label style="font-weight:600;display:block;margin-bottom:4px">Tendance du marché (région, indépendant du PJ)</label>
         <div style="display:flex;gap:8px;margin-bottom:4px">
           <input id="rep-trend-region" type="text" list="rep-region-list" placeholder="Nom de la région" style="flex:1" />
@@ -109,6 +116,26 @@
       const vendorInput = root.querySelector("#rep-vendor");
       const trendRegionInput = root.querySelector("#rep-trend-region");
 
+      const refreshSummary = () => {
+        const pj = game.actors.get(pjSel.value);
+        const summaryEl = root.querySelector("#rep-summary");
+        if (!pj) { summaryEl.innerHTML = "—"; return; }
+
+        const regions = repAPI.listKnownRegionsFor(pj).map(r => ({ type: "Région", name: r, value: repAPI.getRegionRep(pj, r) }));
+        const vendors = repAPI.listKnownVendorsFor(pj).map(v => ({ type: "Entité", name: v, value: repAPI.getVendorRep(pj, v) }));
+        const all = [...regions, ...vendors].sort((a, b) => b.value - a.value);
+
+        if (!all.length) { summaryEl.innerHTML = `<i style="opacity:.7">Aucune réputation enregistrée pour ce PJ.</i>`; return; }
+
+        summaryEl.innerHTML = all.map(r => {
+          const color = r.value > 0 ? "#1d9e75" : r.value < 0 ? "#c0392b" : "var(--color-text-secondary)";
+          return `<div style="display:flex;justify-content:space-between;padding:2px 0">
+            <span>${htmlEscape(r.type)} — <b>${htmlEscape(r.name)}</b></span>
+            <b style="color:${color}">${r.value > 0 ? "+" : ""}${r.value}</b>
+          </div>`;
+        }).join("");
+      };
+
       const refreshRegion = () => {
         const pj = game.actors.get(pjSel.value);
         const val = pj ? repAPI.getRegionRep(pj, regionInput.value.trim()) : 0;
@@ -125,10 +152,12 @@
         root.querySelector("#rep-trend-val").textContent = region ? `${val > 0 ? "+" : ""}${val}%` : "—";
       };
 
-      pjSel.addEventListener("change", () => { refreshRegion(); refreshVendor(); });
+      pjSel.addEventListener("change", () => { refreshRegion(); refreshVendor(); refreshSummary(); });
       regionInput.addEventListener("input", refreshRegion);
       vendorInput.addEventListener("input", refreshVendor);
       trendRegionInput.addEventListener("input", refreshTrend);
+
+      refreshSummary();
 
       root.querySelectorAll(".rep-adj").forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -142,11 +171,13 @@
             if (!region) { ui.notifications.warn("Indique une région."); return; }
             await repAPI.adjustRegionRep(pj, region, delta);
             refreshRegion();
+            refreshSummary();
           } else {
             const vendor = vendorInput.value.trim();
             if (!vendor) { ui.notifications.warn("Indique un vendeur."); return; }
             await repAPI.adjustVendorRep(pj, vendor, delta);
             refreshVendor();
+            refreshSummary();
           }
         });
       });

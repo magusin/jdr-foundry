@@ -9,7 +9,7 @@
   <section class="sheet-body">
 
     <div class="form-group">
-      <label>Statut</label>
+      <label>Statut global</label>
       <select name="system.statut" {{#unless canEdit}}disabled{{/unless}}>
         <option value="active" {{#if (eq system.statut "active")}}selected{{/if}}>En cours</option>
         <option value="reussie" {{#if (eq system.statut "reussie")}}selected{{/if}}>Réussie</option>
@@ -17,23 +17,65 @@
       </select>
     </div>
 
-    <h3>Objectifs</h3>
-    <div class="quest-objectifs">
-      {{#each system.objectifs as |obj idx|}}
-      <div class="objectif-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <input type="checkbox" name="system.objectifs.{{idx}}.fait" {{#if obj.fait}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}} />
-        <input type="text" name="system.objectifs.{{idx}}.text" value="{{obj.text}}" placeholder="Description de l'objectif" style="flex:1" {{#unless canEdit}}disabled{{/unless}} />
+    <div class="form-group">
+      <label>Étape actuelle (le joueur ne voit que celle-ci + les étapes terminées en titre seul)</label>
+      <div style="font-size:13px;font-weight:600">
+        Étape {{calc.etapeActuelleNum}} / {{calc.totalEtapes}}
+      </div>
+    </div>
+
+    <h3>Déroulé de la quête (étapes)</h3>
+    <div class="quest-etapes">
+      {{#each system.etapes as |etape ei|}}
+      <div class="etape-card" data-etape-idx="{{ei}}"
+           style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:8px;margin-bottom:8px;
+                  {{#if (eq ei ../system.etapeActuelle)}}background:rgba(29,158,117,0.08);{{/if}}">
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;opacity:.7">
+            Étape {{etape.etapeNum}}
+            {{#if (eq ei ../system.etapeActuelle)}}<span style="color:#1d9e75">— EN COURS</span>{{/if}}
+            {{#if (lt ei ../system.etapeActuelle)}}<span style="color:var(--color-text-secondary)">— terminée</span>{{/if}}
+            {{#if (gt ei ../system.etapeActuelle)}}<span style="color:var(--color-text-secondary)">— à venir (caché du joueur)</span>{{/if}}
+          </span>
+          {{#if canEdit}}
+          <button type="button" data-action="removeEtape" data-etape-idx="{{ei}}" style="margin-left:auto" title="Retirer l'étape">✕</button>
+          {{/if}}
+        </div>
+
+        <input type="text" name="system.etapes.{{ei}}.label" value="{{etape.label}}"
+          placeholder="Titre de l'étape (ex: Trouver l'auberge)" style="width:100%;margin-bottom:6px"
+          {{#unless ../canEdit}}disabled{{/unless}} />
+
+        <div class="etape-objectifs">
+          {{#each etape.objectifs as |obj oi|}}
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+            <input type="checkbox" name="system.etapes.{{ei}}.objectifs.{{oi}}.fait" {{#if obj.fait}}checked{{/if}}
+              {{#unless ../../canEdit}}disabled{{/unless}} />
+            <input type="text" name="system.etapes.{{ei}}.objectifs.{{oi}}.text" value="{{obj.text}}"
+              placeholder="Description de l'objectif" style="flex:1" {{#unless ../../canEdit}}disabled{{/unless}} />
+            {{#if ../../canEdit}}
+            <button type="button" data-action="removeObjectif" data-etape-idx="{{ei}}" data-obj-idx="{{oi}}" title="Retirer">✕</button>
+            {{/if}}
+          </div>
+          {{/each}}
+        </div>
         {{#if canEdit}}
-        <button type="button" data-action="removeObjectif" data-idx="{{idx}}" title="Retirer">✕</button>
+        <button type="button" data-action="addObjectif" data-etape-idx="{{ei}}" style="margin-top:2px;font-size:11px">+ Objectif</button>
         {{/if}}
       </div>
       {{/each}}
     </div>
+
     {{#if canEdit}}
-    <button type="button" data-action="addObjectif" style="margin-top:4px">+ Ajouter un objectif</button>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button type="button" data-action="addEtape">+ Ajouter une étape</button>
+      <button type="button" data-action="prevEtape">◀ Étape précédente</button>
+      <button type="button" data-action="nextEtape">Étape suivante ▶</button>
+    </div>
     {{/if}}
 
-    <h3 style="margin-top:14px">Récompense</h3>
+    <h3 style="margin-top:14px">Récompense (à la fin de la quête)</h3>
     <div class="form-group">
       <label>XP</label>
       <input type="number" name="system.recompense.xp" value="{{system.recompense.xp}}" min="0" {{#unless canEdit}}disabled{{/unless}} />
