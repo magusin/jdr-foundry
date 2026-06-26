@@ -479,7 +479,14 @@ const KEY_TO_BUCKET = {
   vitesse: ["move", "vitesse"],
 
   // initiative
-  initiativeMod: ["initiative", "mod"]
+  initiativeMod: ["initiative", "mod"],
+
+  // combat — bonus direct à la chance de toucher (réduit le TN nécessaire)
+  toucherPhysique: ["combat", "toucherPhysique"],
+  toucherMagique: ["combat", "toucherMagique"],
+
+  // ressources — fatigue max (équipement/buffs)
+  fatigueMax: ["ressources", "fatigueMax"]
 };
 
 export function sumActiveEffectMods(actor) {

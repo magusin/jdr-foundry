@@ -55,11 +55,11 @@ async function confirmBudgetSlot(actionId, extraSnapshot = null) {
 /**
  * Augmente la fatigue du lanceur (action confirmée = effort magique).
  */
-async function bumpFatigue(actor) {
+async function bumpFatigue(actor, amount = 1) {
   if (!actor) return;
   try {
     const { incrementFatigue } = await import("./action-budget.js");
-    await incrementFatigue(actor, 1);
+    await incrementFatigue(actor, Math.max(0, Number(amount) || 0));
   } catch (e) { /* ignore */ }
 }
 
@@ -960,7 +960,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
     const actionId = data.actionId ?? null;
     await confirmBudgetSlot(actionId);
-    await bumpFatigue(actor);
+    await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
 
     let selfDmgLine = "";
@@ -988,7 +988,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   if (res === "fail") {
     const actionId = data.actionId ?? null;
     await confirmBudgetSlot(actionId);
-    await bumpFatigue(actor);
+    await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
     const failMsg = pickSpellFailMessage(actor.name, targetNames);
     await ChatMessage.create({
@@ -1162,7 +1162,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   // + enregistre les états ajoutés (multi-cible inclus) pour permettre le retrait à l'undo
   const actionId = data.actionId ?? null;
   await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
-  await bumpFatigue(actor);
+  await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
 
   const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),

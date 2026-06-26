@@ -159,9 +159,16 @@ export function computeTN(attacker, target, item) {
 
   const r       = (100 + atk) / (100 + def);
   const tnBase  = tnFromRatio(r);
-  const tnFinal = applyDifficulty(tnBase, diff);
+  let   tnFinal = applyDifficulty(tnBase, diff);
 
-  return { livraison, diff, atk, def, r, tnBase, tnFinal };
+  // ✅ Bonus/malus direct à la chance de toucher (équipement, sorts/effets,
+  // épuisement...) — positif = plus facile à toucher, négatif = plus dur
+  const toucherBonus = isPhys
+    ? Number(attacker?.system?.derived?.toucherPhysique ?? 0) || 0
+    : Number(attacker?.system?.derived?.toucherMagique ?? 0) || 0;
+  tnFinal = clamp(tnFinal - toucherBonus, 6, 16);
+
+  return { livraison, diff, atk, def, r, tnBase, tnFinal, toucherBonus };
 }
 
 /**

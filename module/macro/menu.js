@@ -398,7 +398,7 @@
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
                      background:${hasRecup ? "#3a7bd5" : "#888"};color:#fff;border:none;opacity:${hasRecup ? "1" : "0.5"}"
               ${hasRecup ? "" : "disabled"}
-              title="Réduit la fatigue de 3 (+1 par 20 Endurance) — coûte 1 action">
+              title="Jet 1d4+2 (+1 par 20 Endurance) — coûte 1 action, jamais d'échec">
               🧘 Récupération — Fatigue ${fatigueCur}/${fatigueMax}
             </button>
           </div>`;
@@ -861,13 +861,25 @@
           });
         }
 
+        // Jet de récupération : 1d4+2 (3 à 6) — pas d'échec critique possible,
+        // se reposer ne devrait jamais punir le joueur
+        const roll = await (new Roll("1d4 + 2")).evaluate();
+        const endurance = Number(actor.system?.derived?.effective?.principales?.endurance ?? 0) || 0;
+        const enduranceBonus = Math.floor(endurance / 20);
+        const totalReduction = roll.total + enduranceBonus;
+
+        await roll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          flavor: `🧘 <b>${actor.name}</b> récupère son souffle (1d4+2${enduranceBonus ? ` +${enduranceBonus} Endurance` : ""})`
+        });
+
         const fatigueCur = actor.system?.ressources?.fatigue?.valeur ?? 0;
         const confirmAPI = getConfirmAPI();
         const msgContent = confirmAPI
           ? confirmAPI.buildPendingMessage({
               actor: actor.name, label: `Prend un moment pour récupérer son souffle`,
               slotLabel: "Récupération", slotIcon: "🧘",
-              detail: `Fatigue actuelle : ${fatigueCur}. Réduira de 3 si validé.`,
+              detail: `Fatigue actuelle : ${fatigueCur}. Réduira de <b>${totalReduction}</b> si validé.`,
               actionId, type: "recuperation", outcome: "confirm"
             })
           : `<b>${actor.name}</b> récupère.`;
@@ -875,7 +887,7 @@
         const msg = await ChatMessage.create({
           speaker: ChatMessage.getSpeaker({ actor }),
           content: msgContent,
-          flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id } }
+          flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id, recuperationAmount: totalReduction } }
         });
 
         if (inCombat) await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });

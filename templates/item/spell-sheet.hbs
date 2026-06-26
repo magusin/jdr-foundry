@@ -79,6 +79,15 @@
       </div>
     </div>
 
+    <div style="margin-top:8px;">
+      <label>Coût en fatigue (1 par défaut, augmente pour un sort éprouvant)</label>
+      {{#if isReadOnly}}
+      <div><b>{{system.fatigueCost}}</b></div>
+      {{else}}
+      <input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" />
+      {{/if}}
+    </div>
+
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
       <div>
         <label>Type</label>

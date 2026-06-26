@@ -196,7 +196,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       armureFixe: "Armure fixe",
       resistanceFixe: "Résistance fixe",
       scoreArmure: "Score Armure",
-      scoreResistance: "Score Résistance"
+      scoreResistance: "Score Résistance",
+      toucherPhysique: "Toucher physique",
+      toucherMagique: "Toucher magique"
     };
 
     ctx.displayWeaponBonuses = Object.entries(LABELS_BONUS)

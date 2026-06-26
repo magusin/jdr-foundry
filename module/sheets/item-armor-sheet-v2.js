@@ -94,7 +94,11 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
       // Autres
       vitesse: "Vitesse",
-      podsMax: "Pods max"
+      podsMax: "Pods max",
+
+      // Combat
+      toucherPhysique: "Toucher physique",
+      toucherMagique: "Toucher magique"
     };
 
     // assure toutes les keys existent (évite undefined dans inputs)

@@ -29,7 +29,8 @@ function sumBonuses(actor) {
     defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
     ressources: { pvMax: 0, manaMax: 0 },
     regen: { pvPct: 0, manaPct: 0 },
-    move: { vitesse: 0 }
+    move: { vitesse: 0 },
+    combat: { toucherPhysique: 0, toucherMagique: 0 }
   };
 
   const isMonster = actor.type === "monster";
@@ -67,6 +68,9 @@ function sumBonuses(actor) {
 
     totals.regen.pvPct += Number(b.regenPvPct ?? 0) || 0;
     totals.regen.manaPct += Number(b.regenManaPct ?? 0) || 0;
+
+    totals.combat.toucherPhysique += Number(b.toucherPhysique ?? 0) || 0;
+    totals.combat.toucherMagique += Number(b.toucherMagique ?? 0) || 0;
   }
 
   return totals;
@@ -351,7 +355,8 @@ export class RPGActor extends Actor {
     sys.ressources.fatigue.valeur = clamp(Number(sys.ressources.fatigue.valeur) || 0, 0, fatigueMax);
     sys.ressources.fatigue.pct = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
 
-    // ✅ Épuisement : si fatigue au max, -20% sur les stats principales effectives
+    // ✅ Épuisement : si fatigue au max, -20% sur les stats principales effectives,
+    // -1 vitesse, -1 chance de toucher (physique ET magique)
     // (appliqué APRÈS tous les autres mods, donc toujours visible même avec buffs)
     const isEpuise = sys.ressources.fatigue.valeur >= fatigueMax;
     sys.derived.epuise = isEpuise;
@@ -360,14 +365,28 @@ export class RPGActor extends Actor {
         effP[s] = Math.max(0, Math.floor(Number(effP[s] ?? 0) * 0.8));
       }
     }
+    const epuiseVitesseMalus  = isEpuise ? 1 : 0;
+    const epuiseToucherMalus  = isEpuise ? 1 : 0;
 
 
     // move
     sys.deplacement = sys.deplacement ?? {};
     const baseVit = (Number(baseMove.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
-    let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0);
+    let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus;
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));
+
+    // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire) : équipement
+    // + sorts/effets + malus d'épuisement. Consommé par combat.js > computeTN.
+    sys.derived.toucherPhysique = (Number(bonus.combat?.toucherPhysique ?? 0) || 0)
+      + (Number(flat?.combat?.toucherPhysique ?? 0) || 0) - epuiseToucherMalus;
+    sys.derived.toucherPhysique = applyPct(sys.derived.toucherPhysique, pct?.combat?.toucherPhysique);
+    sys.derived.toucherPhysique = Math.floor(sys.derived.toucherPhysique);
+
+    sys.derived.toucherMagique = (Number(bonus.combat?.toucherMagique ?? 0) || 0)
+      + (Number(flat?.combat?.toucherMagique ?? 0) || 0) - epuiseToucherMalus;
+    sys.derived.toucherMagique = applyPct(sys.derived.toucherMagique, pct?.combat?.toucherMagique);
+    sys.derived.toucherMagique = Math.floor(sys.derived.toucherMagique);
 
     // -----------------------
     // 5) HP state
