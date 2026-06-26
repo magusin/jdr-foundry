@@ -274,6 +274,9 @@
       "statut": "active",
       "etapeActuelle": 0,
       "etapes": [],
+      "partagee": false,
+      "questGroupId": "",
+      "classeRequise": "",
       "recompense": {
         "xp": 0,
         "items": []

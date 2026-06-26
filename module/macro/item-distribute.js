@@ -146,6 +146,13 @@
           const itemData = item.toObject();
           delete itemData._id;
 
+          // ✅ Quête partagée : un seul questGroupId pour toutes les copies
+          // données ici, pour que leur progression reste synchronisée
+          if (item.type === "quest" && item.system?.partagee && game.rpg?.questGroup) {
+            const gid = await game.rpg.questGroup.ensureQuestGroupId(item);
+            if (gid && itemData.system) itemData.system.questGroupId = gid;
+          }
+
           const givenNames = [];
           for (const chk of checks) {
             const actor = game.actors.get(chk.value);

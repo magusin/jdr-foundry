@@ -826,7 +826,7 @@
                 {{#if (eq q.statut "echouee")}}color:#c0392b;{{/if}}">
                 {{q.statutLabel}}
               </small>
-              {{#if q.totalEtapes}}
+              {{#if (and ../flags.isGM q.totalEtapes)}}
               <small style="opacity:.7;margin-left:auto">Étape {{q.etapeActuelleNum}} / {{q.totalEtapes}}</small>
               {{/if}}
             </div>

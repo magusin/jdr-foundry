@@ -599,9 +599,15 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const next = Math.min(etapes.length - 1, cur + 1);
         if (next === cur) return;
         await quest.update({ "system.etapeActuelle": next });
+
+        // ✅ Quête partagée : synchronise la même étape sur toutes les autres copies
+        const { propagateQuestUpdate } = await import("../rules/quest-group.js");
+        const synced = await propagateQuestUpdate(quest, { "system.etapeActuelle": next });
+
         const label = etapes[next]?.label ? ` — ${etapes[next].label}` : "";
+        const syncTxt = synced.length ? ` (synchronisé pour ${synced.length} autre(s) PJ)` : "";
         await ChatMessage.create({
-          content: `📜 <b>${this.document.name}</b> avance dans <b>${quest.name}</b> : Étape ${next + 1}${label}`
+          content: `📜 <b>${this.document.name}</b> avance dans <b>${quest.name}</b> : Étape ${next + 1}${label}${syncTxt}`
         });
         if (game.rpg?.journal) {
           game.rpg.journal.appendToCampaignJournal(`<b>${this.document.name}</b> avance dans la quête <b>${quest.name}</b> (étape ${next + 1}).`).catch(() => {});

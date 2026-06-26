@@ -87,6 +87,14 @@ async function onDropItem(sheetInstance, event) {
   const itemData = item.toObject();
   delete itemData._id;
 
+  // ✅ Quête partagée : assure un questGroupId commun pour synchroniser
+  // la progression entre toutes les copies données à différents PJ
+  if (item.type === "quest" && item.system?.partagee) {
+    const { ensureQuestGroupId } = await import("../rules/quest-group.js");
+    const gid = await ensureQuestGroupId(item);
+    if (gid && itemData.system) itemData.system.questGroupId = gid;
+  }
+
   try {
     const [created] = await actor.createEmbeddedDocuments("Item", [itemData]);
     ui.notifications?.info?.(`"${created?.name ?? item.name}" ajouté à ${actor.name}.`);

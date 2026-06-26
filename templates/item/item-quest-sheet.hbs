@@ -18,6 +18,19 @@
     </div>
 
     <div class="form-group">
+      <label>
+        <input type="checkbox" name="system.partagee" {{#if system.partagee}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}} />
+        Quête partagée (plusieurs PJ peuvent l'avoir, la progression reste synchronisée pour tous)
+      </label>
+    </div>
+
+    <div class="form-group">
+      <label>Classe / Joueur requis (note pour toi, n'apparaît jamais au joueur)</label>
+      <input type="text" name="system.classeRequise" value="{{system.classeRequise}}"
+        placeholder="ex: Mage uniquement, ou nom du joueur" {{#unless canEdit}}disabled{{/unless}} />
+    </div>
+
+    <div class="form-group">
       <label>Étape actuelle (le joueur ne voit que celle-ci + les étapes terminées en titre seul)</label>
       <div style="font-size:13px;font-weight:600">
         Étape {{calc.etapeActuelleNum}} / {{calc.totalEtapes}}
