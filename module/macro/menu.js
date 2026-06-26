@@ -388,6 +388,22 @@
           </div>`;
         })()}
 
+        <!-- Bouton Récupération (réduit la fatigue, coûte 1 slot) -->
+        ${(() => {
+          const fatigueCur = actor.system?.ressources?.fatigue?.valeur ?? 0;
+          const fatigueMax = actor.system?.ressources?.fatigue?.max ?? 10;
+          const hasRecup = isMyTurn(actor) && canUseSlot(actor, "recuperation");
+          return `<div style="margin-bottom:6px">
+            <button type="button" data-action="recuperation"
+              style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
+                     background:${hasRecup ? "#3a7bd5" : "#888"};color:#fff;border:none;opacity:${hasRecup ? "1" : "0.5"}"
+              ${hasRecup ? "" : "disabled"}
+              title="Réduit la fatigue de 3 (coûte 1 action)">
+              🧘 Récupération — Fatigue ${fatigueCur}/${fatigueMax}
+            </button>
+          </div>`;
+        })()}
+
         <!-- Section tabs -->
         <div class="rpg-section-tabs">
           ${weaponsEquipped.length ? `
@@ -802,6 +818,73 @@
           await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
         }
         notify("error", `Erreur déclaration : ${e?.message ?? e}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Déclarer Récupération (réduit la fatigue de 3, coûte 1 slot en combat) ──
+    $root.on("click.rpgMenu", "[data-action='recuperation']", async (ev) => {
+      ev.preventDefault();
+      const btn = ev.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      if (!isMyTurn(actor)) {
+        btn.disabled = false;
+        return notify("warn", "Ce n'est pas ton tour.");
+      }
+
+      const budgetAPI = getBudgetAPI();
+      const combat    = getCombat();
+      const cbt       = getCombatant(actor);
+      const inCombat  = !!(budgetAPI && combat && cbt);
+
+      if (inCombat && !budgetAPI.canUseSlot(budgetAPI.getBudget(combat, cbt.id), "recuperation")) {
+        btn.disabled = false;
+        return notify("warn", "Slot Récupération déjà utilisé ce tour.");
+      }
+
+      try {
+        const actionId = foundry.utils.randomID();
+
+        if (inCombat) {
+          const budget    = budgetAPI.getBudget(combat, cbt.id);
+          const newBudget = budgetAPI.reserveSlot(budget, "recuperation");
+          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+          await budgetAPI.addLogEntry(combat, cbt.id, {
+            id: actionId, slot: "recuperation", status: "pending",
+            label: `Récupération — ${actor.name}`,
+            actorId: actor.id,
+            snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
+            timestamp: Date.now()
+          });
+        }
+
+        const fatigueCur = actor.system?.ressources?.fatigue?.valeur ?? 0;
+        const confirmAPI = getConfirmAPI();
+        const msgContent = confirmAPI
+          ? confirmAPI.buildPendingMessage({
+              actor: actor.name, label: `Prend un moment pour récupérer son souffle`,
+              slotLabel: "Récupération", slotIcon: "🧘",
+              detail: `Fatigue actuelle : ${fatigueCur}. Réduira de 3 si validé.`,
+              actionId, type: "recuperation", outcome: "confirm"
+            })
+          : `<b>${actor.name}</b> récupère.`;
+
+        const msg = await ChatMessage.create({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          content: msgContent,
+          flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id } }
+        });
+
+        if (inCombat) await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+
+        rerenderAll();
+        notify("info", "Récupération déclarée — en attente du MJ.");
+      } catch (e) {
+        console.error("[RPG][Menu] Erreur récupération :", e);
+        notify("error", `Erreur récupération : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;
       }

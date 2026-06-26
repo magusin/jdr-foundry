@@ -40,6 +40,7 @@ import * as Resistances from "./rules/resistances.js";
 import { appendToCampaignJournal } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
 import * as WeatherLibrary from "./rules/weather-library.js";
+import * as Reputation from "./rules/reputation.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -219,6 +220,15 @@ Hooks.once("init", async () => {
     config: false,
     type: String,
     default: "clair"
+  });
+
+  // ✅ Tendance du marché par région (monde) — influence les prix au marché
+  game.settings.register("rpg", "regionMarketTrend", {
+    name: "Tendance du marché par région",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {}
   });
 
   game.rpg = game.rpg ?? {};
@@ -405,6 +415,9 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.weather : météo courante, influence la magie élémentaire
     game.rpg.weather = WeatherLibrary;
+
+    // ✅ game.rpg.reputation : réputation région/vendeur + tendance marché
+    game.rpg.reputation = Reputation;
 
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
     game.rpg.journal = { appendToCampaignJournal };

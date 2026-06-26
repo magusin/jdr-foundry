@@ -45,6 +45,53 @@ export function bindActionChatButtons(html, message) {
           b.disabled = true;
 
         try {
+          // Cas spécial : récupération → réduit la fatigue, fonctionne avec OU sans combat actif
+          if (flags.pendingAction?.type === "recuperation") {
+            const actorId = flags.recuperationActorId;
+            const actor = game.actors.get(actorId);
+            if (!actor) throw new Error("Acteur introuvable pour la récupération");
+
+            if (result === "reject" || result === "correct") {
+              await message.update({
+                content: `<div style="font-size:13px;color:var(--color-text-secondary)">❌ Récupération refusée pour <b>${actor.name}</b>.</div>`,
+                "flags.rpg.pendingAction": null
+              });
+              // Libère le slot si en combat
+              const combat = game.combat;
+              if (combat) {
+                const found = findLogEntry(combat, actionId);
+                if (found) {
+                  const b = getBudget(combat, found.combatantId);
+                  await saveBudget(combat, found.combatantId, releaseSlot(b, "recuperation", false));
+                  await updateLogEntry(combat, actionId, { status: "rejected" });
+                }
+              }
+              return;
+            }
+
+            // confirm : confirme le slot si en combat, réduit la fatigue de 3
+            const combat = game.combat;
+            if (combat) {
+              const found = findLogEntry(combat, actionId);
+              if (found) {
+                const b = getBudget(combat, found.combatantId);
+                await saveBudget(combat, found.combatantId, confirmSlot(b, "recuperation"));
+                await updateLogEntry(combat, actionId, { status: "confirmed" });
+              }
+            }
+
+            const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
+            const next = Math.max(0, cur - 3);
+            await actor.update({ "system.ressources.fatigue.valeur": next });
+
+            await message.delete().catch(() => {});
+            await ChatMessage.create({
+              speaker: ChatMessage.getSpeaker({ actor }),
+              content: `🧘 <b>${actor.name}</b> récupère son souffle. Fatigue : ${cur} → <b>${next}</b>.`
+            });
+            return;
+          }
+
           // Cas spécial : undo_move → replacement token
           if (result === "undo_move") {
             const combat = game.combat;

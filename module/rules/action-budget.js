@@ -21,10 +21,11 @@ export async function incrementFatigue(actor, amount = 1) {
 
 // ── Définition des slots ──────────────────────────────────────────────────
 export const SLOT_DEFS = {
-  deplacement: { label: "Déplacement", icon: "🏃", max: 1 },
-  attaque:     { label: "Attaque",     icon: "⚔️",  max: 1 },
-  sortNormal:  { label: "Sort normal", icon: "✨", max: 1 },
-  sortRapide:  { label: "Sort rapide", icon: "⚡",  max: 2 }
+  deplacement:  { label: "Déplacement",  icon: "🏃", max: 1 },
+  attaque:      { label: "Attaque",      icon: "⚔️",  max: 1 },
+  sortNormal:   { label: "Sort normal",  icon: "✨", max: 1 },
+  sortRapide:   { label: "Sort rapide",  icon: "⚡",  max: 2 },
+  recuperation: { label: "Récupération", icon: "🧘", max: 1 }
 };
 
 const TOTAL_SLOTS = 2;
@@ -32,11 +33,12 @@ const TOTAL_SLOTS = 2;
 // ── Helpers internes ──────────────────────────────────────────────────────
 function freshBudget() {
   return {
-    slotsTotal:  { max: TOTAL_SLOTS, used: 0, pending: 0 },
-    deplacement: { max: 1, used: 0, pending: 0 },
-    attaque:     { max: 1, used: 0, pending: 0 },
-    sortNormal:  { max: 1, used: 0, pending: 0 },
-    sortRapide:  { max: 2, used: 0, pending: 0 }
+    slotsTotal:   { max: TOTAL_SLOTS, used: 0, pending: 0 },
+    deplacement:  { max: 1, used: 0, pending: 0 },
+    attaque:      { max: 1, used: 0, pending: 0 },
+    sortNormal:   { max: 1, used: 0, pending: 0 },
+    sortRapide:   { max: 2, used: 0, pending: 0 },
+    recuperation: { max: 1, used: 0, pending: 0 }
   };
 }
 
