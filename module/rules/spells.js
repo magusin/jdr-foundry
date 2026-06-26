@@ -408,7 +408,12 @@ function summarizeMods(mods = {}) {
     scoreArmure: "Score Armure",
     scoreResistance: "Score Résistance",
     armureFixe: "Armure fixe",
-    resistanceFixe: "Résistance fixe"
+    resistanceFixe: "Résistance fixe",
+    podsMax: "Pods max",
+    initiativeMod: "Initiative",
+    toucherPhysique: "Toucher physique",
+    toucherMagique: "Toucher magique",
+    fatigueMax: "Fatigue max"
   }[k] ?? k);
 
   const parts = [];

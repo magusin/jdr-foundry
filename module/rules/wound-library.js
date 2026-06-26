@@ -8,24 +8,24 @@
 export const WOUND_LIBRARY = {
   bras_blesse: {
     key: "bras_blesse", label: "Bras blessé", icon: "icons/svg/blood.svg",
-    mods: { "principales.force": { flat: 0, pct: -30 } }
+    mods: { "force": { flat: 0, pct: -30 } }
   },
   jambe_blessee: {
     key: "jambe_blessee", label: "Jambe blessée", icon: "icons/svg/blood.svg",
-    mods: { "move.vitesse": { flat: -2, pct: 0 } }
+    mods: { "vitesse": { flat: -2, pct: 0 } }
   },
   torse_blesse: {
     key: "torse_blesse", label: "Torse blessé", icon: "icons/svg/wound.svg",
-    mods: { "ressources.pvMax": { flat: 0, pct: -15 } }
+    mods: { "pvMax": { flat: 0, pct: -15 } }
   },
   tete_blessee: {
     key: "tete_blessee", label: "Tête blessée", icon: "icons/svg/wound.svg",
     mods: {
-      "principales.force": { flat: 0, pct: -20 },
-      "principales.intelligence": { flat: 0, pct: -20 },
-      "principales.dexterite": { flat: 0, pct: -20 },
-      "principales.acuite": { flat: 0, pct: -20 },
-      "principales.endurance": { flat: 0, pct: -20 }
+      "force": { flat: 0, pct: -20 },
+      "intelligence": { flat: 0, pct: -20 },
+      "dexterite": { flat: 0, pct: -20 },
+      "acuite": { flat: 0, pct: -20 },
+      "endurance": { flat: 0, pct: -20 }
     }
   },
   saignement: {

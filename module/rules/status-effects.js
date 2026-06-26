@@ -486,7 +486,10 @@ const KEY_TO_BUCKET = {
   toucherMagique: ["combat", "toucherMagique"],
 
   // ressources — fatigue max (équipement/buffs)
-  fatigueMax: ["ressources", "fatigueMax"]
+  fatigueMax: ["ressources", "fatigueMax"],
+
+  // charge — capacité de transport (le sheet l'offrait déjà sans qu'il soit câblé)
+  podsMax: ["charge", "podsMax"]
 };
 
 export function sumActiveEffectMods(actor) {

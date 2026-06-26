@@ -29,7 +29,7 @@ export const EFFECT_LIBRARY = {
     key: "ardeur", label: "Ardeur", icon: "icons/svg/explosion.svg", tag: "feu",
     defaultDuration: 3,
     dot: null,
-    mods: { "principales.force": { flat: 0, pct: 20 } }
+    mods: { "force": { flat: 0, pct: 20 } }
   },
 
   // ── AIR ──────────────────────────────────────────────────────────────
@@ -37,13 +37,13 @@ export const EFFECT_LIBRARY = {
     key: "bourrasque", label: "Bourrasque", icon: "icons/svg/wing.svg", tag: "air",
     defaultDuration: 2,
     dot: null,
-    mods: { "principales.dexterite": { flat: 0, pct: -20 } }
+    mods: { "dexterite": { flat: 0, pct: -20 } }
   },
   legerete: {
     key: "legerete", label: "Légèreté", icon: "icons/svg/wind.svg", tag: "air",
     defaultDuration: 3,
     dot: null,
-    mods: { "move.vitesse": { flat: 1, pct: 0 }, "initiative.mod": { flat: 0, pct: 15 } }
+    mods: { "vitesse": { flat: 1, pct: 0 }, "initiativeMod": { flat: 0, pct: 15 } }
   },
 
   // ── EAU ──────────────────────────────────────────────────────────────
@@ -65,13 +65,13 @@ export const EFFECT_LIBRARY = {
     key: "gel", label: "Gel", icon: "icons/svg/ice-aura.svg", tag: "glace",
     defaultDuration: 2,
     dot: { perTick: 0 },
-    mods: { "move.vitesse": { flat: -1, pct: 0 } }
+    mods: { "vitesse": { flat: -1, pct: 0 } }
   },
   carapace_glace: {
     key: "carapace_glace", label: "Carapace de Glace", icon: "icons/svg/frozen.svg", tag: "glace",
     defaultDuration: 3,
     dot: null,
-    mods: { "defenses.armureFixe": { flat: 3, pct: 0 } }
+    mods: { "armureFixe": { flat: 3, pct: 0 } }
   },
 
   // ── ÉCLAIR ───────────────────────────────────────────────────────────
@@ -79,13 +79,13 @@ export const EFFECT_LIBRARY = {
     key: "choc", label: "Choc électrique", icon: "icons/svg/lightning.svg", tag: "eclair",
     defaultDuration: 1,
     dot: { perTick: 1 },
-    mods: { "initiative.mod": { flat: 0, pct: -25 } }
+    mods: { "initiativeMod": { flat: 0, pct: -25 } }
   },
   reflexes_foudroyants: {
     key: "reflexes_foudroyants", label: "Réflexes Foudroyants", icon: "icons/svg/lightning.svg", tag: "eclair",
     defaultDuration: 3,
     dot: null,
-    mods: { "initiative.mod": { flat: 0, pct: 25 }, "principales.dexterite": { flat: 0, pct: 10 } }
+    mods: { "initiativeMod": { flat: 0, pct: 25 }, "dexterite": { flat: 0, pct: 10 } }
   },
 
   // ── TERRE ────────────────────────────────────────────────────────────
@@ -93,13 +93,13 @@ export const EFFECT_LIBRARY = {
     key: "enlisement", label: "Enlisement", icon: "icons/svg/mountain.svg", tag: "terre",
     defaultDuration: 2,
     dot: null,
-    mods: { "move.vitesse": { flat: -1, pct: 0 }, "principales.dexterite": { flat: 0, pct: -15 } }
+    mods: { "vitesse": { flat: -1, pct: 0 }, "dexterite": { flat: 0, pct: -15 } }
   },
   peau_de_roc: {
     key: "peau_de_roc", label: "Peau de Roc", icon: "icons/svg/stoned.svg", tag: "terre",
     defaultDuration: 3,
     dot: null,
-    mods: { "principales.endurance": { flat: 0, pct: 15 }, "defenses.scoreArmure": { flat: 0, pct: 10 } }
+    mods: { "endurance": { flat: 0, pct: 15 }, "scoreArmure": { flat: 0, pct: 10 } }
   }
 };
 

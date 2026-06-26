@@ -616,6 +616,11 @@ EFFETS (GM = inputs/select, Joueur = texte gras)
                   <optgroup label="Autres">
                     <option value="vitesse" {{#if (eq m.stat "vitesse")}}selected{{/if}}>Vitesse</option>
                     <option value="podsMax" {{#if (eq m.stat "podsMax")}}selected{{/if}}>Pods max</option>
+                    <option value="initiativeMod" {{#if (eq m.stat "initiativeMod")}}selected{{/if}}>Initiative</option>
+                  </optgroup>
+                  <optgroup label="Toucher">
+                    <option value="toucherPhysique" {{#if (eq m.stat "toucherPhysique")}}selected{{/if}}>Toucher physique</option>
+                    <option value="toucherMagique"  {{#if (eq m.stat "toucherMagique")}}selected{{/if}}>Toucher magique</option>
                   </optgroup>
                 </select>
 

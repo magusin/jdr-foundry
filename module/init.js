@@ -41,6 +41,7 @@ import { appendToCampaignJournal } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
 import * as WeatherLibrary from "./rules/weather-library.js";
 import * as Reputation from "./rules/reputation.js";
+import * as TacticalLibrary from "./rules/tactical-library.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -418,6 +419,9 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.reputation : réputation région/vendeur + tendance marché
     game.rpg.reputation = Reputation;
+
+    // ✅ game.rpg.tactical : positions tactiques (couverture, flanc, angle mort)
+    game.rpg.tactical = TacticalLibrary;
 
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
     game.rpg.journal = { appendToCampaignJournal };
