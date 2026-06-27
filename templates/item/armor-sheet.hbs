@@ -124,6 +124,18 @@
       </section>
     {{/if}}
 
+    {{#if canEdit}}
+      <section>
+        <h2>Recette associée</h2>
+        <div class="resource-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div><label>UUID</label><input type="text" name="system.recetteAssociee.uuid" value="{{system.recetteAssociee.uuid}}"
+            placeholder="Compendium...Item.xxxx"/></div>
+          <div><label>Nom (info)</label><input type="text" name="system.recetteAssociee.name" value="{{system.recetteAssociee.name}}"/></div>
+        </div>
+        <small style="opacity:0.8;">Indique quelle recette permet de forger cette armure (purement informatif).</small>
+      </section>
+    {{/if}}
+
     {{!-- RÉSISTANCES (MJ ONLY) --}}
     {{#if canEdit}}
       <hr/>

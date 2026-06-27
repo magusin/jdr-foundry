@@ -147,6 +147,10 @@
         "equipe": false,
         "effects": [],
         "resistances": [],
+        "recetteAssociee": {
+          "uuid": "",
+          "name": ""
+        },
         "bonus": {
           "force": 0,
           "intelligence": 0,
