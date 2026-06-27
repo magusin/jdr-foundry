@@ -1,6 +1,7 @@
 // systems/rpg/module/sheets/monster-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { setupActorItemDrop } from "./drop-helper.js";
+import { randomizeMonster } from "../monster-gen.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -216,6 +217,25 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         for (const lvl of levels) ensureBand(clone, lvl);
         await this.document.update({ "system.gen.bands": clone.gen.bands });
         this.render({ force: false });
+      });
+    });
+
+    // ── Régénérer les stats du monstre (bouton manquant jusqu'ici) ──
+    qsAll("[data-action='rerollMonster']").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        if (!game.user.isGM) return;
+        btn.disabled = true;
+        try {
+          await randomizeMonster(this.document);
+          ui.notifications?.info?.(`${this.document.name} régénéré.`);
+          this.render({ force: true });
+        } catch (e) {
+          console.error("[RPG] rerollMonster:", e);
+          ui.notifications?.error?.(`Erreur régénération : ${e?.message ?? e}`);
+        } finally {
+          btn.disabled = false;
+        }
       });
     });
 

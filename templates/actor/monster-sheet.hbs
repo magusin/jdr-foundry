@@ -45,15 +45,17 @@
               <span>Butin (RollTable UUID)</span>
               <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}" placeholder="..." />
             </div>
-            <div class="mm-line">
-              <span>Vitesse (base)</span>
-              <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.deplacement.vitesse}}</span>
-            </div>
+          </div>
+          {{#if showGenConfig}}
+          <button type="button" class="btn" data-action="rerollMonster" style="margin-top:10px;width:100%;">
+            🎲 Régénérer les stats (selon le niveau actuel)
+          </button>
+          <small class="muted">Retire de nouvelles valeurs aléatoires dans les bands du niveau ci-dessus.</small>
+          {{/if}}
         </section>
 
         <section class="card">
-          <h2>Ressources</h2>
+          <h2>Combat — PV</h2>
           <div class="resource-block">
             <div class="resource-head">
               <div class="resource-title">PV</div>
@@ -65,13 +67,8 @@
               <input class="num sm" type="number" name="system.ressources.pv.valeur"
                 value="{{system.ressources.pv.valeur}}" min="0" />
               <span class="sep">/</span>
-              <input class="num sm" type="number" name="system.base.pvMax" value="{{system.base.pvMax}}" min="1" />
-              <span class="muted" style="margin-left:8px;">eff max: {{system.ressources.pv.max}}</span>
-            </div>
-            <div class="mm-line">
-              <span>Régén PV (base)</span>
-              <input class="regen-input" type="number" name="system.base.regenPv" value="{{system.base.regenPv}}" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.regeneration.pv}}</span>
+              <b style="margin-left:6px;">{{system.ressources.pv.max}}</b>
+              <span class="muted" style="margin-left:8px;">(base {{system.base.pvMax}})</span>
             </div>
             <div class="hp-btn-row">
               <button type="button" class="btn" data-action="hpPlus" data-delta="5">+5 PV</button>
@@ -83,68 +80,84 @@
         </section>
 
         <section class="card">
-          <h2>Caractéristiques</h2>
+          <h2>Caractéristiques (valeurs effectives)</h2>
           <div class="grid-mm">
-            <div class="stat-total" data-stat="force">
-              <span>Force</span>
-              <input type="number" name="system.principales.force" value="{{system.principales.force}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.force}}</span>
-            </div>
-            <div class="stat-total" data-stat="intelligence">
-              <span>Intelligence</span>
-              <input type="number" name="system.principales.intelligence" value="{{system.principales.intelligence}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.intelligence}}</span>
-            </div>
-            <div class="stat-total" data-stat="dexterite">
-              <span>Dextérité</span>
-              <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.dexterite}}</span>
-            </div>
-            <div class="stat-total" data-stat="acuite">
-              <span>Acuité</span>
-              <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.acuite}}</span>
-            </div>
-            <div class="stat-total" data-stat="endurance">
-              <span>Endurance</span>
-              <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.principales.endurance}}</span>
-            </div>
+            <div class="mm-line"><span>Force</span><b>{{system.derived.effective.principales.force}}</b></div>
+            <div class="mm-line"><span>Intelligence</span><b>{{system.derived.effective.principales.intelligence}}</b></div>
+            <div class="mm-line"><span>Dextérité</span><b>{{system.derived.effective.principales.dexterite}}</b></div>
+            <div class="mm-line"><span>Acuité</span><b>{{system.derived.effective.principales.acuite}}</b></div>
+            <div class="mm-line"><span>Endurance</span><b>{{system.derived.effective.principales.endurance}}</b></div>
+          </div>
+          <small class="muted">Tirées par la génération aléatoire — modifiables dans "Ajustement manuel" ci-dessous si besoin.</small>
         </section>
 
         <section class="card">
-          <h2>Défenses</h2>
+          <h2>Défenses (valeurs effectives)</h2>
           <div class="grid-mm">
-            <div class="mm-line">
-              <span>Armure fixe (base)</span>
-              <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.armureFixe}}</span>
-            </div>
-            <div class="mm-line">
-              <span>Résistance fixe (base)</span>
-              <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.resistanceFixe}}</span>
-            </div>
-            <div class="mm-line">
-              <span>Score Armure (base)</span>
-              <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.scoreArmure}}</span>
-            </div>
-            <div class="mm-line">
-              <span>Réduction phys.</span>
-              <input type="text" value="{{system.derived.reductions.physiquePct}}%" disabled />
-            </div>
-            <div class="mm-line">
-              <span>Score Résistance (base)</span>
-              <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}" min="0" />
-              <span class="muted" style="margin-left:8px;">eff: {{system.derived.effective.defenses.scoreResistance}}</span>
-            </div>
-            <div class="mm-line">
-              <span>Réduction mag.</span>
-              <input type="text" value="{{system.derived.reductions.magiquePct}}%" disabled />
-            </div>
+            <div class="mm-line"><span>Armure fixe</span><b>{{system.derived.effective.defenses.armureFixe}}</b></div>
+            <div class="mm-line"><span>Résistance fixe</span><b>{{system.derived.effective.defenses.resistanceFixe}}</b></div>
+            <div class="mm-line"><span>Score Armure</span><b>{{system.derived.effective.defenses.scoreArmure}}</b></div>
+            <div class="mm-line"><span>Score Résistance</span><b>{{system.derived.effective.defenses.scoreResistance}}</b></div>
+            <div class="mm-line"><span>Réduction phys.</span><b>{{system.derived.reductions.physiquePct}}%</b></div>
+            <div class="mm-line"><span>Réduction mag.</span><b>{{system.derived.reductions.magiquePct}}%</b></div>
           </div>
         </section>
+
+        <details class="card" style="grid-column: 1 / -1;">
+          <summary style="cursor:pointer;font-weight:600;padding:4px 0;">⚙️ Ajustement manuel (avancé — écrase les valeurs tirées par la génération)</summary>
+          <div class="grid-mm" style="margin-top:10px;">
+            <div class="mm-line">
+              <span>Vitesse (base)</span>
+              <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.deplacement.vitesse}}</span>
+            </div>
+            <div class="mm-line">
+              <span>PV max (base)</span>
+              <input class="num sm" type="number" name="system.base.pvMax" value="{{system.base.pvMax}}" min="1" />
+            </div>
+            <div class="mm-line">
+              <span>Régén PV (base)</span>
+              <input class="regen-input" type="number" name="system.base.regenPv" value="{{system.base.regenPv}}" />
+              <span class="muted" style="margin-left:8px;">eff: {{system.regeneration.pv}}</span>
+            </div>
+            <div class="mm-line">
+              <span>Force</span>
+              <input type="number" name="system.principales.force" value="{{system.principales.force}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Intelligence</span>
+              <input type="number" name="system.principales.intelligence" value="{{system.principales.intelligence}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Dextérité</span>
+              <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Acuité</span>
+              <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Endurance</span>
+              <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Armure fixe</span>
+              <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Résistance fixe</span>
+              <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Score Armure</span>
+              <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span>Score Résistance</span>
+              <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}" min="0" />
+            </div>
+          </div>
+        </details>
 
         <section class="panel-states" style="grid-column: 1 / -1;">
           <header class="panel-title">
