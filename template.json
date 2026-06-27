@@ -184,21 +184,22 @@
       ],
       "poids": 1,
       "emplacement": "mainDroite",
+      "twoHands": false,
       "difficulte": 0,
-      "degats": "1d6",
       "livraison": "physique",
       "portee": 1,
-      "degatsFixes": 0,
-      "degatsAdd": 0,
+      "damage": {
+        "dice": "1d6",
+        "flat": 0,
+        "scaling": { "stat": "force", "per": 10, "perStep": 1 }
+      },
       "crit": {
         "mode": "max+die",
-        "extraDice": "1d6",
-        "extraFlat": 0
-      },
-      "scaling": {
-        "stat": "force",
-        "mode": "sqrt",
-        "coef": 1
+        "damage": {
+          "dice": "1d6",
+          "flat": 0,
+          "scaling": { "stat": "force", "per": 10, "perStep": 0 }
+        }
       },
       "effet": ""
     },

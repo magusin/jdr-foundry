@@ -24,6 +24,13 @@
       "path": "packs/macros/macros.db",
       "type": "Macro",
       "system": "rpg"
+    },
+    {
+      "name": "items-reference",
+      "label": "JDR — Équipement de référence",
+      "path": "packs/items/items.db",
+      "type": "Item",
+      "system": "rpg"
     }
   ],
   "documentTypes": {

@@ -34,9 +34,10 @@ export class RPGItem extends Item {
       };
 
       // ── Crit ──────────────────────────────────────────────────────
-      // Normalise extraDice / extraDie → un seul champ "extraDice"
-      const critDie   = String(crit.extraDice ?? crit.extraDie ?? crit.die ?? "").trim();
-      const critFlat  = Number(crit.extraFlat ?? 0) || 0;
+      // Structure réelle soumise par le formulaire : crit.damage.{dice,flat,scaling}
+      const critDmg   = crit.damage ?? {};
+      const critDie   = String(critDmg.dice ?? crit.extraDice ?? crit.extraDie ?? "").trim();
+      const critFlat  = Number(critDmg.flat ?? crit.extraFlat ?? 0) || 0;
       const critMode  = String(crit.mode ?? "max+die");
 
       sys.derived.crit = {
@@ -95,9 +96,20 @@ export class RPGItem extends Item {
     // ── 3) Crit AVANT mitigation ──────────────────────────────────
     let critBonus = 0;
     if (isCrit) {
-      const mode      = String(crit.mode ?? crit.extraDice ? "max+die" : "max");
-      const critDie   = String(crit.extraDice ?? crit.extraDie ?? "").trim();
-      const critFlat  = Number(crit.extraFlat ?? 0) || 0;
+      // ✅ Le formulaire d'arme soumet crit.damage.{dice,flat,scaling.stat/per/perStep}
+      // (même structure riche que les dégâts normaux, scaling possible sur le crit).
+      // Repli sur l'ancienne structure plate crit.extraDice/extraFlat si présente
+      // (objets créés avant cette correction).
+      const critDmg     = crit.damage ?? {};
+      const mode        = String(crit.mode ?? "max+die");
+      const critDie     = String(critDmg.dice ?? crit.extraDice ?? crit.extraDie ?? "").trim();
+      const critFlat    = Number(critDmg.flat ?? crit.extraFlat ?? 0) || 0;
+      const critSc      = critDmg.scaling ?? {};
+      const critStatKey = String(critSc.stat ?? statKey);
+      const critPer     = Math.max(1, Number(critSc.per ?? per) || per);
+      const critPerStep = Number(critSc.perStep ?? 0) || 0;
+      const critStatVal = Number(effP?.[critStatKey] ?? 0) || 0;
+      const critStatBonus = critPerStep ? Math.floor(Math.max(0, critStatVal) / critPer) * critPerStep : 0;
 
       if (mode === "max+die") {
         // On remplace le dé par son max + on tire un dé bonus
@@ -106,10 +118,10 @@ export class RPGItem extends Item {
           ? await (new Roll(critDie)).evaluate()
           : await (new Roll(die)).evaluate();
 
-        critBonus = (faces - roll.total) + critRoll.total + critFlat;
+        critBonus = (faces - roll.total) + critRoll.total + critFlat + critStatBonus;
       } else {
         // mode "double" ou autre : on double le brut
-        critBonus = rawBrut + critFlat;
+        critBonus = rawBrut + critFlat + critStatBonus;
       }
     }
 
