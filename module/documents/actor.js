@@ -353,7 +353,7 @@ export class RPGActor extends Actor {
     sys.ressources.fatigue = sys.ressources.fatigue ?? { valeur: 0, max: 10 };
     const FATIGUE_PER_END_STEP = 20;
     const fatigueFromEnd = Math.floor((Number(effP.endurance) || 0) / FATIGUE_PER_END_STEP);
-    let fatigueMax = 10 + fatigueFromEnd + (Number(bonus.ressources.fatigueMax ?? 0) || 0);
+    let fatigueMax = Number(sys.base.fatigueMax ?? 10) + fatigueFromEnd + (Number(bonus.ressources.fatigueMax ?? 0) || 0);
     fatigueMax += Number(flat?.ressources?.fatigueMax ?? 0) || 0;
     fatigueMax = applyPct(fatigueMax, pct?.ressources?.fatigueMax);
     fatigueMax = Math.max(1, Math.floor(fatigueMax));
@@ -383,14 +383,17 @@ export class RPGActor extends Actor {
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));
 
-    // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire) : équipement
-    // + sorts/effets + malus d'épuisement. Consommé par combat.js > computeTN.
-    sys.derived.toucherPhysique = (Number(bonus.combat?.toucherPhysique ?? 0) || 0)
+    // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire) : base innée
+    // (monstres précis/maladroits) + équipement + sorts/effets + épuisement.
+    // Consommé par combat.js > computeTN.
+    sys.derived.toucherPhysique = Number(sys.base.toucherPhysique ?? 0)
+      + (Number(bonus.combat?.toucherPhysique ?? 0) || 0)
       + (Number(flat?.combat?.toucherPhysique ?? 0) || 0) - epuiseToucherMalus;
     sys.derived.toucherPhysique = applyPct(sys.derived.toucherPhysique, pct?.combat?.toucherPhysique);
     sys.derived.toucherPhysique = Math.floor(sys.derived.toucherPhysique);
 
-    sys.derived.toucherMagique = (Number(bonus.combat?.toucherMagique ?? 0) || 0)
+    sys.derived.toucherMagique = Number(sys.base.toucherMagique ?? 0)
+      + (Number(bonus.combat?.toucherMagique ?? 0) || 0)
       + (Number(flat?.combat?.toucherMagique ?? 0) || 0) - epuiseToucherMalus;
     sys.derived.toucherMagique = applyPct(sys.derived.toucherMagique, pct?.combat?.toucherMagique);
     sys.derived.toucherMagique = Math.floor(sys.derived.toucherMagique);

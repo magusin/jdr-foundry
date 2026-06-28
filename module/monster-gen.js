@@ -80,6 +80,17 @@ export async function randomizeMonster(actor) {
   const vitBase = rollClamped(band.vitesse, 3, 3);
   const xpReward = Math.max(0, rollClamped(band.xpReward, 0, 0));
 
+  // ✅ Bandes secondaires (nouveaux systèmes) — fatigue max et toucher inné
+  const fatigueMaxBase = rollClamped(band.fatigueMax, 10, 10);
+  const toucherPhysiqueBase = (() => {
+    const [mn, mx] = getRange(band.toucherPhysique, 0, 0);
+    return randInt(mn, mx); // peut être négatif (monstre maladroit), pas de clamp à 0
+  })();
+  const toucherMagiqueBase = (() => {
+    const [mn, mx] = getRange(band.toucherMagique, 0, 0);
+    return randInt(mn, mx);
+  })();
+
   // =========================
   // 2) PV “actuels” au spawn = PV MAX FINAL (base + scaling END)
   //    ⚠️ doit matcher actor.js (PV_PER_END_STEP=5, PV_PER_END_GAIN=1)
@@ -115,6 +126,9 @@ export async function randomizeMonster(actor) {
     "system.base.pvMax": pvBase,
     "system.base.regenPv": regenPvBase,
     "system.base.vitesse": vitBase,
+    "system.base.fatigueMax": fatigueMaxBase,
+    "system.base.toucherPhysique": toucherPhysiqueBase,
+    "system.base.toucherMagique": toucherMagiqueBase,
 
     // PV du token : full life (sur le max final)
     "system.ressources.pv.max": pvMaxFinal,

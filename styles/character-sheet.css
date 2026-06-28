@@ -629,3 +629,162 @@
   
   
   
+/* ════════════════════════════════════════════════════════════════
+   Polish visuel général — cartes, sections, boutons
+   ════════════════════════════════════════════════════════════════ */
+
+.rpg-sheet .card {
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.15s ease;
+}
+
+.rpg-sheet .card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+
+.rpg-sheet .card h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-light-2);
+}
+
+.rpg-sheet .btn {
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+
+.rpg-sheet .btn:hover {
+  filter: brightness(1.12);
+}
+
+.rpg-sheet .btn:active {
+  transform: scale(0.97);
+}
+
+/* États (buffs/debuffs) — accent visuel par type */
+.rpg-sheet .panel-states .state-row {
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border-left: 3px solid var(--color-border-light-2);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Génération aléatoire (monstre) — cartes par niveau au lieu
+   d'une table géante de 27 colonnes
+   ════════════════════════════════════════════════════════════════ */
+
+.gen-card h2 {
+  border-bottom: none;
+}
+
+.gen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+}
+
+.gen-toolbar label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gen-toolbar input[type="text"] {
+  flex: 1;
+  min-width: 80px;
+}
+
+.gen-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gen-level-card {
+  border: 1px solid var(--color-border-light-2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+
+.gen-level-card summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 15px;
+  padding: 10px 14px;
+  background: rgba(120, 80, 200, 0.12);
+  list-style: none;
+  user-select: none;
+}
+
+.gen-level-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.gen-level-card summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.gen-level-card[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.gen-level-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gen-group h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.gen-pair-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.gen-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.gen-pair label {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.gen-pair input.num.sm {
+  width: 48px;
+  text-align: center;
+  padding: 2px 4px;
+}
+
+.gen-pair .sep {
+  opacity: 0.5;
+  font-size: 11px;
+}

@@ -26,6 +26,9 @@ function ensureBand(system, lvl) {
     regenPv: cur.regenPv ?? [0, 0],
     vitesse: cur.vitesse ?? [0, 0],
     xpReward: cur.xpReward ?? [0, 0],
+    fatigueMax: cur.fatigueMax ?? [10, 10],
+    toucherPhysique: cur.toucherPhysique ?? [0, 0],
+    toucherMagique: cur.toucherMagique ?? [0, 0],
   };
   next.stats.force = next.stats.force ?? [0, 0];
   next.stats.intelligence = next.stats.intelligence ?? [0, 0];
@@ -57,7 +60,10 @@ function getBand(system, lvl) {
     pv: rangeArrToObj(b.pv),
     regenPv: rangeArrToObj(b.regenPv),
     vitesse: rangeArrToObj(b.vitesse),
-    xpReward: rangeArrToObj(b.xpReward)
+    xpReward: rangeArrToObj(b.xpReward),
+    fatigueMax: rangeArrToObj(b.fatigueMax),
+    toucherPhysique: rangeArrToObj(b.toucherPhysique),
+    toucherMagique: rangeArrToObj(b.toucherMagique)
   };
 }
 
