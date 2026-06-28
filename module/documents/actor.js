@@ -134,6 +134,13 @@ export class RPGActor extends Actor {
     const baseReg = sys.regeneration ?? {};
     const baseMove = sys.deplacement ?? {};
 
+    // ✅ Fix dérive vitesse : sys.deplacement.vitesse est le champ DÉRIVÉ (réécrit
+    // plus bas), jamais une vraie base. La vraie base éditable vit dans sys.base.vitesse
+    // — initialisée une fois depuis l'ancienne valeur pour ne rien perdre.
+    if (sys.base.vitesse === undefined) {
+      sys.base.vitesse = Number(baseMove.vitesse ?? 3) || 3;
+    }
+
     // BONUS items / sorts passifs + skills
     const bonusItems = sumBonuses(this);
     const bonusSkills = sumSkillBonuses(this);
@@ -371,7 +378,7 @@ export class RPGActor extends Actor {
 
     // move
     sys.deplacement = sys.deplacement ?? {};
-    const baseVit = (Number(baseMove.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
+    const baseVit = (Number(sys.base.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
     let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus;
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));

@@ -229,7 +229,6 @@
       "templates": ["baseItem", "equipBonus", "details"],
     
       "speed": "normal",
-      "alwaysActive": false,
       "range": { "min": 0, "max": 6 },
       "targetCount": { "min": 1, "max": 1 },
       "fatigueCost": 1,
@@ -239,18 +238,23 @@
       "livraison": "magique",
     
       "cooldown": { "max": 0, "restant": 0 },
-      "aura": { "active": false },
+      "aura": { "active": false, "target": "allies", "key": "", "range": { "min": 0, "max": 3 } },
     
       "damage": {
+        "enabled": false,
         "flat": 0,
         "dice": "1d6",
-        "scaling": { "stat": "intelligence", "per": 10, "perStep": 1 },
-        "crit": { "mode": "max+die", "extraDice": "1d6", "extraFlat": 0 }
+        "scaling": { "stat": "intelligence", "per": 10, "perStep": 1 }
+      },
+      "damageCrit": {
+        "enabled": false,
+        "flat": 0,
+        "dice": "1d6",
+        "scaling": { "stat": "intelligence", "per": 10, "perStep": 0 }
       },
     
-      "effectsUI": [], 
-      "description": "",
-      "effects": []
+      "effectsUI": [],
+      "description": ""
     },
     "skill": {
       "templates": [

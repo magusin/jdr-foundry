@@ -38,9 +38,10 @@
           </div>
 
           <div class="meta">
-            <label>Vitesse (cases/tour)</label>
-            <input type="number" name="system.deplacement.vitesse" value="{{system.deplacement.vitesse}}" min="0" {{#if
+            <label>Vitesse (base, cases/tour)</label>
+            <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
               flags.readOnly}}disabled{{/if}} />
+            <small class="muted">Effective : {{system.deplacement.vitesse}}</small>
           </div>
         </div>
 
@@ -423,6 +424,40 @@
           </div>
         </section>
 
+        <section class="card">
+          <h2>Combat</h2>
+          <div class="stats-grid">
+            <div class="stat-row">
+              <label>Initiative</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Total</small>
+                  <input type="text" value="{{#if (gte system.derived.initiativeMod 0)}}+{{/if}}{{system.derived.initiativeMod}}" disabled />
+                </div>
+              </div>
+            </div>
+            <div class="stat-row">
+              <label>Toucher physique</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Bonus au TN</small>
+                  <input type="text" value="{{#if (gte system.derived.toucherPhysique 0)}}+{{/if}}{{system.derived.toucherPhysique}}" disabled />
+                </div>
+              </div>
+            </div>
+            <div class="stat-row">
+              <label>Toucher magique</label>
+              <div class="stat-cols">
+                <div class="stat-col">
+                  <small class="muted">Bonus au TN</small>
+                  <input type="text" value="{{#if (gte system.derived.toucherMagique 0)}}+{{/if}}{{system.derived.toucherMagique}}" disabled />
+                </div>
+              </div>
+            </div>
+          </div>
+          <small class="muted">Positif = plus facile à toucher (réduit le TN nécessaire), négatif = plus dur. Vient de l'équipement, des sorts/effets, de la couverture ou de l'épuisement.</small>
+        </section>
+
         <section class="panel-states" style="grid-column: 1 / -1;">
           <header class="panel-title">
             <h2>États</h2>
@@ -463,7 +498,12 @@
                 {{else}}
                 {{#if e.dot.flat}}
                 <div class="muted" style="margin-top:4px;">
-                  DOT: {{e.dot.flat}} / tour
+                  {{#if (gte e.dot.flat 0)}}Dégâts/tour: {{e.dot.flat}}{{else}}Soin/tour: {{e.dot.flat}}{{/if}}
+                </div>
+                {{/if}}
+                {{#if e.dot.fatiguePerTick}}
+                <div class="muted" style="margin-top:4px;">
+                  {{#if (gte e.dot.fatiguePerTick 0)}}Épuise: +{{e.dot.fatiguePerTick}} fatigue/tour{{else}}Repose: {{e.dot.fatiguePerTick}} fatigue/tour{{/if}}
                 </div>
                 {{/if}}
                 {{/if}}
@@ -676,6 +716,7 @@
               <img src="{{it.img}}" alt="" />
               <a class="item-edit">{{it.name}}</a>
               <small>Utilisations: {{it.system.utilisations}}</small>
+              {{#if it.system.effet}}<div class="muted" style="font-size:11px;margin-top:2px">{{it.system.effet}}</div>{{/if}}
             </span>
 
             <span class="actions">

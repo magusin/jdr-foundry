@@ -120,14 +120,21 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const labelMap = {
       force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
       scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
-      pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana", vitesse: "Vitesse"
+      pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana", vitesse: "Vitesse",
+      toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", initiativeMod: "Initiative",
+      fatigueMax: "Fatigue max", podsMax: "Pods max"
     };
 
     const states = Array.isArray(sys?.etatsActifs) ? foundry.utils.deepClone(sys.etatsActifs) : [];
     for (const e of states) {
       const parts = [];
       const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-      if (dot > 0) parts.push(`DOT ${dot}`);
+      if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
+      else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
+
+      const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
+      if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
+      else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
       const mods = e?.mods ?? {};
       for (const [k, v] of Object.entries(mods)) {
         const flat = Number(v?.flat ?? 0) || 0;

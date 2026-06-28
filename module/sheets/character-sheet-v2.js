@@ -21,7 +21,12 @@ const LABELS = {
   scoreArmure: "Score Armure",
   scoreResistance: "Score Résistance",
   armureFixe: "Armure fixe",
-  resistanceFixe: "Résistance fixe"
+  resistanceFixe: "Résistance fixe",
+  toucherPhysique: "Toucher physique",
+  toucherMagique: "Toucher magique",
+  initiativeMod: "Initiative",
+  fatigueMax: "Fatigue max",
+  podsMax: "Pods max"
 };
 
 // ⚠️ soit tu recopies ta fonction normalizeState complète depuis le V1,
@@ -349,7 +354,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const parts = [];
 
       const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-      if (dot > 0) parts.push(`DOT ${dot}`);
+      if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
+      else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
+
+      const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
+      if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
+      else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
 
       const mods = e?.mods ?? {};
       const modsTxt = Object.entries(mods)

@@ -56,7 +56,10 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     ctx.isReadOnly = !ctx.canEdit;
 
     // defaults
+    ctx.system.qte = n(ctx.system.qte, 1);
     ctx.system.poids = n(ctx.system.poids, 0);
+    ctx.system.utilisations = n(ctx.system.utilisations, 0);
+    ctx.system.effet = String(ctx.system.effet ?? "");
     ctx.system.description = String(ctx.system.description ?? "");
 
     ctx.system.prix = ctx.system.prix ?? { cuivre: 0, argent: 0, or: 0 };
@@ -74,7 +77,9 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     const expanded = foundry.utils.expandObject(raw);
 
     // normalise numbers
+    if (expanded?.system?.qte != null) expanded.system.qte = n(expanded.system.qte, 1);
     if (expanded?.system?.poids != null) expanded.system.poids = n(expanded.system.poids, 0);
+    if (expanded?.system?.utilisations != null) expanded.system.utilisations = n(expanded.system.utilisations, 0);
     if (expanded?.system?.prix) {
       expanded.system.prix.cuivre = n(expanded.system.prix.cuivre, 0);
       expanded.system.prix.argent = n(expanded.system.prix.argent, 0);

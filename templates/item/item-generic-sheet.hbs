@@ -21,6 +21,14 @@
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
         <div>
+          <label>Quantité</label>
+          {{#if canEdit}}
+            <input type="number" name="system.qte" value="{{system.qte}}" min="0"/>
+          {{else}}
+            <div><b>{{system.qte}}</b></div>
+          {{/if}}
+        </div>
+        <div>
           <label>Poids (unité)</label>
           {{#if canEdit}}
             <input type="number" name="system.poids" value="{{system.poids}}" min="0" step="0.1"/>
@@ -29,6 +37,28 @@
           {{/if}}
         </div>
       </div>
+
+      {{#if (eq item.type "consumable")}}
+      <hr/>
+      <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+        <div>
+          <label>Utilisations restantes</label>
+          {{#if canEdit}}
+            <input type="number" name="system.utilisations" value="{{system.utilisations}}" min="0"/>
+          {{else}}
+            <div><b>{{system.utilisations}}</b></div>
+          {{/if}}
+        </div>
+        <div>
+          <label>Effet (texte libre, ce que ça fait à l'usage)</label>
+          {{#if canEdit}}
+            <textarea name="system.effet" rows="3">{{system.effet}}</textarea>
+          {{else}}
+            <div style="white-space:pre-wrap;">{{system.effet}}</div>
+          {{/if}}
+        </div>
+      </div>
+      {{/if}}
 
       {{#if canEdit}}
         <hr/>
