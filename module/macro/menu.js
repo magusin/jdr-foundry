@@ -21,6 +21,7 @@
   const getCombatAPI   = () => game.rpg?.combat ?? null;
   const getBudgetAPI   = () => game.rpg?.budget ?? null;
   const getConfirmAPI  = () => game.rpg?.actionConfirm ?? null;
+  const getMoraleAPI   = () => game.rpg?.morale ?? null;
 
   // Helpers budget
   const getCombat       = () => game.combat ?? null;
@@ -33,6 +34,16 @@
     if (game.user.isGM) return true; // le MJ peut toujours agir pour débogage/correction
     return current.actorId === a?.id;
   };
+  const isKO            = (a) => !!a?.system?.derived?.ko;
+  const isCritique      = (a) => !!a?.system?.derived?.critique;
+  const needsMoraleFirst = (a) => {
+    if (isKO(a) || !isCritique(a) || !isMyTurn(a)) return false;
+    const combat = getCombat();
+    if (!combat || !combat.started) return false;
+    const moraleAPI = getMoraleAPI();
+    return !(moraleAPI?.hasRolledMoraleThisTurn(combat));
+  };
+  const canAct = (a) => !isKO(a) && !needsMoraleFirst(a);
   const getBudget       = (a) => {
     const api = getBudgetAPI();
     const cbt = getCombatant(a);
@@ -183,8 +194,10 @@
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
-      const canAttack = myTurn && hasTarget && !atkBlocked && !outOfRange;
+      const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange;
       if (!myTurn) reasons.unshift("Pas ton tour");
+      if (isKO(actor)) reasons.unshift("K.O. (0 PV)");
+      else if (needsMoraleFirst(actor)) reasons.unshift("Jet de moral requis avant d'agir");
       const atkTitle  = reasons.join(" • ");
 
       return `
@@ -280,11 +293,13 @@
       const slotKey  = sSys.speed === "rapide" || sSys.speed === "quick" ? "sortRapide" : "sortNormal";
       const hasSlot  = canUseSlot(actor, slotKey);
       const myTurn   = isMyTurn(actor);
-      const canUse   = myTurn && ready && okMana && okTarget && hasSlot;
+      const canUse   = myTurn && canAct(actor) && ready && okMana && okTarget && hasSlot;
       const cdTxt    = cd.max > 0 ? `${cd.restant}/${cd.max}` : "—";
 
       const reasons = [];
       if (!myTurn) reasons.push("Pas ton tour");
+      if (isKO(actor)) reasons.push("K.O. (0 PV)");
+      else if (needsMoraleFirst(actor)) reasons.push("Jet de moral requis avant d'agir");
       if (!ready) reasons.push(`En recharge (${cd.restant} tour(s))`);
       if (!okMana) reasons.push(`Mana insuffisant (${manaNow}/${manaCost})`);
       if (!hasSlot) reasons.push("Slot épuisé pour ce tour");
@@ -361,6 +376,31 @@
                   </div>`;
         })()}
 
+        <!-- Bannière K.O. -->
+        ${isKO(actor) ? `<div style="background:#444;color:#fff;padding:8px 10px;border-radius:8px;
+                       font-size:12px;font-weight:600;margin-bottom:8px;text-align:center">
+                    💀 K.O. (0 PV) — ne peut plus agir ce tour
+                  </div>` : ""}
+
+        <!-- Bannière jet de moral nécessaire -->
+        ${(() => {
+          const combat = getCombat();
+          if (isKO(actor) || !isCritique(actor) || !isMyTurn(actor)) return "";
+          if (!combat || !combat.started) return "";
+          const moraleAPI = getMoraleAPI();
+          if (!moraleAPI || moraleAPI.hasRolledMoraleThisTurn(combat)) return "";
+          return `<div style="background:#7a4a00;color:#fff;padding:8px 10px;border-radius:8px;
+                       font-size:12px;font-weight:600;margin-bottom:8px;text-align:center">
+                    😰 Danger critique (≤25% PV) — un jet de moral est requis avant d'agir
+                    <div style="margin-top:6px">
+                      <button type="button" data-action="declareMorale"
+                        style="padding:4px 12px;cursor:pointer;border-radius:6px;border:none;background:#fff;color:#7a4a00;font-weight:700">
+                        🎲 Lancer le jet de moral
+                      </button>
+                    </div>
+                  </div>`;
+        })()}
+
         <!-- Budget d'actions -->
         <div class="rpg-budget-widget">
           ${(() => {
@@ -377,7 +417,7 @@
 
         <!-- Bouton déplacement rapide -->
         ${(() => {
-          const hasDepl = isMyTurn(actor) && canUseSlot(actor, "deplacement");
+          const hasDepl = isMyTurn(actor) && canAct(actor) && canUseSlot(actor, "deplacement");
           return `<div style="margin-bottom:6px">
             <button type="button" data-action="move"
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
@@ -392,7 +432,7 @@
         ${(() => {
           const fatigueCur = actor.system?.ressources?.fatigue?.valeur ?? 0;
           const fatigueMax = actor.system?.ressources?.fatigue?.max ?? 10;
-          const hasRecup = isMyTurn(actor) && canUseSlot(actor, "recuperation");
+          const hasRecup = isMyTurn(actor) && canAct(actor) && canUseSlot(actor, "recuperation");
           return `<div style="margin-bottom:6px">
             <button type="button" data-action="recuperation"
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
@@ -818,6 +858,27 @@
           await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
         }
         notify("error", `Erreur déclaration : ${e?.message ?? e}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Lancer le jet de moral (seuil critique) ───────────────────────────
+    $root.on("click.rpgMenu", "[data-action='declareMorale']", async (ev) => {
+      ev.preventDefault();
+      const btn = ev.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      try {
+        const moraleAPI = getMoraleAPI();
+        if (!moraleAPI) { notify("error", "API moral introuvable."); return; }
+        await moraleAPI.declareMoraleCheck(actor);
+        rerenderAll();
+        notify("info", "Jet de moral déclaré — en attente du MJ.");
+      } catch (e) {
+        console.error("[RPG][Menu] Erreur jet de moral :", e);
+        notify("error", `Erreur : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;
       }

@@ -32,7 +32,7 @@ import { resolveEndOfCombat } from "./rules/combat-end.js";
 import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
-import { onPreUpdateToken, onUpdateToken } from "./rules/movement-tracker.js";
+import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
@@ -43,6 +43,8 @@ import * as WeatherLibrary from "./rules/weather-library.js";
 import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
+import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
+import { hasRolledMoraleThisTurn, bindMoraleChatButtons, declareMoraleCheck } from "./rules/morale-resolve.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -427,6 +429,12 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.questGroup : synchronisation des quêtes partagées
     game.rpg.questGroup = QuestGroup;
 
+    // ✅ game.rpg.combatState : K.O., fuite, fin de combat
+    game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };
+
+    // ✅ game.rpg.morale : jet de moral au seuil critique
+    game.rpg.morale = { hasRolledMoraleThisTurn, declareMoraleCheck };
+
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
     game.rpg.journal = { appendToCampaignJournal };
 
@@ -439,6 +447,24 @@ Hooks.once("init", async () => {
       try { bindAttackChatButtons(html, message); } catch (e) { }
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
+      try { bindMoraleChatButtons(html, message); } catch (e) { }
+      try { bindOpportunityAttackButtons(html); } catch (e) { }
+      try {
+        if (message?.flags?.rpg?.combatEndPrompt && game.user.isGM) {
+          const root = html instanceof HTMLElement ? html : html?.[0];
+          const btn = root?.querySelector('[data-action="endCombatNow"]');
+          if (btn && !btn.dataset.bound) {
+            btn.dataset.bound = "1";
+            btn.addEventListener("click", async (ev) => {
+              ev.preventDefault();
+              const combat = game.combats.get(message.flags.rpg.combatId);
+              btn.disabled = true;
+              if (combat) await combat.delete();
+              else ui.notifications?.warn?.("Combat déjà terminé.");
+            });
+          }
+        }
+      } catch (e) { }
     });
 
     // ---------- Aura refresh debounce (centralisé) ----------
@@ -467,6 +493,27 @@ Hooks.once("init", async () => {
       // Suivi budget déplacement (GM seulement)
       try { await onUpdateToken(tokenDoc, changes); } catch (e) {
         console.warn("[RPG] movement-tracker:", e);
+      }
+
+      // ✅ Fuite par sortie de la carte : si un combattant actif quitte les
+      // limites de la scène, on le marque comme ayant fui (compte comme
+      // "hors combat" pour la condition de fin de combat)
+      try {
+        if (game.user.isGM && game.combat?.started) {
+          const scene = tokenDoc.parent;
+          const dims = scene?.dimensions;
+          if (scene && dims) {
+            const outOfBounds = x < 0 || y < 0 || x > dims.width || y > dims.height;
+            if (outOfBounds) {
+              const combatant = game.combat.combatants.find(c => c.actorId === tokenDoc.actor?.id);
+              if (combatant && !combatant.getFlag("rpg", "fled") && !combatant.getFlag("core", "defeated")) {
+                await markFled(game.combat, combatant.id, "sorti de la carte");
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[RPG] flee-on-exit:", e);
       }
     });
 
@@ -636,12 +683,17 @@ Hooks.once("init", async () => {
 
   // ---------------------------
   // Journal : note quand un PJ ou monstre tombe à 0 PV (une seule fois)
+  // + synchronise le flag K.O. natif + vérifie la fin de combat
   // ---------------------------
   const _downLogged = new Set();
   Hooks.on("updateActor", async (actor, changed, options) => {
     if (!game.user.isGM) return;
     const newPv = changed?.system?.ressources?.pv?.valeur;
     if (newPv === undefined) return;
+
+    // Synchronise le flag K.O. (icône crâne du tracker) + vérifie fin de combat
+    await syncDefeatedFlag(actor);
+    if (game.combat) await checkCombatEndCondition(game.combat);
 
     if (Number(newPv) > 0) {
       _downLogged.delete(actor.id); // remonté au-dessus de 0 -> peut re-logger une future chute

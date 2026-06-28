@@ -7,6 +7,7 @@
     "templates": {
       "base": {
         "niveau": 1,
+        "ignoreKO": false,
         "classe": "",
         "xp": {
           "valeur": 0

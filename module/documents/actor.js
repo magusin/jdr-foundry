@@ -406,6 +406,13 @@ export class RPGActor extends Actor {
     const pctHp = clamp(Math.round((pvCur / pvMaxForPct) * 100), 0, 100);
     sys.derived.hp = { pct: pctHp, etat: hpState(pctHp) };
 
+    // ✅ KO : à 0 PV, ne peut plus agir à son tour — sauf exception cochée par le MJ
+    sys.derived.ko = (pvCur <= 0) && !sys.ignoreKO;
+
+    // ✅ Seuil critique (25% PV, comme "À l'agonie") : déclenche un jet de moral
+    // avant de pouvoir agir normalement à son tour
+    sys.derived.critique = (pctHp > 0) && (pctHp <= 25);
+
     // -----------------------
     // 6) InitiativeMod
     // -----------------------

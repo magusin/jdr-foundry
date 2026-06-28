@@ -8,6 +8,9 @@ import {
 
 const SCOPE = "rpg";
 
+const htmlEscapeLocal = (s) =>
+  String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
 // Map temporaire tokenId → {x, y} avant le move (en mémoire client)
 const _prevPos = new Map();
 
@@ -85,7 +88,42 @@ export async function onUpdateToken(tokenDoc, changes) {
     timestamp: Date.now()
   });
 
-  // Message chat pour le MJ
+  // ✅ Désengagement : si ce déplacement éloigne le mobile d'un ennemi qui
+  // était adjacent (distance 1) avant et ne l'est plus après, propose une
+  // attaque d'opportunité gratuite au MJ pour cet ennemi.
+  const distCasesPx = (x1, y1, x2, y2) =>
+    Math.round(Math.abs(x1 - x2) / gs) + Math.round(Math.abs(y1 - y2) / gs);
+
+  const opportunityTargets = [];
+  if (canvas?.tokens?.placeables) {
+    for (const enemyTok of canvas.tokens.placeables) {
+      const enemyActor = enemyTok.actor;
+      if (!enemyActor || enemyActor.id === actor.id) continue;
+      if (enemyActor.type === actor.type) continue; // même camp, pas un ennemi
+      const enemyCombatant = combat.combatants.find(c => c.actorId === enemyActor.id);
+      if (!enemyCombatant) continue; // pas dans ce combat
+      if (enemyCombatant.getFlag("core", "defeated") || enemyCombatant.getFlag("rpg", "fled")) continue;
+
+      const distBefore = distCasesPx(prevPos.x, prevPos.y, enemyTok.x, enemyTok.y);
+      const distAfter  = distCasesPx(newX, newY, enemyTok.x, enemyTok.y);
+
+      if (distBefore <= 1 && distAfter > 1) {
+        opportunityTargets.push({ id: enemyActor.id, name: enemyActor.name });
+      }
+    }
+  }
+
+  const opportunityHtml = opportunityTargets.length
+    ? `<div style="margin-top:8px;padding:6px;background:rgba(192,57,43,0.1);border-radius:6px">
+         <div style="font-size:11px;font-weight:600;margin-bottom:4px">⚔️ Désengagement détecté — attaque d'opportunité disponible :</div>
+         ${opportunityTargets.map(t => `
+           <button type="button" class="rpg-opportunity-btn" data-enemy-id="${t.id}" data-mover-id="${actor.id}"
+             style="display:block;width:100%;margin-bottom:4px;padding:4px;cursor:pointer;font-size:11px">
+             ⚔️ ${htmlEscapeLocal(t.name)} attaque gratuitement ${htmlEscapeLocal(actor.name)}
+           </button>`).join("")}
+       </div>`
+    : "";
+
   const overSlot  = !hasSlot;
   const overSpeed = distCases > vitesse;
   const warnings  = [];
@@ -106,6 +144,7 @@ export async function onUpdateToken(tokenDoc, changes) {
       </div>
       <b>${actor.name}</b> s'est déplacé de <b>${distCases}</b> case${distCases > 1 ? "s" : ""}
       ${warnLine}
+      ${opportunityHtml}
       <div class="rpg-action-gm-btns" style="display:flex;gap:6px;margin-top:8px">
         <button type="button" data-action-resolve="confirm" data-action-id="${actionId}"
           style="flex:1;padding:4px 8px;cursor:pointer;background:#1d9e75;color:#fff;border:none;border-radius:5px;font-size:12px">
@@ -125,6 +164,95 @@ export async function onUpdateToken(tokenDoc, changes) {
   });
 
   await updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+}
+
+/**
+ * Déclenche une attaque d'opportunité gratuite (pas de coût de slot) :
+ * l'ennemi attaque immédiatement le mobile qui vient de se désengager.
+ * Réutilise tout le pipeline d'attaque existant (jet à toucher, puis
+ * Échec/Touché/Critique validés par le MJ comme une attaque normale).
+ */
+export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
+  if (!game.user.isGM) return;
+
+  const enemyActor = game.actors.get(enemyActorId);
+  const moverActor = game.actors.get(moverActorId);
+  if (!enemyActor || !moverActor) {
+    ui.notifications?.warn?.("Acteur introuvable pour l'attaque d'opportunité.");
+    return;
+  }
+
+  const weapon = enemyActor.items.find(i => i.type === "weapon" && i.system?.equipe)
+    ?? enemyActor.items.find(i => i.type === "weapon");
+  if (!weapon) {
+    ui.notifications?.warn?.(`${enemyActor.name} n'a aucune arme pour une attaque d'opportunité.`);
+    return;
+  }
+
+  const combatAPI = game.rpg?.combat;
+  const tnData = combatAPI?.computeTN
+    ? combatAPI.computeTN(enemyActor, moverActor, weapon)
+    : { tnFinal: 11, livraison: "physique" };
+
+  const roll20 = await (new Roll("1d20")).evaluate();
+  await roll20.toMessage({
+    speaker: { alias: enemyActor.name },
+    flavor: `⚔️ <b>Attaque d'opportunité</b> — ${enemyActor.name} attaque ${moverActor.name} qui se désengage (il faut faire <b>${tnData.tnFinal}+</b>)`
+  });
+
+  const actionId = foundry.utils.randomID(); // libre, pas lié au budget (gratuite)
+
+  const msgContent = `
+    <div class="rpg-attack-declare" style="font-size:13px;line-height:1.6">
+      <div>Attaque d'opportunité : <b>${htmlEscapeLocal(weapon.name)}</b> → <b>${htmlEscapeLocal(moverActor.name)}</b></div>
+      <div style="opacity:.85;margin-top:2px">🎲 d20 = <b>${roll20.total}</b> (TN ${tnData.tnFinal}+)</div>
+      <div class="rpg-attack-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="rpg-attack-resolve" data-result="fail" style="flex:1;padding:4px 8px;cursor:pointer">Échec</button>
+        <button type="button" class="rpg-attack-resolve" data-result="hit" style="flex:1;padding:4px 8px;cursor:pointer">Touché</button>
+        <button type="button" class="rpg-attack-resolve" data-result="crit" style="flex:1;padding:4px 8px;cursor:pointer;font-weight:700;color:gold">Critique !</button>
+      </div>
+    </div>`;
+
+  await ChatMessage.create({
+    speaker: { alias: enemyActor.name },
+    content: msgContent,
+    flags: {
+      rpg: {
+        type: "attackDeclaration",
+        actionId,
+        attackDeclaration: {
+          actorId: enemyActor.id, weaponId: weapon.id, targetId: moverActor.id,
+          d20: roll20.total, tnFinal: tnData.tnFinal, livraison: tnData.livraison
+        }
+      }
+    }
+  });
+}
+
+export function bindOpportunityAttackButtons(htmlEl) {
+  const root = htmlEl instanceof HTMLElement ? htmlEl : htmlEl?.[0];
+  if (!root) return;
+  if (!game.user.isGM) {
+    root.querySelectorAll(".rpg-opportunity-btn").forEach(b => b.remove());
+    return;
+  }
+
+  root.querySelectorAll(".rpg-opportunity-btn").forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      btn.disabled = true;
+      btn.textContent += " (utilisée)";
+      try {
+        await triggerOpportunityAttack(btn.dataset.enemyId, btn.dataset.moverId);
+      } catch (e) {
+        console.error("[RPG][Opportunity]", e);
+        ui.notifications?.error?.(`Erreur attaque d'opportunité : ${e?.message ?? e}`);
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 /**

@@ -174,6 +174,22 @@
         </div>
       </div>
 
+      {{!-- État K.O. (MJ only) --}}
+      {{#if flags.isGM}}
+      <div class="resource" style="grid-column: 1 / -1;">
+        <div class="resource-label">
+          <span>💀 K.O.</span>
+          <span class="resource-value">
+            {{#if system.derived.ko}}<b style="color:#c0392b">Ne peut pas agir ce tour</b>{{else}}<span class="muted">Actif</span>{{/if}}
+          </span>
+        </div>
+        <label style="font-size:11px;display:flex;align-items:center;gap:6px;margin-top:4px">
+          <input type="checkbox" name="system.ignoreKO" {{#if system.ignoreKO}}checked{{/if}} />
+          Ignorer l'incapacité à 0 PV (exception — ce PJ continue d'agir normalement même K.O.)
+        </label>
+      </div>
+      {{/if}}
+
       {{!-- Classe --}}
       <div class="resource" style="grid-column: 1 / -1;">
         <div class="resource-label">

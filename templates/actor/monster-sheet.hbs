@@ -76,6 +76,13 @@
               <button type="button" class="btn" data-action="hpPlus" data-delta="-1">-1 PV</button>
               <button type="button" class="btn" data-action="hpPlus" data-delta="-5">-5 PV</button>
             </div>
+            <div style="margin-top:8px;font-size:12px;">
+              {{#if system.derived.ko}}<b style="color:#c0392b">💀 K.O. — ne peut plus agir</b>{{else}}<span class="muted">Actif</span>{{/if}}
+            </div>
+            <label style="font-size:11px;display:flex;align-items:center;gap:6px;margin-top:4px">
+              <input type="checkbox" name="system.ignoreKO" {{#if system.ignoreKO}}checked{{/if}} />
+              Ignorer l'incapacité à 0 PV (exception)
+            </label>
           </div>
         </section>
 
