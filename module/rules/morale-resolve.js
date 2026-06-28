@@ -32,12 +32,14 @@ export async function declareMoraleCheck(actor) {
   if (!combat) return;
 
   const endurance = n(actor.system?.derived?.effective?.principales?.endurance, 0);
-  const bonus = Math.floor(endurance / 10);
+  const survieLevel = n(actor.system?.skills?.survie?.level, 0);
+  const bonus = Math.floor(endurance / 10) + survieLevel;
 
   const roll = await (new Roll(`1d20 + ${bonus}`)).evaluate();
   await roll.toMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
-    flavor: `😰 <b>${actor.name}</b> est en danger critique — jet de moral (TN 11+, +${bonus} Endurance)`
+    flavor: `😰 <b>${actor.name}</b> est en danger critique — jet de moral (TN 11+, +${Math.floor(endurance / 10)} Endurance` +
+      (survieLevel ? ` +${survieLevel} Volonté` : "") + `)`
   });
 
   const content = `

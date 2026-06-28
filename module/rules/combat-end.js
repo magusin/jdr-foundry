@@ -65,24 +65,9 @@ export async function resolveEndOfCombat(combat) {
     await actor.update({ "system.xp.valeur": newXP });
   }
 
-  // ── 5. Loot ────────────────────────────────────────────────────────────
-  const lootLines = [];
-  for (const monster of monsterCombatants) {
-    const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();
-    if (!tableUuid) continue;
-
-    try {
-      const table = await fromUuid(tableUuid);
-      if (!table) { lootLines.push(`<li>${monster.name} : table introuvable (${tableUuid})</li>`); continue; }
-
-      const { results } = await table.roll();
-      const names = results.map((r) => r.text ?? r.name ?? "?").join(", ");
-      lootLines.push(`<li><b>${monster.name}</b> : ${names}</li>`);
-    } catch (e) {
-      console.error(`[RPG][CombatEnd] Erreur loot ${monster.name} :`, e);
-      lootLines.push(`<li>${monster.name} : erreur de loot (voir console)</li>`);
-    }
-  }
+  // ── 5. Butin — OPTIONNEL : on ne tire rien automatiquement, on propose
+  // un bouton (les joueurs/le MJ choisissent de looter ou non) ───────────
+  const lootableMonsters = monsterCombatants.filter(m => String(m.system?.butin?.tableUuid ?? "").trim());
 
   // ── 6. Message récap ───────────────────────────────────────────────────
   const monsterNames = monsterCombatants.map((m) => m.name).join(", ");
@@ -93,15 +78,61 @@ export async function resolveEndOfCombat(combat) {
     `<p><b>XP total :</b> ${totalXP} répartis entre ${pjs.length} PJ(s)</p>` +
     `<ul>${lines.join("")}</ul>`;
 
-  if (lootLines.length) {
-    content += `<hr><b>🎁 Butin :</b><ul>${lootLines.join("")}</ul>`;
+  if (lootableMonsters.length) {
+    const monsterIds = lootableMonsters.map(m => m.id).join(",");
+    content += `
+      <hr>
+      <div style="text-align:center">
+        <button type="button" data-action="lootNow" data-monster-ids="${monsterIds}"
+          style="padding:6px 14px;cursor:pointer;border-radius:6px;border:none;background:#7a5a16;color:#fff;font-weight:600">
+          🎲 Looter les dépouilles (${lootableMonsters.length})
+        </button>
+      </div>`;
   }
 
   await ChatMessage.create({ content, type: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
 
   const pjNames = pjs.map(p => p.name).join(", ");
   appendToCampaignJournal(
-    `Combat contre <b>${monsterNames}</b> remporté par <b>${pjNames}</b>. XP distribué : ${totalXP}.` +
-    (lootLines.length ? " Butin récupéré." : "")
+    `Combat contre <b>${monsterNames}</b> remporté par <b>${pjNames}</b>. XP distribué : ${totalXP}.`
   ).catch(() => {});
+}
+
+/**
+ * Tire le butin des monstres sélectionnés (appelé au clic sur "Looter les
+ * dépouilles" — jamais automatiquement, c'est un choix des joueurs/du MJ).
+ */
+export async function lootMonsters(monsterIds) {
+  if (!game.user.isGM) return;
+
+  const lootLines = [];
+  for (const id of monsterIds) {
+    const monster = game.actors.get(id);
+    if (!monster) continue;
+
+    const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();
+    if (!tableUuid) continue;
+
+    try {
+      const table = await fromUuid(tableUuid);
+      if (!table) { lootLines.push(`<li>${monster.name} : table introuvable (${tableUuid})</li>`); continue; }
+
+      const { results } = await table.roll();
+      const names = results.map((r) => r.text ?? r.name ?? "?").join(", ") || "rien d'intéressant";
+      lootLines.push(`<li><b>${monster.name}</b> : ${names}</li>`);
+    } catch (e) {
+      console.error(`[RPG][CombatEnd] Erreur loot ${monster.name} :`, e);
+      lootLines.push(`<li>${monster.name} : erreur de loot (voir console)</li>`);
+    }
+  }
+
+  if (!lootLines.length) return;
+
+  await ChatMessage.create({
+    content: `<h3>🎁 Butin</h3><ul>${lootLines.join("")}</ul>`
+  });
+
+  if (game.rpg?.journal) {
+    game.rpg.journal.appendToCampaignJournal("Butin récupéré sur les dépouilles.").catch(() => {});
+  }
 }

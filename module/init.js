@@ -28,7 +28,7 @@ import * as Combat from "./rules/combat.js";
 import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
-import { resolveEndOfCombat } from "./rules/combat-end.js";
+import { resolveEndOfCombat, lootMonsters } from "./rules/combat-end.js";
 import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
@@ -449,6 +449,20 @@ Hooks.once("init", async () => {
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindMoraleChatButtons(html, message); } catch (e) { }
       try { bindOpportunityAttackButtons(html); } catch (e) { }
+      try {
+        const root = html instanceof HTMLElement ? html : html?.[0];
+        const lootBtn = root?.querySelector('[data-action="lootNow"]');
+        if (lootBtn && !lootBtn.dataset.bound && game.user.isGM) {
+          lootBtn.dataset.bound = "1";
+          lootBtn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            lootBtn.disabled = true;
+            lootBtn.textContent = "Butin tiré";
+            const ids = (lootBtn.dataset.monsterIds ?? "").split(",").filter(Boolean);
+            await lootMonsters(ids);
+          });
+        }
+      } catch (e) { }
       try {
         if (message?.flags?.rpg?.combatEndPrompt && game.user.isGM) {
           const root = html instanceof HTMLElement ? html : html?.[0];

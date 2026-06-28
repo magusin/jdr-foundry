@@ -142,7 +142,8 @@
           "cuivre": 0,
           "argent": 0,
           "or": 0
-        }
+        },
+        "vendeurAssocie": ""
       },
       "equipBonus": {
         "equipe": false,

@@ -49,7 +49,16 @@
   const knownVendors = repAPI.listAllKnownVendors();
 
   const pjOptions = pjs.map(p => `<option value="${p.id}">${htmlEscape(p.name)}</option>`).join("");
-  const buyItemOptions = worldItems.map(i => `<option value="${i.id}">${htmlEscape(i.name)}</option>`).join("");
+  const buildBuyItemOptions = (vendorFilter) => {
+    const v = String(vendorFilter ?? "").trim().toLowerCase();
+    const filtered = v
+      ? worldItems.filter(i => String(i.system?.vendeurAssocie ?? "").trim().toLowerCase() === v)
+      : worldItems;
+    if (!filtered.length) {
+      return `<option value="" disabled>— Aucun objet pour ce vendeur (laisse vide pour tout voir) —</option>`;
+    }
+    return filtered.map(i => `<option value="${i.id}">${htmlEscape(i.name)}</option>`).join("");
+  };
 
   const buildSellItemOptions = (pjId) => {
     const pj = game.actors.get(pjId);
@@ -84,8 +93,8 @@
       </div>
 
       <div id="mk-buy-panel">
-        <label style="font-weight:600;display:block;margin-bottom:4px">Objet à acheter (Objets du monde)</label>
-        <select id="mk-buy-item" style="width:100%">${buyItemOptions}</select>
+        <label style="font-weight:600;display:block;margin-bottom:4px">Objet à acheter (filtré par Entité si renseignée)</label>
+        <select id="mk-buy-item" style="width:100%">${buildBuyItemOptions("")}</select>
       </div>
 
       <div id="mk-sell-panel" style="display:none">
@@ -244,7 +253,15 @@
         recompute();
       });
       regionInput.addEventListener("input", recompute);
-      vendorInput.addEventListener("input", recompute);
+      vendorInput.addEventListener("input", () => {
+        if (mode === "buy") {
+          const buyItemSel = root.querySelector("#mk-buy-item");
+          const prevVal = buyItemSel.value;
+          buyItemSel.innerHTML = buildBuyItemOptions(vendorInput.value);
+          if ([...buyItemSel.options].some(o => o.value === prevVal)) buyItemSel.value = prevVal;
+        }
+        recompute();
+      });
       root.querySelector("#mk-buy-item").addEventListener("change", recompute);
       root.querySelector("#mk-sell-item").addEventListener("change", recompute);
       root.querySelector("#mk-sell-rate").addEventListener("input", recompute);
