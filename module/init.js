@@ -47,6 +47,7 @@ import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFig
 import { hasRolledMoraleThisTurn, bindMoraleChatButtons, declareMoraleCheck } from "./rules/morale-resolve.js";
 import * as Skills from "./rules/skills.js";
 import { declareSkillCheck, bindSkillCheckChatButtons, DIFFICULTY_TIERS } from "./rules/skill-check.js";
+import * as StateBuilder from "./rules/state-builder.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -442,6 +443,9 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.skillCheck : jet de compétence générique (Discrétion, Crochetage...)
     game.rpg.skillCheck = { declareSkillCheck, DIFFICULTY_TIERS };
+
+    // ✅ game.rpg.stateBuilder : construction d'état personnalisé (MJ)
+    game.rpg.stateBuilder = StateBuilder;
 
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
     game.rpg.journal = { appendToCampaignJournal };
