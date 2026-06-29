@@ -45,6 +45,8 @@ import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledMoraleThisTurn, bindMoraleChatButtons, declareMoraleCheck } from "./rules/morale-resolve.js";
+import * as Skills from "./rules/skills.js";
+import { declareSkillCheck, bindSkillCheckChatButtons, DIFFICULTY_TIERS } from "./rules/skill-check.js";
 import {
   getBudget, saveBudget, resetBudget, canUseSlot, reserveSlot, confirmSlot,
   releaseSlot, budgetHTML, addLogEntry, updateLogEntry, findLogEntry, undoAction,
@@ -435,6 +437,12 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.morale : jet de moral au seuil critique
     game.rpg.morale = { hasRolledMoraleThisTurn, declareMoraleCheck };
 
+    // ✅ game.rpg.skills : XP/niveau de compétences (source unique)
+    game.rpg.skills = Skills;
+
+    // ✅ game.rpg.skillCheck : jet de compétence générique (Discrétion, Crochetage...)
+    game.rpg.skillCheck = { declareSkillCheck, DIFFICULTY_TIERS };
+
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
     game.rpg.journal = { appendToCampaignJournal };
 
@@ -448,6 +456,7 @@ Hooks.once("init", async () => {
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindMoraleChatButtons(html, message); } catch (e) { }
+      try { bindSkillCheckChatButtons(html, message); } catch (e) { }
       try { bindOpportunityAttackButtons(html); } catch (e) { }
       try {
         const root = html instanceof HTMLElement ? html : html?.[0];
