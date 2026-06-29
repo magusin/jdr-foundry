@@ -45,6 +45,13 @@
       "path": "packs/monsters/monsters.db",
       "type": "Actor",
       "system": "rpg"
+    },
+    {
+      "name": "documentation",
+      "label": "JDR — Documentation (Guide Joueur / MJ)",
+      "path": "packs/documentation/documentation.db",
+      "type": "JournalEntry",
+      "system": "rpg"
     }
   ],
   "documentTypes": {
