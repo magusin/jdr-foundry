@@ -100,6 +100,7 @@ function normalizeAndMergeEffects(document, expanded) {
     for (const e of expanded.system.effectsUI) {
       if (e?.mods && !Array.isArray(e.mods)) e.mods = Object.values(e.mods);
       if (e?.damage) e.damage.enabled = b(e.damage.enabled);
+      if (e) { e.permanent = b(e.permanent); e.isAura = b(e.isAura); }
     }
   }
 
@@ -251,6 +252,12 @@ static PARTS = foundry.utils.mergeObject(
 
       fx.uiShowDamage = !!fx.damage.enabled;
       fx.uiStatBonus = fx?.damage?.preview?.scalingBonus ?? 0;
+
+      // Défauts pour les nouveaux champs (permanent/aura)
+      fx.permanent = !!fx.permanent;
+      fx.isAura = !!fx.isAura;
+      fx.auraMin = n(fx.auraMin, 0);
+      fx.auraMax = n(fx.auraMax, 3);
     }
 
     // ui flags joueur

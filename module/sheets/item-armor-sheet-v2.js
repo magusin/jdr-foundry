@@ -114,6 +114,8 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // ✅ résistances (tag, durationReduction, dotReductionPct, immune)
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.EFFECT_TAGS = {
+      "": "(N'importe quel type — filtre seulement par nom d'effet)",
+      magique: "Magique", physique: "Physique",
       feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
     };
 
@@ -162,7 +164,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _actionAddResistance(event) {
     event?.preventDefault?.();
     const list = foundry.utils.deepClone(this.document.system?.resistances ?? []);
-    list.push({ tag: "feu", durationReduction: 0, dotReductionPct: 0, immune: false });
+    list.push({ tag: "feu", effectKey: "", durationReduction: 0, dotReductionPct: 0, immune: false });
     await this.document.update({ "system.resistances": list }, { render: true });
   }
 

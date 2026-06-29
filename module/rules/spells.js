@@ -1092,18 +1092,26 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       const fatigueDotFlat = n(fx.fatigueDot, 0);
 
       const tag = String(fx.tag ?? "").trim() || null;
+      const isAura = !!fx.isAura;
+      const permanent = !!fx.permanent;
+      const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
 
       const state = {
         id:        stateId,
         label:     String(fx.label ?? item.name),
         type:      "spellEffect",
         tag,
-        isAura:    false,
-        duration:  Math.max(1, n(fx.duration, 1)),
-        remaining: Math.max(1, n(fx.duration, 1)),
+        isAura,
+        permanent,
+        duration,
+        remaining: duration,
         dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: fatigueDotFlat },
         mods:      mods
       };
+
+      if (isAura) {
+        state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
+      }
 
       const resistResult = await upsertState(applyTo, state);
       const info = resistResult?.resistanceInfo;

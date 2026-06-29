@@ -40,11 +40,22 @@ function getStateResistances(actor) {
 /**
  * Calcule la résistance totale d'un acteur pour un tag donné.
  */
-export function computeResistanceFor(actor, tag) {
-  if (!tag) return { durationReduction: 0, dotReductionPct: 0, immune: false };
+export function computeResistanceFor(actor, tag, effectLabel = "") {
+  const tagStr = String(tag ?? "");
+  const labelStr = String(effectLabel ?? "").trim().toLowerCase();
 
+  // Une résistance ne s'applique que si elle a au moins un critère renseigné
+  // (tag et/ou effectKey) ET que ce(s) critère(s) correspondent.
   const all = [...getGearResistances(actor), ...getStateResistances(actor)]
-    .filter(r => String(r?.tag ?? "") === String(tag));
+    .filter(r => {
+      const rTag = String(r?.tag ?? "").trim();
+      const rKey = String(r?.effectKey ?? "").trim().toLowerCase();
+      if (!rTag && !rKey) return false; // résistance vide, ignorée
+
+      const tagOk = !rTag || rTag === tagStr;
+      const keyOk = !rKey || rKey === labelStr;
+      return tagOk && keyOk;
+    });
 
   let durationReduction = 0;
   let dotReductionPct = 0;
@@ -58,9 +69,12 @@ export function computeResistanceFor(actor, tag) {
 
   // ✅ Météo : favorise ou défavorise certains éléments (s'ajoute aux
   // résistances d'équipement/buffs, peut amplifier au lieu de réduire)
-  const weatherMod = getWeatherModifierFor(tag);
-  durationReduction += weatherMod.durationReduction;
-  dotReductionPct += weatherMod.dotReductionPct;
+  // — uniquement basé sur le tag (la météo ne connaît pas les effets précis)
+  if (tagStr) {
+    const weatherMod = getWeatherModifierFor(tagStr);
+    durationReduction += weatherMod.durationReduction;
+    dotReductionPct += weatherMod.dotReductionPct;
+  }
 
   // Plafond élargi pour permettre l'amplification météo (-100% = dégâts doublés)
   dotReductionPct = Math.min(100, Math.max(-100, dotReductionPct));
@@ -77,9 +91,11 @@ export function computeResistanceFor(actor, tag) {
  * @returns {object|null} state ajusté, ou null si résisté
  */
 export function applyResistances(actor, state) {
-  if (!state?.tag) return state; // pas de tag = pas concerné
+  // ✅ Une résistance peut viser un type (tag) OU un effet précis (label) —
+  // donc on vérifie même sans tag, tant qu'il y a un label.
+  if (!state?.tag && !state?.label) return state;
 
-  const res = computeResistanceFor(actor, state.tag);
+  const res = computeResistanceFor(actor, state.tag, state.label);
 
   const baseDuration = n(state.duration, 1);
   const basePerTick  = n(state.dot?.perTick, 0);

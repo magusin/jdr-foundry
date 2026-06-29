@@ -154,6 +154,8 @@
                 <option value="{{tag}}" {{#if (eq r.tag tag)}}selected{{/if}}>{{label}}</option>
               {{/each}}
             </select>
+            <input type="text" name="system.resistances.{{idx}}.effectKey" value="{{r.effectKey}}"
+              placeholder="Effet précis (ex: Brûlure) — vide = tout le type" style="flex:1.5;font-size:11px"/>
             <label style="font-size:11px;white-space:nowrap">Durée -<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" min="0" style="width:50px"/></label>
             <label style="font-size:11px;white-space:nowrap">DOT -<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="0" max="100" style="width:50px"/>%</label>
             <label style="font-size:11px;white-space:nowrap"><input type="checkbox" name="system.resistances.{{idx}}.immune" {{#if r.immune}}checked{{/if}}/> Immunité</label>
