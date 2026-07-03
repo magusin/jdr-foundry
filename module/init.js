@@ -461,6 +461,44 @@ Hooks.once("init", async () => {
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindMoraleChatButtons(html, message); } catch (e) { }
       try { bindSkillCheckChatButtons(html, message); } catch (e) { }
+      try {
+        // Résolution du jet de retrait d'état
+        if (message?.flags?.rpg?.type === "removeStateDeclaration" && game.user.isGM) {
+          const root = html instanceof HTMLElement ? html : html?.[0];
+          if (root && !root.dataset.rpgRemoveBound) {
+            root.dataset.rpgRemoveBound = "1";
+            const buttons = root.querySelectorAll(".rpg-remove-resolve");
+            root.querySelector(".rpg-remove-state-gm") && buttons.forEach(btn => {
+              btn.addEventListener("click", async (ev) => {
+                ev.preventDefault();
+                if (!game.user.isGM) return;
+                for (const b of buttons) b.disabled = true;
+                try {
+                  const { actorId, stateId } = message.flags.rpg;
+                  const actor = game.actors.get(actorId);
+                  const success = btn.dataset.result === "success";
+                  await message.delete();
+                  if (success && actor) {
+                    const list = (actor.system?.etatsActifs ?? []).filter(s => s.id !== stateId);
+                    await actor.update({ "system.etatsActifs": list });
+                    const stateName = (actor.system?.etatsActifs ?? []).find(s => s.id === stateId)?.label ?? "état";
+                    await ChatMessage.create({
+                      content: `✅ <b>${actor?.name ?? "?"}</b> se défait de l'état.`
+                    });
+                  } else {
+                    await ChatMessage.create({
+                      content: `❌ <b>${actor?.name ?? "?"}</b> n'arrive pas à se défaire de l'état.`
+                    });
+                  }
+                } catch (e) {
+                  console.error("[RPG][RemoveState]", e);
+                  for (const b of buttons) b.disabled = false;
+                }
+              });
+            });
+          }
+        }
+      } catch (e) { }
       try { bindOpportunityAttackButtons(html); } catch (e) { }
       try {
         const root = html instanceof HTMLElement ? html : html?.[0];
