@@ -1,129 +1,57 @@
 // module/rules/effect-library.js
 //
-// Catalogue d'effets nommés réutilisables, basé sur la magie élémentaire
-// (Feu, Air, Eau, Glace, Éclair, Terre). Chaque élément propose une version
-// offensive (DOT/debuff) et une version de soutien (buff) — les éléments
-// servent autant à attaquer qu'à se renforcer.
-//
-// Le "tag" de chaque effet est utilisé par le système de résistance
-// (équipement ou buff) pour réduire sa durée et/ou ses dégâts par tour.
+// Catalogue des noms d'effets connus du système — UNIQUEMENT des noms et
+// des types. Le MJ renseigne lui-même durée, dégâts, bonus/malus, aura
+// etc. au moment d'appliquer l'effet. Aucune valeur n'est pré-configurée.
 
 export const EFFECT_TAGS = {
-  feu:     "Feu",
-  air:     "Air",
-  eau:     "Eau",
-  glace:   "Glace",
-  eclair:  "Éclair",
-  terre:   "Terre",
-  magique: "Magique",
-  physique:"Physique"
+  feu:     "🔥 Feu",
+  air:     "🌬️ Air",
+  eau:     "💧 Eau",
+  glace:   "❄️ Glace",
+  eclair:  "⚡ Éclair",
+  terre:   "🌿 Terre",
+  magique: "✨ Magique",
+  physique:"⚔️ Physique"
 };
 
 export const EFFECT_LIBRARY = {
   // ── FEU ──────────────────────────────────────────────────────────────
-  brulure: {
-    key: "brulure", label: "Brûlure", icon: "icons/svg/fire.svg", tag: "feu",
-    defaultDuration: 3, removeDifficulty: "moyen",
-    dot: { perTick: 3 },
-    mods: {}
-  },
-  combustion: {
-    key: "combustion", label: "Combustion", icon: "icons/svg/explosion.svg", tag: "feu",
-    defaultDuration: 4, removeDifficulty: "difficile",
-    dot: { perTick: 5 },
-    // Retire de la résistance au feu (le feu s'embrase de lui-même)
-    mods: { "scoreResistance": { flat: -15, pct: 0 } }
-  },
-  ardeur: {
-    key: "ardeur", label: "Ardeur", icon: "icons/svg/explosion.svg", tag: "feu",
-    defaultDuration: 3, removeDifficulty: "facile",
-    dot: null,
-    mods: { "force": { flat: 0, pct: 20 } }
-  },
+  brulure:        { key: "brulure",        label: "Brûlure",         tag: "feu"     },
+  combustion:     { key: "combustion",     label: "Combustion",      tag: "feu"     },
+  ardeur:         { key: "ardeur",         label: "Ardeur",          tag: "feu"     },
 
   // ── AIR ──────────────────────────────────────────────────────────────
-  bourrasque: {
-    key: "bourrasque", label: "Bourrasque", icon: "icons/svg/wing.svg", tag: "air",
-    defaultDuration: 2, removeDifficulty: "facile",
-    dot: null,
-    mods: { "dexterite": { flat: 0, pct: -20 } }
-  },
-  legerete: {
-    key: "legerete", label: "Légèreté", icon: "icons/svg/wind.svg", tag: "air",
-    defaultDuration: 3, removeDifficulty: "facile",
-    dot: null,
-    mods: { "vitesse": { flat: 1, pct: 0 }, "initiativeMod": { flat: 0, pct: 15 } }
-  },
+  bourrasque:     { key: "bourrasque",     label: "Bourrasque",      tag: "air"     },
+  legerete:       { key: "legerete",       label: "Légèreté",        tag: "air"     },
 
   // ── EAU ──────────────────────────────────────────────────────────────
-  asphyxie: {
-    key: "asphyxie", label: "Asphyxie", icon: "icons/svg/wave.svg", tag: "eau",
-    defaultDuration: 3, removeDifficulty: "difficile",
-    dot: { perTick: 2 },
-    mods: {}
-  },
-  regeneration: {
-    key: "regeneration", label: "Régénération", icon: "icons/svg/regen.svg", tag: "eau",
-    defaultDuration: 3, removeDifficulty: null,
-    dot: { perTick: -3 },
-    mods: {}
-  },
-  purification: {
-    key: "purification", label: "Purification", icon: "icons/svg/holy.svg", tag: "eau",
-    defaultDuration: 3, removeDifficulty: null,
-    dot: null,
-    // Bonus au jet de retrait d'état (simulé via un bonus de toucher magique —
-    // le joueur fait le jet avec ce bonus quand il tente de se débarrasser d'un effet)
-    mods: { "toucherMagique": { flat: 4, pct: 0 } }
-  },
+  asphyxie:       { key: "asphyxie",       label: "Asphyxie",        tag: "eau"     },
+  regeneration:   { key: "regeneration",   label: "Régénération",    tag: "eau"     },
+  purification:   { key: "purification",   label: "Purification",    tag: "eau"     },
 
   // ── GLACE ────────────────────────────────────────────────────────────
-  gel: {
-    key: "gel", label: "Gel", icon: "icons/svg/ice-aura.svg", tag: "glace",
-    defaultDuration: 2, removeDifficulty: "moyen",
-    dot: { perTick: 0 },
-    mods: { "toucherPhysique": { flat: -3, pct: 0 } }
-  },
-  engourdissement: {
-    key: "engourdissement", label: "Engourdissement", icon: "icons/svg/frozen.svg", tag: "glace",
-    defaultDuration: 3, removeDifficulty: "moyen",
-    dot: null,
-    mods: { "vitesse": { flat: -2, pct: 0 } }
-  },
-  carapace_glace: {
-    key: "carapace_glace", label: "Carapace de Glace", icon: "icons/svg/frozen.svg", tag: "glace",
-    defaultDuration: 3, removeDifficulty: "facile",
-    dot: null,
-    mods: { "armureFixe": { flat: 3, pct: 0 } }
-  },
+  gel:            { key: "gel",            label: "Gel",             tag: "glace"   },
+  engourdissement:{ key: "engourdissement",label: "Engourdissement", tag: "glace"   },
+  carapace_glace: { key: "carapace_glace", label: "Carapace de Glace",tag: "glace"  },
 
   // ── ÉCLAIR ───────────────────────────────────────────────────────────
-  choc: {
-    key: "choc", label: "Choc électrique", icon: "icons/svg/lightning.svg", tag: "eclair",
-    defaultDuration: 1, removeDifficulty: "moyen",
-    dot: { perTick: 1 },
-    mods: { "initiativeMod": { flat: 0, pct: -25 } }
-  },
-  reflexes_foudroyants: {
-    key: "reflexes_foudroyants", label: "Réflexes Foudroyants", icon: "icons/svg/lightning.svg", tag: "eclair",
-    defaultDuration: 3, removeDifficulty: null,
-    dot: null,
-    mods: { "initiativeMod": { flat: 0, pct: 25 }, "dexterite": { flat: 0, pct: 10 } }
-  },
+  choc:                { key: "choc",                label: "Choc électrique",    tag: "eclair" },
+  reflexes_foudroyants:{ key: "reflexes_foudroyants",label: "Réflexes Foudroyants",tag:"eclair" },
 
   // ── TERRE ────────────────────────────────────────────────────────────
-  enlisement: {
-    key: "enlisement", label: "Enlisement", icon: "icons/svg/mountain.svg", tag: "terre",
-    defaultDuration: 2, removeDifficulty: "difficile",
-    dot: null,
-    mods: { "vitesse": { flat: -1, pct: 0 }, "dexterite": { flat: 0, pct: -15 } }
-  },
-  peau_de_roc: {
-    key: "peau_de_roc", label: "Peau de Roc", icon: "icons/svg/stoned.svg", tag: "terre",
-    defaultDuration: 3, removeDifficulty: null,
-    dot: null,
-    mods: { "endurance": { flat: 0, pct: 15 }, "scoreArmure": { flat: 0, pct: 10 } }
-  }
+  enlisement:     { key: "enlisement",     label: "Enlisement",      tag: "terre"   },
+  peau_de_roc:    { key: "peau_de_roc",    label: "Peau de Roc",     tag: "terre"   },
+
+  // ── MAGIQUE ──────────────────────────────────────────────────────────
+  silence:        { key: "silence",        label: "Silence",         tag: "magique" },
+  benediction:    { key: "benediction",    label: "Bénédiction",     tag: "magique" },
+  malediction:    { key: "malediction",    label: "Malédiction",     tag: "magique" },
+
+  // ── PHYSIQUE ─────────────────────────────────────────────────────────
+  saignement:     { key: "saignement",     label: "Saignement",      tag: "physique"},
+  etourdissement: { key: "etourdissement", label: "Étourdissement",  tag: "physique"},
+  desarmement:    { key: "desarmement",    label: "Désarmement",     tag: "physique"},
 };
 
 export function getEffectDef(key) {
@@ -135,26 +63,34 @@ export function listEffects() {
 }
 
 /**
- * Convertit une entrée du catalogue (+ durée éventuellement custom) en
- * objet "state" prêt à être passé à upsertState / addStateWithResistance.
+ * Construit un état minimal (sans valeurs) depuis un nom du catalogue.
+ * Les valeurs réelles (dégâts, mods, durée…) sont injectées après par
+ * le MJ via apply-effect.js ou l'éditeur de sort.
  */
-export function buildStateFromLibrary(key, { duration = null, sourceLabel = "" } = {}) {
+export function buildStateFromLibrary(key, { duration = 1, sourceLabel = "", removeDifficulty = null,
+  dot = 0, fatiguePerTick = 0, mods = {}, permanent = false, isAura = false, aura = null } = {}) {
   const def = getEffectDef(key);
   if (!def) return null;
 
-  const dur = Math.max(1, Number(duration ?? def.defaultDuration) || def.defaultDuration);
+  const dur = permanent ? 0 : Math.max(1, Number(duration) || 1);
 
-  return {
+  const state = {
     id: `lib_${key}_${foundry.utils.randomID(6)}`,
     label: def.label,
     type: "libraryEffect",
     tag: def.tag,
-    isAura: false,
+    isAura: !!isAura,
+    permanent: !!permanent,
     duration: dur,
     remaining: dur,
-    removeDifficulty: def.removeDifficulty ?? null,
-    dot: def.dot ? { flat: def.dot.perTick, perTick: def.dot.perTick } : { flat: 0, perTick: 0 },
-    mods: foundry.utils.deepClone(def.mods ?? {}),
+    removeDifficulty: removeDifficulty ?? null,
+    dot: { flat: Number(dot) || 0, perTick: Number(dot) || 0 },
+    mods: foundry.utils.deepClone(mods ?? {}),
     sourceLabel
   };
+
+  if (fatiguePerTick) state.dot.fatiguePerTick = Number(fatiguePerTick) || 0;
+  if (isAura && aura) state.aura = aura;
+
+  return state;
 }

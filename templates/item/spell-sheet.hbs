@@ -414,9 +414,20 @@ EFFETS (GM = inputs/select, Joueur = texte gras)
       <div class="fx-body">
         <div class="fx-grid">
           <div class="field">
-            <label>Nom</label>
+            <label>Effet (catalogue ou nom libre)</label>
             {{#if @root.canEdit}}
-              <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}" />
+              <select class="fx-effect-select" name="system.effectsUI.{{i}}.effectKey" style="width:100%">
+                <option value="" {{#unless fx.effectKey}}selected{{/unless}}>— Nom libre ci-dessous —</option>
+                {{#each @root.EFFECT_CATALOG as |group gTag|}}
+                <optgroup label="{{gTag}}">
+                  {{#each group as |e|}}
+                  <option value="{{e.key}}" {{#if (eq ../../../effectsUI.[../i].effectKey e.key)}}selected{{/if}}>{{e.label}}</option>
+                  {{/each}}
+                </optgroup>
+                {{/each}}
+              </select>
+              <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}"
+                placeholder="Nom affiché (auto-rempli si catalogue)" style="margin-top:4px" />
             {{else}}
               <div><b>{{fx.label}}</b></div>
             {{/if}}

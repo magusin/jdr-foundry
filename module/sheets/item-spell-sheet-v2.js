@@ -197,6 +197,25 @@ static PARTS = foundry.utils.mergeObject(
 
     // permissions
     ctx.canEdit = this.isEditable;
+
+    // Catalogue d'effets groupé par type pour les optgroups du dropdown
+    const lib = game.rpg?.effectLibrary;
+    if (lib) {
+      const TAG_LABEL = { feu:"🔥 Feu", air:"🌬️ Air", eau:"💧 Eau", glace:"❄️ Glace",
+                          eclair:"⚡ Éclair", terre:"🌿 Terre", magique:"✨ Magique",
+                          physique:"⚔️ Physique" };
+      const byTag = {};
+      for (const e of lib.listEffects()) {
+        const g = e.tag ?? "autre";
+        if (!byTag[g]) byTag[g] = [];
+        byTag[g].push({ key: e.key, label: e.label });
+      }
+      ctx.EFFECT_CATALOG = Object.fromEntries(
+        Object.entries(byTag).map(([tag, list]) => [TAG_LABEL[tag] ?? tag, list])
+      );
+    } else {
+      ctx.EFFECT_CATALOG = {};
+    }
     ctx.isReadOnly = !ctx.canEdit;
 
     // defaults
@@ -336,6 +355,20 @@ static PARTS = foundry.utils.mergeObject(
     refreshModInputs();
     root.addEventListener("change", (ev) => {
       if (ev.target?.matches?.("select.mod-type")) refreshModInputs();
+
+      // Auto-remplit le label quand le MJ choisit un effet du catalogue
+      if (ev.target?.matches?.("select.fx-effect-select")) {
+        const sel = ev.target;
+        const key = sel.value;
+        if (!key) return;
+        const lib = game.rpg?.effectLibrary;
+        if (!lib) return;
+        const def = lib.getEffectDef(key);
+        if (!def) return;
+        // trouve le champ label dans le même fx-body
+        const labelInput = sel.closest(".fx-body")?.querySelector("input[name*='.label']");
+        if (labelInput && !labelInput.value.trim()) labelInput.value = def.label;
+      }
     });
   }
 
@@ -345,10 +378,15 @@ static PARTS = foundry.utils.mergeObject(
     const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
     effects.push({
       id: foundry.utils.randomID(),
-      label: "Effet",
+      effectKey: "",
+      label: "",
       target: "target",
       when: "hit",
-      duration: 0,
+      duration: 3,
+      permanent: false,
+      isAura: false,
+      auraMin: 0,
+      auraMax: 3,
       details: "",
       damage: { enabled: false, dice: "0", flat: 0, scaling: { stat: "intelligence", per: 10, perStep: 0 } },
       mods: []

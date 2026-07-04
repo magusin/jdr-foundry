@@ -1092,6 +1092,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       const fatigueDotFlat = n(fx.fatigueDot, 0);
 
       const tag = String(fx.tag ?? "").trim() || null;
+      const effectKey = String(fx.effectKey ?? "").trim() || null;
       const isAura = !!fx.isAura;
       const permanent = !!fx.permanent;
       const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
@@ -1101,6 +1102,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         label:     String(fx.label ?? item.name),
         type:      "spellEffect",
         tag,
+        effectKey,    // ← utilisé par computeResistanceFor pour le matching par effet précis
         isAura,
         permanent,
         duration,
