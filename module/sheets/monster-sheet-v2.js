@@ -177,7 +177,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         const field = img.dataset.field;
         if (!field) return;
         const current = foundry.utils.getProperty(this.document, field) ?? "";
-        const fp = new FilePicker({
+        const fp = new foundry.applications.apps.FilePicker({
           type: "image",
           current,
           callback: async (path) => {
