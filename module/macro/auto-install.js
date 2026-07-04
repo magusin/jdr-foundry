@@ -20,11 +20,20 @@ export async function autoInstallMacros() {
     return;
   }
 
-  // ✅ Force le chargement complet du contenu en mémoire (V13 : getIndex
-  // retourne seulement un index léger, getDocument peut retourner null si le
-  // pack n'est pas encore décompressé dans le cache de la session)
-  await pack.getDocuments();
-  const packIndex = pack.index;
+  // ✅ getDocuments() charge tout en mémoire ET retourne le tableau directement
+  // Ne pas rappeler getDocument() après — le cache V13 n'est pas fiable par _id
+  let packDocs;
+  try {
+    packDocs = await pack.getDocuments();
+  } catch (e) {
+    console.error("[RPG] Impossible de charger le compendium de macros :", e);
+    return;
+  }
+
+  if (!packDocs?.length) {
+    console.warn("[RPG] Compendium de macros vide ou non lisible.");
+    return;
+  }
 
   // ── 2. Crée le dossier si besoin ───────────────────────────────────────
   let folder = game.folders.find(
@@ -35,20 +44,8 @@ export async function autoInstallMacros() {
   }
 
   // ── 3. Pour chaque macro du compendium ────────────────────────────────
-  for (const entry of packIndex) {
-    let packDoc;
-    try {
-      packDoc = await pack.getDocument(entry._id);
-    } catch (e) {
-      console.warn(`[RPG] Impossible de charger la macro "${entry.name}" :`, e);
-      continue;
-    }
-
-    // Garde-fou : si getDocument retourne null/undefined malgré tout
-    if (!packDoc) {
-      console.warn(`[RPG] packDoc null pour "${entry.name}" — ignoré.`);
-      continue;
-    }
+  for (const packDoc of packDocs) {
+    if (!packDoc) continue;
 
     const packVer = String(packDoc.flags?.rpg?.version ?? "1.0.0");
 
