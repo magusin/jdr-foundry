@@ -698,7 +698,45 @@ Hooks.once("init", async () => {
   // ---------------------------
   // Génération automatique : token monstre
   // ---------------------------
-  // ── Génération aléatoire des monstres au drop ─────────────────────────
+  // ── Gestion des acteurs monstres importés depuis le compendium ──────────
+  // Foundry doit créer un acteur monde comme "prototype" pour les tokens non-
+  // liés. On les range dans un dossier dédié et on évite les doublons.
+  const MONSTER_IMPORT_FOLDER = "_Monstres (prototypes)";
+
+  Hooks.on("createActor", async (actor, options, userId) => {
+    if (userId !== game.userId) return;
+    if (!game.user.isGM) return;
+    if (actor.type !== "monster") return;
+
+    // Vérifie si cet acteur vient du compendium système
+    const sourceId = actor._stats?.compendiumSource ?? actor.flags?.core?.sourceId ?? "";
+    if (!sourceId) return;
+
+    // Cherche ou crée le dossier "prototypes"
+    let folder = game.folders.find(f => f.type === "Actor" && f.name === MONSTER_IMPORT_FOLDER);
+    if (!folder) {
+      folder = await Folder.create({ name: MONSTER_IMPORT_FOLDER, type: "Actor", color: "#4a3f6b" });
+    }
+
+    // Cherche un doublon existant (même sourceId, pas cet acteur)
+    const duplicate = game.actors.find(a =>
+      a.id !== actor.id &&
+      a.type === "monster" &&
+      (a._stats?.compendiumSource === sourceId || a.flags?.core?.sourceId === sourceId)
+    );
+
+    if (duplicate) {
+      // Un prototype de ce type existe déjà → supprime le nouveau (doublon)
+      await actor.delete();
+    } else {
+      // Premier import de ce type → range dans le dossier prototypes
+      if (actor.folder?.id !== folder.id) {
+        await actor.update({ folder: folder.id });
+      }
+    }
+  });
+
+
   // preCreateToken : intercepte avant la création pour forcer actorLink:false
   // et injecter les stats randomisées dans le delta du token (chaque token
   // a ses propres stats indépendantes, même si l'acteur source est identique)
