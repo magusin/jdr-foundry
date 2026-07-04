@@ -703,10 +703,15 @@ Hooks.once("init", async () => {
     if (!game.user.isGM) return;
 
     try {
-      if (tokenDoc.actorLink) return;
-
       const actor = tokenDoc.actor;
       if (!actor || actor.type !== "monster") return;
+
+      // ✅ On génère si les bands existent et que la génération n'a pas encore eu lieu.
+      // On ne bloque plus sur actorLink — un monstre importé depuis le compendium
+      // doit être généré à sa première apparition sur la carte.
+      const bands = actor.system?.gen?.bands ?? {};
+      const hasBands = Object.keys(bands).length > 0;
+      if (!hasBands) return;
 
       if (actor.system?.gen?.generated === true) return;
 

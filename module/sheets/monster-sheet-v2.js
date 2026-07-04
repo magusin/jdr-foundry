@@ -475,8 +475,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
   _stateDefaults() {
     return this._normalizeState({
       id: foundry.utils.randomID(),
-      label: "Brûlure", type: "burn", isAura: false,
-      duration: 2, remaining: 2, cleanseDC: 0,
+      label: "", tag: "", effectKey: "", isAura: false,
+      permanent: false,
+      duration: 3, remaining: 3, removeDifficulty: "",
       dot: { flat: 0, formula: "", perTick: 0 }, mods: {}
     });
   }
@@ -485,11 +486,13 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const out = foundry.utils.deepClone(st ?? {});
     out.id = String(out.id || foundry.utils.randomID());
     out.label = String(out.label ?? "").trim() || "État";
-    out.type = String(out.type ?? "custom").trim();
+    out.tag = String(out.tag ?? "").trim();
+    out.effectKey = String(out.effectKey ?? "").trim();
     out.isAura = !!out.isAura;
+    out.permanent = !!out.permanent;
     out.duration = Math.max(1, Number(out.duration ?? 1) || 1);
     out.remaining = Math.max(0, Number(out.remaining ?? out.duration) || 0);
-    out.cleanseDC = Math.max(0, Number(out.cleanseDC ?? 0) || 0);
+    out.removeDifficulty = String(out.removeDifficulty ?? "").trim();
     out.dot = out.dot ?? {};
     out.dot.flat = Number(out.dot.flat ?? 0) || 0;
     out.dot.formula = String(out.dot.formula ?? "").trim();
@@ -502,7 +505,8 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     return [
       "force", "dexterite", "intelligence", "acuite", "endurance",
       "pvMax", "manaMax", "regenPv", "regenMana",
-      "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe", "vitesse"
+      "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
+      "vitesse", "toucherPhysique", "toucherMagique", "initiativeMod", "fatigueMax"
     ];
   }
 
@@ -513,40 +517,92 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
       pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana",
       scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe",
-      resistanceFixe: "Résistance fixe", vitesse: "Vitesse"
+      resistanceFixe: "Résistance fixe", vitesse: "Vitesse",
+      toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+      initiativeMod: "Initiative", fatigueMax: "Fatigue max"
     };
+
+    // Catalogue d'effets groupé par type
+    const lib = game.rpg?.effectLibrary;
+    const TAG_LABEL = { feu:"🔥 Feu", air:"🌬️ Air", eau:"💧 Eau", glace:"❄️ Glace",
+                        eclair:"⚡ Éclair", terre:"🌿 Terre", magique:"✨ Magique",
+                        physique:"⚔️ Physique" };
+    let effectOptions = `<option value="">— Nom libre ci-dessous —</option>`;
+    if (lib) {
+      const byTag = {};
+      for (const e of lib.listEffects()) {
+        if (!byTag[e.tag]) byTag[e.tag] = [];
+        byTag[e.tag].push(e);
+      }
+      effectOptions += Object.entries(byTag).map(([tag, list]) =>
+        `<optgroup label="${TAG_LABEL[tag] ?? tag}">` +
+        list.map(e => `<option value="${e.key}" ${st.effectKey === e.key ? "selected" : ""}>${e.label}</option>`).join("") +
+        `</optgroup>`
+      ).join("");
+    }
+
+    const tagOptions = ["", "feu","air","eau","glace","eclair","terre","magique","physique"]
+      .map(t => `<option value="${t}" ${st.tag === t ? "selected" : ""}>${t ? (TAG_LABEL[t] ?? t) : "— Aucun —"}</option>`)
+      .join("");
+
+    const diffOptions = ["","trivial","facile","moyen","difficile","tresDifficile","quasiImpossible"]
+      .map(k => {
+        const lbl = {
+          "":"— Pas de retrait par jet —", trivial:"Trivial (TN 6+)", facile:"Facile (TN 9+)",
+          moyen:"Moyen (TN 11+)", difficile:"Difficile (TN 14+)",
+          tresDifficile:"Très difficile (TN 17+)", quasiImpossible:"Quasi impossible (TN 19+)"
+        }[k];
+        return `<option value="${k}" ${st.removeDifficulty === k ? "selected" : ""}>${lbl}</option>`;
+      }).join("");
+
     const row = (k) => {
       const cur = st.mods?.[k] ?? {};
-      return `<div class="form-group" style="display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;">
-        <label>${labels[k] ?? k}</label>
-        <input type="number" name="mods.${k}.flat" value="${Number(cur.flat??0)||0}" placeholder="Flat"/>
+      return `<div style="display:grid;grid-template-columns:1fr 80px 80px;gap:6px;align-items:center;padding:2px 0">
+        <label style="font-size:12px">${labels[k] ?? k}</label>
+        <input type="number" name="mods.${k}.flat" value="${Number(cur.flat??0)||0}" placeholder="Fixe"/>
         <input type="number" name="mods.${k}.pct" value="${Number(cur.pct??0)||0}" placeholder="%"/>
       </div>`;
     };
+
     const html = `
     <form class="rpg-state-edit">
-      <div class="form-group"><label>Nom</label><input type="text" name="label" value="${st.label}"/></div>
-      <div class="form-group"><label>Type</label><select name="type">
-        ${["poison","burn","buff","debuff","aura","custom"].map(t=>`<option value="${t}"${st.type===t?" selected":""}>${t}</option>`).join("")}
-      </select></div>
-      <div class="form-group"><label>Aura</label><input type="checkbox" name="isAura"${st.isAura?" checked":""}/></div>
-      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="form-group">
+        <label>Effet (catalogue)</label>
+        <select id="se-catalogue">${effectOptions}</select>
+      </div>
+      <div class="form-group">
+        <label>Nom affiché (auto-rempli ou libre)</label>
+        <input type="text" name="label" id="se-label" value="${st.label}"/>
+      </div>
+      <div class="form-group">
+        <label>Type / Élément (résistances)</label>
+        <select name="tag">${tagOptions}</select>
+      </div>
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label>Durée (tours)</label><input type="number" name="duration" value="${st.duration}" min="1"/></div>
         <div><label>Restant</label><input type="number" name="remaining" value="${st.remaining}" min="0"/></div>
       </div>
-      <div class="form-group"><label>Difficulté retrait (DC)</label><input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/></div>
-      <hr/><h3>DOT</h3>
-      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div><label>DOT fixe</label><input type="number" name="dot.flat" value="${Number(st.dot.flat??0)||0}"/></div>
-        <div><label>DOT formule</label><input type="text" name="dot.formula" value="${st.dot.formula??""}" placeholder="ex: 1d4"/></div>
+      <div class="form-group" style="display:flex;gap:12px">
+        <label><input type="checkbox" name="permanent" ${st.permanent ? "checked" : ""}/> Permanent</label>
+        <label><input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/> Aura</label>
       </div>
-      <hr/><h3>Modificateurs</h3>
-      <p class="hint">Flat = +10 / -10. % = +10 / -10.</p>
+      <div class="form-group">
+        <label>Difficulté de retrait</label>
+        <select name="removeDifficulty">${diffOptions}</select>
+      </div>
+      <hr/>
+      <h3>Dégâts/tour</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label style="font-size:12px">DOT fixe (négatif=soin)</label><input type="number" name="dot.flat" value="${Number(st.dot.flat??0)||0}"/></div>
+        <div><label style="font-size:12px">DOT formule</label><input type="text" name="dot.formula" value="${st.dot.formula??""}" placeholder="ex: 1d4"/></div>
+      </div>
+      <hr/>
+      <h3>Modificateurs <span style="font-weight:400;font-size:11px">— Flat : valeur fixe · % : pourcentage</span></h3>
       ${keys.map(row).join("")}
     </form>`;
 
     return new Promise((resolve) => {
-      new Dialog({
+      const dlg = new Dialog({
         title: title || "État",
         content: html,
         buttons: {
@@ -555,15 +611,25 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
             label: "Enregistrer",
             callback: (dlgHtml) => {
               const fd = new FormData(dlgHtml[0].querySelector("form"));
+              const root = dlgHtml[0];
               const getStr = (k, d="") => String(fd.get(k)??d).trim();
               const getNum = (k, d=0) => Number(fd.get(k)??d)||0;
               const out = this._normalizeState(st);
+
+              // Catalogue sélectionné → récupère tag depuis la def si label vide
+              const selectedKey = root.querySelector("#se-catalogue")?.value ?? "";
+              out.effectKey = selectedKey;
               out.label = getStr("label", out.label);
-              out.type = getStr("type", out.type);
+              if (!out.label && selectedKey && lib) {
+                out.label = lib.getEffectDef(selectedKey)?.label ?? selectedKey;
+              }
+
+              out.tag = getStr("tag", out.tag);
               out.isAura = !!fd.get("isAura");
+              out.permanent = !!fd.get("permanent");
               out.duration = Math.max(1, getNum("duration", out.duration));
               out.remaining = Math.max(0, getNum("remaining", out.remaining));
-              out.cleanseDC = Math.max(0, getNum("cleanseDC", out.cleanseDC));
+              out.removeDifficulty = getStr("removeDifficulty", "");
               out.dot.flat = getNum("dot.flat", 0);
               out.dot.formula = getStr("dot.formula", "");
               out.dot.perTick = out.dot.flat;
@@ -577,7 +643,20 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
             }
           }
         },
-        default: "ok"
+        default: "ok",
+        render: (dlgHtml) => {
+          // Auto-remplissage du nom depuis le catalogue
+          const catalogue = dlgHtml[0].querySelector("#se-catalogue");
+          const labelInput = dlgHtml[0].querySelector("#se-label");
+          catalogue?.addEventListener("change", () => {
+            const key = catalogue.value;
+            if (!key || !lib) return;
+            const def = lib.getEffectDef(key);
+            if (def && (!labelInput.value || labelInput.value === "État")) {
+              labelInput.value = def.label;
+            }
+          });
+        }
       }).render(true);
     });
   }
