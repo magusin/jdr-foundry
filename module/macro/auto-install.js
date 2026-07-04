@@ -20,7 +20,11 @@ export async function autoInstallMacros() {
     return;
   }
 
-  const packIndex = await pack.getIndex();
+  // ✅ Force le chargement complet du contenu en mémoire (V13 : getIndex
+  // retourne seulement un index léger, getDocument peut retourner null si le
+  // pack n'est pas encore décompressé dans le cache de la session)
+  await pack.getDocuments();
+  const packIndex = pack.index;
 
   // ── 2. Crée le dossier si besoin ───────────────────────────────────────
   let folder = game.folders.find(
@@ -32,14 +36,26 @@ export async function autoInstallMacros() {
 
   // ── 3. Pour chaque macro du compendium ────────────────────────────────
   for (const entry of packIndex) {
-    const packDoc  = await pack.getDocument(entry._id);
-    const packVer  = String(packDoc.flags?.rpg?.version ?? "1.0.0");
+    let packDoc;
+    try {
+      packDoc = await pack.getDocument(entry._id);
+    } catch (e) {
+      console.warn(`[RPG] Impossible de charger la macro "${entry.name}" :`, e);
+      continue;
+    }
 
-    // Dédoublonnage : si plusieurs macros du même nom existent, on garde la première
-    // et on supprime les copies en trop (peuvent apparaître après un drag manuel répété)
+    // Garde-fou : si getDocument retourne null/undefined malgré tout
+    if (!packDoc) {
+      console.warn(`[RPG] packDoc null pour "${entry.name}" — ignoré.`);
+      continue;
+    }
+
+    const packVer = String(packDoc.flags?.rpg?.version ?? "1.0.0");
+
+    // Dédoublonnage
     const allMatching = game.macros.filter((m) => m.name === packDoc.name);
     if (allMatching.length > 1) {
-      const [keep, ...extras] = allMatching;
+      const [, ...extras] = allMatching;
       await Promise.all(extras.map((m) => m.delete().catch(() => {})));
       console.log(`[RPG] ${extras.length} doublon(s) supprimé(s) pour "${packDoc.name}"`);
     }
@@ -47,7 +63,6 @@ export async function autoInstallMacros() {
     const existing = allMatching[0] ?? null;
 
     if (!existing) {
-      // Crée la macro
       await Macro.create({
         name:    packDoc.name,
         type:    packDoc.type,
@@ -58,7 +73,6 @@ export async function autoInstallMacros() {
       });
       console.log(`[RPG] Macro créée : ${packDoc.name} (v${packVer})`);
     } else {
-      // Compare les versions
       const worldVer = String(existing.flags?.[FLAG_SCOPE]?.[FLAG_VERSION] ?? "0.0.0");
       if (isNewer(packVer, worldVer)) {
         await existing.update({
