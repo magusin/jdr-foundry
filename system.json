@@ -3,11 +3,20 @@
   "title": "RPG",
   "description": "Système maison (MMO-tabletop)",
   "version": "0.3.0",
-  "compatibility": { "minimum": "13", "verified": "13" },
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
   "template": "template.json",
   "templateVersion": 2,
-  "authors": [{ "name": "Hugo" }],
-  "esmodules": ["module/init.js"],
+  "authors": [
+    {
+      "name": "Hugo"
+    }
+  ],
+  "esmodules": [
+    "module/init.js"
+  ],
   "styles": [
     "styles/character-sheet.css",
     "styles/menu-macro.css",
@@ -16,42 +25,78 @@
     "styles/item-sheet.css",
     "styles/weapon-sheet.css"
   ],
-  "languages": [{ "lang": "fr", "name": "Français", "path": "lang/fr.json" }],
+  "languages": [
+    {
+      "lang": "fr",
+      "name": "Français",
+      "path": "lang/fr.json"
+    }
+  ],
   "packs": [
     {
       "name": "macros-rpg",
       "label": "JDR — Macros système",
       "path": "packs/macros/macros.db",
       "type": "Macro",
-      "system": "rpg"
+      "system": "rpg",
+      "private": false,
+      "ownership": {
+        "GAMEMASTER": 3,
+        "ASSISTANT": 3,
+        "default": 2
+      }
     },
     {
       "name": "items-reference",
       "label": "JDR — Équipement de référence",
       "path": "packs/items/items.db",
       "type": "Item",
-      "system": "rpg"
+      "system": "rpg",
+      "private": false,
+      "ownership": {
+        "GAMEMASTER": 3,
+        "ASSISTANT": 3,
+        "default": 2
+      }
     },
     {
       "name": "loot-tables",
       "label": "JDR — Tables de Butin",
       "path": "packs/loot-tables/loot-tables.db",
       "type": "RollTable",
-      "system": "rpg"
+      "system": "rpg",
+      "private": false,
+      "ownership": {
+        "GAMEMASTER": 3,
+        "ASSISTANT": 3,
+        "default": 2
+      }
     },
     {
       "name": "monsters-reference",
       "label": "JDR — Monstres de Référence",
       "path": "packs/monsters/monsters.db",
       "type": "Actor",
-      "system": "rpg"
+      "system": "rpg",
+      "private": false,
+      "ownership": {
+        "GAMEMASTER": 3,
+        "ASSISTANT": 3,
+        "default": 2
+      }
     },
     {
       "name": "documentation",
       "label": "JDR — Documentation (Guide Joueur / MJ)",
       "path": "packs/documentation/documentation.db",
       "type": "JournalEntry",
-      "system": "rpg"
+      "system": "rpg",
+      "private": false,
+      "ownership": {
+        "GAMEMASTER": 3,
+        "ASSISTANT": 3,
+        "default": 2
+      }
     }
   ],
   "documentTypes": {

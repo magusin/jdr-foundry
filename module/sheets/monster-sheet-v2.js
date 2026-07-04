@@ -170,6 +170,21 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const root = this.element;
     if (!root) return;
 
+    // ✅ Clic sur l'image de profil → sélecteur de fichier (API V2)
+    root.querySelectorAll("[data-edit]").forEach(img => {
+      img.style.cursor = game.user.isGM ? "pointer" : "default";
+      if (!game.user.isGM) return;
+      img.addEventListener("click", async () => {
+        const field = img.dataset.edit;
+        const fp = new FilePicker({
+          current: foundry.utils.getProperty(this.document, field),
+          type: "image",
+          callback: (path) => this.document.update({ [field]: path })
+        });
+        fp.browse();
+      });
+    });
+
     // Drag & drop d'item (GM only)
     setupActorItemDrop(this, root);
 

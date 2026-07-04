@@ -407,7 +407,23 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     await super._onRender(context, options);
 
     const root = this.element;
-    // Tabs (manuel, stable en v13+)
+
+    // ✅ Clic sur l'image de profil → sélecteur de fichier natif Foundry
+    // (API V2 : data-edit="img" n'est plus géré automatiquement, on le branche ici)
+    root.querySelectorAll("[data-edit]").forEach(img => {
+      img.style.cursor = "pointer";
+      img.addEventListener("click", async (ev) => {
+        if (!this.isEditable) return;
+        const field = img.dataset.edit;
+        const fp = new FilePicker({
+          current: foundry.utils.getProperty(this.document, field),
+          type: "image",
+          callback: (path) => this.document.update({ [field]: path })
+        });
+        fp.browse();
+      });
+    });
+
     if (!this._tabs) {
       const Tabs = foundry.applications.ux.Tabs;
       this._tabs = new Tabs({
