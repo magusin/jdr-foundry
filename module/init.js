@@ -17,7 +17,7 @@ import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
 
-import { randomizeMonster } from "./monster-gen.js";
+import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
 import { RPGItem } from "./documents/item.js";
 
@@ -698,38 +698,40 @@ Hooks.once("init", async () => {
   // ---------------------------
   // Génération automatique : token monstre
   // ---------------------------
-  Hooks.on("createToken", async (tokenDoc, options, userId) => {
-    if (userId !== game.userId) return;
+  // ── Génération aléatoire des monstres au drop ─────────────────────────
+  // preCreateToken : intercepte avant la création pour forcer actorLink:false
+  // et injecter les stats randomisées dans le delta du token (chaque token
+  // a ses propres stats indépendantes, même si l'acteur source est identique)
+  Hooks.on("preCreateToken", (tokenDoc, createData, options, userId) => {
     if (!game.user.isGM) return;
 
-    try {
-      const actor = tokenDoc.actor ?? game.actors.get(tokenDoc.actorId);
-      if (!actor || actor.type !== "monster") return;
+    const actor = tokenDoc.actor ?? game.actors.get(tokenDoc.actorId);
+    if (!actor || actor.type !== "monster") return;
 
-      const bands = actor.system?.gen?.bands ?? {};
-      const hasBands = Object.keys(bands).length > 0;
-      if (!hasBands) return;
+    const bands = actor.system?.gen?.bands ?? {};
+    if (!Object.keys(bands).length) return;
 
-      // Pour un acteur NON lié (token indépendant) : on ne génère qu'une fois
-      // Pour un acteur lié : chaque token est une instance, on regénère à chaque drop
-      const isLinked = tokenDoc.actorLink === true;
-      if (!isLinked && actor.system?.gen?.generated === true) return;
+    // Tire des stats aléatoires pour CE token
+    const randomUpdates = buildRandomUpdatesForActor(actor);
+    if (!randomUpdates) return;
 
-      // Délai court pour s'assurer que l'acteur est persisté dans le monde
-      await new Promise(r => setTimeout(r, 150));
-
-      const freshActor = game.actors.get(actor.id) ?? actor;
-
-      // Re-vérifie pour les non-liés (cas de race condition double-drop)
-      if (!isLinked && freshActor.system?.gen?.generated === true) return;
-
-      await game.rpg.randomizeMonster(freshActor);
-      await applyInitStatesToTokenActor(freshActor);
-      await RPG_AURAS?.refreshAuras?.();
-
-    } catch (e) {
-      console.error("[RPG] Erreur génération monstre createToken:", e);
+    // Convertit les clés pointées en objet imbriqué pour le delta V13
+    const delta = {};
+    for (const [k, v] of Object.entries(randomUpdates)) {
+      foundry.utils.setProperty(delta, k, v);
     }
+
+    // Force le token à être non-lié (indépendant) + injecte les stats dans son delta
+    tokenDoc.updateSource({
+      actorLink: false,
+      delta
+    });
+  });
+
+  // Nettoyage post-création (plus besoin du hook createToken pour la génération)
+  Hooks.on("createToken", async (tokenDoc, options, userId) => {
+    if (userId !== game.userId) return;
+    await RPG_AURAS?.refreshAuras?.();
   });
 
   // ---------------------------

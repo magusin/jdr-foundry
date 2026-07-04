@@ -104,41 +104,89 @@ export async function randomizeMonster(actor) {
   // =========================
   const updates = {
     "system.niveau": lvl,
-
-    // stats de base (éditables MJ si besoin)
     "system.principales.force": baseForce,
     "system.principales.intelligence": baseInt,
     "system.principales.dexterite": baseDex,
     "system.principales.acuite": baseAcu,
     "system.principales.endurance": baseEnd,
-
-    // défenses de base (les dérivés END seront ajoutés en prepareDerivedData)
     "system.defenses.armureFixe": baseArmFix,
     "system.defenses.resistanceFixe": baseResFix,
     "system.defenses.scoreArmure": baseScArm,
     "system.defenses.scoreResistance": baseScRes,
-
-    // vit / regen PV de base
     "system.deplacement.vitesse": vitBase,
     "system.regeneration.pv": regenPvBase,
-
-    // base immuable (sert de référence comme pour PJ)
     "system.base.pvMax": pvBase,
     "system.base.regenPv": regenPvBase,
     "system.base.vitesse": vitBase,
     "system.base.fatigueMax": fatigueMaxBase,
     "system.base.toucherPhysique": toucherPhysiqueBase,
     "system.base.toucherMagique": toucherMagiqueBase,
-
-    // PV du token : full life (sur le max final)
     "system.ressources.pv.max": pvMaxFinal,
     "system.ressources.pv.valeur": pvMaxFinal,
-
     "system.recompenses.xp": xpReward,
-
-    // marqueur optionnel
     "system.gen.generated": true
   };
 
   await actor.update(updates);
+}
+
+/**
+ * Génère les stats aléatoires sans les appliquer — retourne l'objet d'updates.
+ * Utilisé par preCreateToken pour injecter les stats dans le delta du token
+ * sans passer par un acteur du monde.
+ */
+export function buildRandomUpdatesForActor(actor) {
+  const lvl = pickLevel(actor);
+  if (!lvl) return null;
+  const band = getBand(actor, lvl);
+  if (!band) return null;
+
+  const s = band.stats ?? {};
+  const d = band.defenses ?? {};
+
+  const baseForce = rollClamped(s.force, 0, 0);
+  const baseInt   = rollClamped(s.intelligence, 0, 0);
+  const baseDex   = rollClamped(s.dexterite, 0, 0);
+  const baseAcu   = rollClamped(s.acuite, 0, 0);
+  const baseEnd   = rollClamped(s.endurance, 0, 0);
+
+  const baseArmFix = rollClamped(d.armureFixe, 0, 0);
+  const baseResFix = rollClamped(d.resistanceFixe, 0, 0);
+  const baseScArm  = rollClamped(d.scoreArmure, 0, 0);
+  const baseScRes  = rollClamped(d.scoreResistance, 0, 0);
+
+  const pvBase      = Math.max(1, rollClamped(band.pv, 30, 30));
+  const regenPvBase = rollClamped(band.regenPv, 0, 0);
+  const vitBase     = rollClamped(band.vitesse, 3, 3);
+  const xpReward    = Math.max(0, rollClamped(band.xpReward, 0, 0));
+  const fatigueMaxBase = rollClamped(band.fatigueMax, 10, 10);
+  const toucherPhysiqueBase = (() => { const [mn, mx] = getRange(band.toucherPhysique, 0, 0); return randInt(mn, mx); })();
+  const toucherMagiqueBase  = (() => { const [mn, mx] = getRange(band.toucherMagique, 0, 0); return randInt(mn, mx); })();
+
+  const pvMaxFinal = Math.max(1, pvBase + Math.floor(Math.max(0, baseEnd) / 5));
+
+  return {
+    "system.niveau": lvl,
+    "system.principales.force": baseForce,
+    "system.principales.intelligence": baseInt,
+    "system.principales.dexterite": baseDex,
+    "system.principales.acuite": baseAcu,
+    "system.principales.endurance": baseEnd,
+    "system.defenses.armureFixe": baseArmFix,
+    "system.defenses.resistanceFixe": baseResFix,
+    "system.defenses.scoreArmure": baseScArm,
+    "system.defenses.scoreResistance": baseScRes,
+    "system.deplacement.vitesse": vitBase,
+    "system.regeneration.pv": regenPvBase,
+    "system.base.pvMax": pvBase,
+    "system.base.regenPv": regenPvBase,
+    "system.base.vitesse": vitBase,
+    "system.base.fatigueMax": fatigueMaxBase,
+    "system.base.toucherPhysique": toucherPhysiqueBase,
+    "system.base.toucherMagique": toucherMagiqueBase,
+    "system.ressources.pv.max": pvMaxFinal,
+    "system.ressources.pv.valeur": pvMaxFinal,
+    "system.recompenses.xp": xpReward,
+    "system.gen.generated": true
+  };
 }
