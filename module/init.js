@@ -703,21 +703,30 @@ Hooks.once("init", async () => {
     if (!game.user.isGM) return;
 
     try {
-      const actor = tokenDoc.actor;
+      const actor = tokenDoc.actor ?? game.actors.get(tokenDoc.actorId);
       if (!actor || actor.type !== "monster") return;
 
-      // ✅ On génère si les bands existent et que la génération n'a pas encore eu lieu.
-      // On ne bloque plus sur actorLink — un monstre importé depuis le compendium
-      // doit être généré à sa première apparition sur la carte.
       const bands = actor.system?.gen?.bands ?? {};
       const hasBands = Object.keys(bands).length > 0;
       if (!hasBands) return;
 
-      if (actor.system?.gen?.generated === true) return;
+      // Pour un acteur NON lié (token indépendant) : on ne génère qu'une fois
+      // Pour un acteur lié : chaque token est une instance, on regénère à chaque drop
+      const isLinked = tokenDoc.actorLink === true;
+      if (!isLinked && actor.system?.gen?.generated === true) return;
 
-      await game.rpg.randomizeMonster(actor);
-      await applyInitStatesToTokenActor(actor);
+      // Délai court pour s'assurer que l'acteur est persisté dans le monde
+      await new Promise(r => setTimeout(r, 150));
+
+      const freshActor = game.actors.get(actor.id) ?? actor;
+
+      // Re-vérifie pour les non-liés (cas de race condition double-drop)
+      if (!isLinked && freshActor.system?.gen?.generated === true) return;
+
+      await game.rpg.randomizeMonster(freshActor);
+      await applyInitStatesToTokenActor(freshActor);
       await RPG_AURAS?.refreshAuras?.();
+
     } catch (e) {
       console.error("[RPG] Erreur génération monstre createToken:", e);
     }
