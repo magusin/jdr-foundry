@@ -1,9 +1,26 @@
 <form class="rpg-sheet sheet actor monster-sheet" autocomplete="off">
   <header class="sheet-header">
-    <img class="profile" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64" />
-    <h1>
-      <input name="name" type="text" value="{{actor.name}}" {{#unless canSeeStats}}disabled{{/unless}} />
-    </h1>
+    <div style="display:flex;gap:10px;align-items:center">
+      {{#if canSeeStats}}
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <img class="profile rpg-img-edit" src="{{actor.img}}" data-field="img"
+          title="Cliquer pour changer le portrait" height="64" width="64"
+          style="cursor:pointer;border-radius:8px;border:2px solid var(--color-border-light-2)" />
+        <small style="font-size:9px;opacity:.7">Portrait</small>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <img class="profile rpg-img-edit" src="{{actor.prototypeToken.texture.src}}" data-field="prototypeToken.texture.src"
+          title="Cliquer pour changer l'image du token" height="64" width="64"
+          style="cursor:pointer;border-radius:8px;border:2px solid var(--color-border-light-2);object-fit:cover" />
+        <small style="font-size:9px;opacity:.7">Token</small>
+      </div>
+      {{else}}
+      <img class="profile" src="{{actor.img}}" height="64" width="64" style="border-radius:8px" />
+      {{/if}}
+      <h1 style="flex:1">
+        <input name="name" type="text" value="{{actor.name}}" {{#unless canSeeStats}}disabled{{/unless}} />
+      </h1>
+    </div>
   </header>
 
   <nav class="sheet-tabs tabs">
