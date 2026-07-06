@@ -37,66 +37,31 @@
       "name": "macros-rpg",
       "label": "JDR — Macros système",
       "path": "packs/macros/macros.db",
-      "type": "Macro",
-      "system": "rpg",
-      "private": false,
-      "ownership": {
-        "GAMEMASTER": 3,
-        "ASSISTANT": 3,
-        "default": 2
-      }
+      "type": "Macro"
     },
     {
       "name": "items-reference",
       "label": "JDR — Équipement de référence",
       "path": "packs/items/items.db",
-      "type": "Item",
-      "system": "rpg",
-      "private": false,
-      "ownership": {
-        "GAMEMASTER": 3,
-        "ASSISTANT": 3,
-        "default": 2
-      }
+      "type": "Item"
     },
     {
       "name": "loot-tables",
       "label": "JDR — Tables de Butin",
       "path": "packs/loot-tables/loot-tables.db",
-      "type": "RollTable",
-      "system": "rpg",
-      "private": false,
-      "ownership": {
-        "GAMEMASTER": 3,
-        "ASSISTANT": 3,
-        "default": 2
-      }
+      "type": "RollTable"
     },
     {
       "name": "monsters-reference",
       "label": "JDR — Monstres de Référence",
       "path": "packs/monsters/monsters.db",
-      "type": "Actor",
-      "system": "rpg",
-      "private": false,
-      "ownership": {
-        "GAMEMASTER": 3,
-        "ASSISTANT": 3,
-        "default": 2
-      }
+      "type": "Actor"
     },
     {
       "name": "documentation",
       "label": "JDR — Documentation (Guide Joueur / MJ)",
       "path": "packs/documentation/documentation.db",
-      "type": "JournalEntry",
-      "system": "rpg",
-      "private": false,
-      "ownership": {
-        "GAMEMASTER": 3,
-        "ASSISTANT": 3,
-        "default": 2
-      }
+      "type": "JournalEntry"
     }
   ],
   "documentTypes": {
