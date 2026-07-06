@@ -1,805 +1,295 @@
-{{!-- systems/rpg/module/templates/item/spell-sheet.hbs --}}
-
-<div class="rpg-sheet" autocomplete="off">
-  <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
-    <img src="{{item.img}}" data-edit="img" title="{{item.name}}" width="64" height="64" />
-    <div style="flex:1;">
-      <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;" {{#if
-        isReadOnly}}disabled{{/if}} />
-      <small>Sort</small>
+<form class="rpg-sheet rpg-spell-sheet" autocomplete="off">
+  <header class="sheet-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img class="rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image"
+        style="width:48px;height:48px;cursor:{{#if canEdit}}pointer{{else}}default{{/if}};border-radius:8px;border:1px solid var(--color-border-light-2)"/>
+      <input name="name" type="text" value="{{item.name}}" placeholder="Nom du sort" {{#unless canEdit}}disabled{{/unless}} style="flex:1;font-size:1.3em;font-weight:700"/>
     </div>
   </header>
 
-  <hr />
+  <section class="sheet-body" style="display:flex;flex-direction:column;gap:10px;padding:10px">
 
-  {{!-- =========================
-  PARAMÈTRES (GM = inputs, Joueur = texte gras)
-  ========================== --}}
-  <section>
-    <h2>Paramètres</h2>
+    {{!-- ═══ INFOS GÉNÉRALES ═══ --}}
+    <section class="card">
+      <h2>Général</h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div>
-        <label>Vitesse</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.speed}}</b></div>
-        {{else}}
-        <select name="system.speed">
-          <option value="normal" {{#if (eq system.speed "normal" )}}selected{{/if}}>Normal</option>
-          <option value="rapide" {{#if (eq system.speed "rapide" )}}selected{{/if}}>Rapide</option>
-        </select>
-        {{/if}}
-      </div>
-
-      <div>
-        <label>Coût Mana</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.coutMana}}</b></div>
-        {{else}}
-        <input type="number" name="system.coutMana" value="{{system.coutMana}}" min="0" />
-        {{/if}}
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Portée min (cases)</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.range.min}}</b></div>
-        {{else}}
-        <input type="number" name="system.range.min" value="{{system.range.min}}" min="0" />
-        {{/if}}
-      </div>
-      <div>
-        <label>Portée max (cases)</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.range.max}}</b></div>
-        {{else}}
-        <input type="number" name="system.range.max" value="{{system.range.max}}" min="0" />
-        {{/if}}
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Cibles min</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.targetCount.min}}</b></div>
-        {{else}}
-        <input type="number" name="system.targetCount.min" value="{{system.targetCount.min}}" min="0" />
-        {{/if}}
-      </div>
-      <div>
-        <label>Cibles max</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.targetCount.max}}</b></div>
-        {{else}}
-        <input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" />
-        {{/if}}
-      </div>
-    </div>
-
-    <div style="margin-top:8px;">
-      <label>Coût en fatigue (1 par défaut, augmente pour un sort éprouvant)</label>
-      {{#if isReadOnly}}
-      <div><b>{{system.fatigueCost}}</b></div>
-      {{else}}
-      <input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" />
-      {{/if}}
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Type</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.livraison}}</b></div>
-        {{else}}
-        <select name="system.livraison">
-          <option value="magique" {{#if (eq system.livraison "magique" )}}selected{{/if}}>Magique</option>
-          <option value="physique" {{#if (eq system.livraison "physique" )}}selected{{/if}}>Physique</option>
-        </select>
-        {{/if}}
-      </div>
-
-      <div>
-        <label>Difficulté toucher</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.difficulte}}</b></div>
-        {{else}}
-        <input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="999" />
-        {{/if}}
-      </div>
-    </div>
-  </section>
-
-  <hr />
-
-  {{!-- =========================
-  COOLDOWN (GM = inputs, Joueur = texte gras)
-  ========================== --}}
-  <section>
-    <h2>Cooldown</h2>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div>
-        <label>Cooldown max (tours)</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.cooldown.max}}</b></div>
-        {{else}}
-        <input type="number" name="system.cooldown.max" value="{{system.cooldown.max}}" min="0" />
-        {{/if}}
-      </div>
-      <div>
-        <label>Cooldown restant</label>
-        {{#if isReadOnly}}
-        <div><b>{{system.cooldown.restant}}</b></div>
-        {{else}}
-        <input type="number" name="system.cooldown.restant" value="{{system.cooldown.restant}}" min="0" />
-        {{/if}}
-      </div>
-    </div>
-    <p class="hint" style="margin-top:6px;">
-      Le cooldown baisse de 1 au début du tour du possesseur du sort (ton tick global).
-    </p>
-  </section>
-
-  <hr />
-
-  {{!-- =========================
-  DÉGÂTS (GM)
-  ========================== --}}
-  {{#if @root.canEdit}}
-  <section>
-    <h2>Dégâts</h2>
-
-    <label style="display:flex; gap:8px; align-items:center;">
-<input type="hidden" name="system.damage.enabled" value="0" />
-<input type="checkbox" name="system.damage.enabled" value="1" {{#if system.damage.enabled}}checked{{/if}} />      
-Ce sort inflige des dégâts
-    </label>
-
-    {{#if system.damage.enabled}}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Dés</label>
-        <input type="text" name="system.damage.dice" value="{{system.damage.dice}}" placeholder="ex: 1d10" />
-      </div>
-      <div>
-        <label>Fixe</label>
-        <input type="number" name="system.damage.flat" value="{{system.damage.flat}}" />
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Scaling stat</label>
-        <select name="system.damage.scaling.stat">
-          <option value="intelligence" {{#if (eq system.damage.scaling.stat "intelligence" )}}selected{{/if}}>
-            Intelligence</option>
-          <option value="force" {{#if (eq system.damage.scaling.stat "force" )}}selected{{/if}}>Force</option>
-          <option value="dexterite" {{#if (eq system.damage.scaling.stat "dexterite" )}}selected{{/if}}>Dextérité
-          </option>
-          <option value="acuite" {{#if (eq system.damage.scaling.stat "acuite" )}}selected{{/if}}>Acuité</option>
-          <option value="endurance" {{#if (eq system.damage.scaling.stat "endurance" )}}selected{{/if}}>Endurance
-          </option>
-        </select>
-      </div>
-      <div>
-        <label>Par (ex: 10)</label>
-        <input type="number" name="system.damage.scaling.per" value="{{system.damage.scaling.per}}" min="1" />
-      </div>
-      <div>
-        <label>Gain / palier</label>
-        <input type="number" name="system.damage.scaling.perStep" value="{{system.damage.scaling.perStep}}" />
-      </div>
-    </div>
-
-    <hr />
-    <h3>Dégâts Crit</h3>
-
-    <label style="display:flex; gap:8px; align-items:center;">
-<input type="hidden" name="system.damageCrit.enabled" value="0" />
-<input type="checkbox" name="system.damageCrit.enabled" value="1" {{#if system.damageCrit.enabled}}checked{{/if}} />
-      Le critique a une formule différente
-    </label>
-
-    {{#if system.damageCrit.enabled}}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Dés (crit)</label>
-        <input type="text" name="system.damageCrit.dice" value="{{system.damageCrit.dice}}" placeholder="ex: 1d10" />
-      </div>
-      <div>
-        <label>Fixe (crit)</label>
-        <input type="number" name="system.damageCrit.flat" value="{{system.damageCrit.flat}}" />
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Scaling stat (crit)</label>
-        <select name="system.damageCrit.scaling.stat">
-          <option value="intelligence" {{#if (eq system.damageCrit.scaling.stat "intelligence" )}}selected{{/if}}>
-            Intelligence</option>
-          <option value="force" {{#if (eq system.damageCrit.scaling.stat "force" )}}selected{{/if}}>Force</option>
-          <option value="dexterite" {{#if (eq system.damageCrit.scaling.stat "dexterite" )}}selected{{/if}}>Dextérité
-          </option>
-          <option value="acuite" {{#if (eq system.damageCrit.scaling.stat "acuite" )}}selected{{/if}}>Acuité</option>
-          <option value="endurance" {{#if (eq system.damageCrit.scaling.stat "endurance" )}}selected{{/if}}>Endurance
-          </option>
-        </select>
-      </div>
-      <div>
-        <label>Par (crit)</label>
-        <input type="number" name="system.damageCrit.scaling.per" value="{{system.damageCrit.scaling.per}}" min="1" />
-      </div>
-      <div>
-        <label>Gain / palier (crit)</label>
-        <input type="number" name="system.damageCrit.scaling.perStep" value="{{system.damageCrit.scaling.perStep}}" />
-      </div>
-    </div>
-    {{/if}}
-    {{/if}}
-  </section>
-  {{/if}}
-
-  {{!-- =========================
-  DÉGÂTS (Joueur) : texte + bonus stats (PAS de "Fixe")
-  ========================== --}}
-  {{#if isReadOnly}}
-  {{#if ui.hasDamage}}
-  <section>
-    <h2>Dégâts</h2>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Dés</label>
-        <div><b>{{system.damage.dice}}</b></div>
-      </div>
-      <div>
-        <label>Fixe</label>
-        <div><b>{{system.damage.flat}}</b></div>
-      </div>
-    </div>
-
-    <div style="margin-top:8px;">
-      <label>Dégâts des stats</label>
-      <div><b>{{ui.damageStatBonus}}</b></div>
-    </div>
-
-    {{#if ui.hasDamageCrit}}
-    <hr />
-    <h3>Dégâts Crit</h3>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Dés (crit)</label>
-        <div><b>{{system.damageCrit.dice}}</b></div>
-      </div>
-      <div>
-        <label>Fixe (crit)</label>
-        <div><b>{{system.damageCrit.flat}}</b></div>
-      </div>
-    </div>
-
-    <div style="margin-top:8px;">
-      <label>Dégâts des stats (crit)</label>
-      <div><b>{{ui.damageCritStatBonus}}</b></div>
-    </div>
-    {{/if}}
-  </section>
-  {{/if}}
-  {{/if}}
-
-  <hr />
-
-  {{!-- =========================
-  AURA (GM)
-  ========================== --}}
-  {{#if @root.canEdit}}
-  <section>
-    <h2>Aura</h2>
-
-    <label style="display:flex; gap:8px; align-items:center;">
-<input type="hidden" name="system.aura.active" value="0" />
-<input type="checkbox" name="system.aura.active" value="1" {{#if system.aura.active}}checked{{/if}} />
-      Ce sort active une aura (après réussite/crit)
-    </label>
-
-    {{#if system.aura.active}}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Portée aura min</label>
-        <input type="number" name="system.aura.range.min" value="{{system.aura.range.min}}" min="0" />
-      </div>
-      <div>
-        <label>Portée aura max</label>
-        <input type="number" name="system.aura.range.max" value="{{system.aura.range.max}}" min="0" />
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Cibles</label>
-        <select name="system.aura.target">
-          <option value="allies" {{#if (eq system.aura.target "allies" )}}selected{{/if}}>Alliés</option>
-          <option value="enemies" {{#if (eq system.aura.target "enemies" )}}selected{{/if}}>Ennemis</option>
-          <option value="both" {{#if (eq system.aura.target "both" )}}selected{{/if}}>Tous</option>
-        </select>
-      </div>
-      <div>
-        <label>Nom / clé d’aura</label>
-        <input type="text" name="system.aura.key" value="{{system.aura.key}}" placeholder="ex: Aura de bravoure" />
-      </div>
-    </div>
-
-    <p class="hint" style="margin-top:6px;">
-      Important : portée du sort et portée de l’aura sont indépendantes.
-    </p>
-    {{/if}}
-  </section>
-  {{/if}}
-
-  {{!-- =========================
-  AURA (Joueur)
-  ========================== --}}
-  {{#if isReadOnly}}
-  {{#if ui.hasAuraFields}}
-  <section>
-    <h2>Aura</h2>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Portée aura min</label>
-        <div><b>{{system.aura.range.min}}</b></div>
-      </div>
-      <div>
-        <label>Portée aura max</label>
-        <div><b>{{system.aura.range.max}}</b></div>
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-      <div>
-        <label>Cibles</label>
-        <div><b>{{system.aura.target}}</b></div>
-      </div>
-      <div>
-        <label>Nom / clé d’aura</label>
-        <div><b>{{system.aura.key}}</b></div>
-      </div>
-    </div>
-  </section>
-  {{/if}}
-  {{/if}}
-
-  <hr />
-
-{{!-- =========================
-EFFETS (GM = inputs/select, Joueur = texte gras)
-========================== --}}
-<section class="effects-ui">
-  <div class="fx-toolbar">
-    <h2 style="margin:0;">Effets</h2>
-    {{#if @root.canEdit}}
-      <div class="fx-actions">
-        <button type="button" class="btn" data-action="addEffect">+ Effet</button>
-      </div>
-    {{/if}}
-  </div>
-
-  {{#unless (lookup system.effectsUI 0)}}
-    <p class="hint">Aucun effet.</p>
-  {{/unless}}
-
-  <div class="fx-list">
-    {{#each system.effectsUI as |fx i|}}
-    <details class="fx-card" data-fx-index="{{i}}" open>
-      <summary class="fx-summary">
-        <div class="fx-title">
-          <b>{{fx.label}}</b>
-          <span class="fx-meta">
-            • {{#if (eq fx.when "hit")}}Touché{{/if}}{{#if (eq fx.when "crit")}}Crit{{/if}}{{#if (eq fx.when "cast")}}Lancement{{/if}}
-            • {{#if (eq fx.target "target")}}Cible{{else}}Soi{{/if}}
-            • {{fx.duration}} tour(s)
-          </span>
+        <div>
+          <label>Vitesse</label>
+          {{#if canEdit}}
+          <select name="system.speed" style="width:100%">
+            <option value="passif" {{#if (eq system.speed "passif")}}selected{{/if}}>Passif</option>
+            <option value="rapide" {{#if (eq system.speed "rapide")}}selected{{/if}}>Rapide</option>
+            <option value="normal" {{#if (eq system.speed "normal")}}selected{{/if}}>Normal</option>
+          </select>
+          {{else}}<div><b>{{system.speed}}</b></div>{{/if}}
         </div>
 
-        {{#if @root.canEdit}}
-        <div class="fx-right">
-          <button type="button" class="icon" data-action="removeEffect" title="Supprimer">✕</button>
+        <div>
+          <label>Livraison</label>
+          {{#if canEdit}}
+          <select name="system.livraison" style="width:100%">
+            <option value="magique"  {{#if (eq system.livraison "magique")}}selected{{/if}}>Magique</option>
+            <option value="physique" {{#if (eq system.livraison "physique")}}selected{{/if}}>Physique</option>
+          </select>
+          {{else}}<div><b>{{system.livraison}}</b></div>{{/if}}
         </div>
-        {{/if}}
-      </summary>
 
-      <div class="fx-body">
-        <div class="fx-grid">
-          <div class="field">
-            <label>Effet (catalogue ou nom libre)</label>
-            {{#if @root.canEdit}}
-              <select class="fx-effect-select" name="system.effectsUI.{{i}}.effectKey" style="width:100%">
-                <option value="" {{#unless fx.effectKey}}selected{{/unless}}>— Nom libre ci-dessous —</option>
-                {{#each @root.EFFECT_CATALOG as |group gTag|}}
-                <optgroup label="{{gTag}}">
+        <div>
+          <label>Coût Mana</label>
+          {{#if canEdit}}<input type="number" name="system.coutMana" value="{{system.coutMana}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.coutMana}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Portée min</label>
+          {{#if canEdit}}<input type="number" name="system.range.min" value="{{system.range.min}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.range.min}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Portée max</label>
+          {{#if canEdit}}<input type="number" name="system.range.max" value="{{system.range.max}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.range.max}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Difficulté (TN+)</label>
+          {{#if canEdit}}<input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.difficulte}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Cibles min</label>
+          {{#if canEdit}}<input type="number" name="system.targetCount.min" value="{{system.targetCount.min}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.targetCount.min}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Cibles max</label>
+          {{#if canEdit}}<input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.targetCount.max}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Coût fatigue</label>
+          {{#if canEdit}}<input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.fatigueCost}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Recharge max</label>
+          {{#if canEdit}}<input type="number" name="system.cooldown.max" value="{{system.cooldown.max}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.cooldown.max}}</b></div>{{/if}}
+        </div>
+
+        <div>
+          <label>Recharge restante</label>
+          <input type="number" name="system.cooldown.restant" value="{{system.cooldown.restant}}" min="0" style="width:100%"/>
+        </div>
+
+      </div>
+    </section>
+
+    {{!-- ═══ DÉGÂTS (multiples lignes) ═══ --}}
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2>Dégâts</h2>
+        {{#if canEdit}}
+        <button type="button" data-action="addDmgLine" style="padding:2px 10px;cursor:pointer">+ Ligne</button>
+        {{/if}}
+      </div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">
+        Dés | Plat | Stat | Par | Gain/palier | Critique | Livraison
+      </div>
+
+      {{#each system.damages as |dmg i|}}
+      <div class="dmg-row" data-idx="{{i}}"
+        style="display:grid;grid-template-columns:80px 55px 1fr 55px 55px 80px 1fr 30px;gap:4px;align-items:center;margin-bottom:4px;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px">
+        <input type="text" name="system.damages.{{i}}.dice" value="{{dmg.dice}}" placeholder="1d6"
+          {{#unless canEdit}}disabled{{/unless}}/>
+        <input type="number" name="system.damages.{{i}}.flat" value="{{dmg.flat}}" placeholder="0"
+          {{#unless canEdit}}disabled{{/unless}}/>
+        <select name="system.damages.{{i}}.stat" {{#unless canEdit}}disabled{{/unless}}>
+          <option value="intelligence" {{#if (eq dmg.stat "intelligence")}}selected{{/if}}>Int</option>
+          <option value="force" {{#if (eq dmg.stat "force")}}selected{{/if}}>For</option>
+          <option value="dexterite" {{#if (eq dmg.stat "dexterite")}}selected{{/if}}>Dex</option>
+          <option value="acuite" {{#if (eq dmg.stat "acuite")}}selected{{/if}}>Acu</option>
+          <option value="endurance" {{#if (eq dmg.stat "endurance")}}selected{{/if}}>End</option>
+          <option value="" {{#unless dmg.stat}}selected{{/unless}}>—</option>
+        </select>
+        <input type="number" name="system.damages.{{i}}.per" value="{{dmg.per}}" placeholder="10"
+          {{#unless canEdit}}disabled{{/unless}}/>
+        <input type="number" name="system.damages.{{i}}.perStep" value="{{dmg.perStep}}" placeholder="1"
+          {{#unless canEdit}}disabled{{/unless}}/>
+        <input type="text" name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6 crit"
+          {{#unless canEdit}}disabled{{/unless}}/>
+        <select name="system.damages.{{i}}.livraison" {{#unless canEdit}}disabled{{/unless}}>
+          <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Mag</option>
+          <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Phys</option>
+        </select>
+        {{#if canEdit}}
+        <button type="button" data-action="removeDmgLine" data-idx="{{i}}"
+          style="cursor:pointer;color:#c0392b;border:none;background:none;font-size:16px">✕</button>
+        {{/if}}
+      </div>
+      {{/each}}
+
+      {{#unless system.damages.length}}
+      <div style="font-size:11px;opacity:.6;padding:4px">Aucune ligne de dégâts — clique "+ Ligne" pour en ajouter.</div>
+      {{/unless}}
+    </section>
+
+    {{!-- ═══ EFFETS ═══ --}}
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2>Effets secondaires</h2>
+        {{#if canEdit}}
+        <button type="button" data-action="addEffect" style="padding:2px 10px;cursor:pointer">+ Effet</button>
+        {{/if}}
+      </div>
+
+      {{#each system.effectsUI as |fx i|}}
+      <details class="fx-card" data-fx-index="{{i}}"
+        style="border:1px solid var(--color-border-light-2);border-radius:10px;margin-bottom:6px;overflow:hidden">
+        <summary style="cursor:pointer;padding:8px 12px;background:rgba(255,255,255,0.03);display:flex;align-items:center;gap:8px;list-style:none">
+          <span style="flex:1;font-weight:600">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
+          {{#if fx.tag}}<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.1)">{{fx.tag}}</span>{{/if}}
+          {{#if fx.dot.perTick}}<span style="font-size:11px;opacity:.7">{{fx.dot.perTick}} dég/tour</span>{{/if}}
+          {{#if canEdit}}
+          <button type="button" data-action="removeEffect" data-fx-index="{{i}}"
+            style="cursor:pointer;background:none;border:none;color:#c0392b;font-size:14px;padding:0 4px">✕</button>
+          {{/if}}
+        </summary>
+
+        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+
+          {{!-- Sélecteur catalogue + nom --}}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="font-size:11px">Effet du catalogue (auto-remplit nom + type)</label>
+              {{#if canEdit}}
+              <select class="fx-catalogue-select" data-fx-idx="{{i}}" style="width:100%">
+                <option value="">— Nom libre —</option>
+                {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+                <optgroup label="{{gLabel}}">
                   {{#each group as |e|}}
-                  <option value="{{e.key}}" {{#if (eq ../../../effectsUI.[../i].effectKey e.key)}}selected{{/if}}>{{e.label}}</option>
+                  <option value="{{e.key}}" data-tag="{{e.tag}}" data-label="{{e.label}}"
+                    {{#if (eq fx.effectKey e.key)}}selected{{/if}}>{{e.label}}</option>
                   {{/each}}
                 </optgroup>
                 {{/each}}
               </select>
+              {{/if}}
+            </div>
+            <div>
+              <label style="font-size:11px">Nom affiché</label>
+              {{#if canEdit}}
               <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}"
-                placeholder="Nom affiché (auto-rempli si catalogue)" style="margin-top:4px" />
-            {{else}}
-              <div><b>{{fx.label}}</b></div>
-            {{/if}}
+                placeholder="Nom de l'effet" style="width:100%"/>
+              {{else}}<div><b>{{fx.label}}</b></div>{{/if}}
+            </div>
           </div>
 
-          <div class="field">
-            <label>Quand</label>
-            {{#if @root.canEdit}}
-              <select name="system.effectsUI.{{i}}.when">
-                <option value="hit"  {{#if (eq fx.when "hit")}}selected{{/if}}>Touché</option>
-                <option value="crit" {{#if (eq fx.when "crit")}}selected{{/if}}>Crit</option>
-                <option value="cast" {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement</option>
-              </select>
-            {{else}}
-              <div><b>
-                {{#if (eq fx.when "hit")}}Touché{{/if}}
-                {{#if (eq fx.when "crit")}}Crit{{/if}}
-                {{#if (eq fx.when "cast")}}Au lancement{{/if}}
-              </b></div>
-            {{/if}}
-          </div>
-
-          <div class="field">
-            <label>Cible</label>
-            {{#if @root.canEdit}}
-              <select name="system.effectsUI.{{i}}.target">
-                <option value="target" {{#if (eq fx.target "target")}}selected{{/if}}>Cible</option>
-                <option value="self"   {{#if (eq fx.target "self")}}selected{{/if}}>Soi</option>
-              </select>
-            {{else}}
-              <div><b>{{#if (eq fx.target "target")}}Cible{{else}}Soi{{/if}}</b></div>
-            {{/if}}
-          </div>
-
-          <div class="field">
-            <label>Durée (tours)</label>
-            {{#if @root.canEdit}}
-              <input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" />
-            {{else}}
-              <div><b>{{fx.duration}}</b></div>
-            {{/if}}
-          </div>
-
-          <div class="field">
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}}
-                {{#unless @root.canEdit}}disabled{{/unless}} />
-              Permanent (ne s'estompe jamais seul)
-            </label>
-          </div>
-
-          <div class="field">
-            <label>Type / Élément (résistance)</label>
-            {{#if @root.canEdit}}
-              <select name="system.effectsUI.{{i}}.tag">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div>
+              <label style="font-size:11px">Type / Élément</label>
+              {{#if canEdit}}
+              <select name="system.effectsUI.{{i}}.tag" style="width:100%">
                 <option value="" {{#unless fx.tag}}selected{{/unless}}>— Aucun —</option>
-                <option value="magique"  {{#if (eq fx.tag "magique")}}selected{{/if}}>Magique</option>
-                <option value="physique" {{#if (eq fx.tag "physique")}}selected{{/if}}>Physique</option>
-                <option value="feu"    {{#if (eq fx.tag "feu")}}selected{{/if}}>Feu</option>
-                <option value="air"    {{#if (eq fx.tag "air")}}selected{{/if}}>Air</option>
-                <option value="eau"    {{#if (eq fx.tag "eau")}}selected{{/if}}>Eau</option>
-                <option value="glace"  {{#if (eq fx.tag "glace")}}selected{{/if}}>Glace</option>
-                <option value="eclair" {{#if (eq fx.tag "eclair")}}selected{{/if}}>Éclair</option>
-                <option value="terre"  {{#if (eq fx.tag "terre")}}selected{{/if}}>Terre</option>
+                <option value="magique"  {{#if (eq fx.tag "magique")}}selected{{/if}}>✨ Magique</option>
+                <option value="physique" {{#if (eq fx.tag "physique")}}selected{{/if}}>⚔️ Physique</option>
+                <option value="feu"    {{#if (eq fx.tag "feu")}}selected{{/if}}>🔥 Feu</option>
+                <option value="air"    {{#if (eq fx.tag "air")}}selected{{/if}}>🌬️ Air</option>
+                <option value="eau"    {{#if (eq fx.tag "eau")}}selected{{/if}}>💧 Eau</option>
+                <option value="glace"  {{#if (eq fx.tag "glace")}}selected{{/if}}>❄️ Glace</option>
+                <option value="eclair" {{#if (eq fx.tag "eclair")}}selected{{/if}}>⚡ Éclair</option>
+                <option value="terre"  {{#if (eq fx.tag "terre")}}selected{{/if}}>🌿 Terre</option>
               </select>
-            {{else}}
-              <div><b>{{fx.tag}}</b></div>
+              {{else}}<div><b>{{fx.tag}}</b></div>{{/if}}
+            </div>
+            <div>
+              <label style="font-size:11px">Durée (tours)</label>
+              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" style="width:100%"/>
+              {{else}}<div><b>{{fx.duration}}</b></div>{{/if}}
+            </div>
+            <div>
+              <label style="font-size:11px">Dégâts/tour <span style="opacity:.6">(négatif=soin)</span></label>
+              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" placeholder="0" style="width:100%"/>
+              {{else}}<div>{{fx.damage.flat}}</div>{{/if}}
+            </div>
+            <div>
+              <label style="font-size:11px">Fatigue/tour <span style="opacity:.6">(négatif=repos)</span></label>
+              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.fatigueDot" value="{{fx.fatigueDot}}" placeholder="0" style="width:100%"/>
+              {{else}}<div>{{fx.fatigueDot}}</div>{{/if}}
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px">
+            <label style="font-size:11px;display:flex;align-items:center;gap:4px">
+              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}}/>
+              Permanent
+            </label>
+            <label style="font-size:11px;display:flex;align-items:center;gap:4px">
+              <input type="checkbox" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}}/>
+              Aura
+            </label>
+            {{#if fx.isAura}}
+            <span style="font-size:11px;display:flex;align-items:center;gap:4px">
+              Portée :
+              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" {{#unless canEdit}}disabled{{/unless}}/>
+              –
+              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" {{#unless canEdit}}disabled{{/unless}}/>
+            </span>
             {{/if}}
           </div>
-        </div>
 
-        <div style="margin-top:8px;border-top:1px solid var(--color-border-light-2);padding-top:8px">
-          <label style="display:flex;align-items:center;gap:6px">
-            <input type="checkbox" class="fx-aura-toggle" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}}
-              {{#unless @root.canEdit}}disabled{{/unless}} />
-            Aura (rayonne autour de la cible plutôt que de s'appliquer une seule fois)
-          </label>
-          <div class="fx-aura-fields" style="display:{{#if fx.isAura}}flex{{else}}none{{/if}};gap:10px;margin-top:6px">
-            <div style="flex:1">
-              <label>Portée min</label>
-              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" />
+          {{!-- Modificateurs de stat --}}
+          {{#if canEdit}}
+          <div>
+            <div style="font-size:11px;font-weight:600;margin-bottom:4px">Modificateurs de stat
+              <span style="font-weight:400;opacity:.7">— Fixe / %</span>
+              <button type="button" class="fx-add-mod" data-fx-idx="{{i}}"
+                style="font-size:11px;cursor:pointer;margin-left:6px">+ Stat</button>
             </div>
-            <div style="flex:1">
-              <label>Portée max</label>
-              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" />
-            </div>
-          </div>
-        </div>
-
-        <div class="field" style="margin-top:10px;">
-          <label>Détails</label>
-          {{#if @root.canEdit}}
-            <textarea name="system.effectsUI.{{i}}.details" rows="2">{{fx.details}}</textarea>
-          {{else}}
-            {{#if fx.details}}
-              <div><b>{{fx.details}}</b></div>
-            {{/if}}
-          {{/if}}
-        </div>
-
-        {{!-- =========================
-        DÉGÂTS DE L'EFFET
-        - GM : checkbox + champs si enabled
-        - Joueur : seulement valeurs utiles (pas de 0 / vide)
-        ========================== --}}
-        {{#if @root.canEdit}}
-          <hr style="margin:12px 0; opacity:.25" />
-          <h3>Dégâts de l'effet</h3>
-
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="hidden" name="system.effectsUI.{{i}}.damage.enabled" value="0" />
-            <input type="checkbox"
-                   class="fx-dmg-enabled"
-                   name="system.effectsUI.{{i}}.damage.enabled"
-                   value="1"
-                   {{#if fx.damage.enabled}}checked{{/if}} />
-            Cet effet inflige des dégâts
-          </label>
-
-          {{#if fx.damage.enabled}}
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-              <div>
-                <label>Dés</label>
-                <input type="text" name="system.effectsUI.{{i}}.damage.dice" value="{{fx.damage.dice}}" placeholder="ex: 1d6" />
-              </div>
-              <div>
-                <label>Fixe</label>
-                <input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" />
-              </div>
-            </div>
-
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-              <div>
-                <label>Scaling stat</label>
-                <select name="system.effectsUI.{{i}}.damage.scaling.stat">
-                  <option value="intelligence" {{#if (eq fx.damage.scaling.stat "intelligence")}}selected{{/if}}>Intelligence</option>
-                  <option value="force"        {{#if (eq fx.damage.scaling.stat "force")}}selected{{/if}}>Force</option>
-                  <option value="dexterite"    {{#if (eq fx.damage.scaling.stat "dexterite")}}selected{{/if}}>Dextérité</option>
-                  <option value="acuite"       {{#if (eq fx.damage.scaling.stat "acuite")}}selected{{/if}}>Acuité</option>
-                  <option value="endurance"    {{#if (eq fx.damage.scaling.stat "endurance")}}selected{{/if}}>Endurance</option>
-                </select>
-              </div>
-              <div>
-                <label>Par</label>
-                <input type="number" name="system.effectsUI.{{i}}.damage.scaling.per" value="{{fx.damage.scaling.per}}" min="1" />
-              </div>
-              <div>
-                <label>Gain / palier</label>
-                <input type="number" name="system.effectsUI.{{i}}.damage.scaling.perStep" value="{{fx.damage.scaling.perStep}}" />
-              </div>
-            </div>
-          {{/if}}
-
-          <div style="margin-top:10px">
-            <label>Fatigue / tour (négatif = repos, positif = épuise la cible)</label>
-            <input type="number" name="system.effectsUI.{{i}}.fatigueDot" value="{{fx.fatigueDot}}" placeholder="ex: 2 ou -2" />
-          </div>
-
-        {{else}}
-          {{!-- JOUEUR : n'affiche la section que si il y a des valeurs utiles --}}
-          {{#if (or fx.uiHasDice fx.uiHasFlat fx.uiHasScaling)}}
-            <hr style="margin:12px 0; opacity:.25" />
-            <h3>Dégâts de l'effet</h3>
-
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
-              {{#if fx.uiHasDice}}
-              <div>
-                <label>Dés</label>
-                <div><b>{{fx.damage.dice}}</b></div>
-              </div>
-              {{/if}}
-
-              {{#if fx.uiHasFlat}}
-              <div>
-                <label>Fixe</label>
-                <div><b>{{fx.damage.flat}}</b></div>
-              </div>
-              {{/if}}
-            </div>
-
-            {{#if fx.uiHasScaling}}
-            <div style="margin-top:8px;">
-              <label>Dégâts des stats</label>
-              <div><b>{{fx.uiStatBonus}}</b></div>
-            </div>
-            {{/if}}
-          {{/if}}
-        {{/if}}
-
-        {{!-- =========================
-        MODS
-        ========================== --}}
-        {{#if @root.canEdit}}
-          <div class="mods-head">
-            <b>Mods</b>
-            <button type="button" class="btn small" data-action="addMod" data-fx-index="{{i}}">+ Mod</button>
-          </div>
-        {{/if}}
-
-        {{#if (lookup fx.mods 0)}}
-          {{#if @root.canEdit}}
-            <div class="mods-list">
-              {{#each fx.mods as |m j|}}
-              <div class="mod-line" data-mod-index="{{j}}">
-                <select class="mod-stat" name="system.effectsUI.{{i}}.mods.{{j}}.stat">
-                  <optgroup label="Caractéristiques">
-                    <option value="force"        {{#if (eq m.stat "force")}}selected{{/if}}>Force</option>
-                    <option value="intelligence" {{#if (eq m.stat "intelligence")}}selected{{/if}}>Intelligence</option>
-                    <option value="dexterite"    {{#if (eq m.stat "dexterite")}}selected{{/if}}>Dextérité</option>
-                    <option value="acuite"       {{#if (eq m.stat "acuite")}}selected{{/if}}>Acuité</option>
-                    <option value="endurance"    {{#if (eq m.stat "endurance")}}selected{{/if}}>Endurance</option>
-                  </optgroup>
-                  <optgroup label="Défenses">
-                    <option value="armureFixe"      {{#if (eq m.stat "armureFixe")}}selected{{/if}}>Armure fixe</option>
-                    <option value="resistanceFixe"  {{#if (eq m.stat "resistanceFixe")}}selected{{/if}}>Résistance fixe</option>
-                    <option value="scoreArmure"     {{#if (eq m.stat "scoreArmure")}}selected{{/if}}>Score Armure</option>
-                    <option value="scoreResistance" {{#if (eq m.stat "scoreResistance")}}selected{{/if}}>Score Résistance</option>
-                  </optgroup>
-                  <optgroup label="Ressources">
-                    <option value="pvMax"     {{#if (eq m.stat "pvMax")}}selected{{/if}}>PV max</option>
-                    <option value="manaMax"   {{#if (eq m.stat "manaMax")}}selected{{/if}}>Mana max</option>
-                    <option value="regenPv"   {{#if (eq m.stat "regenPv")}}selected{{/if}}>Régén PV</option>
-                    <option value="regenMana" {{#if (eq m.stat "regenMana")}}selected{{/if}}>Régén Mana</option>
-                  </optgroup>
-                  <optgroup label="Autres">
-                    <option value="vitesse" {{#if (eq m.stat "vitesse")}}selected{{/if}}>Vitesse</option>
-                    <option value="podsMax" {{#if (eq m.stat "podsMax")}}selected{{/if}}>Pods max</option>
-                    <option value="initiativeMod" {{#if (eq m.stat "initiativeMod")}}selected{{/if}}>Initiative</option>
-                  </optgroup>
-                  <optgroup label="Toucher">
-                    <option value="toucherPhysique" {{#if (eq m.stat "toucherPhysique")}}selected{{/if}}>Toucher physique</option>
-                    <option value="toucherMagique"  {{#if (eq m.stat "toucherMagique")}}selected{{/if}}>Toucher magique</option>
-                  </optgroup>
-                </select>
-
-                <select class="mod-mode" name="system.effectsUI.{{i}}.mods.{{j}}.mode">
-                  <option value="flat" {{#if (eq m.mode "flat")}}selected{{/if}}>+ Flat</option>
-                  <option value="pct"  {{#if (eq m.mode "pct")}}selected{{/if}}>%</option>
-                </select>
-
-                <select class="mod-type" name="system.effectsUI.{{i}}.mods.{{j}}.valueType">
-                  <option value="fixed"   {{#if (eq m.valueType "fixed")}}selected{{/if}}>Fixe</option>
-                  <option value="formula" {{#if (eq m.valueType "formula")}}selected{{/if}}>Formule</option>
-                </select>
-
-                <input class="mod-value" type="number" name="system.effectsUI.{{i}}.mods.{{j}}.value" value="{{m.value}}" placeholder="Valeur" />
-                <input class="mod-formula" type="text" name="system.effectsUI.{{i}}.mods.{{j}}.formula" value="{{m.formula}}" placeholder="ex: floor(@effP.intelligence/10)" />
-
-                <button type="button" class="icon" data-action="removeMod" data-fx-index="{{i}}" data-mod-index="{{j}}" title="Supprimer">✕</button>
+            <div class="fx-mods-list" data-fx-idx="{{i}}">
+              {{#each fx.mods as |mod mKey|}}
+              <div class="fx-mod-row" style="display:flex;gap:4px;align-items:center;margin-bottom:3px">
+                <span style="font-size:11px;flex:1">{{mKey}}</span>
+                <input type="number" name="system.effectsUI.{{i}}.mods.{{mKey}}.flat" value="{{mod.flat}}"
+                  placeholder="Fixe" style="width:60px"/>
+                <input type="number" name="system.effectsUI.{{i}}.mods.{{mKey}}.pct" value="{{mod.pct}}"
+                  placeholder="%" style="width:55px"/>
+                <button type="button" class="fx-remove-mod" data-fx-idx="{{i}}" data-mod-key="{{mKey}}"
+                  style="cursor:pointer;color:#c0392b;border:none;background:none">✕</button>
               </div>
               {{/each}}
             </div>
+          </div>
           {{else}}
-            {{!-- joueur : affichage simple (si tu veux filtrer les 0, on peut ajouter un flag m.uiShow) --}}
-            <div style="margin-top:12px;"><b>Bonus / Malus</b></div>
-            <div class="mods-list">
-              {{#each fx.mods as |m j|}}
-              <div class="mod-line" data-mod-index="{{j}}">
-                <div><b>{{m.stat}}</b></div>
-                <div><b>{{m.mode}}</b></div>
-                <div><b>{{m.valueType}}</b></div>
-                <div><b>{{m.value}}</b></div>
-                <div><b>{{m.formula}}</b></div>
-                <div></div>
-              </div>
-              {{/each}}
-            </div>
+          {{#if fx.mods}}
+          <div style="font-size:11px;opacity:.7">
+            {{#each fx.mods as |mod mKey|}}
+            <span>{{mKey}} : {{#if mod.flat}}{{mod.flat}}{{/if}}{{#if mod.pct}} / {{mod.pct}}%{{/if}} </span>
+            {{/each}}
+          </div>
           {{/if}}
-        {{else}}
-          <p class="hint" style="margin-top:6px;">{{#if @root.canEdit}}Aucun mod.{{else}}Aucun bonus/malus.{{/if}}</p>
-        {{/if}}
-      </div>
-    </details>
-    {{/each}}
-  </div>
-</section>
+          {{/if}}
 
-  <style>
-    .effects-ui .fx-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px
-    }
+        </div>
+      </details>
+      {{/each}}
+    </section>
 
-    .effects-ui .fx-actions {
-      display: flex;
-      gap: 8px
-    }
+    {{!-- ═══ DESCRIPTION ═══ --}}
+    <section class="card">
+      <h2>Description</h2>
+      {{#if canEdit}}
+      <textarea name="system.description" rows="4" style="width:100%">{{system.description}}</textarea>
+      {{else}}
+      <div style="white-space:pre-wrap">{{system.description}}</div>
+      {{/if}}
+    </section>
 
-    .effects-ui .fx-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px
-    }
-
-    .effects-ui .fx-card {
-      border: 1px solid rgba(0, 0, 0, .12);
-      border-radius: 12px;
-      padding: 0;
-      background: rgba(255, 255, 255, .25)
-    }
-
-    .effects-ui .fx-summary {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px
-    }
-
-    .effects-ui .fx-title {
-      display: flex;
-      flex-direction: column;
-      gap: 2px
-    }
-
-    .effects-ui .fx-meta {
-      opacity: .75;
-      font-size: 12px
-    }
-
-    .effects-ui .fx-body {
-      padding: 0 12px 12px
-    }
-
-    .effects-ui .fx-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr;
-      gap: 10px
-    }
-
-    .effects-ui .field label {
-      display: block;
-      font-size: 12px;
-      opacity: .8;
-      margin-bottom: 4px
-    }
-
-    .effects-ui .mods-head {
-      margin-top: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between
-    }
-
-    .effects-ui .mods-list {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px
-    }
-
-    .effects-ui .mod-line {
-      display: grid;
-      grid-template-columns: 1.4fr .7fr .8fr .7fr 1.2fr 34px;
-      gap: 8px;
-      align-items: center
-    }
-
-    .effects-ui .icon {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px
-    }
-  </style>
-
-  <hr />
-
-  <section>
-    <h2>Description</h2>
-    <textarea name="system.description" rows="6" {{#if isReadOnly}}disabled{{/if}}>{{system.description}}</textarea>
   </section>
-</div>
+</form>

@@ -16,3 +16,38 @@
     color: var(--color-text-dark-primary);
   } */
   
+/* ══ Fiche Sort V2 ══════════════════════════════════════════════════════ */
+
+.rpg-spell-sheet .sheet-body { padding: 8px; }
+
+.rpg-spell-sheet .card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--color-border-light-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.rpg-spell-sheet .card h2 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--color-border-light-2);
+}
+
+.rpg-spell-sheet .card label { font-size: 11px; display:block; margin-bottom:2px; opacity:.85; }
+
+.rpg-spell-sheet .dmg-row input,
+.rpg-spell-sheet .dmg-row select {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.rpg-spell-sheet details[data-fx-index] > summary { list-style: none; }
+.rpg-spell-sheet details[data-fx-index] > summary::before {
+  content: "▶";
+  font-size: 9px;
+  margin-right: 6px;
+  transition: transform .15s;
+}
+.rpg-spell-sheet details[data-fx-index][open] > summary::before { transform: rotate(90deg); }

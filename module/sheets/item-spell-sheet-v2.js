@@ -130,6 +130,17 @@ function normalizeAndMergeEffects(document, expanded) {
     expanded.system.effectsUI = merged;
   }
 
+  // damages[] normalize (Object -> Array) + types numériques
+  const dmgRaw = expanded?.system?.damages;
+  if (dmgRaw && !Array.isArray(dmgRaw)) expanded.system.damages = Object.values(dmgRaw);
+  if (Array.isArray(expanded?.system?.damages)) {
+    for (const d of expanded.system.damages) {
+      d.flat = Number(d.flat ?? 0) || 0;
+      d.per = Number(d.per ?? 10) || 10;
+      d.perStep = Number(d.perStep ?? 0) || 0;
+    }
+  }
+
   return expanded;
 }
 
@@ -160,8 +171,10 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
      * Actions V2: data-action="..." appelle automatiquement ces handlers
      */
     actions: {
-      addEffect: async function(event) { await this._actionAddEffect(event); },
-      removeEffect: async function(event) { await this._actionRemoveEffect(event); },
+      addEffect:     async function(event) { await this._actionAddEffect(event); },
+      removeEffect:  async function(event) { await this._actionRemoveEffect(event); },
+      addDmgLine:    async function(event) { await this._actionAddDmgLine(event); },
+      removeDmgLine: async function(event) { await this._actionRemoveDmgLine(event); },
       addMod: async function(event) { await this._actionAddMod(event); },
       removeMod: async function(event) { await this._actionRemoveMod(event); }
     }
@@ -194,6 +207,18 @@ static PARTS = foundry.utils.mergeObject(
 
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
+
+    // Normalise damages[] (multi-lignes de dégâts)
+    if (!Array.isArray(ctx.system.damages)) ctx.system.damages = [];
+    for (const dmg of ctx.system.damages) {
+      dmg.dice = String(dmg.dice ?? "1d6");
+      dmg.flat = Number(dmg.flat ?? 0) || 0;
+      dmg.stat = String(dmg.stat ?? "intelligence");
+      dmg.per = Number(dmg.per ?? 10) || 10;
+      dmg.perStep = Number(dmg.perStep ?? 1) || 0;
+      dmg.critDice = String(dmg.critDice ?? "");
+      dmg.livraison = String(dmg.livraison ?? "magique");
+    }
 
     // permissions
     ctx.canEdit = this.isEditable;
@@ -353,21 +378,37 @@ static PARTS = foundry.utils.mergeObject(
     };
 
     refreshModInputs();
-    root.addEventListener("change", (ev) => {
+    root.addEventListener("change", async (ev) => {
       if (ev.target?.matches?.("select.mod-type")) refreshModInputs();
 
-      // Auto-remplit le label quand le MJ choisit un effet du catalogue
-      if (ev.target?.matches?.("select.fx-effect-select")) {
+      // Auto-remplit nom + type quand le MJ choisit un effet du catalogue
+      if (ev.target?.matches?.("select.fx-catalogue-select")) {
         const sel = ev.target;
         const key = sel.value;
-        if (!key) return;
+        const fxIdx = sel.dataset.fxIdx;
+        if (!key || fxIdx === undefined) return;
+
         const lib = game.rpg?.effectLibrary;
         if (!lib) return;
         const def = lib.getEffectDef(key);
         if (!def) return;
-        // trouve le champ label dans le même fx-body
-        const labelInput = sel.closest(".fx-body")?.querySelector("input[name*='.label']");
+
+        // Remplit les champs visibles immédiatement
+        const card = sel.closest("details");
+        const labelInput = card?.querySelector(`input[name="system.effectsUI.${fxIdx}.label"]`);
+        const tagSel = card?.querySelector(`select[name="system.effectsUI.${fxIdx}.tag"]`);
         if (labelInput && !labelInput.value.trim()) labelInput.value = def.label;
+        if (tagSel && def.tag) tagSel.value = def.tag;
+
+        // Persiste sur le document
+        const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+        const idx = Number(fxIdx);
+        if (effects[idx]) {
+          effects[idx].effectKey = key;
+          if (!effects[idx].label) effects[idx].label = def.label;
+          if (def.tag && !effects[idx].tag) effects[idx].tag = def.tag;
+          await this.document.update({ "system.effectsUI": effects });
+        }
       }
     });
   }
@@ -396,12 +437,35 @@ static PARTS = foundry.utils.mergeObject(
 
   async _actionRemoveEffect(event) {
     const btn = event?.target?.closest?.("[data-action]");
-    const fxIndex = Number(btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? -1);
+    const fxIndex = Number(btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? btn?.dataset?.fxIndex ?? -1);
     if (!Number.isFinite(fxIndex) || fxIndex < 0) return;
-
     const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
     effects.splice(fxIndex, 1);
     await this.document.update({ "system.effectsUI": effects }, { render: true });
+  }
+
+  async _actionAddDmgLine(event) {
+    const damages = foundry.utils.deepClone(this.document.system.damages ?? []);
+    damages.push({
+      id: foundry.utils.randomID(),
+      dice: "1d6",
+      flat: 0,
+      stat: "intelligence",
+      per: 10,
+      perStep: 1,
+      critDice: "",
+      livraison: "magique"
+    });
+    await this.document.update({ "system.damages": damages }, { render: true });
+  }
+
+  async _actionRemoveDmgLine(event) {
+    const btn = event?.target?.closest?.("[data-action='removeDmgLine']");
+    const idx = Number(btn?.dataset?.idx ?? -1);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    const damages = foundry.utils.deepClone(this.document.system.damages ?? []);
+    damages.splice(idx, 1);
+    await this.document.update({ "system.damages": damages }, { render: true });
   }
 
   async _actionAddMod(event) {
