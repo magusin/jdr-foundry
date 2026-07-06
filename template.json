@@ -50,16 +50,86 @@
         "etats": "",
         "etatsActifs": [],
         "skills": {
-          "crochetage": { "label": "Crochetage", "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
-          "larcin":     { "label": "Larcin",     "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
-          "forge":      { "label": "Forge",      "level": 0, "xp": 0, "grants": { "force": 1 } },
-          "survie":     { "label": "Volonté",     "level": 0, "xp": 0, "grants": { "endurance": 1 } },
-          "discretion": { "label": "Discrétion", "level": 0, "xp": 0, "grants": { "dexterite": 1 } },
-          "perception": { "label": "Perception", "level": 0, "xp": 0, "grants": { "acuite": 1 } },
-          "detection":  { "label": "Détection",  "level": 0, "xp": 0, "grants": { "acuite": 1 } },
-          "intuition":   { "label": "Intuition", "level": 0, "xp": 0, "grants": { "intelligence": 1 } },
-          "connaissance": { "label": "Connaissance", "level": 0, "xp": 0, "grants": { "intelligence": 1 } },
-          "athletisme": { "label": "Athlétisme", "level": 0, "xp": 0, "grants": { "endurance": 1 } }
+          "crochetage": {
+            "label": "Crochetage",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "dexterite": 1
+            }
+          },
+          "larcin": {
+            "label": "Larcin",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "dexterite": 1
+            }
+          },
+          "forge": {
+            "label": "Forge",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "force": 1
+            }
+          },
+          "survie": {
+            "label": "Volonté",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "endurance": 1
+            }
+          },
+          "discretion": {
+            "label": "Discrétion",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "dexterite": 1
+            }
+          },
+          "perception": {
+            "label": "Perception",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "acuite": 1
+            }
+          },
+          "detection": {
+            "label": "Détection",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "acuite": 1
+            }
+          },
+          "intuition": {
+            "label": "Intuition",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "intelligence": 1
+            }
+          },
+          "connaissance": {
+            "label": "Connaissance",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "intelligence": 1
+            }
+          },
+          "athletisme": {
+            "label": "Athlétisme",
+            "level": 0,
+            "xp": 0,
+            "grants": {
+              "endurance": 1
+            }
+          }
         },
         "butin": {
           "tableUuid": ""
@@ -102,7 +172,7 @@
         "levelsCsv": "2,4,6",
         "bands": {},
         "generated": false
-      },      
+      },
       "regeneration": {
         "pv": 0.0,
         "mana": 0.0
@@ -130,7 +200,6 @@
       "armor",
       "consumable",
       "spell",
-      "skill",
       "recipe",
       "quest"
     ],
@@ -197,14 +266,22 @@
       "damage": {
         "dice": "1d6",
         "flat": 0,
-        "scaling": { "stat": "force", "per": 10, "perStep": 1 }
+        "scaling": {
+          "stat": "force",
+          "per": 10,
+          "perStep": 1
+        }
       },
       "crit": {
         "mode": "max+die",
         "damage": {
           "dice": "1d6",
           "flat": 0,
-          "scaling": { "stat": "force", "per": 10, "perStep": 0 }
+          "scaling": {
+            "stat": "force",
+            "per": 10,
+            "perStep": 0
+          }
         }
       },
       "effet": ""
@@ -228,44 +305,59 @@
       "effet": ""
     },
     "spell": {
-      "templates": ["baseItem", "equipBonus", "details"],
-    
+      "templates": [
+        "baseItem",
+        "equipBonus",
+        "details"
+      ],
       "speed": "normal",
-      "range": { "min": 0, "max": 6 },
-      "targetCount": { "min": 1, "max": 1 },
+      "range": {
+        "min": 0,
+        "max": 6
+      },
+      "targetCount": {
+        "min": 1,
+        "max": 1
+      },
       "fatigueCost": 1,
-    
       "coutMana": 0,
       "difficulte": 0,
       "livraison": "magique",
-    
-      "cooldown": { "max": 0, "restant": 0 },
-      "aura": { "active": false, "target": "allies", "key": "", "range": { "min": 0, "max": 3 } },
-    
+      "cooldown": {
+        "max": 0,
+        "restant": 0
+      },
+      "aura": {
+        "active": false,
+        "target": "allies",
+        "key": "",
+        "range": {
+          "min": 0,
+          "max": 3
+        }
+      },
       "damage": {
         "enabled": false,
         "flat": 0,
         "dice": "1d6",
-        "scaling": { "stat": "intelligence", "per": 10, "perStep": 1 }
+        "scaling": {
+          "stat": "intelligence",
+          "per": 10,
+          "perStep": 1
+        }
       },
       "damageCrit": {
         "enabled": false,
         "flat": 0,
         "dice": "1d6",
-        "scaling": { "stat": "intelligence", "per": 10, "perStep": 0 }
+        "scaling": {
+          "stat": "intelligence",
+          "per": 10,
+          "perStep": 0
+        }
       },
-    
       "effectsUI": [],
       "description": ""
-    },
-    "skill": {
-      "templates": [
-        "baseItem",
-        "details"
-      ],
-      "rang": 0,
-      "statLiee": "dexterite",
-      "difficulte": 0
     },
     "recipe": {
       "templates": [

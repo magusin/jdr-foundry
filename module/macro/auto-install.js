@@ -16,7 +16,10 @@ export async function autoInstallMacros() {
   // ── 1. Ouvre le compendium ─────────────────────────────────────────────
   const pack = game.packs.get(PACK_NAME);
   if (!pack) {
+    const available = game.packs.map(p => p.collection).join(", ");
     console.warn(`[RPG] Compendium "${PACK_NAME}" introuvable.`);
+    console.warn(`[RPG] Packs disponibles : ${available || "(aucun)"}`);
+    ui.notifications?.warn?.(`[RPG] Compendium de macros introuvable — redémarre le serveur Foundry (pas juste F5).`);
     return;
   }
 
