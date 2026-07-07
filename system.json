@@ -35,31 +35,31 @@
   "packs": [
     {
       "name": "macros-rpg",
-      "label": "JDR — Macros système",
+      "label": "Macros système",
       "path": "packs/macros/macros.db",
       "type": "Macro"
     },
     {
       "name": "items-reference",
-      "label": "JDR — Équipement de référence",
+      "label": "Équipement de référence",
       "path": "packs/items/items.db",
       "type": "Item"
     },
     {
       "name": "loot-tables",
-      "label": "JDR — Tables de Butin",
+      "label": "Tables de Butin",
       "path": "packs/loot-tables/loot-tables.db",
       "type": "RollTable"
     },
     {
       "name": "monsters-reference",
-      "label": "JDR — Monstres de Référence",
+      "label": "Monstres de Référence",
       "path": "packs/monsters/monsters.db",
       "type": "Actor"
     },
     {
       "name": "documentation",
-      "label": "JDR — Documentation (Guide Joueur / MJ)",
+      "label": "Documentation",
       "path": "packs/documentation/documentation.db",
       "type": "JournalEntry"
     }
