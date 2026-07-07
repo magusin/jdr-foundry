@@ -76,6 +76,7 @@ export async function autoInstallMacros() {
       const worldVer = String(existing.flags?.[FLAG_SCOPE]?.[FLAG_VERSION] ?? "0.0.0");
       if (isNewer(packVer, worldVer)) {
         await existing.update({
+          name:    packDoc.name,
           command: packDoc.command,
           img:     packDoc.img,
           flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }

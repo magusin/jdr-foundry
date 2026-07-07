@@ -878,7 +878,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   }
 
   const tnLine = tnInfo
-    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e8b94a">${tnInfo.tnFinal}+</b> sur 1d20`
+    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20`
       + (sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)} incluse)` : ``)
     : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`;
 
