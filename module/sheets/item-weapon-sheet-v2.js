@@ -131,7 +131,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
-    ctx.canEdit = this.isEditable;
+    // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
+    ctx.canEdit = game.user.isGM || this.isEditable;
+    ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
 
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
@@ -312,10 +314,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const root = this.element;
     if (!root) return;
 
-    if (!game.user.isGM) {
-      root.querySelectorAll("input, select, textarea, button, [data-action]")
-        .forEach(el => (el.disabled = true));
-    }
+    applySheetViewMode(root, { isGM: game.user.isGM });
+    bindImageEditors(root, this.document);
   }
 
   async _actionAddEffect(event) {

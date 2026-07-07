@@ -788,3 +788,39 @@
   opacity: 0.5;
   font-size: 11px;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   Vue Joueur — champs en lecture seule (readonly)
+   Les inputs/selects/textareas en readonly sont lisibles mais pas
+   modifiables. On les présente comme du texte, pas comme des champs.
+   ════════════════════════════════════════════════════════════════ */
+
+.rpg-sheet input[readonly],
+.rpg-sheet select[readonly],
+.rpg-sheet textarea[readonly] {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  cursor: default;
+  color: inherit;
+  opacity: 0.9;
+}
+
+/* Masque les boutons d'action (+ Ligne, + Effet, ✕...) pour les joueurs */
+.rpg-sheet.joueur-view [data-action],
+.rpg-sheet.joueur-view button[data-action] {
+  display: none !important;
+}
+
+/* Indicateur de mode MJ */
+.rpg-badge-mj {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(180, 120, 0, 0.18);
+  color: #c8960a;
+  font-weight: 600;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}

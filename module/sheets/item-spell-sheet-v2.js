@@ -221,7 +221,9 @@ static PARTS = foundry.utils.mergeObject(
     }
 
     // permissions
-    ctx.canEdit = this.isEditable;
+    // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
+    ctx.canEdit = game.user.isGM || this.isEditable;
+    ctx.isGM = game.user.isGM;
 
     // Catalogue d'effets groupé par type pour les optgroups du dropdown
     const lib = game.rpg?.effectLibrary;
@@ -351,12 +353,31 @@ static PARTS = foundry.utils.mergeObject(
     const root = this.element;
     if (!root) return;
 
-    // read-only joueur
+    // ✅ Vue joueur : les champs readonly deviennent invisibles comme du texte,
+    // les boutons d'action sont masqués. Le MJ voit tout et peut tout éditer.
     if (!game.user.isGM) {
-      root.querySelectorAll("input, select, textarea, button, [data-action]")
-        .forEach(el => (el.disabled = true));
+      root.classList.add("joueur-view");
+      // Les selects readonly ne gèrent pas bien CSS — on les désactive visuellement
+      root.querySelectorAll("select[readonly]").forEach(el => {
+        el.disabled = true;
+        el.style.cssText = "background:transparent;border-color:transparent;pointer-events:none";
+      });
+      root.querySelectorAll("button[data-action]").forEach(el => el.style.display = "none");
       return;
     }
+
+    // MJ : image cliquable
+    root.querySelectorAll(".rpg-img-edit").forEach(img => {
+      img.style.cursor = "pointer";
+      img.addEventListener("click", async () => {
+        const field = img.dataset.field;
+        if (!field) return;
+        const current = foundry.utils.getProperty(this.document, field) ?? "";
+        const fp = new foundry.applications.apps.FilePicker({ type:"image", current,
+          callback: async (path) => this.document.update({ [field]: path }) });
+        fp.render(true);
+      });
+    });
 
     // toggle mod value/formula
     const refreshModInputs = () => {

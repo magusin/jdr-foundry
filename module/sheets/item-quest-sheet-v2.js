@@ -76,7 +76,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       totalEtapes: ctx.system.etapes.length
     };
 
-    ctx.canEdit = this.isEditable;
+    // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
+    ctx.canEdit = game.user.isGM || this.isEditable;
+    ctx.isGM = game.user.isGM;
     return ctx;
   }
 

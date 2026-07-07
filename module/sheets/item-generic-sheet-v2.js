@@ -52,7 +52,9 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
 
-    ctx.canEdit = this.isEditable;
+    // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
+    ctx.canEdit = game.user.isGM || this.isEditable;
+    ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
 
     // defaults
@@ -97,9 +99,7 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     if (!root) return;
 
     // read-only joueur : désactive tout (sécurité)
-    if (!game.user.isGM) {
-      root.querySelectorAll("input, select, textarea, button, [data-action]")
-        .forEach((el) => (el.disabled = true));
-    }
+    applySheetViewMode(root, { isGM: game.user.isGM });
+    bindImageEditors(root, this.document);
   }
 }

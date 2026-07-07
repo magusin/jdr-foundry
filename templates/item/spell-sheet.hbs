@@ -3,7 +3,12 @@
     <div style="display:flex;align-items:center;gap:10px">
       <img class="rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image"
         style="width:48px;height:48px;cursor:{{#if canEdit}}pointer{{else}}default{{/if}};border-radius:8px;border:1px solid var(--color-border-light-2)"/>
-      <input name="name" type="text" value="{{item.name}}" placeholder="Nom du sort" {{#unless canEdit}}disabled{{/unless}} style="flex:1;font-size:1.3em;font-weight:700"/>
+      {{#if canEdit}}
+      <input name="name" type="text" value="{{item.name}}" placeholder="Nom du sort" style="flex:1;font-size:1.3em;font-weight:700"/>
+      {{else}}
+      <h2 style="flex:1;margin:0">{{item.name}}</h2>
+      {{/if}}
+      {{#if isGM}}<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(180,120,0,0.2);color:#c8960a">MJ</span>{{/if}}
     </div>
   </header>
 
@@ -107,10 +112,10 @@
       <div class="dmg-row" data-idx="{{i}}"
         style="display:grid;grid-template-columns:80px 55px 1fr 55px 55px 80px 1fr 30px;gap:4px;align-items:center;margin-bottom:4px;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px">
         <input type="text" name="system.damages.{{i}}.dice" value="{{dmg.dice}}" placeholder="1d6"
-          {{#unless canEdit}}disabled{{/unless}}/>
+          {{#unless canEdit}}readonly{{/unless}}/>
         <input type="number" name="system.damages.{{i}}.flat" value="{{dmg.flat}}" placeholder="0"
-          {{#unless canEdit}}disabled{{/unless}}/>
-        <select name="system.damages.{{i}}.stat" {{#unless canEdit}}disabled{{/unless}}>
+          {{#unless canEdit}}readonly{{/unless}}/>
+        <select name="system.damages.{{i}}.stat" {{#unless canEdit}}readonly{{/unless}}>
           <option value="intelligence" {{#if (eq dmg.stat "intelligence")}}selected{{/if}}>Int</option>
           <option value="force" {{#if (eq dmg.stat "force")}}selected{{/if}}>For</option>
           <option value="dexterite" {{#if (eq dmg.stat "dexterite")}}selected{{/if}}>Dex</option>
@@ -119,12 +124,12 @@
           <option value="" {{#unless dmg.stat}}selected{{/unless}}>—</option>
         </select>
         <input type="number" name="system.damages.{{i}}.per" value="{{dmg.per}}" placeholder="10"
-          {{#unless canEdit}}disabled{{/unless}}/>
+          {{#unless canEdit}}readonly{{/unless}}/>
         <input type="number" name="system.damages.{{i}}.perStep" value="{{dmg.perStep}}" placeholder="1"
-          {{#unless canEdit}}disabled{{/unless}}/>
+          {{#unless canEdit}}readonly{{/unless}}/>
         <input type="text" name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6 crit"
-          {{#unless canEdit}}disabled{{/unless}}/>
-        <select name="system.damages.{{i}}.livraison" {{#unless canEdit}}disabled{{/unless}}>
+          {{#unless canEdit}}readonly{{/unless}}/>
+        <select name="system.damages.{{i}}.livraison" {{#unless canEdit}}readonly{{/unless}}>
           <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Mag</option>
           <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Phys</option>
         </select>
@@ -227,19 +232,19 @@
 
           <div style="display:flex;gap:12px">
             <label style="font-size:11px;display:flex;align-items:center;gap:4px">
-              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}}/>
+              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}} {{#unless canEdit}}readonly{{/unless}}/>
               Permanent
             </label>
             <label style="font-size:11px;display:flex;align-items:center;gap:4px">
-              <input type="checkbox" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}}/>
+              <input type="checkbox" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}} {{#unless canEdit}}readonly{{/unless}}/>
               Aura
             </label>
             {{#if fx.isAura}}
             <span style="font-size:11px;display:flex;align-items:center;gap:4px">
               Portée :
-              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" {{#unless canEdit}}disabled{{/unless}}/>
+              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" {{#unless canEdit}}readonly{{/unless}}/>
               –
-              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" {{#unless canEdit}}disabled{{/unless}}/>
+              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" {{#unless canEdit}}readonly{{/unless}}/>
             </span>
             {{/if}}
           </div>
