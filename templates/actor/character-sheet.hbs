@@ -3,7 +3,10 @@
   {{!-- =========================
   HEADER
   ========================== --}}
-  <header class="sheet-header">
+  <header class="sheet-header" id="rpg-header-{{actor.id}}">
+    <div class="header-toggle" data-action="toggleHeader" title="Masquer/afficher le résumé">
+      ▲ Résumé
+    </div>
     <div class="header-left">
       <div style="display:flex;gap:6px;align-items:flex-start">
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
@@ -52,10 +55,9 @@
           </div>
 
           <div class="meta">
-            <label>Vitesse (base, cases/tour)</label>
+            <label>Vitesse</label>
             <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
               flags.readOnly}}disabled{{/if}} />
-            <small class="muted">Effective : {{system.deplacement.vitesse}}</small>
           </div>
         </div>
 
@@ -83,6 +85,9 @@
           <div class="enc-bar">
             <div class="enc-fill {{charge.cssFill}}" style="width: {{charge.pctCapped}}%;"></div>
           </div>
+          {{#if system.derived.surcharge}}
+          <div class="state-badge state-badge--orange">🏋️ Surchargé — -1 vitesse</div>
+          {{/if}}
         </div>
       </div>
     </div>
@@ -183,9 +188,9 @@
           <div class="enc-fill {{#if system.derived.epuise}}enc-surcharge{{/if}}"
                style="width: {{system.ressources.fatigue.pct}}%;"></div>
         </div>
-        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">
-          Augmente à chaque action en combat. Le MJ la réduit via repos (macro Survie).
-        </div>
+        {{#if system.derived.epuise}}
+        <div class="state-badge state-badge--red">😴 Fatigué — -10% stats, -1 vitesse</div>
+        {{/if}}
       </div>
 
       {{!-- État K.O. (MJ only) --}}

@@ -362,24 +362,29 @@ export class RPGActor extends Actor {
     sys.ressources.fatigue.valeur = clamp(Number(sys.ressources.fatigue.valeur) || 0, 0, fatigueMax);
     sys.ressources.fatigue.pct = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
 
-    // ✅ Épuisement : si fatigue au max, -20% sur les stats principales effectives,
-    // -1 vitesse, -1 chance de toucher (physique ET magique)
-    // (appliqué APRÈS tous les autres mods, donc toujours visible même avec buffs)
+    // ✅ Épuisement : si fatigue au max → état "Fatigué" (-10% stats, -1 vitesse)
+    // (appliqué APRÈS tous les autres mods)
     const isEpuise = sys.ressources.fatigue.valeur >= fatigueMax;
     sys.derived.epuise = isEpuise;
     if (isEpuise) {
       for (const s of Object.keys(effP)) {
-        effP[s] = Math.max(0, Math.floor(Number(effP[s] ?? 0) * 0.8));
+        effP[s] = Math.max(0, Math.floor(Number(effP[s] ?? 0) * 0.9)); // -10%
       }
     }
-    const epuiseVitesseMalus  = isEpuise ? 1 : 0;
-    const epuiseToucherMalus  = isEpuise ? 1 : 0;
+    const epuiseVitesseMalus = isEpuise ? 1 : 0;
+    const epuiseToucherMalus = isEpuise ? 1 : 0;
 
+    // ✅ Surcharge : si charge >= 90% du max → -1 vitesse (état automatique)
+    const chargeCur = Number(sys.charge?.actuelle ?? sys.charge?.pods ?? 0) || 0;
+    const chargeMax = Number(sys.podsMax ?? 50) || 50;
+    const isSurcharge = chargeMax > 0 && (chargeCur / chargeMax) >= 0.9;
+    sys.derived.surcharge = isSurcharge;
+    const surchargeVitesseMalus = isSurcharge ? 1 : 0;
 
-    // move
+    // move — épuisement -1 vitesse + surcharge -1 vitesse
     sys.deplacement = sys.deplacement ?? {};
     const baseVit = (Number(sys.base.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
-    let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus;
+    let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus - surchargeVitesseMalus;
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));
 

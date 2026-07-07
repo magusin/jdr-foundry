@@ -198,7 +198,7 @@ async function handlePendingAction(message, result, actionId) {
       await updateLogEntry(combat, actionId, { status: "confirmed" });
 
       const moverActor = combat.combatants.get(combatantId)?.actor;
-      if (moverActor) await incrementFatigue(moverActor, 1);
+      if (moverActor) await incrementFatigue(moverActor, 0); // déplacement = pas de fatigue
 
       await message.update({
         content: `<div style="font-size:13px;color:var(--color-text-secondary)">

@@ -426,8 +426,22 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     });
 
-    if (!this._tabs) {
-      const Tabs = foundry.applications.ux.Tabs;
+    // ✅ Toggle du header (masquer/afficher le résumé pour plus d'espace)
+    const headerToggle = root.querySelector(".header-toggle");
+    const header = root.querySelector(".sheet-header");
+    const PREF_KEY = `rpg.headerCollapsed.${this.document.id}`;
+    const isCollapsed = game.user.getFlag("rpg", `headerCollapsed.${this.document.id}`) ?? false;
+    if (isCollapsed) {
+      header?.classList.add("header-collapsed");
+      if (headerToggle) headerToggle.textContent = "▼ Résumé";
+    }
+    headerToggle?.addEventListener("click", async () => {
+      const collapsed = header?.classList.toggle("header-collapsed");
+      if (headerToggle) headerToggle.textContent = collapsed ? "▼ Résumé" : "▲ Résumé";
+      await game.user.setFlag("rpg", `headerCollapsed.${this.document.id}`, collapsed);
+    });
+
+
       this._tabs = new Tabs({
         navSelector: ".sheet-tabs",
         contentSelector: ".sheet-body",

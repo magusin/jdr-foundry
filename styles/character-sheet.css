@@ -822,3 +822,62 @@
   letter-spacing: .04em;
   vertical-align: middle;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   États automatiques (Fatigué / Surchargé)
+   ════════════════════════════════════════════════════════════════ */
+
+.state-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-top: 4px;
+  display: inline-block;
+}
+.state-badge--red    { background: rgba(192,57,43,0.18); color: #c0392b; border: 1px solid rgba(192,57,43,0.3); }
+.state-badge--orange { background: rgba(200,120,0,0.18); color: #c87800; border: 1px solid rgba(200,120,0,0.3); }
+
+/* ════════════════════════════════════════════════════════════════
+   Header rétractable
+   ════════════════════════════════════════════════════════════════ */
+
+.rpg-sheet .header-toggle {
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 2px 8px;
+  border-radius: 8px;
+  display: inline-block;
+  background: rgba(255,255,255,0.05);
+  margin-bottom: 4px;
+  user-select: none;
+  transition: background .15s;
+}
+.rpg-sheet .header-toggle:hover { background: rgba(255,255,255,0.12); }
+
+.rpg-sheet .sheet-header.header-collapsed .header-left,
+.rpg-sheet .sheet-header.header-collapsed .header-right {
+  display: none;
+}
+.rpg-sheet .sheet-header.header-collapsed { padding-bottom: 2px; }
+
+/* ════════════════════════════════════════════════════════════════
+   Couleurs de section — onglets et cartes
+   ════════════════════════════════════════════════════════════════ */
+
+/* Accent couleur sur les cartes de ressources */
+.rpg-sheet .resource.pv-resource { border-left: 3px solid #c0392b; }
+.rpg-sheet .resource.mana-resource { border-left: 3px solid #2980b9; }
+.rpg-sheet .resource.fatigue-resource { border-left: 3px solid #c87800; }
+
+/* Onglets avec accent couleur au survol */
+.rpg-sheet .sheet-tabs .item {
+  transition: color .15s, border-color .15s;
+}
+.rpg-sheet .sheet-tabs .item:hover { color: var(--color-text-primary); }
+.rpg-sheet .sheet-tabs .item.active { border-bottom: 2px solid #9b59b6; color: #9b59b6; }
+
+/* Titres de section colorés */
+.rpg-sheet .card h2 { color: var(--color-text-primary); }
+.rpg-sheet .card h2::before { content: ""; display: inline-block; width: 3px; height: 14px; background: #9b59b6; border-radius: 2px; margin-right: 6px; vertical-align: middle; }

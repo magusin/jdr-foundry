@@ -12,6 +12,12 @@ function n(v, d = 0) {
   return Number.isFinite(x) ? x : d;
 }
 
+/** Retourne la liste des userIds GM pour les whispers MJ-only */
+function gmUserIds() {
+  return game.users.filter(u => u.isGM).map(u => u.id);
+}
+}
+
 const SPELL_FAIL_MESSAGES = [
   "{target} résiste au sort de {actor} !",
   "Le sort de {actor} est bloqué par {target} !",
@@ -596,21 +602,38 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
   const targetTokenUuid = targetT?.document?.uuid ?? null;
   const casterTokenUuid = casterT?.document?.uuid ?? null;
 
-  const content = `
+  const publicContent = `
   <div class="rpg-spell-declare">
-    <div><b>${actor.name}</b> déclare le sort <b>${item.name}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""} (mana -${manaCost}, CD=${cdMax}).</div>
+    <div><b>${actor.name}</b> déclare <b>${item.name}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""} (mana -${manaCost}, CD=${cdMax}).</div>
     <div style="opacity:.8;margin-top:4px;"><i>En attente de validation MJ.</i></div>
-    <hr style="margin:8px 0;opacity:.2"/>
-    <div class="rpg-spell-gm" style="display:flex;gap:8px;flex-wrap:wrap;">
+  </div>`;
+
+  const gmContent = `
+  <div class="rpg-spell-declare rpg-gm-panel">
+    <div style="font-size:11px;color:#c8960a;font-weight:600;margin-bottom:4px">⚙️ Validation MJ — ${actor.name} → ${item.name}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button type="button" class="rpg-spell-resolve" data-result="fail">Refuser</button>
       <button type="button" class="rpg-spell-resolve" data-result="success">Valider</button>
       <button type="button" class="rpg-spell-resolve" data-result="crit">Valider Crit</button>
     </div>
   </div>`;
 
+  // Message public (tout le monde voit)
   const msg = await ChatMessage.create({
     speaker,
-    content,
+    content: publicContent,
+    flags: {
+      rpg: {
+        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid, actionId: actionId ?? null }
+      }
+    }
+  });
+
+  // Message séparé en whisper MJ avec les boutons de validation
+  await ChatMessage.create({
+    speaker,
+    content: gmContent,
+    whisper: gmUserIds(),
     flags: {
       rpg: {
         spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid, actionId: actionId ?? null }
@@ -912,8 +935,12 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     <hr style="margin:8px 0;opacity:.2"/>
 
     <div style="opacity:.8"><i>En attente de validation MJ.</i></div>
+  </div>`;
 
-    <div class="rpg-spell-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+  const gmContent2 = `
+  <div class="rpg-spell-declare rpg-gm-panel">
+    <div style="font-size:11px;color:#c8960a;font-weight:600;margin-bottom:6px">⚙️ Validation MJ — ${actor.name} → ${item.name}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button type="button" class="rpg-spell-resolve" data-result="critfail" style="color:#8b1a12;font-weight:700">Échec Critique</button>
       <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>
       <button type="button" class="rpg-spell-resolve" data-result="success">Réussite</button>
@@ -924,6 +951,17 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const msg = await ChatMessage.create({
     speaker,
     content,
+    flags: {
+      rpg: {
+        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuids, actionId: actionId ?? null }
+      }
+    }
+  });
+
+  await ChatMessage.create({
+    speaker,
+    content: gmContent2,
+    whisper: gmUserIds(),
     flags: {
       rpg: {
         spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuids, actionId: actionId ?? null }
