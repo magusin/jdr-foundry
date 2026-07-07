@@ -328,23 +328,69 @@ static PARTS = foundry.utils.mergeObject(
    * Signature: (event, form, formData, options) :contentReference[oaicite:3]{index=3}
    */
   async _onFormSubmitV2(event, form, formData, options) {
-    if (!game.user.isGM && !this.isEditable) return; // joueur non-propriétaire : lecture seule
+    if (!game.user.isGM && !this.isEditable) return;
 
-    // checkbox safety: si le template oublie un hidden, on force une valeur
     const t = event?.target;
+
+    // ── Mémorise l'état des accordéons avant le re-render ─────────────────
+    const root = this.element;
+    const openDetails = new Set();
+    root?.querySelectorAll("details[data-fx-index]").forEach(d => {
+      if (d.open) openDetails.add(d.dataset.fxIndex);
+    });
+
+    // ── Checkbox : ajoute la valeur manquante dans formData ────────────────
     if (t?.type === "checkbox" && t?.name) {
       const raw = formData?.object ?? {};
-      raw[t.name] = t.checked ? (t.value ?? "1") : "0";
+      raw[t.name] = t.checked ? "1" : "0";
     }
 
     const raw = formData?.object ?? {};
+
+    // ── damages : collecte directement depuis le DOM pour éviter la perte ──
+    const dmgRows = root?.querySelectorAll(".dmg-row[data-idx]") ?? [];
+    if (dmgRows.length) {
+      const damages = [];
+      dmgRows.forEach(row => {
+        const get = (sel) => row.querySelector(sel);
+        damages.push({
+          id: get("input[name*='.id']")?.value ?? foundry.utils.randomID(),
+          dice:     get("input[name*='.dice']")?.value?.trim() || "1d6",
+          flat:     Number(get("input[name*='.flat']")?.value) || 0,
+          stat:     get("select[name*='.stat']")?.value || "intelligence",
+          per:      Number(get("input[name*='.per']")?.value) || 10,
+          perStep:  Number(get("input[name*='.perStep']")?.value) || 0,
+          critDice: get("input[name*='.critDice']")?.value?.trim() || "",
+          livraison:get("select[name*='.livraison']")?.value || "magique",
+        });
+      });
+      raw["system.damages"] = damages;
+      // Retire les clés indexées du raw pour éviter les doublons
+      Object.keys(raw).forEach(k => {
+        if (k.startsWith("system.damages.")) delete raw[k];
+      });
+    }
+
     const expanded = foundry.utils.expandObject(raw);
 
-    // normalisations + merge effectsUI (préserve ce qui n'est pas dans le form)
+    // Si damages est un array direct on le place bien
+    if (Array.isArray(raw["system.damages"])) {
+      expanded.system = expanded.system ?? {};
+      expanded.system.damages = raw["system.damages"];
+    }
+
     const prepared = normalizeAndMergeEffects(this.document, expanded);
 
     await this.document.update(prepared, { render: false });
     await this.render({ force: true });
+
+    // ── Restaure l'état des accordéons après le re-render ──────────────────
+    if (openDetails.size) {
+      const newRoot = this.element;
+      newRoot?.querySelectorAll("details[data-fx-index]").forEach(d => {
+        if (openDetails.has(d.dataset.fxIndex)) d.open = true;
+      });
+    }
   }
 
   async _onRender(context, options) {
