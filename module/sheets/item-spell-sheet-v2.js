@@ -175,8 +175,8 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       removeEffect:  async function(event) { await this._actionRemoveEffect(event); },
       addDmgLine:    async function(event) { await this._actionAddDmgLine(event); },
       removeDmgLine: async function(event) { await this._actionRemoveDmgLine(event); },
-      addMod: async function(event) { await this._actionAddMod(event); },
-      removeMod: async function(event) { await this._actionRemoveMod(event); }
+      addMod:        async function(event) { await this._actionAddMod(event); },
+      removeMod:     async function(event) { await this._actionRemoveMod(event); },
     }
 },
 { inplace: false }   // ✅ IMPORTANT
@@ -328,7 +328,7 @@ static PARTS = foundry.utils.mergeObject(
    * Signature: (event, form, formData, options) :contentReference[oaicite:3]{index=3}
    */
   async _onFormSubmitV2(event, form, formData, options) {
-    if (!this.isEditable) return;
+    if (!game.user.isGM && !this.isEditable) return; // joueur non-propriétaire : lecture seule
 
     // checkbox safety: si le template oublie un hidden, on force une valeur
     const t = event?.target;

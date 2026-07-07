@@ -790,14 +790,12 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   Vue Joueur — champs en lecture seule (readonly)
-   Les inputs/selects/textareas en readonly sont lisibles mais pas
-   modifiables. On les présente comme du texte, pas comme des champs.
+   Vue Joueur — champs en lecture seule UNIQUEMENT dans joueur-view
    ════════════════════════════════════════════════════════════════ */
 
-.rpg-sheet input[readonly],
-.rpg-sheet select[readonly],
-.rpg-sheet textarea[readonly] {
+.rpg-sheet.joueur-view input[readonly],
+.rpg-sheet.joueur-view select[readonly],
+.rpg-sheet.joueur-view textarea[readonly] {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -807,7 +805,7 @@
   opacity: 0.9;
 }
 
-/* Masque les boutons d'action (+ Ligne, + Effet, ✕...) pour les joueurs */
+/* Masque les boutons d'action pour les joueurs */
 .rpg-sheet.joueur-view [data-action],
 .rpg-sheet.joueur-view button[data-action] {
   display: none !important;

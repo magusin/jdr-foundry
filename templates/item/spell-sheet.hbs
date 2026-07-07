@@ -112,10 +112,10 @@
       <div class="dmg-row" data-idx="{{i}}"
         style="display:grid;grid-template-columns:80px 55px 1fr 55px 55px 80px 1fr 30px;gap:4px;align-items:center;margin-bottom:4px;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px">
         <input type="text" name="system.damages.{{i}}.dice" value="{{dmg.dice}}" placeholder="1d6"
-          {{#unless canEdit}}readonly{{/unless}}/>
+          />
         <input type="number" name="system.damages.{{i}}.flat" value="{{dmg.flat}}" placeholder="0"
-          {{#unless canEdit}}readonly{{/unless}}/>
-        <select name="system.damages.{{i}}.stat" {{#unless canEdit}}readonly{{/unless}}>
+          />
+        <select name="system.damages.{{i}}.stat" >
           <option value="intelligence" {{#if (eq dmg.stat "intelligence")}}selected{{/if}}>Int</option>
           <option value="force" {{#if (eq dmg.stat "force")}}selected{{/if}}>For</option>
           <option value="dexterite" {{#if (eq dmg.stat "dexterite")}}selected{{/if}}>Dex</option>
@@ -124,12 +124,12 @@
           <option value="" {{#unless dmg.stat}}selected{{/unless}}>—</option>
         </select>
         <input type="number" name="system.damages.{{i}}.per" value="{{dmg.per}}" placeholder="10"
-          {{#unless canEdit}}readonly{{/unless}}/>
+          />
         <input type="number" name="system.damages.{{i}}.perStep" value="{{dmg.perStep}}" placeholder="1"
-          {{#unless canEdit}}readonly{{/unless}}/>
+          />
         <input type="text" name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6 crit"
-          {{#unless canEdit}}readonly{{/unless}}/>
-        <select name="system.damages.{{i}}.livraison" {{#unless canEdit}}readonly{{/unless}}>
+          />
+        <select name="system.damages.{{i}}.livraison" >
           <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Mag</option>
           <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Phys</option>
         </select>
@@ -232,19 +232,19 @@
 
           <div style="display:flex;gap:12px">
             <label style="font-size:11px;display:flex;align-items:center;gap:4px">
-              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}} {{#unless canEdit}}readonly{{/unless}}/>
+              <input type="checkbox" name="system.effectsUI.{{i}}.permanent" {{#if fx.permanent}}checked{{/if}} />
               Permanent
             </label>
             <label style="font-size:11px;display:flex;align-items:center;gap:4px">
-              <input type="checkbox" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}} {{#unless canEdit}}readonly{{/unless}}/>
+              <input type="checkbox" name="system.effectsUI.{{i}}.isAura" {{#if fx.isAura}}checked{{/if}} />
               Aura
             </label>
             {{#if fx.isAura}}
             <span style="font-size:11px;display:flex;align-items:center;gap:4px">
               Portée :
-              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" {{#unless canEdit}}readonly{{/unless}}/>
+              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" />
               –
-              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" {{#unless canEdit}}readonly{{/unless}}/>
+              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" />
             </span>
             {{/if}}
           </div>
@@ -254,7 +254,7 @@
           <div>
             <div style="font-size:11px;font-weight:600;margin-bottom:4px">Modificateurs de stat
               <span style="font-weight:400;opacity:.7">— Fixe / %</span>
-              <button type="button" class="fx-add-mod" data-fx-idx="{{i}}"
+              <button type="button" data-action="addMod" data-fx-idx="{{i}}"
                 style="font-size:11px;cursor:pointer;margin-left:6px">+ Stat</button>
             </div>
             <div class="fx-mods-list" data-fx-idx="{{i}}">
@@ -265,7 +265,7 @@
                   placeholder="Fixe" style="width:60px"/>
                 <input type="number" name="system.effectsUI.{{i}}.mods.{{mKey}}.pct" value="{{mod.pct}}"
                   placeholder="%" style="width:55px"/>
-                <button type="button" class="fx-remove-mod" data-fx-idx="{{i}}" data-mod-key="{{mKey}}"
+                <button type="button" data-action="removeMod" data-fx-idx="{{i}}" data-mod-key="{{mKey}}"
                   style="cursor:pointer;color:#c0392b;border:none;background:none">✕</button>
               </div>
               {{/each}}
