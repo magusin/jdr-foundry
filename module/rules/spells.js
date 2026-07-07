@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/spells.js
 import { manhattanDistanceTokens } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
+import { computeTN } from "./combat.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -866,6 +867,21 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const targetTokenUuids = targetTokens.map(t => t?.document?.uuid).filter(Boolean);
   const targetNamesList = targetActors.map(a => a.name).join(", ");
 
+  // Calcule le TN pour la première cible (ou sans cible)
+  const firstTarget = targetActors[0] ?? null;
+  let tnInfo = null;
+  if (firstTarget) {
+    try {
+      const tnData = computeTN(actor, firstTarget, item);
+      tnInfo = tnData;
+    } catch(e) { /* pas grave si ça échoue */ }
+  }
+
+  const tnLine = tnInfo
+    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e8b94a">${tnInfo.tnFinal}+</b> sur 1d20`
+      + (sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)} incluse)` : ``)
+    : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`;
+
   const content = `
   <div class="rpg-spell-declare">
     <div>
@@ -875,8 +891,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     </div>
 
     <div style="opacity:.9;margin-top:4px;">
-      🎯 <b>Jet de touché</b> : fais ton jet (puis MJ coche Échec / Réussite / Crit)
-      ${sys.difficulte ? ` • difficulté +${n(sys.difficulte,0)}` : ``}
+      ${tnLine}
     </div>
 
     <div style="margin-top:8px;">
