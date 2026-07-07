@@ -20,9 +20,54 @@ const _prevPos = new Map();
 export function onPreUpdateToken(tokenDoc, changes) {
   if (!("x" in changes) && !("y" in changes)) return;
   if (!game.combat?.active) return;
-  const isTracked = game.combat.combatants.some(c => c.tokenId === tokenDoc.id);
-  if (!isTracked) return;
+
+  const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
+  if (!combatant) return;
+
+  // Mémorise la position pour onUpdateToken
   _prevPos.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y });
+
+  // ✅ GARDE-FOU : blocage si pas le tour du combattant ou K.O.
+  if (!game.user.isGM) {
+    const actor = tokenDoc.actor;
+
+    // K.O. → bloqué
+    if (actor?.system?.derived?.ko) {
+      ui.notifications?.warn?.("K.O. — impossible de se déplacer.");
+      return false; // annule le déplacement
+    }
+
+    // Pas son tour → bloqué
+    const current = game.combat.combatant;
+    if (current && current.tokenId !== tokenDoc.id) {
+      ui.notifications?.warn?.("Ce n'est pas ton tour.");
+      return false;
+    }
+
+    // Slot de déplacement épuisé → bloqué
+    const budgetAPI = game.rpg?.budget;
+    if (budgetAPI) {
+      const budget = budgetAPI.getBudgetFor?.(game.combat, combatant.id);
+      if (budget && !budgetAPI.canUseSlot(budget, "deplacement")) {
+        ui.notifications?.warn?.("Slot de déplacement épuisé pour ce tour.");
+        return false;
+      }
+    }
+
+    // Vitesse dépassée → bloqué
+    const gs = canvas.scene?.grid?.size ?? 100;
+    const vitesse = Number(actor?.system?.deplacement?.vitesse ?? 3) || 3;
+    const newX = changes.x ?? tokenDoc.x;
+    const newY = changes.y ?? tokenDoc.y;
+    const prevPos = _prevPos.get(tokenDoc.id) ?? { x: tokenDoc.x, y: tokenDoc.y };
+    const distCases = Math.round(
+      (Math.abs(newX - prevPos.x) + Math.abs(newY - prevPos.y)) / gs
+    );
+    if (distCases > vitesse) {
+      ui.notifications?.warn?.(`Vitesse max ${vitesse} case${vitesse > 1 ? "s" : ""} — tu essaies de faire ${distCases} cases.`);
+      return false;
+    }
+  }
 }
 
 /**

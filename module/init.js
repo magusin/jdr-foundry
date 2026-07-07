@@ -462,6 +462,33 @@ Hooks.once("init", async () => {
       try { bindMoraleChatButtons(html, message); } catch (e) { }
       try { bindSkillCheckChatButtons(html, message); } catch (e) { }
       try {
+        // Bouton "Lancer le d20" dans le message de sort
+        const root = html instanceof HTMLElement ? html : html?.[0];
+        root?.querySelectorAll(".rpg-roll-d20-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            btn.disabled = true;
+            try {
+              const actorId = btn.dataset.actorId;
+              const tn = Number(btn.dataset.tn) || 11;
+              const spellName = btn.dataset.spell ?? "Sort";
+              const actor = game.actors.get(actorId);
+              const roll = await (new Roll("1d20")).evaluate();
+              const hit = roll.total >= tn;
+              await roll.toMessage({
+                speaker: ChatMessage.getSpeaker({ actor }),
+                flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${spellName} : <b>${roll.total}</b> vs TN <b>${tn}+</b> → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`
+              });
+            } catch(e) {
+              console.error("[RPG] Erreur lancer d20 sort :", e);
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch (e) { }
+      try {
         // Résolution du jet de retrait d'état
         if (message?.flags?.rpg?.type === "removeStateDeclaration" && game.user.isGM) {
           const root = html instanceof HTMLElement ? html : html?.[0];

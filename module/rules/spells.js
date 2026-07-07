@@ -878,8 +878,13 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   }
 
   const tnLine = tnInfo
-    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20`
-      + (sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)} incluse)` : ``)
+    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20
+       <button type="button" class="rpg-roll-d20-btn"
+         data-actor-id="${actor.id}" data-tn="${tnInfo.tnFinal}" data-spell="${item.name}"
+         style="margin-left:8px;padding:2px 10px;cursor:pointer;border-radius:6px;font-size:11px">
+         🎲 Lancer le d20
+       </button>`
+      + (sys.difficulte ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte,0)} déjà incluse dans le TN)</div>` : ``)
     : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`;
 
   const content = `
