@@ -250,7 +250,7 @@
     const hasTarget    = targets.length > 0;
 
     return filtered.map((s) => {
-      const sSys     = s.system ?? {};
+      const sys = s.system ?? {};
       const cd       = getCD(s);
       const r        = getRange(s);
       const manaCost = getManaCost(s);
@@ -260,8 +260,8 @@
       const okMana   = manaNow >= manaCost;
 
       // ── Nombre de cibles requis ──────────────────────────────────────
-      const tcMin = n(sSys.targetCount?.min, 1);
-      const tcMax = n(sSys.targetCount?.max, 1);
+      const tcMin = n(sys.targetCount?.min, 1);
+      const tcMax = n(sys.targetCount?.max, 1);
       const tcCount = targets.length;
       let okTargetCount = true;
       let targetCountMsg = "";
@@ -290,7 +290,7 @@
       }
 
       const okTarget = !needTgt || (hasTarget && okTargetCount && okRange);
-      const slotKey  = sSys.speed === "rapide" || sSys.speed === "quick" ? "sortRapide" : "sortNormal";
+      const slotKey  = sys.speed === "rapide" || sys.speed === "quick" ? "sortRapide" : "sortNormal";
       const hasSlot  = canUseSlot(actor, slotKey);
       const myTurn   = isMyTurn(actor);
       const canUse   = myTurn && canAct(actor) && ready && okMana && okTarget && hasSlot;
