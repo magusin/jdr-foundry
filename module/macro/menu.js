@@ -1,5 +1,5 @@
 /**
- * Macro "Menu Combat" (Foundry VTT v13)
+ * Macro "Menu Combat" (Foundry VTT v13) — VERSION 2.0.0-BUILD-20250708
  * - Section ARMES : armes équipées du token, bouton Attaquer (d20 → TN → dégâts)
  * - Section SORTS : sorts avec filtres + bouton Déclarer
  * - Toggle thème Clair/Sombre mémorisé par joueur
