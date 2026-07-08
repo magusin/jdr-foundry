@@ -278,6 +278,28 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     const states = Array.isArray(ctx.system.etatsActifs) ? foundry.utils.deepClone(ctx.system.etatsActifs) : [];
 
+    // ✅ États automatiques (dérivés) — injectés en tête de liste pour que le
+    // joueur les voit dans l'onglet États sans que le MJ ait à les appliquer
+    const autoStates = [];
+    if (ctx.system.derived?.epuise) {
+      autoStates.push({
+        id: "_auto_fatigue", label: "😴 Fatigué", type: "auto",
+        tag: null, permanent: true, duration: 0, remaining: 0,
+        summary: "-10% stats principales • -1 Vitesse",
+        isBeneficial: false, isHarmful: true, isAuto: true,
+        dot: { flat: 0, perTick: 0 }, mods: {}
+      });
+    }
+    if (ctx.system.derived?.surcharge) {
+      autoStates.push({
+        id: "_auto_surcharge", label: "🏋️ Surchargé", type: "auto",
+        tag: null, permanent: true, duration: 0, remaining: 0,
+        summary: "-1 Vitesse (charge ≥ 90%)",
+        isBeneficial: false, isHarmful: true, isAuto: true,
+        dot: { flat: 0, perTick: 0 }, mods: {}
+      });
+    }
+
     for (const e of states) {
       const parts = [];
 
@@ -319,7 +341,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       e.isHarmful = hasMinus && !hasPlus;
     }
 
-    ctx.system.etatsActifs = states;
+    ctx.system.etatsActifs = [...autoStates, ...states];
     // skills
     ctx.system.skills = ctx.system.skills ?? {};
     ctx.skills = Object.entries(ctx.system.skills).map(([key, s]) => {

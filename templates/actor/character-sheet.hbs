@@ -4,9 +4,6 @@
   HEADER
   ========================== --}}
   <header class="sheet-header" id="rpg-header-{{actor.id}}">
-    <div class="header-toggle" data-action="toggleHeader" title="Masquer/afficher le résumé">
-      ▲ Résumé
-    </div>
     <div class="header-left">
       <div style="display:flex;gap:6px;align-items:flex-start">
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
@@ -181,7 +178,7 @@
           <span>😴 Fatigue</span>
           <span class="resource-value">
             {{system.ressources.fatigue.valeur}} / {{system.ressources.fatigue.max}}
-            {{#if system.derived.epuise}}<b style="color:#c0392b">— ÉPUISÉ (−20% stats)</b>{{/if}}
+            {{#if system.derived.epuise}}<b style="color:#c0392b">— ÉPUISÉ (−10% stats)</b>{{/if}}
           </span>
         </div>
         <div class="enc-bar">
@@ -249,6 +246,7 @@
   TABS (Observer = page 1 seulement)
   ========================== --}}
   <nav class="sheet-tabs tabs" data-group="primary">
+    <span class="header-toggle" title="Masquer/afficher le résumé" style="margin-right:auto;font-size:10px;cursor:pointer;padding:2px 6px;border-radius:6px;opacity:.6;user-select:none">▲</span>
     <a class="item" data-tab="stats">Caractéristiques</a>
 
     {{#unless flags.limitedView}}

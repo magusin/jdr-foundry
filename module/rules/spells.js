@@ -1101,10 +1101,13 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       } catch (e) { /* ignore */ }
     }
 
-    // Applique mitigation par cible (multi-cible : même jet, mitigation propre à chacune)
-    if (targetActors.length && rawDmg > 0) {
+    // Applique mitigation par cible — poste un bouton joueur + résultat après clic
+    if (targetActors.length && rawDmg >= 0) {
       const livraison = String(sys.livraison ?? "magique");
       const isPhys    = livraison === "physique";
+      const diceExpr  = diceStr && diceStr !== "0" ? diceStr : null;
+      const flatPart  = flatTotal !== 0 ? (flatTotal > 0 ? `+${flatTotal}` : `${flatTotal}`) : "";
+      const formulaDisplay = [diceExpr, flatPart].filter(Boolean).join(" ") || "0";
 
       for (const tActor of targetActors) {
         const tSys = tActor.system ?? {};
@@ -1112,15 +1115,29 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         const red  = tSys.derived?.reductions ?? {};
         const fixe = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
         const pct  = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
-        const afterFixe = Math.max(0, rawDmg - fixe);
-        const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
-        const mitigLine = fixe || pct ? ` (−${fixe} fixe, −${pct}% → <b>${finalDmg}</b>)` : ` → <b>${finalDmg}</b>`;
 
-        const pvCur = n(tActor.system?.ressources?.pv?.valeur, 0);
-        const pvMax = n(tActor.system?.ressources?.pv?.max, 0);
-        const pvNew = Math.max(0, pvCur - finalDmg);
-        await tActor.update({ "system.ressources.pv.valeur": pvNew });
-        rows.push(`💥 <b>Dégâts</b> : ${rawDmg}${rollLine}${mitigLine} — ${tActor.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`);
+        // Bouton joueur — le joueur lance lui-même les dés
+        const dmgBtnContent = `
+          <div style="font-size:13px">
+            💥 <b>${actor.name}</b> → <b>${tActor.name}</b><br>
+            <span style="opacity:.8">Formule : <b>${formulaDisplay}</b> dégâts ${livraison}
+            ${flatPart ? `(dont ${flatPart} fixe)` : ""}
+            ${fixe ? `• Réduction : −${fixe} fixe` : ""}
+            ${pct ? `• −${pct}%` : ""}</span>
+            <div style="margin-top:8px">
+              <button type="button" class="rpg-dmg-roll-btn"
+                data-actor-id="${actor.id}" data-target-id="${tActor.id}"
+                data-dice="${diceExpr ?? ""}" data-flat="${flatTotal}"
+                data-fixe="${fixe}" data-pct="${pct}"
+                style="padding:4px 14px;cursor:pointer;border-radius:6px;font-weight:600">
+                🎲 Lancer les dégâts
+              </button>
+            </div>
+          </div>`;
+        await ChatMessage.create({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          content: dmgBtnContent
+        });
       }
     } else if (rawDmg > 0) {
       rows.push(`💥 <b>Dégâts</b> : <b>${rawDmg}</b>${rollLine}`);
