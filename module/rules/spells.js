@@ -16,7 +16,6 @@ function n(v, d = 0) {
 function gmUserIds() {
   return game.users.filter(u => u.isGM).map(u => u.id);
 }
-}
 
 const SPELL_FAIL_MESSAGES = [
   "{target} résiste au sort de {actor} !",
