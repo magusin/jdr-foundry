@@ -88,9 +88,10 @@ function tickStates(actor) {
  */
 async function ensureTurnGuard(combat) {
   const key  = `${combat.id}:${combat.round}:${combat.turn}`;
-  const last = await combat.getFlag("rpg", "lastTurnEffectsKey").catch(() => null);
+  let last = null;
+  try { last = await combat.getFlag("rpg", "lastTurnEffectsKey"); } catch { last = null; }
   if (last === key) return { ok: false };
-  await combat.setFlag("rpg", "lastTurnEffectsKey", key);
+  try { await combat.setFlag("rpg", "lastTurnEffectsKey", key); } catch { /* pas critique */ }
   return { ok: true };
 }
 

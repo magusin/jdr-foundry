@@ -788,6 +788,9 @@ Hooks.once("init", async () => {
     // ✅ refresh auras après tick (si aura source expire, auraApplied disparaît)
     await RPG_AURAS?.refreshAuras?.();
 
+    // ✅ Auto-refresh du Menu Combat si ouvert
+    try { game.rpg?._menuRefresh?.(); } catch { /* menu fermé ou non ouvert */ }
+
     // ✅ Regen (PV/Mana uniquement)
     const pvCur = Number(actor.system?.ressources?.pv?.valeur ?? 0) || 0;
     const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0) || 0;

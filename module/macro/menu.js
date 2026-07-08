@@ -600,6 +600,16 @@
     const rerenderPassif  = () => $root.find(".rpg-passif-list").html(buildPassifHTML());
     const rerenderMana    = () => $root.find(".rpg-mana-val").text(String(getManaNow(actor)));
 
+    // ✅ Expose le callback de refresh pour l'auto-refresh au changement de tour
+    game.rpg = game.rpg ?? {};
+    game.rpg._menuRefresh = () => {
+      if (!$root || !document.body.contains($root[0])) {
+        game.rpg._menuRefresh = null; // menu fermé, on nettoie
+        return;
+      }
+      rerenderAll();
+    };
+
     $root.off(".rpgMenu");
 
     // Section tabs
