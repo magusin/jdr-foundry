@@ -1,101 +1,122 @@
 // module/macro/auto-install.js
 //
-// Importation automatique des macros système au premier lancement
-// et mise à jour si la version du compendium est plus récente.
-//
-// Appelé depuis init.js > hook "ready" (GM uniquement).
+// Installe/met à jour les macros système directement depuis les fichiers JS
+// du système (fetch HTTP), sans passer par le compendium. Cette approche
+// est plus fiable car elle ne dépend pas du chargement du compendium.
 
-const PACK_NAME    = "rpg.macros-rpg";
-const FOLDER_NAME  = "JDR — Macros système";
+const FOLDER_NAME  = "Macros système";
 const FLAG_SCOPE   = "rpg";
-const FLAG_VERSION = "macroVersion";
+const FLAG_VERSION = "version";
 
-export async function autoInstallMacros() {
-  if (!game.user.isGM) return;
+// Liste des macros avec leur chemin fichier et leur version
+const MACRO_LIST = [
+  { name: "Menu Combat",                       file: "menu.js",              version: "1.8.2", img: "icons/svg/sword.svg" },
+  { name: "Auras Grille",                      file: "aura.js",              version: "1.0.2", img: "icons/svg/aura.svg" },
+  { name: "Gérer l'Or (MJ)",                   file: "gold.js",              version: "1.0.5", img: "systems/rpg/assets/icons/coins.svg" },
+  { name: "Forge",                              file: "forge.js",             version: "1.1.2", img: "systems/rpg/assets/icons/anvil.svg" },
+  { name: "Forcer Effets de Tour (MJ)",         file: "force-turn.js",        version: "1.0.2", img: "icons/svg/regen.svg" },
+  { name: "Distribuer une Recette (MJ)",        file: "recipe-distribute.js", version: "1.0.2", img: "systems/rpg/assets/icons/anvil.svg" },
+  { name: "Distribuer un Objet (MJ)",           file: "item-distribute.js",   version: "1.2.2", img: "icons/svg/item-bag.svg" },
+  { name: "Appliquer un Effet (MJ)",            file: "apply-effect.js",      version: "2.1.2", img: "icons/svg/lightning.svg" },
+  { name: "Survie : Repos / Blessures (MJ)",    file: "survival-tools.js",    version: "1.1.2", img: "icons/svg/blood.svg" },
+  { name: "Météo (MJ)",                         file: "weather-control.js",   version: "1.0.2", img: "icons/svg/wave.svg" },
+  { name: "Marché (MJ)",                        file: "market.js",            version: "2.1.2", img: "systems/rpg/assets/icons/coins.svg" },
+  { name: "Réputation & Marché Régional (MJ)",  file: "reputation-tools.js",  version: "1.1.2", img: "icons/svg/eye.svg" },
+  { name: "Position Tactique (MJ)",             file: "tactical-tools.js",    version: "1.0.2", img: "icons/svg/shield.svg" },
+  { name: "Cibler la Zone",                     file: "target-zone.js",       version: "1.0.2", img: "icons/svg/target.svg" },
+  { name: "Compétences (MJ)",                   file: "skills-tools.js",      version: "1.1.2", img: "icons/svg/book.svg" },
+  { name: "Jet de Compétence",                  file: "skill-check-macro.js", version: "1.0.2", img: "systems/rpg/assets/icons/dice.svg" },
+  { name: "Créer un État (MJ)",                 file: "state-builder-macro.js",version:"1.0.2", img: "icons/svg/aura.svg" },
+  { name: "Retirer un État (jet)",              file: "remove-state-macro.js",version: "1.0.2", img: "icons/svg/cancel.svg" },
+  { name: "Déverrouiller les Compendiums (MJ)", file: "unlock-compendiums.js",version: "1.0.2", img: "icons/svg/book.svg" },
+  { name: "Lancer un Sort",                     file: "cast-spell.js",        version: "1.0.2", img: "icons/svg/lightning.svg" },
+];
 
-  // ── 1. Ouvre le compendium ─────────────────────────────────────────────
-  const pack = game.packs.get(PACK_NAME);
-  if (!pack) {
-    const available = game.packs.map(p => p.collection).join(", ");
-    console.warn(`[RPG] Compendium "${PACK_NAME}" introuvable.`);
-    console.warn(`[RPG] Packs disponibles : ${available || "(aucun)"}`);
-    ui.notifications?.warn?.(`[RPG] Compendium de macros introuvable — redémarre le serveur Foundry (pas juste F5).`);
-    return;
-  }
-
-  // ✅ getDocuments() charge tout en mémoire ET retourne le tableau directement
-  // Ne pas rappeler getDocument() après — le cache V13 n'est pas fiable par _id
-  let packDocs;
-  try {
-    packDocs = await pack.getDocuments();
-  } catch (e) {
-    console.error("[RPG] Impossible de charger le compendium de macros :", e);
-    return;
-  }
-
-  if (!packDocs?.length) {
-    console.warn("[RPG] Compendium de macros vide ou non lisible.");
-    return;
-  }
-
-  // ── 2. Crée le dossier si besoin ───────────────────────────────────────
-  let folder = game.folders.find(
-    (f) => f.type === "Macro" && f.name === FOLDER_NAME
-  );
-  if (!folder) {
-    folder = await Folder.create({ name: FOLDER_NAME, type: "Macro", color: "#4a3f6b" });
-  }
-
-  // ── 3. Pour chaque macro du compendium ────────────────────────────────
-  for (const packDoc of packDocs) {
-    if (!packDoc) continue;
-
-    const packVer = String(packDoc.flags?.rpg?.version ?? "1.0.0");
-
-    // Dédoublonnage
-    const allMatching = game.macros.filter((m) => m.name === packDoc.name);
-    if (allMatching.length > 1) {
-      const [, ...extras] = allMatching;
-      await Promise.all(extras.map((m) => m.delete().catch(() => {})));
-      console.log(`[RPG] ${extras.length} doublon(s) supprimé(s) pour "${packDoc.name}"`);
-    }
-
-    const existing = allMatching[0] ?? null;
-
-    if (!existing) {
-      await Macro.create({
-        name:    packDoc.name,
-        type:    packDoc.type,
-        command: packDoc.command,
-        img:     packDoc.img,
-        folder:  folder.id,
-        flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }
-      });
-      console.log(`[RPG] Macro créée : ${packDoc.name} (v${packVer})`);
-    } else {
-      const worldVer = String(existing.flags?.[FLAG_SCOPE]?.[FLAG_VERSION] ?? "0.0.0");
-      if (isNewer(packVer, worldVer)) {
-        await existing.update({
-          name:    packDoc.name,
-          command: packDoc.command,
-          img:     packDoc.img,
-          flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }
-        });
-        console.log(`[RPG] Macro mise à jour : ${packDoc.name} ${worldVer} → ${packVer}`);
-      }
-    }
-  }
-}
-
-/** Compare deux versions semver simples "X.Y.Z" → true si a > b */
 function isNewer(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) {
-    const na = pa[i] ?? 0;
-    const nb = pb[i] ?? 0;
-    if (na > nb) return true;
-    if (na < nb) return false;
+    if ((pa[i] ?? 0) > (pb[i] ?? 0)) return true;
+    if ((pa[i] ?? 0) < (pb[i] ?? 0)) return false;
   }
   return false;
+}
+
+export async function autoInstallMacros() {
+  if (!game.user.isGM) return;
+
+  // Crée le dossier si besoin
+  let folder = game.folders.find(f => f.type === "Macro" && f.name === FOLDER_NAME);
+  if (!folder) {
+    folder = await Folder.create({ name: FOLDER_NAME, type: "Macro", color: "#4a3f6b" });
+  }
+
+  let created = 0, updated = 0, skipped = 0;
+
+  for (const entry of MACRO_LIST) {
+    const packVer = entry.version;
+    const macroName = entry.name;
+
+    // Cherche les macros existantes par nom (gérant les anciens préfixes)
+    const allMatching = game.macros.filter(m =>
+      m.name === macroName ||
+      m.name === `RPG — ${macroName}` ||
+      m.name === `JDR — ${macroName}`
+    );
+
+    // Supprime les doublons
+    if (allMatching.length > 1) {
+      const [, ...extras] = allMatching;
+      for (const dup of extras) await dup.delete().catch(() => {});
+      console.log(`[RPG] Doublon supprimé : ${macroName}`);
+    }
+
+    const existing = allMatching[0] ?? null;
+    const worldVer = String(existing?.flags?.[FLAG_SCOPE]?.[FLAG_VERSION] ?? "0.0.0");
+
+    if (existing && !isNewer(packVer, worldVer)) {
+      skipped++;
+      continue;
+    }
+
+    // Charge le code source via fetch
+    const url = `systems/rpg/module/macro/${entry.file}`;
+    let command;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      command = await resp.text();
+    } catch(e) {
+      console.warn(`[RPG] Impossible de charger ${url} :`, e);
+      continue;
+    }
+
+    if (existing) {
+      await existing.update({
+        name:    macroName,   // corrige le nom (supprime RPG — ou JDR —)
+        command,
+        img:     entry.img,
+        folder:  folder.id,
+        flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }
+      });
+      console.log(`[RPG] Macro mise à jour : ${macroName} ${worldVer} → ${packVer}`);
+      updated++;
+    } else {
+      await Macro.create({
+        name:    macroName,
+        type:    "script",
+        command,
+        img:     entry.img,
+        folder:  folder.id,
+        flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }
+      });
+      console.log(`[RPG] Macro créée : ${macroName} (v${packVer})`);
+      created++;
+    }
+  }
+
+  if (created || updated) {
+    console.log(`[RPG] Macros : ${created} créée(s), ${updated} mise(s) à jour, ${skipped} déjà à jour.`);
+    if (created || updated) ui.notifications?.info?.(`Macros système : ${created} créée(s), ${updated} mise(s) à jour.`);
+  }
 }
