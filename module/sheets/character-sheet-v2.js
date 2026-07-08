@@ -426,10 +426,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     });
 
+
     // ✅ Toggle du header (masquer/afficher le résumé pour plus d'espace)
     const headerToggle = root.querySelector(".header-toggle");
     const header = root.querySelector(".sheet-header");
-    const PREF_KEY = `rpg.headerCollapsed.${this.document.id}`;
     const isCollapsed = game.user.getFlag("rpg", `headerCollapsed.${this.document.id}`) ?? false;
     if (isCollapsed) {
       header?.classList.add("header-collapsed");
@@ -441,7 +441,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       await game.user.setFlag("rpg", `headerCollapsed.${this.document.id}`, collapsed);
     });
 
-
+    if (!this._tabs) {
+      const Tabs = foundry.applications.ux.Tabs;
       this._tabs = new Tabs({
         navSelector: ".sheet-tabs",
         contentSelector: ".sheet-body",
