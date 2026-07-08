@@ -452,8 +452,6 @@ Hooks.once("init", async () => {
 
     // ✅ Auto-installation des macros système (GM uniquement)
     // ── Mise à jour des macros système ────────────────────────────────
-    // Exécutée directement ici (pas via auto-install.js) pour garantir
-    // l'exécution même si le compendium ne charge pas.
     try {
       const MACRO_FILES = [
         ["Menu Combat",                       "menu.js"],
@@ -478,39 +476,40 @@ Hooks.once("init", async () => {
         ["Lancer un Sort",                    "cast-spell.js"],
       ];
 
+      ui.notifications?.info?.("[RPG] Mise à jour des macros système en cours...");
+
       let folder = game.folders.find(f => f.type === "Macro" && f.name === "Macros système");
       if (!folder) folder = await Folder.create({ name: "Macros système", type: "Macro", color: "#4a3f6b" });
 
       let updCount = 0;
       for (const [name, file] of MACRO_FILES) {
-        // Cherche par nom exact ET avec ancien préfixe RPG—/JDR—
+        // Cherche TOUTES les macros correspondantes (noms anciens inclus)
         const candidates = game.macros.filter(m =>
           m.name === name || m.name === `RPG — ${name}` || m.name === `JDR — ${name}`
         );
-        // Supprime les doublons
-        if (candidates.length > 1) {
-          for (const dup of candidates.slice(1)) await dup.delete().catch(() => {});
-        }
-        const existing = candidates[0] ?? null;
 
-        // Charge le code source
+        // Charge le code source avec cache-bust
         let cmd;
         try {
-          const r = await fetch(`systems/rpg/module/macro/${file}`);
-          if (!r.ok) continue;
+          const r = await fetch(`systems/rpg/module/macro/${file}?v=${Date.now()}`);
+          if (!r.ok) { console.warn(`[RPG] Fetch failed ${file}: ${r.status}`); continue; }
           cmd = await r.text();
-        } catch { continue; }
+        } catch(e) { console.warn(`[RPG] Fetch error ${file}:`, e); continue; }
 
-        if (existing) {
-          await existing.update({ name, command: cmd, folder: folder.id,
-            flags: { rpg: { systemMacro: true, version: "2.0.0" } } });
-        } else {
-          await Macro.create({ name, type: "script", command: cmd, folder: folder.id,
-            flags: { rpg: { systemMacro: true, version: "2.0.0" } } });
+        // Supprime TOUS les existants (doublons inclus)
+        for (const m of candidates) {
+          await m.delete().catch(e => console.warn("[RPG] Delete failed:", e));
         }
+
+        // Recrée proprement
+        await Macro.create({
+          name, type: "script", command: cmd, folder: folder.id,
+          flags: { rpg: { systemMacro: true, version: "2.0.0" } }
+        });
         updCount++;
       }
-      if (updCount) console.log(`[RPG] ${updCount} macro(s) mise(s) à jour.`);
+      console.log(`[RPG] ${updCount} macro(s) recréée(s).`);
+      if (updCount) ui.notifications?.info?.(`[RPG] ${updCount} macros système recréées avec succès.`);
     } catch(e) { console.error("[RPG] Erreur mise à jour macros :", e); }
 
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
