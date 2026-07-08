@@ -72,12 +72,12 @@ export async function autoInstallMacros() {
     }
 
     const existing = allMatching[0] ?? null;
-    const worldVer = String(existing?.flags?.[FLAG_SCOPE]?.[FLAG_VERSION] ?? "0.0.0");
 
-    if (existing && !isNewer(packVer, worldVer)) {
-      skipped++;
-      continue;
-    }
+    // ✅ Force la mise à jour : on met à jour si la macro existe (nom RPG—/JDR— trouvé)
+    // OU si c'est une macro système connue. Pas de vérification de version.
+    const needsUpdate = true; // toujours mettre à jour les macros système
+
+    if (!needsUpdate) { skipped++; continue; }
 
     // Charge le code source via fetch
     const url = `systems/rpg/module/macro/${entry.file}`;
@@ -93,13 +93,13 @@ export async function autoInstallMacros() {
 
     if (existing) {
       await existing.update({
-        name:    macroName,   // corrige le nom (supprime RPG — ou JDR —)
+        name:    macroName,
         command,
         img:     entry.img,
         folder:  folder.id,
         flags:   { [FLAG_SCOPE]: { [FLAG_VERSION]: packVer, systemMacro: true } }
       });
-      console.log(`[RPG] Macro mise à jour : ${macroName} ${worldVer} → ${packVer}`);
+      console.log(`[RPG] Macro mise à jour : ${macroName}`);
       updated++;
     } else {
       await Macro.create({
