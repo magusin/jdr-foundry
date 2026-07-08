@@ -1,0 +1,6 @@
+# Force LF sur toutes les machines (Windows inclus)
+* text=auto eol=lf
+*.js eol=lf
+*.hbs eol=lf
+*.css eol=lf
+*.json eol=lf
