@@ -451,6 +451,68 @@ Hooks.once("init", async () => {
     game.rpg.journal = { appendToCampaignJournal };
 
     // ✅ Auto-installation des macros système (GM uniquement)
+    // ── Mise à jour des macros système ────────────────────────────────
+    // Exécutée directement ici (pas via auto-install.js) pour garantir
+    // l'exécution même si le compendium ne charge pas.
+    try {
+      const MACRO_FILES = [
+        ["Menu Combat",                       "menu.js"],
+        ["Auras Grille",                      "aura.js"],
+        ["Gérer l'Or (MJ)",                   "gold.js"],
+        ["Forge",                             "forge.js"],
+        ["Forcer Effets de Tour (MJ)",        "force-turn.js"],
+        ["Distribuer une Recette (MJ)",       "recipe-distribute.js"],
+        ["Distribuer un Objet (MJ)",          "item-distribute.js"],
+        ["Appliquer un Effet (MJ)",           "apply-effect.js"],
+        ["Survie : Repos / Blessures (MJ)",   "survival-tools.js"],
+        ["Météo (MJ)",                        "weather-control.js"],
+        ["Marché (MJ)",                       "market.js"],
+        ["Réputation & Marché Régional (MJ)", "reputation-tools.js"],
+        ["Position Tactique (MJ)",            "tactical-tools.js"],
+        ["Cibler la Zone",                    "target-zone.js"],
+        ["Compétences (MJ)",                  "skills-tools.js"],
+        ["Jet de Compétence",                 "skill-check-macro.js"],
+        ["Créer un État (MJ)",                "state-builder-macro.js"],
+        ["Retirer un État (jet)",             "remove-state-macro.js"],
+        ["Déverrouiller les Compendiums (MJ)","unlock-compendiums.js"],
+        ["Lancer un Sort",                    "cast-spell.js"],
+      ];
+
+      let folder = game.folders.find(f => f.type === "Macro" && f.name === "Macros système");
+      if (!folder) folder = await Folder.create({ name: "Macros système", type: "Macro", color: "#4a3f6b" });
+
+      let updCount = 0;
+      for (const [name, file] of MACRO_FILES) {
+        // Cherche par nom exact ET avec ancien préfixe RPG—/JDR—
+        const candidates = game.macros.filter(m =>
+          m.name === name || m.name === `RPG — ${name}` || m.name === `JDR — ${name}`
+        );
+        // Supprime les doublons
+        if (candidates.length > 1) {
+          for (const dup of candidates.slice(1)) await dup.delete().catch(() => {});
+        }
+        const existing = candidates[0] ?? null;
+
+        // Charge le code source
+        let cmd;
+        try {
+          const r = await fetch(`systems/rpg/module/macro/${file}`);
+          if (!r.ok) continue;
+          cmd = await r.text();
+        } catch { continue; }
+
+        if (existing) {
+          await existing.update({ name, command: cmd, folder: folder.id,
+            flags: { rpg: { systemMacro: true, version: "2.0.0" } } });
+        } else {
+          await Macro.create({ name, type: "script", command: cmd, folder: folder.id,
+            flags: { rpg: { systemMacro: true, version: "2.0.0" } } });
+        }
+        updCount++;
+      }
+      if (updCount) console.log(`[RPG] ${updCount} macro(s) mise(s) à jour.`);
+    } catch(e) { console.error("[RPG] Erreur mise à jour macros :", e); }
+
     autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
 
     // ✅ Boutons MJ dans les messages chat (sorts + attaques)
