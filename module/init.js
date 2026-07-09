@@ -453,67 +453,60 @@ Hooks.once("init", async () => {
     // ✅ Auto-installation des macros système (GM uniquement)
     // ── Mise à jour des macros système ────────────────────────────────
     try {
-      const MACRO_FILES = [
-        ["Menu Combat",                       "menu.js"],
-        ["Auras Grille",                      "aura.js"],
-        ["Gérer l'Or (MJ)",                   "gold.js"],
-        ["Forge",                             "forge.js"],
-        ["Forcer Effets de Tour (MJ)",        "force-turn.js"],
-        ["Distribuer une Recette (MJ)",       "recipe-distribute.js"],
-        ["Distribuer un Objet (MJ)",          "item-distribute.js"],
-        ["Appliquer un Effet (MJ)",           "apply-effect.js"],
-        ["Survie : Repos / Blessures (MJ)",   "survival-tools.js"],
-        ["Météo (MJ)",                        "weather-control.js"],
-        ["Marché (MJ)",                       "market.js"],
-        ["Réputation & Marché Régional (MJ)", "reputation-tools.js"],
-        ["Position Tactique (MJ)",            "tactical-tools.js"],
-        ["Cibler la Zone",                    "target-zone.js"],
-        ["Compétences (MJ)",                  "skills-tools.js"],
-        ["Jet de Compétence",                 "skill-check-macro.js"],
-        ["Créer un État (MJ)",                "state-builder-macro.js"],
-        ["Retirer un État (jet)",             "remove-state-macro.js"],
-        ["Déverrouiller les Compendiums (MJ)","unlock-compendiums.js"],
-        ["Lancer un Sort",                    "cast-spell.js"],
+      const MACRO_DEFS = [
+        ["Menu Combat",                        "menu.js",               "icons/svg/sword.svg",           "all"],
+        ["Lancer un Sort",                     "cast-spell.js",         "icons/svg/lightning.svg",       "all"],
+        ["Jet de Compétence",                  "skill-check-macro.js",  "systems/rpg/assets/icons/dice.svg","all"],
+        ["Retirer un État (jet)",              "remove-state-macro.js", "icons/svg/cancel.svg",          "all"],
+        ["Forge",                              "forge.js",              "systems/rpg/assets/icons/anvil.svg","all"],
+        ["Cibler la Zone",                     "target-zone.js",        "icons/svg/target.svg",          "all"],
+        ["Appliquer un Effet (MJ)",            "apply-effect.js",       "icons/svg/lightning.svg",       "gm"],
+        ["Créer un État (MJ)",                 "state-builder-macro.js","icons/svg/aura.svg",            "gm"],
+        ["Survie : Repos / Blessures (MJ)",    "survival-tools.js",     "icons/svg/blood.svg",           "gm"],
+        ["Météo (MJ)",                         "weather-control.js",    "icons/svg/wave.svg",            "gm"],
+        ["Marché (MJ)",                        "market.js",             "systems/rpg/assets/icons/coins.svg","gm"],
+        ["Réputation & Marché Régional (MJ)",  "reputation-tools.js",   "icons/svg/eye.svg",             "gm"],
+        ["Position Tactique (MJ)",             "tactical-tools.js",     "icons/svg/shield.svg",          "gm"],
+        ["Compétences (MJ)",                   "skills-tools.js",       "icons/svg/book.svg",            "gm"],
+        ["Distribuer un Objet (MJ)",           "item-distribute.js",    "icons/svg/item-bag.svg",        "gm"],
+        ["Distribuer une Recette (MJ)",        "recipe-distribute.js",  "systems/rpg/assets/icons/anvil.svg","gm"],
+        ["Gérer l'Or (MJ)",                    "gold.js",               "systems/rpg/assets/icons/coins.svg","gm"],
+        ["Auras Grille",                       "aura.js",               "icons/svg/aura.svg",            "gm"],
+        ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
+        ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
       ];
-
-      ui.notifications?.info?.("[RPG] Mise à jour des macros système en cours...");
-
-      let folder = game.folders.find(f => f.type === "Macro" && f.name === "Macros système");
-      if (!folder) folder = await Folder.create({ name: "Macros système", type: "Macro", color: "#4a3f6b" });
-
-      let updCount = 0;
-      for (const [name, file] of MACRO_FILES) {
-        // Cherche TOUTES les macros correspondantes (noms anciens inclus)
-        const candidates = game.macros.filter(m =>
-          m.name === name || m.name === `RPG — ${name}` || m.name === `JDR — ${name}`
-        );
-
-        // Charge le code source avec cache-bust
+      const getFolder = async (name) => {
+        let f = game.folders.find(x => x.type === "Macro" && x.name === name);
+        if (!f) f = await Folder.create({ name, type: "Macro", color: "#4a3f6b" });
+        return f;
+      };
+      const folderAll = await getFolder("Macros système");
+      const folderGM  = await getFolder("Macros système (MJ)");
+      let created = 0, updated = 0;
+      for (const [name, file, img, scope] of MACRO_DEFS) {
+        const folder = scope === "gm" ? folderGM : folderAll;
         let cmd;
         try {
-          const r = await fetch(`systems/rpg/module/macro/${file}?v=${Date.now()}`);
-          if (!r.ok) { console.warn(`[RPG] Fetch failed ${file}: ${r.status}`); continue; }
+          const r = await fetch(`systems/rpg/module/macro/${file}?t=${Date.now()}`);
+          if (!r.ok) continue;
           cmd = await r.text();
-        } catch(e) { console.warn(`[RPG] Fetch error ${file}:`, e); continue; }
-
-        // Supprime TOUS les existants (doublons inclus)
-        for (const m of candidates) {
-          await m.delete().catch(e => console.warn("[RPG] Delete failed:", e));
+        } catch { continue; }
+        const existing = game.macros.filter(m =>
+          m.name === name || m.name === `RPG — ${name}` || m.name === `JDR — ${name}`
+        );
+        if (existing.length > 1) for (const d of existing.slice(1)) await d.delete().catch(()=>{});
+        if (existing[0]) {
+          await existing[0].update({ name, command: cmd, img, folder: folder.id,
+            flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
+          updated++;
+        } else {
+          await Macro.create({ name, type: "script", command: cmd, img, folder: folder.id,
+            flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
+          created++;
         }
-
-        // Recrée proprement
-        await Macro.create({
-          name, type: "script", command: cmd, folder: folder.id,
-          flags: { rpg: { systemMacro: true, version: "2.0.0" } }
-        });
-        updCount++;
       }
-      console.log(`[RPG] ${updCount} macro(s) recréée(s).`);
-      if (updCount) ui.notifications?.info?.(`[RPG] ${updCount} macros système recréées avec succès.`);
-    } catch(e) { console.error("[RPG] Erreur mise à jour macros :", e); }
-
-    autoInstallMacros().catch((e) => console.error("[RPG] autoInstallMacros :", e));
-
+      console.log(`[RPG] Macros : ${created} créée(s), ${updated} mise(s) à jour.`);
+    } catch(e) { console.error("[RPG] Erreur macros :", e); }
     // ✅ Boutons MJ dans les messages chat (sorts + attaques)
     Hooks.on("renderChatMessageHTML", (message, html) => {
       try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
