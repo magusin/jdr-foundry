@@ -1219,7 +1219,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
     });
   }
-
+}
 
 export function bindSpellChatButtons(htmlEl, message) {
   const data =
