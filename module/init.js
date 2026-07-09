@@ -525,56 +525,78 @@ Hooks.once("init", async () => {
       try {
         // Bouton "Lancer le d20" dans le message de sort
         const root = html instanceof HTMLElement ? html : html?.[0];
-        // Bouton "Lancer les dégâts" (sort)
+        // Bouton "Lancer les dégâts" (sort) — nouveau format multi-lignes
         root?.querySelectorAll(".rpg-dmg-roll-btn:not([data-bound])").forEach(btn => {
           btn.dataset.bound = "1";
           btn.addEventListener("click", async (ev) => {
             ev.preventDefault();
             btn.disabled = true;
-            btn.textContent = "Lancé !";
+            btn.textContent = "Calcul en cours...";
             try {
-              const actorId  = btn.dataset.actorId;
-              const targetId = btn.dataset.targetId;
-              const diceExpr = btn.dataset.dice || "";
-              const flat     = Number(btn.dataset.flat) || 0;
-              const fixe     = Number(btn.dataset.fixe) || 0;
-              const pct      = Number(btn.dataset.pct)  || 0;
+              const actorId   = btn.dataset.actorId;
+              const targetIds = (btn.dataset.targetIds ?? btn.dataset.targetId ?? "").split(",").filter(Boolean);
+              const caster    = game.actors.get(actorId);
 
-              const caster = game.actors.get(actorId);
-              const target = game.actors.get(targetId);
-
-              let rawDmg = flat;
-              let rollDesc = flat !== 0 ? `${flat}` : "";
-
-              if (diceExpr) {
-                const roll = await (new Roll(diceExpr)).evaluate();
-                await roll.toMessage({
-                  speaker: ChatMessage.getSpeaker({ actor: caster }),
-                  flavor: `🎲 Dégâts — ${diceExpr}`
-                });
-                rawDmg += roll.total;
-                rollDesc = `${diceExpr} (${roll.total})${flat ? ` + ${flat}` : ""}`;
+              // Nouveau format : dmg-blocks JSON
+              let dmgBlocks = [];
+              if (btn.dataset.dmgBlocks) {
+                try { dmgBlocks = JSON.parse(decodeURIComponent(btn.dataset.dmgBlocks)); } catch {}
+              } else {
+                // Ancien format compat
+                dmgBlocks = [{
+                  dice: btn.dataset.dice || "",
+                  flat: Number(btn.dataset.flat) || 0,
+                  livraison: "magique",
+                  fixe: Number(btn.dataset.fixe) || 0,
+                  pct:  Number(btn.dataset.pct)  || 0,
+                  label: "Dégâts"
+                }];
               }
 
-              const afterFixe = Math.max(0, rawDmg - fixe);
-              const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+              let resultLines = [];
+              for (const targetId of targetIds) {
+                const target = game.actors.get(targetId);
+                if (!target) continue;
 
-              let resultLine = `💥 <b>${rawDmg}</b> dégâts bruts`;
-              if (fixe || pct) resultLine += ` → après réduction (−${fixe} fixe, −${pct}%) = <b style="color:#c0392b">${finalDmg}</b>`;
-              else resultLine += ` = <b style="color:#c0392b">${finalDmg}</b>`;
+                let totalDmg = 0;
+                let rollDetails = [];
 
-              if (target) {
+                for (const b of dmgBlocks) {
+                  let raw = Number(b.flat) || 0;
+                  if (b.dice) {
+                    const roll = await (new Roll(b.dice)).evaluate();
+                    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
+                      flavor: `🎲 ${b.label ?? "Dégâts"} — ${b.dice}` });
+                    raw += roll.total;
+                    rollDetails.push(`${b.label}: ${b.dice}(${roll.total}) + ${b.flat || 0}`);
+                  } else {
+                    rollDetails.push(`${b.label}: ${b.flat || 0}`);
+                  }
+
+                  const fixe = Number(b.fixe) || 0;
+                  const pct  = Number(b.pct)  || 0;
+                  const afterFixe = Math.max(0, raw - fixe);
+                  const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+                  totalDmg += finalDmg;
+
+                  resultLines.push(
+                    `${b.label}: <b>${raw}</b> brut${fixe ? ` −${fixe}` : ""}${pct ? ` −${pct}%` : ""} = <b style="color:#c0392b">${finalDmg}</b>`
+                  );
+                }
+
+                // Applique les dégâts
                 const pvCur = Number(target.system?.ressources?.pv?.valeur ?? 0) || 0;
                 const pvMax = Number(target.system?.ressources?.pv?.max ?? 0) || 0;
-                const pvNew = Math.max(0, pvCur - finalDmg);
+                const pvNew = Math.max(0, pvCur - totalDmg);
                 await target.update({ "system.ressources.pv.valeur": pvNew });
-                resultLine += `<br>${target.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`;
+                resultLines.push(`${target.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`);
               }
 
               await ChatMessage.create({
                 speaker: ChatMessage.getSpeaker({ actor: caster }),
-                content: resultLine
+                content: `💥 <b>Dégâts infligés</b><br>${resultLines.join("<br>")}`
               });
+              btn.closest(".message-content")?.closest(".chat-message")?.querySelector(".message-content")?.remove?.();
             } catch(e) {
               console.error("[RPG] Erreur lancer dégâts :", e);
               btn.disabled = false;

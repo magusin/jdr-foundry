@@ -1061,89 +1061,149 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   }
 
   const rows = [];
-  const addedStatesTracker = []; // [{actorId, stateId}] — pour l'undo (retrait des effets posés)
+  const addedStatesTracker = [];
 
-  // ── Dégâts principaux ────────────────────────────────────────────────
+  // ── Collecte toutes les lignes de dégâts (ancien format ET nouveau) ──
+  const dmgBlocks = [];
+
+  // Ancien format system.damage / system.damageCrit
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
   if (dmgBlock?.enabled) {
-    const diceStr  = String(dmgBlock.dice ?? "").trim();
-    const flatBase = n(dmgBlock.flat, 0);
-    const scaling  = dmgBlock.scaling ?? {};
-    const statKey  = String(scaling.stat ?? "intelligence");
-    const per      = Math.max(1, n(scaling.per, 10) || 10);
-    const perStep  = n(scaling.perStep, 0);
-    const effP     = getEffP(actor);
-    const statVal  = n(effP?.[statKey], 0);
-    const scaled   = Math.floor(statVal / per) * perStep;
-    const flatTotal = flatBase + scaled;
+    const scaling = dmgBlock.scaling ?? {};
+    const statKey = String(scaling.stat ?? "intelligence");
+    const per     = Math.max(1, n(scaling.per, 10) || 10);
+    const perStep = n(scaling.perStep, 0);
+    const effP    = getEffP(actor);
+    const scaled  = Math.floor(n(effP?.[statKey], 0) / per) * perStep;
+    dmgBlocks.push({
+      dice:      String(dmgBlock.dice ?? "").trim() || null,
+      flat:      n(dmgBlock.flat, 0) + scaled,
+      livraison: String(sys.livraison ?? "magique"),
+      label:     res === "crit" ? "Dégâts (Critique)" : "Dégâts"
+    });
+  }
 
-    let rawDmg = flatTotal;
-    let rollLine = "";
+  // Nouveau format system.damages[]
+  for (const d of (Array.isArray(sys.damages) ? sys.damages : [])) {
+    if (!d) continue;
+    const statKey = String(d.stat ?? "intelligence");
+    const per     = Math.max(1, n(d.per, 10) || 10);
+    const perStep = n(d.perStep, 0);
+    const effP    = getEffP(actor);
+    const scaled  = Math.floor(n(effP?.[statKey], 0) / per) * perStep;
+    dmgBlocks.push({
+      dice:      String(d.dice ?? "").trim() || null,
+      flat:      n(d.flat, 0) + scaled,
+      livraison: String(d.livraison ?? sys.livraison ?? "magique"),
+      label:     `Dégâts (${d.livraison ?? "magique"})`
+    });
+  }
 
-    if (diceStr && diceStr !== "0" && diceStr !== "—") {
-      try {
-        const roll = await (new Roll(diceStr)).evaluate();
-        rawDmg += roll.total;
-        rollLine = ` (🎲 ${diceStr} → ${roll.total})`;
-      } catch (e) {
-        console.warn("[RPG][Spell] Roll failed:", e);
+  // ── Prépare la liste des effets à appliquer ───────────────────────────
+  const fxList = effectsForResult(item, res);
+
+  // ── Si dégâts ou effets : poste un message "Lancer les dégâts" pour le joueur
+  if (dmgBlocks.length > 0 && targetActors.length > 0) {
+    const firstTarget = targetActors[0];
+    const tSys  = firstTarget.system ?? {};
+    const effD  = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+    const red   = tSys.derived?.reductions ?? {};
+
+    // Construit les lignes de formule
+    const dmgLines = dmgBlocks.map(b => {
+      const isPhys = b.livraison === "physique";
+      const fixe   = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
+      const pct    = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
+      const parts  = [b.dice, b.flat !== 0 ? `${b.flat > 0 ? "+" : ""}${b.flat}` : ""].filter(Boolean);
+      const formula = parts.join(" ") || "0";
+      const fixeStr = fixe ? ` −${fixe} armure` : "";
+      const pctStr  = pct  ? ` −${pct}%` : "";
+      return `<b>${b.label}</b> : <span style="color:#e05a00">${formula}</span>${fixeStr}${pctStr}`;
+    });
+
+    // Encode les blocs pour le handler
+    const dmgData = encodeURIComponent(JSON.stringify(dmgBlocks.map(b => {
+      const isPhys = b.livraison === "physique";
+      const fixe   = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
+      const pct    = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
+      return { ...b, fixe, pct };
+    })));
+
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `
+        <div style="font-size:13px">
+          💥 <b>${actor.name}</b> → <b>${firstTarget.name}</b><br>
+          <div style="margin:4px 0;opacity:.85">${dmgLines.join("<br>")}</div>
+          <button type="button" class="rpg-dmg-roll-btn"
+            data-actor-id="${actor.id}"
+            data-target-ids="${targetActors.map(a=>a.id).join(",")}"
+            data-dmg-blocks="${dmgData}"
+            style="margin-top:8px;padding:4px 14px;cursor:pointer;border-radius:6px;font-weight:600;width:100%">
+            🎲 Lancer les dégâts
+          </button>
+        </div>`
+    });
+  }
+
+  // ── Effets — s'appliquent après la résolution (automatiquement) ───────
+  const fxResultRows = [];
+  for (const fx of fxList) {
+    const mods = buildModsFromFxMods(fx.mods);
+    const fxTarget = String(fx.target ?? "target").toLowerCase();
+    const applyToList =
+      (fxTarget === "self" || fxTarget === "caster") ? [actor] :
+      (fxTarget === "target") ? targetActors : [];
+
+    for (const applyTo of applyToList) {
+      if (!applyTo) continue;
+      const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
+      const dotFlat = n(fx.damage?.flat, 0);
+      const dotDice = String(fx.damage?.dice ?? "").trim();
+      const tag = String(fx.tag ?? "").trim() || null;
+      const effectKey = String(fx.effectKey ?? "").trim() || null;
+      const isAura = !!fx.isAura;
+      const permanent = !!fx.permanent;
+      const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
+
+      const state = {
+        id: stateId, label: String(fx.label ?? item.name),
+        type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
+        dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
+        mods
+      };
+      if (isAura) state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
+
+      const resistResult = await upsertState(applyTo, state);
+      const info = resistResult?.resistanceInfo;
+
+      if (resistResult?.resisted) {
+        const reason = info?.immune ? "immunité" : "durée ramenée à 0";
+        fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
+        continue;
       }
-    }
-
-    // Crit : mode max+die → on replace le dé par son max + dé bonus
-    if (res === "crit" && diceStr && diceStr !== "0") {
-      try {
-        const critDef  = sys.damageCrit?.crit ?? sys.damage?.crit ?? {};
-        const extraDie = String(critDef.extraDice ?? critDef.extraDie ?? diceStr).trim();
-        const extra    = await (new Roll(extraDie)).evaluate();
-        rawDmg += extra.total;
-        rollLine += ` + crit 🎲 (${extraDie} → ${extra.total})`;
-      } catch (e) { /* ignore */ }
-    }
-
-    // Applique mitigation par cible — poste un bouton joueur + résultat après clic
-    if (targetActors.length && rawDmg >= 0) {
-      const livraison = String(sys.livraison ?? "magique");
-      const isPhys    = livraison === "physique";
-      const diceExpr  = diceStr && diceStr !== "0" ? diceStr : null;
-      const flatPart  = flatTotal !== 0 ? (flatTotal > 0 ? `+${flatTotal}` : `${flatTotal}`) : "";
-      const formulaDisplay = [diceExpr, flatPart].filter(Boolean).join(" ") || "0";
-
-      for (const tActor of targetActors) {
-        const tSys = tActor.system ?? {};
-        const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
-        const red  = tSys.derived?.reductions ?? {};
-        const fixe = isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0);
-        const pct  = isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0);
-
-        // Bouton joueur — le joueur lance lui-même les dés
-        const dmgBtnContent = `
-          <div style="font-size:13px">
-            💥 <b>${actor.name}</b> → <b>${tActor.name}</b><br>
-            <span style="opacity:.8">Formule : <b>${formulaDisplay}</b> dégâts ${livraison}
-            ${flatPart ? `(dont ${flatPart} fixe)` : ""}
-            ${fixe ? `• Réduction : −${fixe} fixe` : ""}
-            ${pct ? `• −${pct}%` : ""}</span>
-            <div style="margin-top:8px">
-              <button type="button" class="rpg-dmg-roll-btn"
-                data-actor-id="${actor.id}" data-target-id="${tActor.id}"
-                data-dice="${diceExpr ?? ""}" data-flat="${flatTotal}"
-                data-fixe="${fixe}" data-pct="${pct}"
-                style="padding:4px 14px;cursor:pointer;border-radius:6px;font-weight:600">
-                🎲 Lancer les dégâts
-              </button>
-            </div>
-          </div>`;
-        await ChatMessage.create({
-          speaker: ChatMessage.getSpeaker({ actor }),
-          content: dmgBtnContent
-        });
-      }
-    } else if (rawDmg > 0) {
-      rows.push(`💥 <b>Dégâts</b> : <b>${rawDmg}</b>${rollLine}`);
+      addedStatesTracker.push({ actorId: applyTo.id, stateId });
+      const modSummary = summarizeMods(mods);
+      const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? duration} tours`;
+      fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}`);
     }
   }
 
+  // Aura
+  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
+  if (auraEnabled) {
+    rows.push(`🌀 <b>Aura</b> — ${str(sys.aura?.target, "allies")} • Portée: ${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}`);
+    if (globalThis.RPG_AURAS?.refreshAuras) setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
+  }
+
+  // Tout afficher dans un seul message de résolution
+  const allRows = [...rows, ...fxResultRows];
+  const body = allRows.length ? `<br>${allRows.join("<br>")}` : "";
+
+  await message.delete();
+  const actionId = data.actionId ?? null;
+  await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
+  await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
   // ── Effets (buffs / debuffs / DOT) ───────────────────────────────────
   const fxList = effectsForResult(item, res);
   for (const fx of fxList) {
