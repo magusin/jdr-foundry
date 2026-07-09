@@ -1062,6 +1062,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   // ── Collecte toutes les lignes de dégâts (ancien format ET nouveau) ──
   const dmgBlocks = [];
+  const addedStatesTracker = [];
 
   // Ancien format system.damage / system.damageCrit
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
