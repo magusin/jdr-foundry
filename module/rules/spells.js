@@ -1060,11 +1060,165 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     return;
   }
 
-  const rows = [];
-  const addedStatesTracker = [];
-
   // ── Collecte toutes les lignes de dégâts (ancien format ET nouveau) ──
   const dmgBlocks = [];
+
+  // Ancien format system.damage / system.damageCrit
+  const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
+  if (dmgBlock?.enabled) {
+    const scaling = dmgBlock.scaling ?? {};
+    const statKey = String(scaling.stat ?? "intelligence");
+    const per     = Math.max(1, n(scaling.per, 10) || 10);
+    const perStep = n(scaling.perStep, 0);
+    const effP    = getEffP(actor);
+    const statBonus = Math.floor(n(effP?.[statKey], 0) / per) * perStep;
+    const flat    = n(dmgBlock.flat, 0) + statBonus;
+    const dice    = String(dmgBlock.dice ?? "").trim() || null;
+    dmgBlocks.push({
+      dice, flat, livraison: String(sys.livraison ?? "magique"),
+      label: res === "crit" ? "Dégâts (Critique)" : "Dégâts",
+      statKey, statBonus
+    });
+  }
+
+  // Nouveau format system.damages[]
+  for (const d of (Array.isArray(sys.damages) ? sys.damages : [])) {
+    if (!d) continue;
+    const statKey = String(d.stat ?? "");
+    const per     = Math.max(1, n(d.per, 10) || 10);
+    const perStep = n(d.perStep, 0);
+    const effP    = getEffP(actor);
+    const statBonus = statKey ? Math.floor(n(effP?.[statKey], 0) / per) * perStep : 0;
+    const flat    = n(d.flat, 0) + statBonus;
+    const dice    = String(d.dice ?? "").trim() || null;
+    dmgBlocks.push({
+      dice, flat, livraison: String(d.livraison ?? sys.livraison ?? "magique"),
+      label: `Dégâts ${d.livraison ?? ""}`.trim(),
+      statKey, statBonus
+    });
+  }
+
+  // ── Effets/États — appliqués immédiatement après réussite ────────────
+  const fxList = effectsForResult(item, res);
+  const fxResultRows = [];
+
+  for (const fx of fxList) {
+    const mods = buildModsFromFxMods(fx.mods);
+    const fxTarget = String(fx.target ?? "target").toLowerCase();
+    const applyToList =
+      (fxTarget === "self" || fxTarget === "caster") ? [actor] :
+      (fxTarget === "target") ? targetActors : [];
+
+    for (const applyTo of applyToList) {
+      if (!applyTo) continue;
+      const stateId  = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
+      const dotFlat  = n(fx.damage?.flat, 0);
+      const dotDice  = String(fx.damage?.dice ?? "").trim();
+      const tag = String(fx.tag ?? "").trim() || null;
+      const effectKey = String(fx.effectKey ?? "").trim() || null;
+      const isAura = !!fx.isAura;
+      const permanent = !!fx.permanent;
+      const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
+
+      const state = {
+        id: stateId, label: String(fx.label ?? item.name),
+        type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
+        dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
+        mods
+      };
+      if (isAura) state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
+
+      const resistResult = await upsertState(applyTo, state);
+      const info = resistResult?.resistanceInfo;
+
+      if (resistResult?.resisted) {
+        const reason = info?.immune ? "immunité" : "durée ramenée à 0";
+        fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
+        continue;
+      }
+      addedStatesTracker.push({ actorId: applyTo.id, stateId });
+      const modSummary = summarizeMods(mods);
+      const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? duration} tours`;
+      fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}`);
+    }
+  }
+
+  // Aura
+  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
+  if (auraEnabled && globalThis.RPG_AURAS?.refreshAuras) {
+    setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
+    fxResultRows.push(`🌀 <b>Aura</b> active — ${str(sys.aura?.target, "alliés")}`);
+  }
+
+  await message.delete();
+  const actionId = data.actionId ?? null;
+  await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
+  await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
+
+  // ── Message de résolution : effets + formule dégâts + bouton joueur ──
+  if (dmgBlocks.length > 0 && targetActors.length > 0) {
+    // Formule lisible par ligne
+    const formulaLines = dmgBlocks.map(b => {
+      const parts = [];
+      if (b.dice) parts.push(`<b>${b.dice}</b>`);
+      if (b.flat !== 0) parts.push(`<b>${b.flat > 0 ? "+" : ""}${b.flat}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
+      const formula = parts.join(" + ") || "<b>0</b>";
+      return `${b.label} : ${formula} dégâts ${b.livraison}`;
+    });
+
+    // Encode les blocs + réductions pour le handler du bouton
+    const targetData = targetActors.map(tActor => {
+      const tSys = tActor.system ?? {};
+      const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+      const red  = tSys.derived?.reductions ?? {};
+      return {
+        id: tActor.id,
+        name: tActor.name,
+        pvCur: n(tActor.system?.ressources?.pv?.valeur, 0),
+        pvMax: n(tActor.system?.ressources?.pv?.max, 0),
+        blocks: dmgBlocks.map(b => {
+          const isPhys = b.livraison === "physique";
+          return {
+            ...b,
+            fixe: isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0),
+            pct:  isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0),
+          };
+        })
+      };
+    });
+
+    const encodedData = encodeURIComponent(JSON.stringify({
+      actorId: actor.id,
+      targets: targetData
+    }));
+
+    const fxSection = fxResultRows.length
+      ? `<div style="margin-top:6px;font-size:12px;opacity:.85">${fxResultRows.join("<br>")}</div>`
+      : "";
+
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `
+        <div style="font-size:13px">
+          <b>✅ ${title}</b>${targetNames ? ` sur <b>${targetNames}</b>` : ""}<br>
+          ${fxSection}
+          <div style="margin:8px 0 4px;font-weight:600">💥 Dégâts à infliger :</div>
+          ${formulaLines.map(l => `<div style="opacity:.85">${l}</div>`).join("")}
+          <button type="button" class="rpg-dmg-roll-btn" data-spell-dmg="${encodedData}"
+            style="width:100%;margin-top:8px;padding:6px;cursor:pointer;border-radius:6px;font-weight:700;font-size:13px">
+            🎲 Lancer les dégâts
+          </button>
+        </div>`
+    });
+  } else {
+    // Pas de dégâts — message de résolution simple
+    const fxBody = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `<b>✅ ${title}</b>${targetNames ? ` sur <b>${targetNames}</b>` : ""}${fxBody}`,
+      flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
+    });
+  }
 
   // Ancien format system.damage / system.damageCrit
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
@@ -1196,122 +1350,6 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     if (globalThis.RPG_AURAS?.refreshAuras) setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
   }
 
-  // Tout afficher dans un seul message de résolution
-  const allRows = [...rows, ...fxResultRows];
-  const body = allRows.length ? `<br>${allRows.join("<br>")}` : "";
-
-  await message.delete();
-  const actionId = data.actionId ?? null;
-  await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
-  await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
-  // ── Effets (buffs / debuffs / DOT) ───────────────────────────────────
-  const fxList = effectsForResult(item, res);
-  for (const fx of fxList) {
-    const mods = buildModsFromFxMods(fx.mods);
-
-    // Détermine la/les cible(s) de l'effet
-    const fxTarget = String(fx.target ?? "target").toLowerCase();
-    const applyToList =
-      (fxTarget === "self" || fxTarget === "caster") ? [actor] :
-      (fxTarget === "target") ? targetActors :
-      [];
-
-    for (const applyTo of applyToList) {
-      if (!applyTo) continue;
-
-      // Construit l'état V2 à partir du fx
-      const stateId = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
-      const dotFlat  = n(fx.damage?.flat, 0);
-      const dotDice  = String(fx.damage?.dice ?? "").trim();
-      const fatigueDotFlat = n(fx.fatigueDot, 0);
-
-      const tag = String(fx.tag ?? "").trim() || null;
-      const effectKey = String(fx.effectKey ?? "").trim() || null;
-      const isAura = !!fx.isAura;
-      const permanent = !!fx.permanent;
-      const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
-
-      const state = {
-        id:        stateId,
-        label:     String(fx.label ?? item.name),
-        type:      "spellEffect",
-        tag,
-        effectKey,    // ← utilisé par computeResistanceFor pour le matching par effet précis
-        isAura,
-        permanent,
-        duration,
-        remaining: duration,
-        dot:       { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: fatigueDotFlat },
-        mods:      mods
-      };
-
-      if (isAura) {
-        state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
-      }
-
-      const resistResult = await upsertState(applyTo, state);
-      const info = resistResult?.resistanceInfo;
-
-      if (resistResult?.resisted) {
-        const reason = info?.immune ? "immunité" : "durée ramenée à 0";
-        rows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} a résisté (${reason}) !`);
-        continue;
-      }
-
-      addedStatesTracker.push({ actorId: applyTo.id, stateId });
-
-      const modSummary = summarizeMods(mods);
-      const parts = [];
-      if (modSummary) parts.push(modSummary);
-
-      // Détail dégâts/durée avant-après résistance si une résistance est en jeu
-      let durTxt = `${n(fx.duration, 1)} tours`;
-      let dotTxt = "";
-
-      if (info) {
-        durTxt = info.durationReduction > 0
-          ? `${info.baseDuration} → <b>${info.finalDuration}</b> tours (−${info.durationReduction})`
-          : `${info.finalDuration} tours`;
-
-        if (info.baseDot) {
-          dotTxt = info.dotReductionPct > 0
-            ? `, DOT ${Math.abs(info.baseDot)} → <b>${Math.abs(info.finalDot)}</b>/tour (−${info.dotReductionPct}%)`
-            : `, DOT ${Math.abs(info.baseDot)}/tour`;
-        }
-      } else if (dotFlat || dotDice) {
-        dotTxt = `, DOT ${dotFlat || dotDice}/tour`;
-      }
-
-      rows.push(
-        `✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}` +
-        (parts.length ? ` (${parts.join(", ")})` : "") +
-        ` — Durée : ${durTxt}${dotTxt}`
-      );
-    }
-  }
-
-  // ── Aura ─────────────────────────────────────────────────────────────
-  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
-  if (auraEnabled) {
-    rows.push(
-      `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b>` +
-      ` • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b>` +
-      ` • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
-    );
-    if (globalThis.RPG_AURAS?.refreshAuras) {
-      setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
-    }
-  }
-
-  const body = rows.length ? `<br>${rows.join("<br>")}` : "";
-
-  await message.delete();
-
-  // Confirme le slot de budget (l'action a été tentée, qu'elle réussisse ou non)
-  // + enregistre les états ajoutés (multi-cible inclus) pour permettre le retrait à l'undo
-  const actionId = data.actionId ?? null;
-  await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
-  await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
 
   const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),

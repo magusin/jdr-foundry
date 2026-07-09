@@ -525,8 +525,109 @@ Hooks.once("init", async () => {
       try {
         // Bouton "Lancer le d20" dans le message de sort
         const root = html instanceof HTMLElement ? html : html?.[0];
-        // Bouton "Lancer les dégâts" (sort) — nouveau format multi-lignes
+        // ─── Étape 2 : Joueur lance les dés ───────────────────────────
         root?.querySelectorAll(".rpg-dmg-roll-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = "Calcul...";
+            try {
+              const raw = JSON.parse(decodeURIComponent(btn.dataset.spellDmg ?? btn.dataset.dmgBlocks ?? "{}"));
+              const actorId = raw.actorId ?? btn.dataset.actorId;
+              const caster  = game.actors.get(actorId);
+              const targets = raw.targets ?? [];
+
+              for (const tData of targets) {
+                const target  = game.actors.get(tData.id);
+                let totalFinal = 0;
+                const resultLines = [];
+
+                for (const b of (tData.blocks ?? [])) {
+                  let raw = Number(b.flat) || 0;
+                  if (b.dice) {
+                    const roll = await (new Roll(b.dice)).evaluate();
+                    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
+                      flavor: `🎲 ${b.label ?? "Dégâts"} — ${b.dice}` });
+                    raw += roll.total;
+                  }
+                  const fixe = Number(b.fixe) || 0;
+                  const pct  = Number(b.pct)  || 0;
+                  const afterFixe = Math.max(0, raw - fixe);
+                  const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+                  totalFinal += finalDmg;
+                  resultLines.push(`${b.label}: brut <b>${raw}</b> → <b style="color:#c0392b">${finalDmg}</b>`);
+                }
+
+                const pvCur = tData.pvCur ?? Number(target?.system?.ressources?.pv?.valeur ?? 0);
+                const pvMax = tData.pvMax ?? Number(target?.system?.ressources?.pv?.max ?? 0);
+                const pvNew = Math.max(0, pvCur - totalFinal);
+
+                // Encode les données pour la confirmation MJ
+                const confirmData = encodeURIComponent(JSON.stringify({
+                  actorId, targetId: tData.id, pvNew, totalFinal,
+                  pvCur, pvMax, targetName: tData.name ?? target?.name ?? "?"
+                }));
+
+                await ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ actor: caster }),
+                  content: `
+                    <div style="font-size:13px">
+                      💥 Dégâts sur <b>${tData.name ?? target?.name}</b><br>
+                      ${resultLines.join("<br>")}
+                      <b>Total : <span style="color:#c0392b">${totalFinal}</span> dégâts</b><br>
+                      ${tData.name ?? target?.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV
+                      <div class="rpg-dmg-confirm-gm" style="margin-top:8px;display:flex;gap:8px">
+                        <button type="button" class="rpg-dmg-confirm-btn" data-confirm="1"
+                          data-spell-confirm="${confirmData}"
+                          style="flex:1;padding:4px;cursor:pointer;background:#1d9e75;color:#fff;border:none;border-radius:5px;font-weight:600">
+                          ✅ Appliquer
+                        </button>
+                        <button type="button" class="rpg-dmg-confirm-btn" data-confirm="0"
+                          data-spell-confirm="${confirmData}"
+                          style="flex:1;padding:4px;cursor:pointer;background:#c0392b;color:#fff;border:none;border-radius:5px">
+                          ❌ Annuler
+                        </button>
+                      </div>
+                    </div>`
+                });
+              }
+            } catch(e) {
+              console.error("[RPG] Erreur lancer dégâts :", e);
+              btn.disabled = false;
+              btn.textContent = "🎲 Lancer les dégâts";
+            }
+          });
+        });
+
+        // ─── Étape 3 : MJ valide l'application des dégâts ─────────────
+        root?.querySelectorAll(".rpg-dmg-confirm-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          if (!game.user.isGM) { btn.style.display = "none"; return; }
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            if (btn.disabled) return;
+            const allBtns = btn.closest(".rpg-dmg-confirm-gm")?.querySelectorAll("button");
+            allBtns?.forEach(b => b.disabled = true);
+            try {
+              const d = JSON.parse(decodeURIComponent(btn.dataset.spellConfirm ?? "{}"));
+              if (btn.dataset.confirm === "1") {
+                const target = game.actors.get(d.targetId);
+                if (target) await target.update({ "system.ressources.pv.valeur": d.pvNew });
+                await ChatMessage.create({
+                  content: `✅ <b>${d.targetName}</b> : ${d.pvCur} PV → <b>${d.pvNew}</b> PV (−${d.totalFinal})`
+                });
+              } else {
+                await ChatMessage.create({ content: `❌ Dégâts annulés par le MJ.` });
+              }
+              btn.closest(".message-content")?.querySelectorAll("button").forEach(b => b.style.display = "none");
+            } catch(e) {
+              console.error("[RPG] Erreur confirmation dégâts :", e);
+              allBtns?.forEach(b => b.disabled = false);
+            }
+          });
+        });
           btn.dataset.bound = "1";
           btn.addEventListener("click", async (ev) => {
             ev.preventDefault();
