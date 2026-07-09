@@ -1168,12 +1168,14 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     });
 
     // Encode les blocs + réductions pour le handler du bouton
-    const targetData = targetActors.map(tActor => {
+    const targetData = targetActors.map((tActor, idx) => {
       const tSys = tActor.system ?? {};
       const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
       const red  = tSys.derived?.reductions ?? {};
+      const tokenUuid = targetTokens[idx]?.document?.uuid ?? null;
       return {
         id: tActor.id,
+        tokenUuid,
         name: tActor.name,
         pvCur: n(tActor.system?.ressources?.pv?.valeur, 0),
         pvMax: n(tActor.system?.ressources?.pv?.max, 0),

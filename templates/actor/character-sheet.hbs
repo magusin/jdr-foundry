@@ -55,6 +55,9 @@
             <label>Vitesse</label>
             <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
               flags.readOnly}}disabled{{/if}} />
+            {{#unless (eq system.deplacement.vitesse system.base.vitesse)}}
+            <small style="color:#e05a00;font-size:11px">⚠️ Effective : {{system.deplacement.vitesse}}</small>
+            {{/unless}}
           </div>
         </div>
 

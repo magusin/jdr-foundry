@@ -533,7 +533,10 @@ Hooks.once("init", async () => {
               const targets = raw.targets ?? [];
 
               for (const tData of targets) {
-                const target  = game.actors.get(tData.id);
+                // ✅ Pour les tokens non-liés, utiliser le tokenUuid pour l'acteur synthétique
+                const target = tData.tokenUuid
+                  ? (await fromUuid(tData.tokenUuid))?.actor ?? game.actors.get(tData.id)
+                  : game.actors.get(tData.id);
                 let totalFinal = 0;
                 const resultLines = [];
 
@@ -559,7 +562,7 @@ Hooks.once("init", async () => {
 
                 // Encode les données pour la confirmation MJ
                 const confirmData = encodeURIComponent(JSON.stringify({
-                  actorId, targetId: tData.id, pvNew, totalFinal,
+                  actorId, targetId: tData.id, tokenUuid: tData.tokenUuid ?? null, pvNew, totalFinal,
                   pvCur, pvMax, targetName: tData.name ?? target?.name ?? "?"
                 }));
 
@@ -606,7 +609,9 @@ Hooks.once("init", async () => {
             try {
               const d = JSON.parse(decodeURIComponent(btn.dataset.spellConfirm ?? "{}"));
               if (btn.dataset.confirm === "1") {
-                const target = game.actors.get(d.targetId);
+                const target = d.tokenUuid
+                  ? (await fromUuid(d.tokenUuid))?.actor ?? game.actors.get(d.targetId)
+                  : game.actors.get(d.targetId);
                 if (target) await target.update({ "system.ressources.pv.valeur": d.pvNew });
                 await ChatMessage.create({
                   content: `✅ <b>${d.targetName}</b> : ${d.pvCur} PV → <b>${d.pvNew}</b> PV (−${d.totalFinal})`
