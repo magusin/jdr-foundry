@@ -55,8 +55,8 @@
             <label>Vitesse</label>
             <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
               flags.readOnly}}disabled{{/if}} />
-            {{#unless (eq system.deplacement.vitesse system.base.vitesse)}}
-            <small style="color:#e05a00;font-size:11px">⚠️ Effective : {{system.deplacement.vitesse}}</small>
+            {{#unless (eq system.derived.effective.vitesse system.base.vitesse)}}
+            <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}}</small>
             {{/unless}}
           </div>
         </div>
@@ -476,14 +476,14 @@
         </section>
 
         <section class="card">
-          <h2>Combat</h2>
+          <h2>Combat <span style="font-size:10px;font-weight:400;opacity:.6">(valeurs effectives — effets, équipements, sorts inclus)</span></h2>
           <div class="stats-grid">
             <div class="stat-row">
               <label>Initiative</label>
               <div class="stat-cols">
                 <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="text" value="{{#if (gte system.derived.initiativeMod 0)}}+{{/if}}{{system.derived.initiativeMod}}" disabled />
+                  <small class="muted">Bonus</small>
+                  <input type="text" value="{{#if (gte system.derived.effective.initiative 0)}}+{{/if}}{{system.derived.effective.initiative}}" disabled />
                 </div>
               </div>
             </div>
@@ -492,7 +492,7 @@
               <div class="stat-cols">
                 <div class="stat-col">
                   <small class="muted">Bonus au TN</small>
-                  <input type="text" value="{{#if (gte system.derived.toucherPhysique 0)}}+{{/if}}{{system.derived.toucherPhysique}}" disabled />
+                  <input type="text" value="{{#if (gte system.derived.effective.toucherPhys 0)}}+{{/if}}{{system.derived.effective.toucherPhys}}" disabled />
                 </div>
               </div>
             </div>
@@ -501,7 +501,7 @@
               <div class="stat-cols">
                 <div class="stat-col">
                   <small class="muted">Bonus au TN</small>
-                  <input type="text" value="{{#if (gte system.derived.toucherMagique 0)}}+{{/if}}{{system.derived.toucherMagique}}" disabled />
+                  <input type="text" value="{{#if (gte system.derived.effective.toucherMag 0)}}+{{/if}}{{system.derived.effective.toucherMag}}" disabled />
                 </div>
               </div>
             </div>

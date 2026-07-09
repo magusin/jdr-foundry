@@ -387,10 +387,9 @@ export class RPGActor extends Actor {
     let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus - surchargeVitesseMalus;
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));
+    sys.derived.effective.vitesse = sys.deplacement.vitesse;
 
-    // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire) : base innée
-    // (monstres précis/maladroits) + équipement + sorts/effets + épuisement.
-    // Consommé par combat.js > computeTN.
+    // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire)
     sys.derived.toucherPhysique = Number(sys.base.toucherPhysique ?? 0)
       + (Number(bonus.combat?.toucherPhysique ?? 0) || 0)
       + (Number(flat?.combat?.toucherPhysique ?? 0) || 0) - epuiseToucherMalus;
@@ -402,6 +401,16 @@ export class RPGActor extends Actor {
       + (Number(flat?.combat?.toucherMagique ?? 0) || 0) - epuiseToucherMalus;
     sys.derived.toucherMagique = applyPct(sys.derived.toucherMagique, pct?.combat?.toucherMagique);
     sys.derived.toucherMagique = Math.floor(sys.derived.toucherMagique);
+
+    // Stocke les valeurs effectives de combat dans derived.effective
+    sys.derived.effective.vitesse        = sys.deplacement.vitesse;
+    sys.derived.effective.toucherPhys    = sys.derived.toucherPhysique;
+    sys.derived.effective.toucherMag     = sys.derived.toucherMagique;
+    sys.derived.effective.initiative     = Math.floor(
+      ((effP.dexterite ?? 0) + (effP.acuite ?? 0)) / 2
+      + (Number(bonus.combat?.initiativeMod ?? 0) || 0)
+      + (Number(flat?.combat?.initiativeMod ?? 0) || 0)
+    );
 
     // -----------------------
     // 5) HP state
@@ -422,9 +431,12 @@ export class RPGActor extends Actor {
     // 6) InitiativeMod
     // -----------------------
     sys.derived.initiativeMod = Math.floor(((Number(effP.dexterite) || 0) + (Number(effP.acuite) || 0)) / 2);
-    sys.derived.initiativeMod += Number(flat?.initiative?.mod ?? 0) || 0;
-    sys.derived.initiativeMod = applyPct(sys.derived.initiativeMod, pct?.initiative?.mod);
+    sys.derived.initiativeMod += (Number(bonus.combat?.initiativeMod ?? 0) || 0)
+      + (Number(flat?.combat?.initiativeMod ?? 0) || 0)
+      + (Number(flat?.initiative?.mod ?? 0) || 0);
+    sys.derived.initiativeMod = applyPct(sys.derived.initiativeMod, pct?.combat?.initiativeMod ?? pct?.initiative?.mod);
     sys.derived.initiativeMod = Math.floor(sys.derived.initiativeMod);
+    sys.derived.effective.initiative = sys.derived.initiativeMod;
 
     // -----------------------
     // 7) Pods (monstre = 0)
