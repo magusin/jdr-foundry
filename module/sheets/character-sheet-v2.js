@@ -257,6 +257,19 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.system = foundry.utils.deepClone(actor.system ?? {});
     ctx.items = categorized;
     ctx.charge = charge;
+
+    // ── Tableau des stats pour la vue lisible ─────────────────────────
+    const effP  = actor.system?.derived?.effective?.principales ?? {};
+    const baseP = actor.system?.principales ?? {};
+    const fsb   = actor.system?.derived?.fromSkills ?? {};
+    const niv   = Number(actor.system?.niveau ?? 1) || 1;
+    ctx.stats = [
+      { key:"force",        label:"Force",        base: baseP.force        ?? 0, total: effP.force        ?? 0, fromSkills: fsb.force        || 0, fromBonus: (effP.force        ?? 0) - (baseP.force        ?? 0) - niv - (fsb.force        || 0) },
+      { key:"intelligence", label:"Intelligence",  base: baseP.intelligence ?? 0, total: effP.intelligence ?? 0, fromSkills: fsb.intelligence || 0, fromBonus: (effP.intelligence ?? 0) - (baseP.intelligence ?? 0) - niv - (fsb.intelligence || 0) },
+      { key:"dexterite",    label:"Dextérité",     base: baseP.dexterite    ?? 0, total: effP.dexterite    ?? 0, fromSkills: fsb.dexterite    || 0, fromBonus: (effP.dexterite    ?? 0) - (baseP.dexterite    ?? 0) - niv - (fsb.dexterite    || 0) },
+      { key:"acuite",       label:"Acuité",        base: baseP.acuite       ?? 0, total: effP.acuite       ?? 0, fromSkills: fsb.acuite       || 0, fromBonus: (effP.acuite       ?? 0) - (baseP.acuite       ?? 0) - niv - (fsb.acuite       || 0) },
+      { key:"endurance",    label:"Endurance",     base: baseP.endurance    ?? 0, total: effP.endurance    ?? 0, fromSkills: fsb.endurance    || 0, fromBonus: (effP.endurance    ?? 0) - (baseP.endurance    ?? 0) - niv - (fsb.endurance    || 0) },
+    ];
     ctx.equipSlots = this._buildEquipSlotsUI(itemsObj);
 
     ctx.flags = {

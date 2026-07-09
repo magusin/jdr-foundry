@@ -181,11 +181,27 @@ export class RPGActor extends Actor {
     // 1) EFFECTIVE PRINCIPALES
     // -----------------------
     const effP = {
-      force: (Number(baseP.force ?? 0) || 0) + bonus.principales.force,
+      force:        (Number(baseP.force        ?? 0) || 0) + bonus.principales.force,
       intelligence: (Number(baseP.intelligence ?? 0) || 0) + bonus.principales.intelligence,
-      dexterite: (Number(baseP.dexterite ?? 0) || 0) + bonus.principales.dexterite,
-      acuite: (Number(baseP.acuite ?? 0) || 0) + bonus.principales.acuite,
-      endurance: (Number(baseP.endurance ?? 0) || 0) + bonus.principales.endurance
+      dexterite:    (Number(baseP.dexterite    ?? 0) || 0) + bonus.principales.dexterite,
+      acuite:       (Number(baseP.acuite       ?? 0) || 0) + bonus.principales.acuite,
+      endurance:    (Number(baseP.endurance    ?? 0) || 0) + bonus.principales.endurance
+    };
+
+    // ✅ Bonus de niveau : +1 à chaque stat principale par niveau
+    const niveau = Math.max(1, Number(sys.niveau ?? 1) || 1);
+    for (const s of ["force","intelligence","dexterite","acuite","endurance"]) {
+      effP[s] += niveau;
+    }
+
+    // Stocke les contributions pour l'affichage sur la fiche
+    sys.derived.fromLevel = niveau;
+    sys.derived.fromSkills = {
+      force:        bonusSkills.principales.force,
+      intelligence: bonusSkills.principales.intelligence,
+      dexterite:    bonusSkills.principales.dexterite,
+      acuite:       bonusSkills.principales.acuite,
+      endurance:    bonusSkills.principales.endurance,
     };
 
     for (const s of ["force", "intelligence", "dexterite", "acuite", "endurance"]) {

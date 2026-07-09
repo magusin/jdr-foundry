@@ -287,97 +287,37 @@
 
         <section class="card">
           <h2>Caractéristiques</h2>
+          <div style="font-size:10px;opacity:.6;margin-bottom:8px">
+            Base + Niveau ({{system.niveau}}×1) + Compétences + Équipements/Effets = <b>Total</b>
+          </div>
 
           <div class="stats-grid">
-            {{!-- FORCE --}}
+            {{#each stats as |s|}}
             <div class="stat-row">
-              <label>Force</label>
-              <div class="stat-cols">
-                {{#if flags.isGM}}
-                <div class="stat-col">
+              <label>{{s.label}}</label>
+              <div class="stat-cols" style="display:flex;align-items:center;gap:4px;font-size:12px">
+                {{#if ../flags.isGM}}
+                <div class="stat-col" title="Base (éditable MJ)">
                   <small class="muted">Base</small>
-                  <input type="number" name="system.principales.force" value="{{system.principales.force}}" {{#unless
-                    flags.isGM}}disabled{{/unless}} />
+                  <input type="number" name="system.principales.{{s.key}}" value="{{s.base}}" style="width:48px"/>
                 </div>
+                <span style="opacity:.4">+{{../system.niveau}}</span>
+                {{#if s.fromSkills}}
+                <span style="opacity:.4;color:#2980b9" title="Compétences">+{{s.fromSkills}}</span>
+                {{/if}}
+                {{#if s.fromBonus}}
+                <span style="opacity:.4;color:#1d9e75" title="Équipements/Effets">+{{s.fromBonus}}</span>
+                {{/if}}
+                <span style="opacity:.4">=</span>
                 {{/if}}
                 <div class="stat-col">
                   <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.principales.force}}" disabled />
+                  <input type="number" value="{{s.total}}" disabled
+                    style="font-size:15px;font-weight:700;background:rgba(255,255,255,0.06)"/>
                 </div>
               </div>
             </div>
-
-            {{!-- INT --}}
-            <div class="stat-row">
-              <label>Intelligence</label>
-              <div class="stat-cols">
-                {{#if flags.isGM}}
-                <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.principales.intelligence"
-                    value="{{system.principales.intelligence}}" {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.principales.intelligence}}" disabled />
-                </div>
-              </div>
-            </div>
-
-            {{!-- DEX --}}
-            <div class="stat-row">
-              <label>Dextérité</label>
-              <div class="stat-cols">
-                {{#if flags.isGM}}
-                <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.principales.dexterite" value="{{system.principales.dexterite}}"
-                    {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.principales.dexterite}}" disabled />
-                </div>
-              </div>
-            </div>
-
-            {{!-- ACUITE --}}
-            <div class="stat-row">
-              <label>Acuité</label>
-              <div class="stat-cols">
-                {{#if flags.isGM}}
-                <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.principales.acuite" value="{{system.principales.acuite}}" {{#unless
-                    flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.principales.acuite}}" disabled />
-                </div>
-              </div>
-            </div>
-
-            {{!-- ENDURANCE --}}
-            <div class="stat-row">
-              <label>Endurance</label>
-              <div class="stat-cols">
-                {{#if flags.isGM}}
-                <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.principales.endurance" value="{{system.principales.endurance}}"
-                    {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.principales.endurance}}" disabled />
-                </div>
-              </div>
-            </div>
+            {{/each}}
           </div>
         </section>
 
