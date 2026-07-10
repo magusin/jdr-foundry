@@ -491,17 +491,31 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // Drag & drop d'item (GM only) — doit être branché AVANT le early-return non-GM
     setupActorItemDrop(this, root);
 
-    // Player: disable most actions but allow equip toggling
+    // ── Handler toggleEquip (joueurs ET MJ) ─────────────────────────────
+    // Doit être branché avant le return joueur pour que les boutons fonctionnent
+    root.addEventListener("click", async (evEquip) => {
+      const btn = evEquip.target?.closest("[data-action='toggleEquip']");
+      if (!btn || btn.disabled) return;
+      evEquip.preventDefault();
+      evEquip.stopPropagation();
+      const itemId = btn.dataset.itemId ?? btn.closest(".item")?.dataset?.itemId;
+      const item = this.document.items.get(itemId);
+      if (!item) return;
+      btn.disabled = true;
+      try {
+        await this._toggleEquipItem(item);
+        this._debouncedPodsUpdate?.();
+        await this.render({ force: true });
+      } finally { btn.disabled = false; }
+    }, { capture: true });
+
+    // Player: disable inputs and most actions
     if (!game.user.isGM) {
       root.querySelectorAll("input, select, textarea").forEach(el => el.disabled = true);
-      // Désactive les boutons sauf toggleEquip (les joueurs peuvent équiper/déséquiper)
-      root.querySelectorAll("button[data-action]").forEach(el => {
-        if (el.dataset.action !== "toggleEquip") el.disabled = true;
-      });
-      // Les boutons toggleEquip restent actifs mais doivent fonctionner sur le propriétaire
-      root.querySelectorAll("button[data-action='toggleEquip']").forEach(btn => {
-        btn.disabled = !this.document.isOwner;
-      });
+      root.querySelectorAll("button[data-action]:not([data-action='toggleEquip'])").forEach(el => el.disabled = true);
+      if (!this.document.isOwner) {
+        root.querySelectorAll("button[data-action='toggleEquip']").forEach(el => el.disabled = true);
+      }
       return;
     }
 
@@ -541,16 +555,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const itemId = btn.dataset.itemId || li?.dataset?.itemId;
         if (!itemId) return;
         await this.document.deleteEmbeddedDocuments("Item", [itemId]);
-        this._debouncedPodsUpdate?.();
-        await this.render({ force: true });
-        return;
-      }
-
-      if (action === "toggleEquip") {
-        const li = btn.closest(".item");
-        const item = this.document.items.get(li?.dataset?.itemId);
-        if (!item) return;
-        await this._toggleEquipItem(item);
         this._debouncedPodsUpdate?.();
         await this.render({ force: true });
         return;

@@ -656,8 +656,10 @@
                   <a class="item-edit" style="font-weight:600">{{it.name}}</a>
                   <div style="opacity:0.65;font-size:11px">✅ {{it.system.emplacement}}</div>
                 </div>
+                {{#unless ../flags.isGM}}
                 <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
                   style="color:#1d9e75;cursor:pointer;padding:2px 7px;border:1px solid #1d9e75;border-radius:4px;font-size:11px;white-space:nowrap">⬇ Retirer</button>
+                {{/unless}}
                 {{#if ../flags.isGM}}
                 <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
                 {{/if}}
@@ -671,8 +673,10 @@
                   <a class="item-edit">{{it.name}}</a>
                   <div style="opacity:0.5;font-size:11px">Slot: {{it.system.emplacement}}</div>
                 </div>
+                {{#unless ../flags.isGM}}
                 <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
                   style="cursor:pointer;padding:2px 7px;border:1px solid #888;border-radius:4px;font-size:11px;white-space:nowrap">⬆ Équiper</button>
+                {{/unless}}
                 {{#if ../flags.isGM}}
                 <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
                 {{/if}}
