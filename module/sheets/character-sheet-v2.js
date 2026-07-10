@@ -258,6 +258,19 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.items = categorized;
     ctx.charge = charge;
 
+    // ── Flags showDef : masque les lignes de défense à 0 pour les joueurs ─
+    const effD2 = actor.system?.derived?.effective?.defenses ?? {};
+    const red2  = actor.system?.derived?.reductions ?? {};
+    const showAll = isGM;
+    ctx.showDef = {
+      armureFixe:      showAll || (effD2.armureFixe      ?? 0) !== 0,
+      resistanceFixe:  showAll || (effD2.resistanceFixe  ?? 0) !== 0,
+      scoreArmure:     showAll || (effD2.scoreArmure      ?? 0) !== 0,
+      scoreResistance: showAll || (effD2.scoreResistance  ?? 0) !== 0,
+      reductionPhys:   showAll || (red2.physiquePct       ?? 0) !== 0,
+      reductionMag:    showAll || (red2.magiquePct        ?? 0) !== 0,
+    };
+
     // ── Tableau des stats pour la vue lisible ─────────────────────────
     const effP  = actor.system?.derived?.effective?.principales ?? {};
     const baseP = actor.system?.principales ?? {};

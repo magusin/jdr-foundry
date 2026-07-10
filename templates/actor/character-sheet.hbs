@@ -318,6 +318,7 @@
           <h2>Défenses</h2>
 
           <div class="stats-grid">
+            {{#if showDef.armureFixe}}
             <div class="stat-row">
               <label>Armure fixe (physique)</label>
               <div class="stat-cols">
@@ -334,7 +335,9 @@
                 </div>
               </div>
             </div>
+            {{/if}}
 
+            {{#if showDef.resistanceFixe}}
             <div class="stat-row">
               <label>Résistance fixe (magique)</label>
               <div class="stat-cols">
@@ -351,7 +354,9 @@
                 </div>
               </div>
             </div>
+            {{/if}}
 
+            {{#if showDef.scoreArmure}}
             <div class="stat-row">
               <label>Score Armure (physique)</label>
               <div class="stat-cols">
@@ -368,7 +373,9 @@
                 </div>
               </div>
             </div>
+            {{/if}}
 
+            {{#if showDef.reductionPhys}}
             <div class="stat-row">
               <label>Réduction physique (%)</label>
               <div class="stat-cols">
@@ -378,7 +385,9 @@
                 </div>
               </div>
             </div>
+            {{/if}}
 
+            {{#if showDef.scoreResistance}}
             <div class="stat-row">
               <label>Score Résistance (magique)</label>
               <div class="stat-cols">
@@ -395,7 +404,9 @@
                 </div>
               </div>
             </div>
+            {{/if}}
 
+            {{#if showDef.reductionMag}}
             <div class="stat-row">
               <label>Réduction magique (%)</label>
               <div class="stat-cols">
@@ -405,6 +416,7 @@
                 </div>
               </div>
             </div>
+            {{/if}}
           </div>
         </section>
 
