@@ -579,112 +579,99 @@
           {{/if}}
         </div>
 
-        <p class="hint">
-          Slots : tête • torse • taille • bras • mains • jambes • pieds • main gauche • main droite • artefact
-          <br />Arme 2 mains : occupe main droite + main gauche.
-        </p>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
-          {{!-- COL 1: SLOTS --}}
+        {{#if flags.isGM}}
+        {{!-- VUE MJ : slots + liste --}}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
             <h3>Slots</h3>
-
-            <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
               {{#each equipSlots as |s|}}
-              <div data-slot="{{s.key}}"
-                style="border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                  <b>{{s.label}}</b>
-                  {{#if s.locked}}<small style="opacity:0.8;">(lié)</small>{{/if}}
-                </div>
-
-                <div style="margin-top:8px; display:flex; gap:10px; align-items:center;">
-                  <select style="flex:1;" data-action="equipSlotSelect" data-slot="{{s.key}}" {{#if
-                    s.locked}}disabled{{/if}}>
+              <div data-slot="{{s.key}}" style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px;">
+                <b>{{s.label}}</b>
+                <div style="margin-top:8px;display:flex;gap:10px;align-items:center;">
+                  <select style="flex:1;" data-action="equipSlotSelect" data-slot="{{s.key}}" {{#if s.locked}}disabled{{/if}}>
                     <option value="">Aucun</option>
-                    {{#each s.options as |opt|}}
-                    <option value="{{opt._id}}" {{#if opt.selected}}selected{{/if}}>
-                      {{opt.name}}{{#if opt.system.twoHands}} (2 mains){{/if}}
-                    </option>
-                    {{/each}}
+                    {{#each s.options as |opt|}}<option value="{{opt._id}}" {{#if opt.selected}}selected{{/if}}>{{opt.name}}{{#if opt.system.twoHands}} (2m){{/if}}</option>{{/each}}
                   </select>
-
-                  {{#if s.item}}
-                  <img src="{{s.item.img}}" alt=""
-                    style="width:32px; height:32px; border-radius:6px; object-fit:cover;" />
-                  {{/if}}
+                  {{#if s.item}}<img src="{{s.item.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover;"/>{{/if}}
                 </div>
-
                 {{#if s.item}}
-                <div class="item" data-item-id="{{s.item._id}}"
-                  style="margin-top:8px; display:flex; justify-content:space-between; gap:10px; align-items:center;">
-                  <div style="flex:1;">
-                    <a class="item-edit"><b>{{s.item.name}}</b></a>
-                    <div style="opacity:0.8; font-size:12px;">
-                      Slot: {{s.item.system.emplacement}}
-                      {{#if s.item.system.twoHands}} — 2 mains{{/if}}
-                      {{#if s.item.system.damage.dice}} — Dégâts: {{s.item.system.damage.dice}}{{/if}}
-                    </div>
-
-                    <div style="opacity:0.8; font-size:12px; margin-top:4px;">
-                      Qté: {{s.item.system.qte}} • Poids: {{s.item.system.poids}} • Total:
-                      {{s.item._derived.poidsTotal}}
-                    </div>
-                  </div>
-
-                  {{#if ../flags.isGM}}
+                <div class="item" data-item-id="{{s.item._id}}" style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;">
+                  <div><a class="item-edit" style="font-size:12px;font-weight:600">{{s.item.name}}</a></div>
                   <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
-                  {{/if}}
                 </div>
-                {{else}}
-                <div style="margin-top:8px; opacity:0.8;">Vide</div>
-                {{/if}}
+                {{else}}<div style="margin-top:6px;opacity:0.4;font-size:11px">Vide</div>{{/if}}
               </div>
               {{/each}}
             </div>
           </div>
 
-          {{!-- COL 2: LISTE RAPIDE --}}
           <div>
-            <h3>Équipements possédés</h3>
-
+            <h3>Possédés</h3>
             <ol class="items-list simple">
               {{#each items.equipe as |it|}}
-              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:8px;padding:5px;background:rgba(29,158,117,0.08);border-radius:8px;margin-bottom:4px">
-                <img src="{{it.img}}" alt="" style="width:26px;height:26px;border-radius:5px;object-fit:cover;" />
-                <div style="flex:1;min-width:0">
-                  <a class="item-edit" style="font-weight:600">{{it.name}}</a>
-                  <div style="opacity:0.65;font-size:11px">✅ {{it.system.emplacement}}</div>
-                </div>
-                {{#unless ../flags.isGM}}
-                <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
-                  style="color:#1d9e75;cursor:pointer;padding:2px 7px;border:1px solid #1d9e75;border-radius:4px;font-size:11px;white-space:nowrap">⬇ Retirer</button>
-                {{/unless}}
-                {{#if ../flags.isGM}}
+              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:6px;padding:4px;background:rgba(29,158,117,0.08);border-radius:7px;margin-bottom:4px">
+                <img src="{{it.img}}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;"/>
+                <div style="flex:1;font-size:12px"><a class="item-edit"><b>{{it.name}}</b></a><br><span style="opacity:.6;font-size:10px">✅ {{it.system.emplacement}}</span></div>
                 <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
-                {{/if}}
               </li>
               {{/each}}
-
               {{#each items.nonEquipe as |it|}}
-              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:8px;padding:5px;margin-bottom:4px">
-                <img src="{{it.img}}" alt="" style="width:26px;height:26px;border-radius:5px;object-fit:cover;opacity:.65" />
-                <div style="flex:1;min-width:0">
-                  <a class="item-edit">{{it.name}}</a>
-                  <div style="opacity:0.5;font-size:11px">Slot: {{it.system.emplacement}}</div>
-                </div>
-                {{#unless ../flags.isGM}}
-                <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
-                  style="cursor:pointer;padding:2px 7px;border:1px solid #888;border-radius:4px;font-size:11px;white-space:nowrap">⬆ Équiper</button>
-                {{/unless}}
-                {{#if ../flags.isGM}}
+              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:6px;padding:4px;margin-bottom:4px">
+                <img src="{{it.img}}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;opacity:.6"/>
+                <div style="flex:1;font-size:12px"><a class="item-edit">{{it.name}}</a><br><span style="opacity:.5;font-size:10px">{{it.system.emplacement}}</span></div>
                 <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
-                {{/if}}
               </li>
               {{/each}}
             </ol>
           </div>
         </div>
+
+        {{else}}
+        {{!-- VUE JOUEUR : items équipés avec stats utiles --}}
+        {{#if items.equipe.length}}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          {{#each items.equipe as |it|}}
+          <div class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(29,158,117,0.08);border-radius:10px;border:1px solid rgba(29,158,117,0.2)">
+            <img src="{{it.img}}" alt="" style="width:36px;height:36px;border-radius:8px;object-fit:cover;"/>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700">{{it.name}}</div>
+              <div style="font-size:11px;opacity:.6">{{it.system.emplacement}}</div>
+              <div style="font-size:11px;margin-top:3px;display:flex;flex-wrap:wrap;gap:6px">
+                {{#if it.system.bonus.force}}<span style="color:#e8a020">For +{{it.system.bonus.force}}</span>{{/if}}
+                {{#if it.system.bonus.intelligence}}<span style="color:#9b59b6">Int +{{it.system.bonus.intelligence}}</span>{{/if}}
+                {{#if it.system.bonus.dexterite}}<span style="color:#2ecc71">Dex +{{it.system.bonus.dexterite}}</span>{{/if}}
+                {{#if it.system.bonus.acuite}}<span style="color:#3498db">Acu +{{it.system.bonus.acuite}}</span>{{/if}}
+                {{#if it.system.bonus.endurance}}<span style="color:#e74c3c">End +{{it.system.bonus.endurance}}</span>{{/if}}
+                {{#if it.system.bonus.scoreArmure}}<span style="opacity:.8">🛡 +{{it.system.bonus.scoreArmure}}</span>{{/if}}
+                {{#if it.system.bonus.scoreResistance}}<span style="opacity:.8">✨ +{{it.system.bonus.scoreResistance}}</span>{{/if}}
+                {{#if it.system.bonus.pvMax}}<span style="color:#e74c3c">❤️ +{{it.system.bonus.pvMax}}</span>{{/if}}
+                {{#if it.system.bonus.vitesse}}<span style="color:#1abc9c">⚡ +{{it.system.bonus.vitesse}}</span>{{/if}}
+                {{#if it.system.damage.dice}}<span style="color:#e05a00">⚔️ {{it.system.damage.dice}}</span>{{/if}}
+              </div>
+            </div>
+            <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
+              style="color:#c0392b;cursor:pointer;padding:3px 8px;border:1px solid #c0392b;border-radius:5px;font-size:11px;white-space:nowrap">⬇ Retirer</button>
+          </div>
+          {{/each}}
+        </div>
+        {{#if items.nonEquipe.length}}
+        <div style="margin-top:12px">
+          <h3 style="font-size:12px;opacity:.6;margin-bottom:6px">Dans le sac</h3>
+          {{#each items.nonEquipe as |it|}}
+          <div style="display:flex;align-items:center;gap:8px;padding:4px;margin-bottom:3px">
+            <img src="{{it.img}}" alt="" style="width:22px;height:22px;border-radius:4px;opacity:.5"/>
+            <span style="flex:1;opacity:.7;font-size:12px">{{it.name}}</span>
+            <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
+              style="cursor:pointer;padding:2px 7px;border:1px solid #666;border-radius:4px;font-size:11px;white-space:nowrap">⬆ Équiper</button>
+          </div>
+          {{/each}}
+        </div>
+        {{/if}}
+        {{else}}
+        <div style="opacity:.4;text-align:center;padding:24px;font-size:13px">Aucun équipement porté.</div>
+        {{/if}}
+        {{/if}}
       </section>
     </div>
 
