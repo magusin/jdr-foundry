@@ -68,13 +68,6 @@
               flags.readOnly}}disabled{{/if}} />
           </div>
 
-          <div class="meta">
-            <label>Pods actuels</label>
-            <input type="number" name="system.charge.podsActuels" value="{{system.charge.podsActuels}}" min="0"
-              step="0.1" disabled />
-          </div>
-        </div>
-
         <div class="encumbrance">
           <div class="enc-label {{charge.cssSurcharge}}">
             <span>Charge
@@ -654,28 +647,32 @@
           {{!-- COL 2: LISTE RAPIDE --}}
           <div>
             <h3>Équipements possédés</h3>
-            <p class="hint" style="margin-bottom:8px;">
-              Modifie poids/quantité dans l’onglet Inventaire si besoin.
-            </p>
 
             <ol class="items-list simple">
               {{#each items.equipe as |it|}}
-              <li class="item" data-item-id="{{it._id}}" style="display:flex; align-items:center; gap:10px;">
-                <img src="{{it.img}}" alt="" style="width:28px; height:28px; border-radius:6px; object-fit:cover;" />
-                <div style="flex:1;">
-                  <a class="item-edit"><b>{{it.name}}</b></a>
-                  <div style="opacity:0.8; font-size:12px;">Équipé sur: {{it.system.emplacement}}</div>
+              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:8px;padding:5px;background:rgba(29,158,117,0.08);border-radius:8px;margin-bottom:4px">
+                <img src="{{it.img}}" alt="" style="width:26px;height:26px;border-radius:5px;object-fit:cover;" />
+                <div style="flex:1;min-width:0">
+                  <a class="item-edit" style="font-weight:600">{{it.name}}</a>
+                  <div style="opacity:0.65;font-size:11px">✅ {{it.system.emplacement}}</div>
                 </div>
+                <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
+                  style="color:#1d9e75;cursor:pointer;padding:2px 7px;border:1px solid #1d9e75;border-radius:4px;font-size:11px;white-space:nowrap">⬇ Retirer</button>
+                {{#if ../flags.isGM}}
+                <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
+                {{/if}}
               </li>
               {{/each}}
 
               {{#each items.nonEquipe as |it|}}
-              <li class="item" data-item-id="{{it._id}}" style="display:flex; align-items:center; gap:10px;">
-                <img src="{{it.img}}" alt="" style="width:28px; height:28px; border-radius:6px; object-fit:cover;" />
-                <div style="flex:1;">
-                  <a class="item-edit"><b>{{it.name}}</b></a>
-                  <div style="opacity:0.8; font-size:12px;">Slot: {{it.system.emplacement}}</div>
+              <li class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:8px;padding:5px;margin-bottom:4px">
+                <img src="{{it.img}}" alt="" style="width:26px;height:26px;border-radius:5px;object-fit:cover;opacity:.65" />
+                <div style="flex:1;min-width:0">
+                  <a class="item-edit">{{it.name}}</a>
+                  <div style="opacity:0.5;font-size:11px">Slot: {{it.system.emplacement}}</div>
                 </div>
+                <button type="button" data-action="toggleEquip" data-item-id="{{it._id}}"
+                  style="cursor:pointer;padding:2px 7px;border:1px solid #888;border-radius:4px;font-size:11px;white-space:nowrap">⬆ Équiper</button>
                 {{#if ../flags.isGM}}
                 <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
                 {{/if}}

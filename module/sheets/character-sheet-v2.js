@@ -491,10 +491,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // Drag & drop d'item (GM only) — doit être branché AVANT le early-return non-GM
     setupActorItemDrop(this, root);
 
-    // Player: disable everything
+    // Player: disable most actions but allow equip toggling
     if (!game.user.isGM) {
-      root.querySelectorAll("input, select, textarea, button[data-action]")
-        .forEach(el => el.disabled = true);
+      root.querySelectorAll("input, select, textarea").forEach(el => el.disabled = true);
+      // Désactive les boutons sauf toggleEquip (les joueurs peuvent équiper/déséquiper)
+      root.querySelectorAll("button[data-action]").forEach(el => {
+        if (el.dataset.action !== "toggleEquip") el.disabled = true;
+      });
+      // Les boutons toggleEquip restent actifs mais doivent fonctionner sur le propriétaire
+      root.querySelectorAll("button[data-action='toggleEquip']").forEach(btn => {
+        btn.disabled = !this.document.isOwner;
+      });
       return;
     }
 
