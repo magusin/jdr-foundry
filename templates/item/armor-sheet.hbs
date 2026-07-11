@@ -127,16 +127,27 @@
     {{#if canEdit}}
       <section>
         <h2>Recette associée</h2>
+        {{#if canEdit}}
         <div class="resource-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
           <div><label>UUID</label><input type="text" name="system.recetteAssociee.uuid" value="{{system.recetteAssociee.uuid}}"
             placeholder="Compendium...Item.xxxx"/></div>
           <div><label>Nom (info)</label><input type="text" name="system.recetteAssociee.name" value="{{system.recetteAssociee.name}}"/></div>
         </div>
-        <small style="opacity:0.8;">Indique quelle recette permet de forger cette armure (purement informatif).</small>
+        {{else}}
+        {{#if system.recetteAssociee.uuid}}
+        <div style="font-size:12px;opacity:.7">Recette : {{system.recetteAssociee.name}}</div>
+        {{/if}}
+        {{/if}}
+        {{#if system.recetteAssociee.uuid}}
+        <button type="button" class="rpg-open-uuid" data-uuid="{{system.recetteAssociee.uuid}}"
+          style="margin-top:6px;cursor:pointer;padding:3px 10px;border-radius:5px;font-size:12px">
+          📜 Voir la recette
+        </button>
+        {{/if}}
 
         <div style="margin-top:8px;">
-          <label>Vendeur associé (qui vend/lâche cet objet — filtre le Marché)</label>
-          <input type="text" name="system.vendeurAssocie" value="{{system.vendeurAssocie}}" placeholder="Nom du marchand ou du monstre" style="width:100%"/>
+          <label>Vendeur associé</label>
+          <input type="text" name="system.vendeurAssocie" value="{{system.vendeurAssocie}}" placeholder="Nom du marchand ou du monstre" style="width:100%" {{#unless canEdit}}disabled{{/unless}}/>
         </div>
       </section>
     {{/if}}

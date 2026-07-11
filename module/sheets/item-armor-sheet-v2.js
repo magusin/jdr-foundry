@@ -187,5 +187,20 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
+    // ── UUID cliquable → ouvre la fiche de l'item associé ─────────────────
+    root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const uuid = btn.dataset.uuid;
+        if (!uuid) return;
+        try {
+          const doc = await fromUuid(uuid);
+          if (doc?.sheet) doc.sheet.render(true);
+          else ui.notifications?.warn?.("Item introuvable pour cet UUID.");
+        } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
+      });
+    });
+
+    bindImageEditors(root, this.document);
   }
 }

@@ -316,24 +316,28 @@
       </section>
     {{/if}}
 
-    {{!-- RECETTE ASSOCIÉE (MJ ONLY) --}}
+    {{!-- RECETTE ASSOCIÉE --}}
     {{#if canEdit}}
       <section class="card">
         <h2>Recette associée</h2>
         <div class="mm-line">
           <span class="mm-label">UUID</span>
           <input class="mm-input" type="text" name="system.recetteAssociee.uuid" value="{{system.recetteAssociee.uuid}}"
-            placeholder="Compendium...Item.xxxx ou Item.xxxx (clic droit -> Copy UUID)" />
+            placeholder="Clic droit sur recette → Copy UUID" />
         </div>
         <div class="mm-line">
           <span class="mm-label">Nom (info)</span>
           <input class="mm-input" type="text" name="system.recetteAssociee.name" value="{{system.recetteAssociee.name}}"
             placeholder="Nom affiché de la recette" />
         </div>
-        <small style="opacity:0.85;">Indique quelle recette permet de forger cette arme (purement informatif).</small>
-
+        {{#if system.recetteAssociee.uuid}}
+        <button type="button" class="rpg-open-uuid" data-uuid="{{system.recetteAssociee.uuid}}"
+          style="margin-top:6px;cursor:pointer;padding:3px 10px;border-radius:5px;font-size:12px">
+          📜 Voir la recette
+        </button>
+        {{/if}}
         <div style="margin-top:8px;">
-          <label>Vendeur associé (qui vend/lâche cet objet — filtre le Marché)</label>
+          <label>Vendeur associé</label>
           <input type="text" name="system.vendeurAssocie" value="{{system.vendeurAssocie}}" placeholder="Nom du marchand ou du monstre" style="width:100%"/>
         </div>
       </section>
