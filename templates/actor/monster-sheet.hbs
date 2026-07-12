@@ -29,6 +29,7 @@
     <a class="item" data-tab="attacks">Attaques</a>
     {{/if}}
     {{#if showGenConfig}}
+    <a class="item" data-tab="butin">Butin</a>
     <a class="item" data-tab="gen">Génération (MJ)</a>
     {{/if}}
   </nav>
@@ -59,8 +60,15 @@
               <input type="number" name="system.recompenses.xp" value="{{system.recompenses.xp}}" min="0" />
             </div>
             <div class="mm-line">
-              <span>Butin (RollTable UUID)</span>
-              <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}" placeholder="..." />
+              <span>Butin (RollTable UUID, optionnel)</span>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}"
+                  placeholder="UUID table Foundry (optionnel)" style="flex:1;font-size:11px" />
+                {{#if system.butin.tableUuid}}
+                <button type="button" class="rpg-open-uuid" data-uuid="{{system.butin.tableUuid}}"
+                  style="cursor:pointer;padding:1px 6px;font-size:10px;white-space:nowrap">📄</button>
+                {{/if}}
+              </div>
             </div>
           </div>
           {{#if showGenConfig}}
@@ -265,6 +273,66 @@
     {{/if}}
 
     {{#if showGenConfig}}
+    <div class="tab" data-tab="butin" style="display:none;">
+      <section class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h2>🎁 Butin de ce monstre</h2>
+          <button type="button" data-action="addLootEntry" style="cursor:pointer;padding:2px 10px">+ Item</button>
+        </div>
+        <div style="font-size:11px;opacity:.6;margin-bottom:8px">
+          Chaque item a une probabilité (%) d'être lâché. Qté min/max = quantité tirée aléatoirement.
+        </div>
+
+        {{#each system.butin.entries as |entry idx|}}
+        <div class="loot-entry" data-idx="{{idx}}"
+          style="display:grid;grid-template-columns:32px 1fr 55px 45px 45px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px">
+          <img src="{{entry.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover;opacity:{{#if entry.uuid}}.9{{else}}.3{{/if}}"/>
+          <div>
+            {{#if entry.uuid}}
+            <button type="button" class="rpg-open-uuid" data-uuid="{{entry.uuid}}"
+              style="cursor:pointer;font-weight:600;background:none;border:none;text-align:left;color:inherit;font-size:13px">
+              {{entry.name}}
+            </button>
+            {{else}}
+            <input type="text" name="system.butin.entries.{{idx}}.uuid"
+              value="{{entry.uuid}}" placeholder="UUID de l'item" style="font-size:11px;width:100%"/>
+            {{/if}}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+            <small style="font-size:9px;opacity:.6">%</small>
+            <input type="number" name="system.butin.entries.{{idx}}.pct" value="{{entry.pct}}" min="1" max="100" style="width:50px;font-size:12px"/>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+            <small style="font-size:9px;opacity:.6">Min</small>
+            <input type="number" name="system.butin.entries.{{idx}}.qteMin" value="{{entry.qteMin}}" min="1" style="width:40px;font-size:12px"/>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+            <small style="font-size:9px;opacity:.6">Max</small>
+            <input type="number" name="system.butin.entries.{{idx}}.qteMax" value="{{entry.qteMax}}" min="1" style="width:40px;font-size:12px"/>
+          </div>
+          <button type="button" data-action="removeLootEntry" data-idx="{{idx}}"
+            style="cursor:pointer;color:#c0392b;background:none;border:none;font-size:16px">✕</button>
+        </div>
+        {{else}}
+        <div style="opacity:.4;text-align:center;padding:20px;font-size:13px">
+          Aucun butin configuré. Clique "+ Item" pour ajouter des drops.
+        </div>
+        {{/each}}
+
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1)">
+          <div style="font-size:11px;opacity:.5;margin-bottom:4px">Table Foundry (optionnel, pour compat.)</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" name="system.butin.tableUuid" value="{{system.butin.tableUuid}}"
+              placeholder="UUID RollTable Foundry" style="flex:1;font-size:11px;opacity:.7" />
+            {{#if system.butin.tableUuid}}
+            <button type="button" class="rpg-open-uuid" data-uuid="{{system.butin.tableUuid}}"
+              style="cursor:pointer;padding:1px 6px;font-size:10px">📄</button>
+            {{/if}}
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div class="tab" data-tab="gen" style="display:none;">
       <section class="card gen-card">
         <h2>🎲 Configuration aléatoire</h2>

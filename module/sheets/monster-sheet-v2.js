@@ -355,6 +355,76 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       });
     });
 
+    // ── UUID cliquable → ouvre la fiche de l'item ─────────────────────
+    qsAll(".rpg-open-uuid").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const uuid = btn.dataset.uuid;
+        if (!uuid) return;
+        try {
+          const doc = await fromUuid(uuid);
+          if (doc?.sheet) doc.sheet.render(true);
+          else ui.notifications?.warn?.("Item introuvable pour cet UUID.");
+        } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
+      });
+    });
+
+    // ── Butin : ajouter / retirer une entrée ──────────────────────────
+    qsAll("[data-action='addLootEntry']").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        if (!game.user.isGM) return;
+        const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+
+        // Ouvre un mini-dialogue pour saisir l'UUID
+        const uuid = await new Promise(resolve => {
+          new Dialog({
+            title: "Ajouter un item au butin",
+            content: `<div style="padding:4px">
+              <label style="font-size:12px">UUID de l'item (clic droit → Copy UUID)</label>
+              <input id="loot-uuid" type="text" style="width:100%;margin-top:4px"
+                placeholder="Compendium.rpg.items-reference.Item.xxxx" />
+            </div>`,
+            buttons: {
+              ok: {
+                label: "Ajouter",
+                callback: (html) => resolve(html[0]?.querySelector("#loot-uuid")?.value?.trim())
+              },
+              cancel: { label: "Annuler", callback: () => resolve(null) }
+            },
+            default: "ok"
+          }).render(true);
+        });
+
+        if (!uuid) return;
+
+        // Résout l'item pour récupérer nom + image
+        let name = "Item inconnu", img = "icons/svg/item-bag.svg";
+        try {
+          const doc = await fromUuid(uuid);
+          if (doc) { name = doc.name; img = doc.img ?? img; }
+          else { ui.notifications?.warn?.("UUID introuvable — ajouté quand même."); }
+        } catch(e) { ui.notifications?.warn?.("UUID invalide."); }
+
+        entries.push({ uuid, name, img, pct: 100, qteMin: 1, qteMax: 1 });
+        await this.document.update({ "system.butin.entries": entries });
+        this.render({ force: true });
+      });
+    });
+
+    qsAll("[data-action='removeLootEntry']").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        if (!game.user.isGM) return;
+        const idx = Number(btn.dataset.idx);
+        if (!Number.isFinite(idx)) return;
+        const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+        entries.splice(idx, 1);
+        await this.document.update({ "system.butin.entries": entries });
+        this.render({ force: true });
+      });
+    });
+
     // ── États ─────────────────────────────────────────
     qsAll("[data-action='stateAdd']").forEach(btn => {
       btn.addEventListener("click", async (ev) => {

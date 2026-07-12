@@ -132,7 +132,8 @@
           }
         },
         "butin": {
-          "tableUuid": ""
+          "tableUuid": "",
+          "entries": []
         },
         "recompenses": {
           "xp": 0

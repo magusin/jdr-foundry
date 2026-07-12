@@ -111,15 +111,39 @@ export async function lootMonsters(monsterIds) {
     if (!monster) continue;
 
     const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();
-    if (!tableUuid) continue;
+    const entries   = Array.isArray(monster.system?.butin?.entries) ? monster.system.butin.entries : [];
 
     try {
-      const table = await fromUuid(tableUuid);
-      if (!table) { lootLines.push(`<li>${monster.name} : table introuvable (${tableUuid})</li>`); continue; }
+      const drops = [];
 
-      const { results } = await table.roll();
-      const names = results.map((r) => r.text ?? r.name ?? "?").join(", ") || "rien d'intéressant";
-      lootLines.push(`<li><b>${monster.name}</b> : ${names}</li>`);
+      // ── Nouveau système : entries[] personnalisés par monstre ──────
+      for (const entry of entries) {
+        const pct = Math.min(100, Math.max(0, Number(entry.pct ?? 100) || 100));
+        if (Math.random() * 100 > pct) continue; // pas de drop cette fois
+        const qteMin = Math.max(1, Number(entry.qteMin ?? 1) || 1);
+        const qteMax = Math.max(qteMin, Number(entry.qteMax ?? 1) || 1);
+        const qte    = qteMin + Math.floor(Math.random() * (qteMax - qteMin + 1));
+        drops.push(`${entry.name || "Item"} ×${qte}`);
+
+        // Essaie de créer l'item dans l'inventaire d'un réceptacle (optionnel)
+        // pour l'instant affiche juste dans le chat
+      }
+
+      if (drops.length) {
+        lootLines.push(`<li><b>${monster.name}</b> : ${drops.join(", ")}</li>`);
+      } else if (!tableUuid) {
+        // Aucun drop (probabilité) et pas de table de fallback
+        lootLines.push(`<li><b>${monster.name}</b> : rien d'intéressant.</li>`);
+      }
+
+      // ── Ancien système : RollTable Foundry (fallback) ─────────────
+      if (tableUuid && !drops.length) {
+        const table = await fromUuid(tableUuid);
+        if (!table) { lootLines.push(`<li>${monster.name} : table introuvable</li>`); continue; }
+        const { results } = await table.roll();
+        const names = results.map((r) => r.text ?? r.name ?? "?").join(", ") || "rien d'intéressant";
+        lootLines.push(`<li><b>${monster.name}</b> (table) : ${names}</li>`);
+      }
     } catch (e) {
       console.error(`[RPG][CombatEnd] Erreur loot ${monster.name} :`, e);
       lootLines.push(`<li>${monster.name} : erreur de loot (voir console)</li>`);
