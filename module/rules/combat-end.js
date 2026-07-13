@@ -65,9 +65,12 @@ export async function resolveEndOfCombat(combat) {
     await actor.update({ "system.xp.valeur": newXP });
   }
 
-  // ── 5. Butin — OPTIONNEL : on ne tire rien automatiquement, on propose
-  // un bouton (les joueurs/le MJ choisissent de looter ou non) ───────────
-  const lootableMonsters = monsterCombatants.filter(m => String(m.system?.butin?.tableUuid ?? "").trim());
+  // ── 5. Boutons de loot — un par monstre + un global ──────────────────
+  const lootableMonsters = monsterCombatants.filter(m => {
+    const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
+    const tableUuid = String(m.system?.butin?.tableUuid ?? "").trim();
+    return entries.length > 0 || tableUuid;
+  });
 
   // ── 6. Message récap ───────────────────────────────────────────────────
   const monsterNames = monsterCombatants.map((m) => m.name).join(", ");
@@ -79,15 +82,34 @@ export async function resolveEndOfCombat(combat) {
     `<ul>${lines.join("")}</ul>`;
 
   if (lootableMonsters.length) {
-    const monsterIds = lootableMonsters.map(m => m.id).join(",");
-    content += `
-      <hr>
-      <div style="text-align:center">
-        <button type="button" data-action="lootNow" data-monster-ids="${monsterIds}"
-          style="padding:6px 14px;cursor:pointer;border-radius:6px;border:none;background:#7a5a16;color:#fff;font-weight:600">
-          🎲 Looter les dépouilles (${lootableMonsters.length})
+    const allIds = lootableMonsters.map(m => m.id).join(",");
+    content += `<hr><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎁 Dépouilles</div>`;
+    content += `<div style="display:flex;flex-direction:column;gap:4px">`;
+
+    for (const m of lootableMonsters) {
+      const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
+      const preview = entries.slice(0, 3).map(e =>
+        `${e.name}${e.tries > 1 ? ` (×${e.tries} essais)` : ""} — ${e.pct}%`
+      ).join(", ") + (entries.length > 3 ? `… +${entries.length - 3}` : "");
+      content += `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+          <span style="flex:1;font-size:12px"><b>${m.name}</b>${preview ? `<br><small style="opacity:.6">${preview}</small>` : ""}</span>
+          <button type="button" data-action="lootNow" data-monster-ids="${m.id}"
+            style="padding:3px 10px;cursor:pointer;border-radius:5px;font-size:11px;white-space:nowrap">
+            🎲 Looter
+          </button>
+        </div>`;
+    }
+
+    if (lootableMonsters.length > 1) {
+      content += `<div style="margin-top:6px;text-align:center">
+        <button type="button" data-action="lootNow" data-monster-ids="${allIds}"
+          style="padding:5px 14px;cursor:pointer;border-radius:6px;font-weight:600;width:100%">
+          🎁 Tout looter (${lootableMonsters.length} monstres)
         </button>
       </div>`;
+    }
+    content += `</div>`;
   }
 
   await ChatMessage.create({ content, type: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
@@ -102,12 +124,22 @@ export async function resolveEndOfCombat(combat) {
  * Tire le butin des monstres sélectionnés (appelé au clic sur "Looter les
  * dépouilles" — jamais automatiquement, c'est un choix des joueurs/du MJ).
  */
+/**
+ * Résout le loot d'un ou plusieurs monstres.
+ * Nouvelle logique : chaque entry a pct (% de chance par essai) + qty (quantité obtenue) + tries (nombre d'essais).
+ * Exemple : Dent, 90%, qty=1, tries=5 → 5 jets de 90% → 0 à 5 dents
+ */
 export async function lootMonsters(monsterIds) {
   if (!game.user.isGM) return;
 
+  const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+
   const lootLines = [];
+
   for (const id of monsterIds) {
-    const monster = game.actors.get(id);
+    // Cherche d'abord dans les acteurs du monde, puis dans les tokens de la scène
+    const monster = game.actors.get(id)
+      ?? canvas?.tokens?.placeables?.find(t => t.id === id || t.actor?.id === id)?.actor;
     if (!monster) continue;
 
     const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();
@@ -116,41 +148,45 @@ export async function lootMonsters(monsterIds) {
     try {
       const drops = [];
 
-      // ── Nouveau système : entries[] personnalisés par monstre ──────
+      // ── Nouveau système : entries[] avec qty + tries ───────────────
       for (const entry of entries) {
-        const pct = Math.min(100, Math.max(0, Number(entry.pct ?? 100) || 100));
-        if (Math.random() * 100 > pct) continue; // pas de drop cette fois
-        const qteMin = Math.max(1, Number(entry.qteMin ?? 1) || 1);
-        const qteMax = Math.max(qteMin, Number(entry.qteMax ?? 1) || 1);
-        const qte    = qteMin + Math.floor(Math.random() * (qteMax - qteMin + 1));
-        drops.push(`${entry.name || "Item"} ×${qte}`);
+        const pct   = Math.min(100, Math.max(0, n(entry.pct, 100)));
+        const qty   = Math.max(1, n(entry.qty,  1));
+        const tries = Math.max(1, n(entry.tries, 1));
+        const itemName = entry.name || "Item inconnu";
 
-        // Essaie de créer l'item dans l'inventaire d'un réceptacle (optionnel)
-        // pour l'instant affiche juste dans le chat
+        let total = 0;
+        for (let t = 0; t < tries; t++) {
+          if (Math.random() * 100 < pct) total += qty;
+        }
+
+        if (total > 0) drops.push(`${itemName} ×${total}`);
       }
 
       if (drops.length) {
         lootLines.push(`<li><b>${monster.name}</b> : ${drops.join(", ")}</li>`);
-      } else if (!tableUuid) {
-        // Aucun drop (probabilité) et pas de table de fallback
-        lootLines.push(`<li><b>${monster.name}</b> : rien d'intéressant.</li>`);
+      } else if (entries.length) {
+        lootLines.push(`<li><b>${monster.name}</b> : rien cette fois.</li>`);
       }
 
-      // ── Ancien système : RollTable Foundry (fallback) ─────────────
-      if (tableUuid && !drops.length) {
+      // ── Fallback : RollTable Foundry ──────────────────────────────
+      if (!entries.length && tableUuid) {
         const table = await fromUuid(tableUuid);
         if (!table) { lootLines.push(`<li>${monster.name} : table introuvable</li>`); continue; }
         const { results } = await table.roll();
-        const names = results.map((r) => r.text ?? r.name ?? "?").join(", ") || "rien d'intéressant";
-        lootLines.push(`<li><b>${monster.name}</b> (table) : ${names}</li>`);
+        const names = results.map(r => r.text ?? r.name ?? "?").join(", ") || "rien d'intéressant";
+        lootLines.push(`<li><b>${monster.name}</b> : ${names}</li>`);
       }
     } catch (e) {
-      console.error(`[RPG][CombatEnd] Erreur loot ${monster.name} :`, e);
-      lootLines.push(`<li>${monster.name} : erreur de loot (voir console)</li>`);
+      console.error(`[RPG][Loot] Erreur ${monster.name} :`, e);
+      lootLines.push(`<li>${monster.name} : erreur (voir console)</li>`);
     }
   }
 
-  if (!lootLines.length) return;
+  if (!lootLines.length) {
+    ui.notifications?.info?.("Aucun butin configuré sur ces monstres.");
+    return;
+  }
 
   await ChatMessage.create({
     content: `<h3>🎁 Butin</h3><ul>${lootLines.join("")}</ul>`

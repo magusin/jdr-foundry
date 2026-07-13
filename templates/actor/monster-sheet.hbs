@@ -77,6 +77,11 @@
           </button>
           <small class="muted">Retire de nouvelles valeurs aléatoires dans les bands du niveau ci-dessus.</small>
           {{/if}}
+          {{#if hasLoot}}
+          <button type="button" data-action="lootThisMonster" style="margin-top:8px;width:100%;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">
+            🎁 Looter ce monstre
+          </button>
+          {{/if}}
         </section>
 
         <section class="card">
@@ -285,12 +290,12 @@
 
         {{#each system.butin.entries as |entry idx|}}
         <div class="loot-entry" data-idx="{{idx}}"
-          style="display:grid;grid-template-columns:32px 1fr 55px 45px 45px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px">
-          <img src="{{entry.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover;opacity:{{#if entry.uuid}}.9{{else}}.3{{/if}}"/>
+          style="display:grid;grid-template-columns:32px 1fr 60px 55px 55px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:6px;background:rgba(255,255,255,0.03);border-radius:6px">
+          <img src="{{entry.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover"/>
           <div>
             {{#if entry.uuid}}
             <button type="button" class="rpg-open-uuid" data-uuid="{{entry.uuid}}"
-              style="cursor:pointer;font-weight:600;background:none;border:none;text-align:left;color:inherit;font-size:13px">
+              style="cursor:pointer;font-weight:600;background:none;border:none;text-align:left;color:inherit;font-size:13px;padding:0">
               {{entry.name}}
             </button>
             {{else}}
@@ -299,19 +304,19 @@
             {{/if}}
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-            <small style="font-size:9px;opacity:.6">%</small>
-            <input type="number" name="system.butin.entries.{{idx}}.pct" value="{{entry.pct}}" min="1" max="100" style="width:50px;font-size:12px"/>
+            <small style="font-size:9px;opacity:.6">Chance %</small>
+            <input type="number" name="system.butin.entries.{{idx}}.pct" value="{{entry.pct}}" min="1" max="100" style="width:54px;font-size:12px;text-align:center"/>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-            <small style="font-size:9px;opacity:.6">Min</small>
-            <input type="number" name="system.butin.entries.{{idx}}.qteMin" value="{{entry.qteMin}}" min="1" style="width:40px;font-size:12px"/>
+            <small style="font-size:9px;opacity:.6">Qté/drop</small>
+            <input type="number" name="system.butin.entries.{{idx}}.qty" value="{{entry.qty}}" min="1" style="width:48px;font-size:12px;text-align:center"/>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-            <small style="font-size:9px;opacity:.6">Max</small>
-            <input type="number" name="system.butin.entries.{{idx}}.qteMax" value="{{entry.qteMax}}" min="1" style="width:40px;font-size:12px"/>
+            <small style="font-size:9px;opacity:.6">Essais</small>
+            <input type="number" name="system.butin.entries.{{idx}}.tries" value="{{entry.tries}}" min="1" style="width:48px;font-size:12px;text-align:center"/>
           </div>
           <button type="button" data-action="removeLootEntry" data-idx="{{idx}}"
-            style="cursor:pointer;color:#c0392b;background:none;border:none;font-size:16px">✕</button>
+            style="cursor:pointer;color:#c0392b;background:none;border:none;font-size:16px;line-height:1">✕</button>
         </div>
         {{else}}
         <div style="opacity:.4;text-align:center;padding:20px;font-size:13px">

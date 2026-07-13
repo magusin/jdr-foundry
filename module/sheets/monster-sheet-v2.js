@@ -95,6 +95,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     ctx.canSeeStats = game.user.isGM;
     ctx.isToken = actor.isToken === true;
     ctx.showGenConfig = game.user.isGM && !ctx.isToken;
+    const _entries = Array.isArray(actor.system?.butin?.entries) ? actor.system.butin.entries : [];
+    const _tableUuid = String(actor.system?.butin?.tableUuid ?? "").trim();
+    ctx.hasLoot = game.user.isGM && (_entries.length > 0 || !!_tableUuid);
 
     ctx.system.gen = ctx.system.gen ?? { levelsCsv: "", bands: {}, generated: false };
     ctx.system.gen.bands = ctx.system.gen.bands ?? {};
@@ -270,6 +273,26 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       });
     });
 
+    // ── Looter CE monstre depuis sa fiche ─────────────────────────────
+    qsAll("[data-action='lootThisMonster']").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        if (!game.user.isGM) return;
+        btn.disabled = true;
+        try {
+          const { lootMonsters } = await import("../rules/combat-end.js");
+          // Utilise l'id de l'acteur OU du token selon le contexte
+          const id = this.document.id;
+          await lootMonsters([id]);
+        } catch(e) {
+          console.error("[RPG] lootThisMonster:", e);
+          ui.notifications?.error?.(`Erreur loot : ${e?.message ?? e}`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
     // ── PV +/- ────────────────────────────────────────
     qsAll("[data-action='hpPlus']").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
@@ -406,7 +429,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
           else { ui.notifications?.warn?.("UUID introuvable — ajouté quand même."); }
         } catch(e) { ui.notifications?.warn?.("UUID invalide."); }
 
-        entries.push({ uuid, name, img, pct: 100, qteMin: 1, qteMax: 1 });
+        entries.push({ uuid, name, img, pct: 100, qty: 1, tries: 1 });
         await this.document.update({ "system.butin.entries": entries });
         this.render({ force: true });
       });
