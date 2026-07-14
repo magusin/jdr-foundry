@@ -94,9 +94,17 @@ export function bindSkillCheckChatButtons(htmlEl, message) {
         const actor = game.actors.get(flags.actorId);
         const success = btn.dataset.result === "success";
 
-        // ✅ Petit gain d'XP à chaque tentative — encourage la pratique
-        // organique, même montant d'esprit que la Forge (réussite > échec)
+        // XP compétence (monte les niveaux de compétence)
         if (actor) await addXpToSkill(actor, flags.skillKey, success ? 10 : 3);
+
+        // XP de niveau (+2 succès, +1 échec — la pratique forme l'aventurier)
+        if (actor) {
+          const curXP = Number(actor.system?.xp?.valeur ?? 0) || 0;
+          const gain  = success ? 2 : 1;
+          await actor.update({ "system.xp.valeur": curXP + gain });
+          const { checkLevelUp } = await import("./level-up.js");
+          await checkLevelUp(actor);
+        }
 
         await message.delete();
         await ChatMessage.create({

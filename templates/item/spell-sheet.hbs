@@ -217,6 +217,16 @@
               {{else}}<div><b>{{fx.duration}}</b></div>{{/if}}
             </div>
             <div>
+              <label style="font-size:11px">TN retrait <span style="opacity:.6">(0=impossible)</span></label>
+              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" style="width:100%"/>
+              {{else}}<div>{{#if fx.removeBaseTN}}<b>{{fx.removeBaseTN}}+</b>{{else}}—{{/if}}</div>{{/if}}
+            </div>
+            <div>
+              <label style="font-size:11px">Mod retrait <span style="opacity:.6">(+/- au TN)</span></label>
+              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.retraitMod" value="{{fx.retraitMod}}" placeholder="0" style="width:100%"/>
+              {{else}}<div>{{#if fx.retraitMod}}<span style="color:{{#if (gt fx.retraitMod 0)}}#c0392b{{else}}#1d9e75{{/if}}">{{#if (gt fx.retraitMod 0)}}+{{/if}}{{fx.retraitMod}}</span>{{else}}—{{/if}}</div>{{/if}}
+            </div>
+            <div>
               <label style="font-size:11px">Dégâts/tour <span style="opacity:.6">(négatif=soin)</span></label>
               {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" placeholder="0" style="width:100%"/>
               {{else}}<div>{{fx.damage.flat}}</div>{{/if}}

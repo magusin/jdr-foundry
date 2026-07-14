@@ -1125,7 +1125,9 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         id: stateId, label: String(fx.label ?? item.name),
         type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
         dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
-        mods
+        mods,
+        removeBaseTN: n(fx.removeBaseTN, 0) || null,
+        retraitMod:   n(fx.retraitMod, 0)
       };
       if (isAura) state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
 

@@ -4,6 +4,7 @@
 // Distribue XP + loot entre les PJ qui participaient au combat.
 
 import { appendToCampaignJournal } from "./campaign-journal.js";
+import { checkLevelUp } from "./level-up.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -63,6 +64,7 @@ export async function resolveEndOfCombat(combat) {
   // Écrit en base
   for (const { actor, newXP } of updates) {
     await actor.update({ "system.xp.valeur": newXP });
+    await checkLevelUp(actor);
   }
 
   // ── 5. Boutons de loot — un par monstre + un global ──────────────────
