@@ -190,7 +190,7 @@
       const reasons = [];
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
-      if (outOfRange) reasons.push(`Hors portée (${distCases} cases, portée ${portee})`);
+      if (outOfRange) reasons.push(`Hors portée (${distCases?.toFixed?.(1) ?? distCases}m, portée ${portee}m)`);
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
@@ -218,7 +218,7 @@
             <div class="rpg-stats">
               <span>⚔️ Dégâts <b>${dmgTxt}</b></span>
               <span>${tnTxt}</span>
-              <span>📏 Portée <b>${portee}</b>${distCases !== null ? ` (cible à ${distCases})` : ""}</span>
+              <span>📏 Portée <b>${portee}m</b>${distCases !== null ? ` (cible à ${distCases?.toFixed?.(1) ?? distCases}m)` : ""}</span>
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>
@@ -283,7 +283,7 @@
           const dist = game.rpg.measureDistance(token.center, t.center);
           if (dist < r.min || dist > r.max) {
             okRange = false;
-            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${dist} cases, ${r.min}–${r.max})`;
+            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${dist?.toFixed?.(1) ?? dist}m, portée ${r.max}m)`;
             break;
           }
         }
@@ -423,7 +423,7 @@
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
                      background:${hasDepl ? "#1d9e75" : "#888"};color:#fff;border:none;opacity:${hasDepl ? "1" : "0.5"}"
               ${hasDepl ? "" : "disabled"}>
-              🏃 Déclarer Déplacement (${actor.system?.deplacement?.vitesse ?? "?"} cases)
+              🏃 Déclarer Déplacement (${actor.system?.deplacement?.vitesse ?? "?"}m)
             </button>
           </div>`;
         })()}
@@ -1015,7 +1015,7 @@
         const confirmAPI = getConfirmAPI();
         const msgContent = confirmAPI
           ? confirmAPI.buildPendingMessage({
-              actor: actor.name, label: `Se déplace (vitesse : <b>${actor.system?.deplacement?.vitesse ?? "?"}</b> cases)`,
+              actor: actor.name, label: `Se déplace (vitesse : <b>${actor.system?.deplacement?.vitesse ?? "?"}m</b>)`,
               slotLabel: "Déplacement", slotIcon: "🏃",
               detail: "Le déplacement est libre sur la carte.",
               actionId, type: "move", outcome: "confirm"

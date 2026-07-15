@@ -138,7 +138,7 @@ export class RPGActor extends Actor {
     // plus bas), jamais une vraie base. La vraie base éditable vit dans sys.base.vitesse
     // — initialisée une fois depuis l'ancienne valeur pour ne rien perdre.
     if (sys.base.vitesse === undefined) {
-      sys.base.vitesse = Number(baseMove.vitesse ?? 3) || 3;
+      sys.base.vitesse = Number(baseMove.vitesse ?? 6) || 6;
     }
 
     // BONUS items / sorts passifs + skills

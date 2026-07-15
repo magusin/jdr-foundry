@@ -36,7 +36,7 @@
           "mana": 1.0
         },
         "deplacement": {
-          "vitesse": 3
+          "vitesse": 6
         },
         "charge": {
           "podsActuels": 0,
@@ -231,7 +231,7 @@
           "endurance": 0,
           "pvMax": 0,
           "manaMax": 0,
-          "vitesse": 0,
+          "vitesse": 6,
           "armureFixe": 0,
           "resistanceFixe": 0,
           "scoreArmure": 0,
@@ -263,7 +263,7 @@
       "twoHands": false,
       "difficulte": 0,
       "livraison": "physique",
-      "portee": 1,
+      "portee": 1.5,
       "damage": {
         "dice": "1d6",
         "flat": 0,
@@ -314,7 +314,7 @@
       "speed": "normal",
       "range": {
         "min": 0,
-        "max": 6
+        "max": 9
       },
       "targetCount": {
         "min": 1,
