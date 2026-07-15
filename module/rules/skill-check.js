@@ -31,42 +31,42 @@ function statForSkill(actor, skillKey) {
  * Déclare un jet de compétence : lance 1d20 + bonus de stat + niveau de
  * compétence, affiche le TN visé, poste un message MJ Réussite/Échec.
  */
-export async function declareSkillCheck(actor, skillKey, difficultyKey = "moyen") {
-  const skill = actor.system?.skills?.[skillKey];
-  if (!skill) {
-    ui.notifications?.warn?.("Compétence introuvable sur cet acteur.");
-    return;
-  }
+export async function declareSkillCheck(actor, skillKey, difficulty = 11, opts = {}) {
+  const secret     = !!opts.secret;
+  const skill      = actor.system?.skills?.[skillKey];
+  const skillLabel = skill?.label ?? skillKey;
+  const skillLevel = n(skill?.level, 0);
 
-  const diff = DIFFICULTY_TIERS[difficultyKey] ?? DIFFICULTY_TIERS.moyen;
-  const statKey = statForSkill(actor, skillKey);
-  const statVal = n(actor.system?.derived?.effective?.principales?.[statKey], 0);
-  const statBonus = Math.floor(statVal / 10);
-  const skillLevel = n(skill.level, 0);
-  const totalBonus = statBonus + skillLevel;
+  // TN = difficulté - niveau compétence (le niveau soulage la difficulté)
+  const tn = Math.max(1, difficulty - skillLevel);
+  const speaker = ChatMessage.getSpeaker({ actor });
 
-  const roll = await (new Roll(`1d20 + ${totalBonus}`)).evaluate();
-  await roll.toMessage({
-    speaker: ChatMessage.getSpeaker({ actor }),
-    flavor: `🎲 <b>${actor.name}</b> — Jet de <b>${skill.label ?? skillKey}</b> ` +
-      `(+${statBonus} ${statKey}, +${skillLevel} niveau) — ${diff.label} (TN ${diff.tn}+)`
-  });
-
-  const content = `
+  // Message avec bouton "Lancer" pour le joueur
+  const rollContent = `
     <div style="font-size:13px">
-      <b>${actor.name}</b> tente : <b>${skill.label ?? skillKey}</b> — ${diff.label}<br>
-      Jet : <b>${roll.total}</b> (TN ${diff.tn}+)
-      <div class="rpg-skillcheck-gm" style="display:flex;gap:8px;margin-top:8px">
-        <button type="button" class="rpg-skillcheck-resolve" data-result="fail" style="flex:1;padding:4px;cursor:pointer">Échec</button>
-        <button type="button" class="rpg-skillcheck-resolve" data-result="success" style="flex:1;padding:4px;cursor:pointer">Réussite</button>
-      </div>
+      🎲 <b>${actor.name}</b> — <b>${skillLabel}</b>
+      ${secret
+        ? `<div style="opacity:.6;font-size:11px;margin-top:2px">🔒 Test secret — fais de ton mieux.</div>`
+        : `<div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLevel ? ` (difficulté ${difficulty} − niv.${skillLevel})` : ``}</div>`
+      }
+      <button type="button" class="rpg-skillcheck-roll-btn"
+        data-actor-id="${actor.id}" data-skill-key="${skillKey}"
+        data-skill-label="${skillLabel}" data-tn="${tn}" data-secret="${secret}"
+        style="width:100%;margin-top:8px;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">
+        🎲 Lancer le dé
+      </button>
     </div>`;
 
-  await ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ actor }),
-    content,
-    flags: { rpg: { type: "skillCheckDeclaration", actorId: actor.id, skillKey, rollTotal: roll.total, tn: diff.tn } }
-  });
+  // Whisper MJ avec le vrai TN même si secret
+  const gmContent = `
+    <div style="font-size:11px;color:#c8960a;padding:5px;border:1px solid rgba(200,150,0,0.3);border-radius:6px">
+      ⚙️ MJ — ${actor.name} → <b>${skillLabel}</b><br>
+      Difficulté : ${difficulty} | Niveau compétence : ${skillLevel} | <b>TN réel : ${tn}+</b>
+      ${secret ? " | 🔒 SECRET" : ""}
+    </div>`;
+
+  await ChatMessage.create({ speaker, content: rollContent });
+  await ChatMessage.create({ speaker, content: gmContent, whisper: game.users.filter(u => u.isGM).map(u => u.id) });
 }
 
 export function bindSkillCheckChatButtons(htmlEl, message) {

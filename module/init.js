@@ -514,7 +514,49 @@ Hooks.once("init", async () => {
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindMoraleChatButtons(html, message); } catch (e) { }
-      try { bindSkillCheckChatButtons(html, message); } catch (e) { }
+      // ── Nouveau : bouton "Lancer le dé" (jet de compétence initié par MJ) ──
+      {
+        const _root = html instanceof HTMLElement ? html : html?.[0];
+        _root?.querySelectorAll(".rpg-skillcheck-roll-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault(); btn.disabled = true;
+            try {
+              const actorId = btn.dataset.actorId, skillLabel = btn.dataset.skillLabel;
+              const tn = Number(btn.dataset.tn)||11, secret = btn.dataset.secret==="true";
+              const actor = game.actors.get(actorId);
+              if (!actor) throw new Error("Acteur introuvable");
+              const roll = await (new Roll("1d20")).evaluate();
+              await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }),
+                flavor: `🎲 ${actor.name} — ${skillLabel}${secret ? " 🔒" : ""}` });
+              const success = roll.total >= tn;
+              await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+                content: `<div style="font-size:13px"><b>${actor.name}</b> — <b>${skillLabel}</b><br>
+                  Jet : <b>${roll.total}</b> vs TN <b>${tn}+</b>
+                  ${success ? `<span style="color:#1d9e75;font-weight:700"> — ✅ Passe</span>` : `<span style="color:#c0392b;font-weight:700"> — ❌ Sous le TN</span>`}
+                  <div style="display:flex;gap:8px;margin-top:8px">
+                    <button type="button" class="rpg-skillcheck-resolve" data-result="fail" data-actor-id="${actorId}" data-skill-key="${btn.dataset.skillKey}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px">❌ Échec</button>
+                    <button type="button" class="rpg-skillcheck-resolve" data-result="success" data-actor-id="${actorId}" data-skill-key="${btn.dataset.skillKey}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px;${success?"background:rgba(29,158,117,0.2)":""}">✅ Réussite</button>
+                  </div></div>`,
+                whisper: game.users.filter(u=>u.isGM).map(u=>u.id) });
+              btn.textContent = "Lancé !";
+            } catch(e){ console.error("[RPG] skillcheck roll:",e); btn.disabled=false; }
+          });
+        });
+        _root?.querySelectorAll(".rpg-skillcheck-resolve:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          if (!game.user.isGM) { btn.style.display="none"; return; }
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            const allBtns = btn.closest("div")?.querySelectorAll("button");
+            allBtns?.forEach(b => b.disabled=true);
+            const actorId=btn.dataset.actorId, skillKey=btn.dataset.skillKey, success=btn.dataset.result==="success";
+            const actor = game.actors.get(actorId);
+            if (actor && skillKey) { const {addXpToSkill}=await import("./rules/skills.js"); await addXpToSkill(actor,skillKey,success?10:3); }
+            await ChatMessage.create({ content: `${success?"✅":"❌"} <b>${actor?.name??"?"}</b> — ${success?"Réussite":"Échec"}` });
+          });
+        });
+      }
       try {
         // Bouton "Lancer le d20" dans le message de sort
         const root = html instanceof HTMLElement ? html : html?.[0];
