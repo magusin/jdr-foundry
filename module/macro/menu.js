@@ -627,6 +627,21 @@
       rerenderAll();
     };
 
+    // ── Portée de sort : afficher au survol ────────────────────────────────
+    $root.on("mouseenter.rpgMenu", ".rpg-spell-row[data-item-type='spell']", (ev) => {
+      const row    = ev.currentTarget;
+      const item   = actor.items.get(row?.dataset?.itemId);
+      const rangeM = Number(item?.system?.range?.max ?? 0) || 0;
+      if (token && rangeM > 0 && game.rpg?.spellRange?.showSpellRange) {
+        game.rpg.spellRange.showSpellRange(token, rangeM, item.name).catch(() => {});
+      }
+    });
+    $root.on("mouseleave.rpgMenu", ".rpg-spell-row[data-item-type='spell']", () => {
+      if (token && game.rpg?.spellRange?.clearSpellRange) {
+        game.rpg.spellRange.clearSpellRange(token.id).catch(() => {});
+      }
+    });
+
     $root.off(".rpgMenu");
 
     // Section tabs
@@ -855,7 +870,14 @@
           });
         }
 
-        // 3. Déclare via spellAPI (targetToken:null → lit lui-même TOUTES les cibles
+        // 3. Affiche la portée du sort sur la carte (gabarit temporaire)
+        try {
+          if (token && game.rpg?.spellRange?.showSpellRangeFromItem) {
+            await game.rpg.spellRange.showSpellRangeFromItem(token, item);
+          }
+        } catch { /* non bloquant */ }
+
+        // 4. Déclare via spellAPI (targetToken:null → lit lui-même TOUTES les cibles
         //    sélectionnées via game.user.targets, supporte le multi-cible)
         const res = await spellAPI.declareSpell(actor, item, {
           casterToken: token ?? null,

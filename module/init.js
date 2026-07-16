@@ -35,6 +35,7 @@ import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-conf
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
 import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/region-behaviors.js";
 import { MOVEMENT_TYPES, getActiveMovementTypes, isImmuneToTerrain, getEffectiveSpeedMult, getMovementTypeLabel } from "./rules/movement-types.js";
+import { showSpellRange, showSpellRangeFromItem, clearSpellRange } from "./rules/spell-range.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
@@ -275,6 +276,8 @@ Hooks.once("init", async () => {
     getEffectiveSpeedMult,
     getMovementTypeLabel
   };
+  // API portée de sort visuelle
+  game.rpg.spellRange = { showSpellRange, showSpellRangeFromItem, clearSpellRange };
   // Rendre getTerrainAt accessible globalement pour les macros
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 

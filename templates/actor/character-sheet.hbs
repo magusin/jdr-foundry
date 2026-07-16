@@ -294,6 +294,9 @@
     <a class="item" data-tab="spells">Sorts</a>
     <a class="item" data-tab="skills">Compétences</a>
     <a class="item" data-tab="quests">Quêtes</a>
+    <a class="item" data-tab="blessures" style="{{#if hasBlessures}}color:#c0392b;font-weight:700{{/if}}">
+      {{#if hasBlessures}}🩸{{/if}} Blessures
+    </a>
     {{/unless}}
   </nav>
 
@@ -921,6 +924,112 @@
       </section>
     </div>
 
+    {{/unless}}
+
+    {{!-- =====================================================
+    TAB: BLESSURES & NOTES RP
+    Blessures permanentes (MJ uniquement pour éditer)
+    + Notes RP libres (contexte narratif, fractures, cicatrices)
+    ====================================================== --}}
+    {{#unless flags.limitedView}}
+    <div class="tab" data-group="primary" data-tab="blessures">
+
+      {{!-- BLESSURES PERMANENTES --}}
+      <section class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h2 style="color:#c0392b">🩸 Blessures permanentes</h2>
+          {{#if flags.isGM}}
+          <button type="button" data-action="addBlessure"
+            style="padding:2px 10px;cursor:pointer;border-radius:5px;font-size:12px">
+            + Ajouter
+          </button>
+          {{/if}}
+        </div>
+
+        {{#if system.blessures.length}}
+        <div style="display:flex;flex-direction:column;gap:6px">
+          {{#each system.blessures as |b idx|}}
+          <div style="padding:8px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">
+                {{#if (eq b.gravite "legere")}}🟡{{/if}}
+                {{#if (eq b.gravite "moderee")}}🟠{{/if}}
+                {{#if (eq b.gravite "grave")}}🔴{{/if}}
+                {{#if (eq b.gravite "critique")}}💀{{/if}}
+              </span>
+              {{#if ../flags.isGM}}
+              <input type="text" name="system.blessures.{{idx}}.label" value="{{b.label}}"
+                placeholder="Description de la blessure" style="flex:1;font-weight:600"/>
+              {{else}}
+              <span style="flex:1;font-weight:600">{{b.label}}</span>
+              {{/if}}
+              {{#if ../flags.isGM}}
+              <select name="system.blessures.{{idx}}.gravite" style="width:110px;font-size:11px">
+                <option value="legere"   {{#if (eq b.gravite "legere")}}selected{{/if}}>🟡 Légère</option>
+                <option value="moderee"  {{#if (eq b.gravite "moderee")}}selected{{/if}}>🟠 Modérée</option>
+                <option value="grave"    {{#if (eq b.gravite "grave")}}selected{{/if}}>🔴 Grave</option>
+                <option value="critique" {{#if (eq b.gravite "critique")}}selected{{/if}}>💀 Critique</option>
+              </select>
+              <button type="button" data-action="removeBlessure" data-idx="{{idx}}"
+                style="color:#c0392b;background:none;border:none;cursor:pointer;font-size:14px">✕</button>
+              {{else}}
+              <span style="font-size:11px;opacity:.7;white-space:nowrap">
+                {{#if (eq b.gravite "legere")}}Légère{{/if}}
+                {{#if (eq b.gravite "moderee")}}Modérée{{/if}}
+                {{#if (eq b.gravite "grave")}}Grave{{/if}}
+                {{#if (eq b.gravite "critique")}}Critique{{/if}}
+              </span>
+              {{/if}}
+            </div>
+            {{#if ../flags.isGM}}
+            <textarea name="system.blessures.{{idx}}.notes" rows="2"
+              placeholder="Localisation, contexte, conséquences spécifiques..."
+              style="width:100%;margin-top:4px;font-size:11px;resize:vertical">{{b.notes}}</textarea>
+            {{else if b.notes}}
+            <div style="font-size:11px;opacity:.7;margin-top:4px;white-space:pre-wrap">{{b.notes}}</div>
+            {{/if}}
+          </div>
+          {{/each}}
+        </div>
+        {{else}}
+        <div style="opacity:.4;text-align:center;padding:16px;font-size:13px">
+          Aucune blessure permanente.
+        </div>
+        {{/if}}
+      </section>
+
+      {{!-- ÉTATS ACTIFS (rappel depuis l'onglet blessures) --}}
+      {{#if autoStatesForBlessures.length}}
+      <section class="card" style="margin-top:10px">
+        <h2>⚠️ États liés aux blessures</h2>
+        <div style="font-size:12px;opacity:.7">
+          {{#each autoStatesForBlessures as |s|}}
+          <div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+            {{s.label}} — {{s.summary}}
+          </div>
+          {{/each}}
+        </div>
+      </section>
+      {{/if}}
+
+      {{!-- NOTES RP --}}
+      <section class="card" style="margin-top:10px">
+        <h2>📝 Notes RP</h2>
+        <div style="font-size:11px;opacity:.6;margin-bottom:6px">
+          {{#if flags.isGM}}Visible uniquement par le MJ — cicatrices, traumatismes, détails narratifs.{{else}}Contexte narratif fourni par le MJ.{{/if}}
+        </div>
+        {{#if flags.isGM}}
+        <textarea name="system.notesRP" rows="6"
+          placeholder="Ex: Fracture ancienne à la jambe gauche depuis la bataille de Velmoor. Cicatrice sur l'œil droit. Peur des araignées suite à l'épisode de la Forêt Noire..."
+          style="width:100%;resize:vertical;font-size:12px">{{system.notesRP}}</textarea>
+        {{else if system.notesRP}}
+        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6">{{system.notesRP}}</div>
+        {{else}}
+        <div style="opacity:.4;font-size:12px">Aucune note RP pour ce personnage.</div>
+        {{/if}}
+      </section>
+
+    </div>
     {{/unless}}
 
   </section>

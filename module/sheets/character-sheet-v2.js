@@ -258,6 +258,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.items = categorized;
     ctx.charge = charge;
 
+    // ── Blessures ─────────────────────────────────────────────────────────
+    ctx.hasBlessures = Array.isArray(actor.system?.blessures) && actor.system.blessures.length > 0;
+    // États actifs liés aux blessures (type "wound" ou blessure permanente)
+    ctx.autoStatesForBlessures = (actor.system?.etatsActifs ?? [])
+      .filter(s => s.type === "wound" || s.permanent)
+      .map(s => ({ label: s.label, summary: s.summary ?? "" }));
+
     // ── Tableau des stats pour la vue lisible ─────────────────────────
     const effP  = actor.system?.derived?.effective?.principales ?? {};
     const baseP = actor.system?.principales ?? {};
@@ -599,6 +606,29 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
         const next = Math.max(0, Math.min(max, cur + delta));
         await this.document.update({ "system.ressources.fatigue.valeur": next });
+        return;
+      }
+
+      if (action === "addBlessure" && game.user.isGM) {
+        const list = foundry.utils.deepClone(this.document.system?.blessures ?? []);
+        list.push({
+          id: foundry.utils.randomID(),
+          label: "Nouvelle blessure",
+          localisation: "",
+          gravite: "moderee",
+          notes: "",
+          date: game.time?.worldTime ?? 0
+        });
+        await this.document.update({ "system.blessures": list });
+        return;
+      }
+
+      if (action === "removeBlessure" && game.user.isGM) {
+        const idx = Number(btn.dataset.idx);
+        if (!Number.isFinite(idx)) return;
+        const list = foundry.utils.deepClone(this.document.system?.blessures ?? []);
+        list.splice(idx, 1);
+        await this.document.update({ "system.blessures": list });
         return;
       }
       if (action === "stateEdit") { await this._stateEdit?.(btn.dataset.id); return; }
