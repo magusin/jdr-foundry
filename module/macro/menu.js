@@ -418,13 +418,30 @@
         <!-- Bouton déplacement rapide -->
         ${(() => {
           const hasDepl = isMyTurn(actor) && canAct(actor) && canUseSlot(actor, "deplacement");
+          const vitesse = actor.system?.deplacement?.vitesse ?? 6;
+          // Terrain à la position actuelle du token
+          let terrainInfo = "";
+          try {
+            if (typeof getTerrainAt === "function") {
+              const tx = token?.x ?? 0, ty = token?.y ?? 0;
+              const terrains = getTerrainAt(tx, ty);
+              if (terrains.length) {
+                const t = terrains.reduce((a, b) => b.terrain.speedMult < a.terrain.speedMult ? b : a);
+                const vitEff = (vitesse * t.terrain.speedMult).toFixed(1);
+                terrainInfo = `<div style="font-size:10px;opacity:.7;margin-top:2px">
+                  ⚠️ ${t.terrain.label} — vitesse effective : ${vitEff}m
+                </div>`;
+              }
+            }
+          } catch { /* terrain pas dispo */ }
           return `<div style="margin-bottom:6px">
             <button type="button" data-action="move"
               style="width:100%;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:12px;
                      background:${hasDepl ? "#1d9e75" : "#888"};color:#fff;border:none;opacity:${hasDepl ? "1" : "0.5"}"
               ${hasDepl ? "" : "disabled"}>
-              🏃 Déclarer Déplacement (${actor.system?.deplacement?.vitesse ?? "?"}m)
+              🏃 Déclarer Déplacement (${vitesse}m)
             </button>
+            ${terrainInfo}
           </div>`;
         })()}
 

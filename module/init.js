@@ -33,6 +33,7 @@ import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
+import { registerRegionBehaviors } from "./rules/region-behaviors.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
@@ -220,6 +221,14 @@ async function tickActorCooldowns(actor) {
 Hooks.once("init", async () => {
   console.log("RPG init chargé");
 
+  // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
+  registerRegionBehaviors();
+
+  // Expose l'API terrain pour les macros
+  Hooks.once("ready", () => {
+    const { getTerrainAt, calculateMovementCost, TERRAIN_TYPES } = foundry.utils.mergeObject({},{});
+  });
+
   // ✅ Setting météo courante (monde) — influence la magie élémentaire
   game.settings.register("rpg", "currentWeather", {
     name: "Météo actuelle",
@@ -245,6 +254,15 @@ Hooks.once("init", async () => {
   game.rpg.gmAura = GM_AURA;
   game[MODULE_ID] = game[MODULE_ID] || {};
   game.rpg.measureDistance = measureDistanceManhattan;
+  // API terrain (types de terrain, coût de mouvement)
+  const _terrainModule = await import("./rules/region-behaviors.js");
+  game.rpg.terrain = {
+    getTerrainAt:          _terrainModule.getTerrainAt,
+    calculateMovementCost: _terrainModule.calculateMovementCost,
+    TERRAIN_TYPES:         _terrainModule.TERRAIN_TYPES
+  };
+  // Rendre getTerrainAt accessible globalement pour les macros
+  globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 
   game.rpg.combat = Combat;
   console.log("[RPG] Combat API OK:", Object.keys(game.rpg.combat ?? {}));
