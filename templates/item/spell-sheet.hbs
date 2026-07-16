@@ -227,6 +227,22 @@
               {{else}}<div>{{#if fx.retraitMod}}<span style="color:{{#if (gt fx.retraitMod 0)}}#c0392b{{else}}#1d9e75{{/if}}">{{#if (gt fx.retraitMod 0)}}+{{/if}}{{fx.retraitMod}}</span>{{else}}—{{/if}}</div>{{/if}}
             </div>
             <div>
+              <label style="font-size:11px">🏃 Mode déplacement accordé</label>
+              {{#if canEdit}}
+              <select name="system.effectsUI.{{i}}.movementTypeGrant" style="width:100%">
+                <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
+                <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
+                <option value="aquatique"  {{#if (eq fx.movementTypeGrant "aquatique")}}selected{{/if}}>🐟 Nage</option>
+                <option value="amphibie"   {{#if (eq fx.movementTypeGrant "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
+                <option value="ethere"     {{#if (eq fx.movementTypeGrant "ethere")}}selected{{/if}}>👻 Éthéré</option>
+                <option value="montagnard" {{#if (eq fx.movementTypeGrant "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
+                <option value="forestier"  {{#if (eq fx.movementTypeGrant "forestier")}}selected{{/if}}>🌲 Forestier</option>
+              </select>
+              {{else}}
+              <div style="font-size:12px">{{#if fx.movementTypeGrant}}{{fx.movementTypeGrant}}{{else}}—{{/if}}</div>
+              {{/if}}
+            </div>
+            <div>
               <label style="font-size:11px">Dégâts/tour <span style="opacity:.6">(négatif=soin)</span></label>
               {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" placeholder="0" style="width:100%"/>
               {{else}}<div>{{fx.damage.flat}}</div>{{/if}}

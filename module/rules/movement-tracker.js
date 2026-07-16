@@ -82,22 +82,27 @@ export function onPreUpdateToken(tokenDoc, changes) {
       return false;
     }
 
-    // Vérif vitesse + terrain (estimation rapide côté client)
+    // Vérif vitesse + terrain (avec type de déplacement)
     const vitesse = getVitesse(actor);
     const startPos = _prevPos.get(tokenDoc.id) ?? { x: tokenDoc.x, y: tokenDoc.y };
     const newX = changes.x ?? tokenDoc.x;
     const newY = changes.y ?? tokenDoc.y;
 
-    // Terrain à destination
     const destTerrains = getTerrainAt(newX, newY);
-    const mult = destTerrains.reduce((m, t) => Math.min(m, t.terrain.speedMult), 1);
+    const getEffMult = game?.rpg?.movementTypes?.getEffectiveSpeedMult;
+    let mult = 1;
+    for (const t of destTerrains) {
+      const regionMult = Number(t.behavior?.system?.speedMult ?? t.terrain.speedMult ?? 1);
+      const effMult = getEffMult ? getEffMult(actor, t.typeKey, regionMult) : regionMult;
+      if (effMult < mult) mult = effMult;
+    }
     const distBrute = measureDist(startPos.x, startPos.y, newX, newY);
-    const cost = distBrute / mult;
+    const cost = mult > 0 ? distBrute / mult : 999;
 
     if (cost > vitesse + 0.1) {
-      const terrainMsg = mult < 1 ? ` (terrain ×${mult})` : "";
+      const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
       ui.notifications?.warn?.(
-        `Vitesse insuffisante — ${fmt(cost)} nécessaires${terrainMsg} vs ${fmt(vitesse)} disponibles.`
+        `Déplacement impossible — ${fmt(cost)} nécessaires${typeLabel} vs ${fmt(vitesse)} disponibles.`
       );
       return false;
     }
@@ -161,8 +166,8 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   const hasSlot = canUseSlot(budget, "deplacement");
   const vitesse = getVitesse(actor);
 
-  // ── Calcul du coût réel avec terrain ────────────────────────────────
-  const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints);
+  // ── Calcul du coût réel avec terrain + type de déplacement ─────────────
+  const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints, actor);
   const distBrute = segments.reduce((s, seg) => s + seg.rawDist, 0);
   const terrainInfo = formatTerrainSummary(terrainsCrossed);
   const overSpeed   = cost > vitesse + 0.05;

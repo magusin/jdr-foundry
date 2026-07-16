@@ -97,13 +97,21 @@ export function getTerrainAt(x, y) {
 
 /**
  * Calcule le coût de déplacement en mètres pour un chemin donné,
- * en tenant compte des terrains traversés.
+ * en tenant compte des terrains traversés ET du type de déplacement de l'acteur.
  *
  * @param {Array} waypoints — [{x, y}] points du trajet
+ * @param {Actor} actor     — acteur qui se déplace (pour type de mouvement)
  * @returns {{ cost: number, segments: Array, terrainsCrossed: Set }}
  */
-export function calculateMovementCost(waypoints) {
+export function calculateMovementCost(waypoints, actor = null) {
   if (!waypoints || waypoints.length < 2) return { cost: 0, segments: [], terrainsCrossed: new Set() };
+
+  // Import dynamique pour éviter les dépendances circulaires
+  let getEffectiveSpeedMult = null;
+  try {
+    // On essaie de récupérer depuis game.rpg.movementTypes si disponible
+    getEffectiveSpeedMult = game?.rpg?.movementTypes?.getEffectiveSpeedMult ?? null;
+  } catch { /* pas encore dispo */ }
 
   const segments = [];
   const terrainsCrossed = new Set();
@@ -112,36 +120,48 @@ export function calculateMovementCost(waypoints) {
   for (let i = 0; i < waypoints.length - 1; i++) {
     const from = waypoints[i];
     const to   = waypoints[i + 1];
-
-    // Distance réelle du segment
     const rawDist = _measureSegment(from.x, from.y, to.x, to.y);
 
-    // Terrain au milieu du segment
     const midX = (from.x + to.x) / 2;
     const midY = (from.y + to.y) / 2;
     const terrains = getTerrainAt(midX, midY);
 
-    // Multiplicateur le plus pénalisant (on prend le minimum)
+    // Multiplicateur le plus pénalisant avec prise en compte du type de mouvement
     let speedMult = 1;
     let terrainLabel = null;
     for (const t of terrains) {
-      if (t.terrain.speedMult < speedMult) {
-        speedMult = t.terrain.speedMult;
-        terrainLabel = t.terrain.label;
-        terrainsCrossed.add(t.typeKey);
+      if (!t.terrain.enabled && t.behavior?.system?.enabled === false) continue;
+
+      // Récupère le multiplicateur configuré sur CETTE région (peut différer du défaut du type)
+      const regionMult = Number(t.behavior?.system?.speedMult ?? t.terrain.speedMult ?? 1);
+
+      // Applique les immunités du type de déplacement de l'acteur
+      let effectiveMult = regionMult;
+      if (actor && getEffectiveSpeedMult) {
+        effectiveMult = getEffectiveSpeedMult(actor, t.typeKey, regionMult);
       }
+
+      if (effectiveMult < speedMult) {
+        speedMult    = effectiveMult;
+        terrainLabel = t.behavior?.system?.notes
+          ? `${t.terrain.label} (${t.behavior.system.notes})`
+          : t.terrain.label;
+        if (effectiveMult < regionMult) {
+          terrainLabel += " [immunité partielle]";
+        }
+        if (effectiveMult < speedMult || effectiveMult === 1 && regionMult < 1) {
+          // Acteur immunisé → ne signale pas le terrain
+        } else {
+          terrainsCrossed.add(t.typeKey);
+        }
+      }
+      if (effectiveMult < 1) terrainsCrossed.add(t.typeKey);
     }
 
-    const cost = rawDist / speedMult; // coût en "mètres de mouvement"
+    const cost = speedMult > 0 ? rawDist / speedMult : rawDist * 10;
     totalCost += cost;
 
-    segments.push({
-      from, to,
-      rawDist,
-      speedMult,
-      cost,
-      terrainLabel
-    });
+    segments.push({ from, to, rawDist, speedMult, cost, terrainLabel });
   }
 
   return { cost: totalCost, segments, terrainsCrossed };

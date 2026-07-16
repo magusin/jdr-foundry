@@ -36,7 +36,9 @@
           "mana": 1.0
         },
         "deplacement": {
-          "vitesse": 6
+          "vitesse": 6,
+          "type": "terrestre",
+          "typesExtra": []
         },
         "charge": {
           "podsActuels": 0,

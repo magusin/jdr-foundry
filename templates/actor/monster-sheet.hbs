@@ -144,8 +144,18 @@
           <summary style="cursor:pointer;font-weight:600;padding:4px 0;">⚙️ Ajustement manuel (avancé — écrase les valeurs tirées par la génération)</summary>
           <div class="grid-mm" style="margin-top:10px;">
             <div class="mm-line">
-              <span>Vitesse (base)</span>
+              <span>Vitesse (m)</span>
               <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
+              <span style="margin-top:6px">Mode de déplacement</span>
+              <select name="system.deplacement.type">
+                <option value="terrestre"  {{#if (eq system.deplacement.type "terrestre")}}selected{{/if}}>🦶 Terrestre</option>
+                <option value="volant"     {{#if (eq system.deplacement.type "volant")}}selected{{/if}}>🦅 Volant</option>
+                <option value="aquatique"  {{#if (eq system.deplacement.type "aquatique")}}selected{{/if}}>🐟 Aquatique</option>
+                <option value="amphibie"   {{#if (eq system.deplacement.type "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
+                <option value="montagnard" {{#if (eq system.deplacement.type "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
+                <option value="forestier"  {{#if (eq system.deplacement.type "forestier")}}selected{{/if}}>🌲 Forestier</option>
+                <option value="ethere"     {{#if (eq system.deplacement.type "ethere")}}selected{{/if}}>👻 Éthéré</option>
+              </select>
               <span class="muted" style="margin-left:8px;">eff: {{system.deplacement.vitesse}}</span>
             </div>
             <div class="mm-line">

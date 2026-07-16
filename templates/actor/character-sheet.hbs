@@ -59,6 +59,33 @@
             <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}}</small>
             {{/unless}}
           </div>
+          <div class="meta">
+            <label>Mode de déplacement</label>
+            {{#if flags.isGM}}
+            <select name="system.deplacement.type">
+              <option value="terrestre" {{#if (eq system.deplacement.type "terrestre")}}selected{{/if}}>🦶 Terrestre</option>
+              <option value="volant"    {{#if (eq system.deplacement.type "volant")}}selected{{/if}}>🦅 Volant</option>
+              <option value="aquatique" {{#if (eq system.deplacement.type "aquatique")}}selected{{/if}}>🐟 Aquatique</option>
+              <option value="amphibie"  {{#if (eq system.deplacement.type "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
+              <option value="montagnard"{{#if (eq system.deplacement.type "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
+              <option value="forestier" {{#if (eq system.deplacement.type "forestier")}}selected{{/if}}>🌲 Forestier</option>
+              <option value="ethere"    {{#if (eq system.deplacement.type "ethere")}}selected{{/if}}>👻 Éthéré</option>
+            </select>
+            {{else}}
+            <div style="font-size:12px;padding:4px 0">
+              {{#if (eq system.deplacement.type "volant")}}🦅 Volant{{/if}}
+              {{#if (eq system.deplacement.type "aquatique")}}🐟 Aquatique{{/if}}
+              {{#if (eq system.deplacement.type "amphibie")}}🐸 Amphibie{{/if}}
+              {{#if (eq system.deplacement.type "montagnard")}}⛰️ Montagnard{{/if}}
+              {{#if (eq system.deplacement.type "forestier")}}🌲 Forestier{{/if}}
+              {{#if (eq system.deplacement.type "ethere")}}👻 Éthéré{{/if}}
+              {{#if (eq system.deplacement.type "terrestre")}}🦶 Terrestre{{/if}}
+              {{#if system.deplacement.typesExtra.length}}
+              + {{#each system.deplacement.typesExtra}}<span style="opacity:.7">{{this}}</span>{{/each}}
+              {{/if}}
+            </div>
+            {{/if}}
+          </div>
         </div>
 
         <div class="meta-row">
