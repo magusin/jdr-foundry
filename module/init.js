@@ -33,7 +33,7 @@ import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
-import { registerRegionBehaviors } from "./rules/region-behaviors.js";
+import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/region-behaviors.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
@@ -227,6 +227,11 @@ Hooks.once("init", async () => {
   // Expose l'API terrain pour les macros
   Hooks.once("ready", () => {
     const { getTerrainAt, calculateMovementCost, TERRAIN_TYPES } = foundry.utils.mergeObject({},{});
+  });
+
+  // Sheets de configuration des terrains (après le hook setup)
+  Hooks.once("setup", () => {
+    registerRegionBehaviorSheets();
   });
 
   // ✅ Setting météo courante (monde) — influence la magie élémentaire

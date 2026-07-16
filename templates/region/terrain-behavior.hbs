@@ -1,0 +1,60 @@
+{{!-- Template pour la fiche de configuration d'un comportement de terrain --}}
+<div style="display:flex;flex-direction:column;gap:12px;padding:4px">
+
+  <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:{{terrain.color}}22;border:1px solid {{terrain.color}}44">
+    <i class="{{terrain.icon}}" style="font-size:24px;color:{{terrain.color}}"></i>
+    <div>
+      <div style="font-weight:700;font-size:14px">{{terrain.label}}</div>
+      <div style="font-size:11px;opacity:.7">{{terrain.description}}</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label style="font-weight:700">
+      Coût de déplacement
+      <span style="font-weight:400;font-size:11px;opacity:.7"> — multiplicateur (1 = normal, 0.5 = double le coût)</span>
+    </label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="range" name="system.speedMult" value="{{system.speedMult}}"
+        min="0.1" max="1" step="0.05" style="flex:1"
+        oninput="this.nextElementSibling.textContent = '×' + parseFloat(this.value).toFixed(2) + ' (' + (1/parseFloat(this.value)).toFixed(1) + 'x plus lent)'"/>
+      <span style="min-width:130px;font-weight:600;color:{{terrain.color}}">
+        ×{{system.speedMult}} ({{speedCostLabel}})
+      </span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;opacity:.5;margin-top:2px">
+      <span>×0.1 (10× plus lent)</span>
+      <span>×0.5 (2× plus lent)</span>
+      <span>×1.0 (normal)</span>
+    </div>
+
+    <div style="margin-top:8px;padding:6px;background:rgba(255,255,255,0.05);border-radius:6px;font-size:12px">
+      💡 Avec vitesse <b>6m</b> : dans ce terrain tu parcours <b>{{effectiveSpeed}}m</b> réels pour 6m de mouvement dépensés
+      {{#if (lt system.speedMult 1)}}
+      — ou inversement 6m réels coûtent <b>{{trueCost}}m</b> de mouvement
+      {{/if}}
+    </div>
+  </div>
+
+  {{#if terrain.hasVisionRange}}
+  <div class="form-group">
+    <label style="font-weight:700">
+      Vision limitée à (mètres)
+      <span style="font-weight:400;font-size:11px;opacity:.7"> — 0 = pas de limite</span>
+    </label>
+    <input type="number" name="system.visionRange" value="{{system.visionRange}}"
+      min="0" max="50" step="0.5" style="width:100%"/>
+  </div>
+  {{/if}}
+
+  <div class="form-group">
+    <label style="font-weight:700">Actif</label>
+    <input type="checkbox" name="system.enabled" {{#if system.enabled}}checked{{/if}} />
+    <span style="font-size:11px;opacity:.7">Décocher pour désactiver temporairement sans supprimer</span>
+  </div>
+
+  <div class="form-group">
+    <label style="font-weight:700">Notes MJ (optionnel)</label>
+    <textarea name="system.notes" rows="2" placeholder="Ex: Cette zone est de la boue après la pluie de ce soir">{{system.notes}}</textarea>
+  </div>
+</div>

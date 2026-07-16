@@ -233,3 +233,57 @@ export function registerRegionBehaviors() {
     console.log(`[RPG] Comportement région enregistré : ${fullKey} (${config.label})`);
   }
 }
+
+
+// ─── Sheet de configuration du comportement terrain ──────────────────────────
+// Fournit l'UI dans Foundry pour configurer speedMult, visionRange, etc.
+
+export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBehaviorConfig {
+  static DEFAULT_OPTIONS = foundry.utils.mergeObject(
+    super.DEFAULT_OPTIONS ?? {},
+    { window: { title: "Configuration du terrain" }, position: { width: 420 } },
+    { inplace: false }
+  );
+
+  static PARTS = {
+    form: { template: "systems/rpg/templates/region/terrain-behavior.hbs" }
+  };
+
+  async _prepareContext(options) {
+    const ctx = await super._prepareContext(options);
+    const typeKey = String(this.document.type ?? "").replace("rpg.", "");
+    const terrain = TERRAIN_TYPES[typeKey] ?? {};
+
+    ctx.terrain = {
+      ...terrain,
+      color: terrain.color ?? "#888888",
+      icon:  terrain.icon  ?? "fas fa-map",
+      hasVisionRange: "visionRange" in (terrain) || !!this.document.system?.visionRange
+    };
+
+    const mult = Number(this.document.system?.speedMult ?? terrain.speedMult ?? 1);
+    ctx.speedCostLabel = mult >= 1 ? "normal" :
+      `${(1/mult).toFixed(1)}× plus lent`;
+    ctx.effectiveSpeed = (6 * mult).toFixed(1);
+    ctx.trueCost       = mult > 0 ? (6 / mult).toFixed(1) : "∞";
+
+    return ctx;
+  }
+}
+
+/**
+ * Enregistre les sheets de comportements.
+ * Appelé après registerRegionBehaviors().
+ */
+export function registerRegionBehaviorSheets() {
+  if (!foundry.applications.sheets?.RegionBehaviorConfig) return;
+
+  for (const typeKey of Object.keys(TERRAIN_TYPES)) {
+    const fullKey = `rpg.${typeKey}`;
+    try {
+      foundry.applications.sheets.RegionBehaviorConfig.registerConfig(
+        fullKey, TerrainBehaviorSheet
+      );
+    } catch { /* API peut varier selon la version V13 */ }
+  }
+}
