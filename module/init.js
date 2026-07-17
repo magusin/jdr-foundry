@@ -495,6 +495,8 @@ Hooks.once("init", async () => {
         ["Retirer un État (jet)",              "remove-state-macro.js", "icons/svg/cancel.svg",          "all"],
         ["Forge",                              "forge.js",              "systems/rpg/assets/icons/anvil.svg","all"],
         ["Cibler la Zone",                     "target-zone.js",        "icons/svg/target.svg",          "all"],
+        ["🎮 Tableau de bord MJ",               "dashboard-mj.js",       "icons/svg/clockwork.svg",       "gm"],
+        ["📋 Aide-mémoire MJ",                  "aide-memoire-mj.js",    "icons/svg/book.svg",            "gm"],
         ["Appliquer un Effet (MJ)",            "apply-effect.js",       "icons/svg/lightning.svg",       "gm"],
         ["Créer un État (MJ)",                 "state-builder-macro.js","icons/svg/aura.svg",            "gm"],
         ["Survie : Repos / Blessures (MJ)",    "survival-tools.js",     "icons/svg/blood.svg",           "gm"],
