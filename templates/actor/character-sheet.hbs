@@ -6,19 +6,28 @@
   <header class="sheet-header" id="rpg-header-{{actor.id}}">
     <div class="header-left">
       <div style="display:flex;gap:6px;align-items:flex-start">
+        {{!-- PORTRAIT — visible par tous, modifiable par proprio et MJ --}}
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          {{#if flags.canEditImg}}
           <img class="profile-img rpg-img-edit" src="{{actor.img}}" data-field="img"
-            title="Cliquer pour changer le portrait" style="cursor:pointer" />
-          <small style="font-size:9px;opacity:.6">Portrait</small>
+            title="Cliquer pour changer l'illustration"
+            style="cursor:pointer;width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid rgba(155,89,182,0.4)" />
+          {{else}}
+          <img src="{{actor.img}}"
+            style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.1)" />
+          {{/if}}
+          <small style="font-size:9px;opacity:.6">Illustration</small>
         </div>
-        {{#unless flags.readOnly}}
+        {{!-- TOKEN — visible et modifiable uniquement par le MJ --}}
+        {{#if flags.isGM}}
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-          <img class="rpg-img-edit" src="{{actor.prototypeToken.texture.src}}" data-field="prototypeToken.texture.src"
-            title="Cliquer pour changer l'image du token"
+          <img class="rpg-img-edit rpg-token-img" src="{{actor.prototypeToken.texture.src}}"
+            data-field="prototypeToken.texture.src"
+            title="Cliquer pour changer l'image du token (MJ)"
             style="width:48px;height:48px;cursor:pointer;border-radius:6px;border:1px solid var(--color-border-light-2);object-fit:cover" />
           <small style="font-size:9px;opacity:.6">Token</small>
         </div>
-        {{/unless}}
+        {{/if}}
       </div>
 
       <div class="header-meta">

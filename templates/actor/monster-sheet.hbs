@@ -2,20 +2,23 @@
   <header class="sheet-header">
     <div style="display:flex;gap:10px;align-items:center">
       {{#if canSeeStats}}
+      {{!-- Illustration --}}
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
         <img class="profile rpg-img-edit" src="{{actor.img}}" data-field="img"
-          title="Cliquer pour changer le portrait" height="64" width="64"
-          style="cursor:pointer;border-radius:8px;border:2px solid var(--color-border-light-2)" />
-        <small style="font-size:9px;opacity:.7">Portrait</small>
+          title="Cliquer pour changer l'illustration" height="64" width="64"
+          style="cursor:pointer;border-radius:8px;border:2px solid rgba(155,89,182,0.4);object-fit:cover" />
+        <small style="font-size:9px;opacity:.7">Illustration</small>
       </div>
+      {{!-- Token — MJ uniquement --}}
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-        <img class="profile rpg-img-edit" src="{{actor.prototypeToken.texture.src}}" data-field="prototypeToken.texture.src"
-          title="Cliquer pour changer l'image du token" height="64" width="64"
-          style="cursor:pointer;border-radius:8px;border:2px solid var(--color-border-light-2);object-fit:cover" />
+        <img class="profile rpg-img-edit rpg-token-img" src="{{actor.prototypeToken.texture.src}}"
+          data-field="prototypeToken.texture.src"
+          title="Cliquer pour changer l'image du token (MJ)" height="48" width="48"
+          style="cursor:pointer;border-radius:6px;border:1px solid var(--color-border-light-2);object-fit:cover" />
         <small style="font-size:9px;opacity:.7">Token</small>
       </div>
       {{else}}
-      <img class="profile" src="{{actor.img}}" height="64" width="64" style="border-radius:8px" />
+      <img class="profile" src="{{actor.img}}" height="64" width="64" style="border-radius:8px;object-fit:cover" />
       {{/if}}
       <h1 style="flex:1">
         <input name="name" type="text" value="{{actor.name}}" {{#unless canSeeStats}}disabled{{/unless}} />

@@ -283,7 +283,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       isGM,
       isOwner,
       limitedView: !isGM && !isOwner,
-      readOnly: !isGM
+      readOnly: !isGM,
+      // Portrait : MJ ou propriétaire peuvent changer leur illustration
+      canEditImg: isGM || isOwner
     };
 
     // XP display
@@ -452,16 +454,26 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
     root.querySelectorAll(".rpg-img-edit").forEach(img => {
-      if (!this.isEditable) return;
+      if (!this.isEditable && !this.document.isOwner) return;
+      const field = img.dataset.field;
+      if (!field) return;
+      // Le token ne peut être modifié que par le MJ
+      if (field.startsWith("prototypeToken") && !game.user.isGM) return;
+      // Le portrait peut être modifié par le propriétaire même non-MJ
+      if (field === "img" && !this.document.isOwner) return;
+
       img.addEventListener("click", async () => {
-        const field = img.dataset.field;
-        if (!field) return;
         const current = foundry.utils.getProperty(this.document, field) ?? "";
         const fp = new foundry.applications.apps.FilePicker({
           type: "image",
           current,
           callback: async (path) => {
-            await this.document.update({ [field]: path });
+            if (field === "img") {
+              // Mise à jour du portrait UNIQUEMENT — pas de synchro vers le token
+              await this.document.update({ "img": path }, { noTokenUpdate: true });
+            } else {
+              await this.document.update({ [field]: path });
+            }
           }
         });
         fp.render(true);

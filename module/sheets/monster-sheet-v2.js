@@ -173,18 +173,23 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const root = this.element;
     if (!root) return;
 
-    // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
+    // ✅ Clic images (illustration + token) — MJ only, portrait ne sync pas token
     root.querySelectorAll(".rpg-img-edit").forEach(img => {
       if (!game.user.isGM) return;
+      const field = img.dataset.field;
+      if (!field) return;
       img.addEventListener("click", async () => {
-        const field = img.dataset.field;
-        if (!field) return;
         const current = foundry.utils.getProperty(this.document, field) ?? "";
         const fp = new foundry.applications.apps.FilePicker({
           type: "image",
           current,
           callback: async (path) => {
-            await this.document.update({ [field]: path });
+            if (field === "img") {
+              // Portrait UNIQUEMENT — ne pas synchro vers le token
+              await this.document.update({ "img": path }, { noTokenUpdate: true });
+            } else {
+              await this.document.update({ [field]: path });
+            }
           }
         });
         fp.render(true);

@@ -403,12 +403,22 @@ Hooks.once("init", async () => {
   // ---------------------------
   Hooks.on("preUpdateActor", (doc, changed, options, userId) => {
     const user = game.users.get(userId);
+
+    // ✅ Empêche la synchro automatique portrait → token
+    // Quand on change img avec noTokenUpdate:true, on retire la mise à jour du token
+    if (options?.noTokenUpdate && "img" in changed) {
+      // On garde seulement img, on ne laisse pas Foundry synchro vers prototypeToken
+      delete changed["prototypeToken"];
+    }
+
     if (user?.isGM) return true;
 
     const flat = foundry.utils.flattenObject(changed);
+    // Joueurs peuvent changer leur propre illustration
     const allowed = new Set([
       "system.ressources.pv.valeur",
-      "system.ressources.mana.valeur"
+      "system.ressources.mana.valeur",
+      "img"  // portrait : le propriétaire peut changer son illustration
     ]);
     return Object.keys(flat).every(k => allowed.has(k));
   });
