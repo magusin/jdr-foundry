@@ -7,7 +7,7 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 /* Utils XP / Skills                            */
 /* -------------------------------------------- */
 
-const LABELS = {
+export const LABELS = {
   force: "Force",
   dexterite: "Dextérité",
   intelligence: "Intelligence",
@@ -31,7 +31,7 @@ const LABELS = {
 
 // ⚠️ soit tu recopies ta fonction normalizeState complète depuis le V1,
 // soit tu l'importes si tu l'as mise dans un fichier util.
-function normalizeState(st) {
+export function normalizeState(st) {
   const out = foundry.utils.deepClone(st ?? {});
   out.id = String(out.id || foundry.utils.randomID());
   out.label = String(out.label ?? "").trim() || "État";
@@ -56,7 +56,7 @@ function normalizeState(st) {
   return out;
 }
 
-function ensureStateDialogCSS() {
+export function ensureStateDialogCSS() {
   if (document.getElementById("rpg-state-dialog-css")) return;
 
   const style = document.createElement("style");

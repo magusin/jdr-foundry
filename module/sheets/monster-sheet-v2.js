@@ -2,7 +2,7 @@
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
-
+import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 function parseLevels(csv) {
@@ -586,30 +586,19 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
   _stateDefaults() {
     return this._normalizeState({
       id: foundry.utils.randomID(),
-      label: "", tag: "", effectKey: "", isAura: false,
-      permanent: false,
-      duration: 3, remaining: 3, removeDifficulty: "",
-      dot: { flat: 0, formula: "", perTick: 0 }, mods: {}
+      label: "Poison",
+      type: "poison",
+      isAura: false,
+      duration: 3,
+      remaining: 3,
+      cleanseDC: 0,
+      dot: { flat: 0, formula: "", perTick: 0 },
+      mods: {}
     });
   }
 
   _normalizeState(st) {
-    const out = foundry.utils.deepClone(st ?? {});
-    out.id = String(out.id || foundry.utils.randomID());
-    out.label = String(out.label ?? "").trim() || "État";
-    out.tag = String(out.tag ?? "").trim();
-    out.effectKey = String(out.effectKey ?? "").trim();
-    out.isAura = !!out.isAura;
-    out.permanent = !!out.permanent;
-    out.duration = Math.max(1, Number(out.duration ?? 1) || 1);
-    out.remaining = Math.max(0, Number(out.remaining ?? out.duration) || 0);
-    out.removeDifficulty = String(out.removeDifficulty ?? "").trim();
-    out.dot = out.dot ?? {};
-    out.dot.flat = Number(out.dot.flat ?? 0) || 0;
-    out.dot.formula = String(out.dot.formula ?? "").trim();
-    out.dot.perTick = Number(out.dot.perTick ?? out.dot.flat) || 0;
-    out.mods = out.mods ?? {};
-    return out;
+    return normalizeState(st);
   }
 
   _allModKeys() {
@@ -617,11 +606,206 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       "force", "dexterite", "intelligence", "acuite", "endurance",
       "pvMax", "manaMax", "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
-      "vitesse", "toucherPhysique", "toucherMagique", "initiativeMod", "fatigueMax"
+      "vitesse"
     ];
   }
 
-  async _editStateDialog(state, { title }) {
+  async _editStateDialog(state, { title } = {}) {
+    const st = this._normalizeState(state);
+    const keys = this._allModKeys();
+
+    const labels = {
+      force: "Force",
+      dexterite: "Dextérité",
+      intelligence: "Intelligence",
+      acuite: "Acuité",
+      endurance: "Endurance",
+      pvMax: "PV max",
+      manaMax: "Mana max",
+      regenPv: "Régén PV",
+      regenMana: "Régén Mana",
+      scoreArmure: "Score Armure",
+      scoreResistance: "Score Résistance",
+      armureFixe: "Armure fixe",
+      resistanceFixe: "Résistance fixe",
+      vitesse: "Vitesse"
+    };
+
+    const row = (k, label) => {
+      const cur = st.mods?.[k] ?? {};
+      const flat = Number(cur.flat ?? 0) || 0;
+      const pct = Number(cur.pct ?? 0) || 0;
+
+      return `
+        <div class="mods-row">
+          <div class="mods-label">${label}</div>
+          <div class="mods-inputs">
+            <input type="number" name="mods.${k}.flat" value="${flat}" placeholder="Flat"/>
+            <input type="number" name="mods.${k}.pct" value="${pct}" placeholder="%"/>
+          </div>
+        </div>
+      `;
+    };
+
+    const modsHtml = keys.map(k => row(k, labels[k] ?? k)).join("");
+
+    const content = `
+  <div class="rpg-state-dialog">
+
+    <div class="scroll">
+      <form class="rpg-state-edit">
+
+        <div class="line">
+          <div class="lbl">Nom (label)</div>
+          <input type="text" name="label" value="${st.label}"/>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Type</div>
+          <select name="type">
+            ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
+      `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`
+    ).join("")}
+          </select>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Aura (avec portée)</div>
+          <div><input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/></div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>Durée (tours)</label>
+            <input type="number" name="duration" value="${st.duration}" min="1"/>
+          </div>
+          <div>
+            <label>Restant (tours)</label>
+            <input type="number" name="remaining" value="${st.remaining}" min="0"/>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Difficulté retrait (cleanse DC)</div>
+          <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>Portée min (cases) (aura)</label>
+            <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0"/>
+          </div>
+          <div>
+            <label>Portée max (cases) (aura)</label>
+            <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0"/>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Cible (aura)</div>
+          <select name="aura.target">
+            ${["allies", "enemies", "both"].map(t =>
+      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${t}</option>`
+    ).join("")}
+          </select>
+        </div>
+
+        <hr/>
+        <h3>DOT</h3>
+        <p class="hint">DOT fixe = dégâts appliqués à chaque tick (ex: début de tour).</p>
+
+        <div class="line">
+          <div class="lbl">DOT fixe</div>
+          <input type="number" name="dot.flat" value="${Number(st.dot.flat ?? 0) || 0}"/>
+        </div>
+
+        <hr/>
+        <h3>Modificateurs (buff / debuff)</h3>
+        <p class="hint">Flat = +10 / -10. % = +10 / -10 (pour +10% / -10%).</p>
+
+        ${modsHtml}
+      </form>
+    </div>
+  </div>
+`;
+
+    const parseForm = (htmlRoot) => {
+      const form = htmlRoot.querySelector("form");
+      const fd = new FormData(form);
+
+      const getStr = (k, d = "") => String(fd.get(k) ?? d).trim();
+      const getNum = (k, d = 0) => Number(fd.get(k) ?? d) || 0;
+      const getChk = (k) => fd.get(k) !== null;
+
+      const out = this._normalizeState(st);
+      out.label = getStr("label", out.label);
+      out.type = getStr("type", out.type);
+      out.isAura = getChk("isAura");
+
+      out.duration = Math.max(1, getNum("duration", out.duration));
+      out.remaining = Math.max(0, getNum("remaining", out.remaining));
+      out.cleanseDC = Math.max(0, getNum("cleanseDC", out.cleanseDC));
+
+      out.dot = out.dot ?? {};
+      out.dot.flat = getNum("dot.flat", 0);
+      out.dot.formula = "";
+      out.dot.perTick = out.dot.flat;
+
+      if (out.isAura) {
+        out.aura = out.aura ?? {};
+        out.aura.min = Math.max(0, getNum("aura.min", 0));
+        out.aura.max = Math.max(0, getNum("aura.max", 0));
+        out.aura.target = getStr("aura.target", "allies") || "allies";
+      } else {
+        delete out.aura;
+      }
+
+      out.mods = out.mods ?? {};
+      for (const k of keys) {
+        const flat = getNum(`mods.${k}.flat`, 0);
+        const pct = getNum(`mods.${k}.pct`, 0);
+        if (flat !== 0 || pct !== 0) out.mods[k] = { flat, pct };
+        else delete out.mods[k];
+      }
+
+      return out;
+    };
+
+    const DialogV2 = foundry.applications.api.DialogV2 ?? foundry.applications.api.Dialog;
+
+    return await new Promise((resolve) => {
+      ensureStateDialogCSS();
+
+      const dlg = new DialogV2({
+        window: {
+          title: title || "État",
+          contentClasses: ["rpg-state-dialog-window"]
+        },
+        position: { width: 680, height: 760 },
+        content,
+        buttons: [
+          {
+            action: "cancel",
+            label: "Annuler",
+            default: false,
+            callback: () => resolve(null)
+          },
+          {
+            action: "ok",
+            label: "Enregistrer",
+            default: true,
+            callback: (_event, _button, dialog) => {
+              const root = dialog.element ?? dialog?.form ?? dialog;
+              resolve(parseForm(root));
+            }
+          }
+        ],
+        close: () => resolve(null)
+      });
+
+      dlg.render(true);
+    });
+  }) {
     const st = this._normalizeState(state);
     const keys = this._allModKeys();
     const labels = {
