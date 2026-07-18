@@ -713,15 +713,19 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     </form>`;
 
     return new Promise((resolve) => {
-      const dlg = new Dialog({
-        title: title || "État",
-        content: html,
-        buttons: {
-          cancel: { label: "Annuler", callback: () => resolve(null) },
-          ok: {
-            label: "Enregistrer",
-            callback: (dlgHtml) => {
-              const fd = new FormData(dlgHtml[0].querySelector("form"));
+      // Support V13 (DialogV2) et V12 (Dialog)
+      const DialogClass = foundry.applications?.api?.DialogV2 ?? Dialog;
+      if (DialogClass === Dialog) {
+        // V1 classique
+        new Dialog({
+          title: title || "État",
+          content: html,
+          buttons: {
+            cancel: { label: "Annuler", callback: () => resolve(null) },
+            ok: {
+              label: "Enregistrer",
+              callback: (dlgHtml) => {
+                const fd = new FormData(dlgHtml[0].querySelector("form"));
               const root = dlgHtml[0];
               const getStr = (k, d="") => String(fd.get(k)??d).trim();
               const getNum = (k, d=0) => Number(fd.get(k)??d)||0;
@@ -756,7 +760,6 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         },
         default: "ok",
         render: (dlgHtml) => {
-          // Auto-remplissage du nom depuis le catalogue
           const catalogue = dlgHtml[0].querySelector("#se-catalogue");
           const labelInput = dlgHtml[0].querySelector("#se-label");
           catalogue?.addEventListener("change", () => {
@@ -769,6 +772,44 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
           });
         }
       }).render(true);
+      } else {
+        // DialogV2 — wrap dans un conteneur form pour accès FormData
+        DialogClass.wait({
+          title: title || "État",
+          content: `<form>${html}</form>`,
+          buttons: [
+            { action:"cancel", label:"Annuler", callback: () => resolve(null) },
+            { action:"ok",     label:"Enregistrer", default: true, callback: (_ev, button) => {
+              const fd = new FormData(button.form ?? button.closest("form"));
+              const root = button.form ?? button.closest("form");
+              const getStr = (k,d="") => String(fd.get(k)??d).trim();
+              const getNum = (k,d=0) => Number(fd.get(k)??d)||0;
+              const out = this._normalizeState(st);
+              const selectedKey = root?.querySelector("#se-catalogue")?.value ?? "";
+              out.effectKey = selectedKey;
+              out.label = getStr("label", out.label);
+              if (!out.label && selectedKey && lib) out.label = lib.getEffectDef(selectedKey)?.label ?? selectedKey;
+              out.tag = getStr("tag", out.tag);
+              out.isAura = !!fd.get("isAura");
+              out.permanent = !!fd.get("permanent");
+              out.duration = Math.max(1, getNum("duration", out.duration));
+              out.remaining = Math.max(0, getNum("remaining", out.remaining));
+              out.removeDifficulty = getStr("removeDifficulty","");
+              out.dot.flat = getNum("dot.flat",0);
+              out.dot.formula = getStr("dot.formula","");
+              out.dot.perTick = out.dot.flat;
+              out.mods = {};
+              for (const k of keys) {
+                const flat = getNum(`mods.${k}.flat`,0);
+                const pct  = getNum(`mods.${k}.pct`,0);
+                if (flat !== 0 || pct !== 0) out.mods[k] = { flat, pct };
+              }
+              resolve(out);
+            }}
+          ]
+        }).catch(() => resolve(null));
+      }
+    });
     });
   }
 }
