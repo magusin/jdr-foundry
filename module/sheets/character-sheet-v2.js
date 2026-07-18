@@ -610,7 +610,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       }
 
       if (action === "addBlessure" && game.user.isGM) {
-        const list = foundry.utils.deepClone(this.document.system?.blessures ?? []);
+        const raw  = this.document.system?.blessures;
+        const list = Array.isArray(raw) ? foundry.utils.deepClone(raw) :
+                     (raw && typeof raw === "object") ? Object.values(foundry.utils.deepClone(raw)) : [];
         list.push({
           id: foundry.utils.randomID(),
           label: "Nouvelle blessure",
@@ -624,9 +626,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       }
 
       if (action === "removeBlessure" && game.user.isGM) {
-        const idx = Number(btn.dataset.idx);
+        const idx  = Number(btn.dataset.idx);
         if (!Number.isFinite(idx)) return;
-        const list = foundry.utils.deepClone(this.document.system?.blessures ?? []);
+        const raw  = this.document.system?.blessures;
+        const list = Array.isArray(raw) ? foundry.utils.deepClone(raw) :
+                     (raw && typeof raw === "object") ? Object.values(foundry.utils.deepClone(raw)) : [];
         list.splice(idx, 1);
         await this.document.update({ "system.blessures": list });
         return;

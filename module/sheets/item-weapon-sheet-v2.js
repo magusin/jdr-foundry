@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/item-weapon-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
+import { applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 
 function n(v, d = 0) {
   const x = Number(v);
