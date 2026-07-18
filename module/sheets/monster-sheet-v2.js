@@ -999,6 +999,5 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         }).catch(() => resolve(null));
       }
     });
-    });
   }
 }
