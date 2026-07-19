@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
+import { getManaCostMultiplier, getCurrentWeather, ELEMENT_TAGS } from "../rules/weather-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -257,6 +258,27 @@ static PARTS = foundry.utils.mergeObject(
     ctx.system.aura.key = String(ctx.system.aura.key ?? "");
 
     ctx.system.description = String(ctx.system.description ?? "");
+
+    // ── Effet météo sur ce sort ───────────────────────────────────────────
+    const tag = String(ctx.system.tag ?? "neutre");
+    const mult = getManaCostMultiplier(tag);
+    const baseMana = n(ctx.system.coutMana, 0);
+    const effectifMana = Math.max(0, Math.round(baseMana * mult));
+    const weather = getCurrentWeather();
+    const tagDef  = ELEMENT_TAGS[tag] ?? null;
+    if (mult !== 1 && baseMana > 0 && tagDef) {
+      const isBoosted = mult < 1;
+      ctx.weatherEffect = {
+        label:            weather.label,
+        icon:             weather.icon,
+        manaCoutEffectif: effectifMana,
+        mult:             mult < 1 ? `×${mult} (réduit)` : `×${mult} (augmenté)`,
+        color:            isBoosted ? "#1d9e75" : "#c0392b",
+        isBoosted
+      };
+    } else {
+      ctx.weatherEffect = null;
+    }
 
     ctx.system.damage = normDamage(ctx.system.damage);
     ctx.system.damageCrit = normDamage(ctx.system.damageCrit);

@@ -2,6 +2,7 @@
 import { manhattanDistanceTokens } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { computeTN } from "./combat.js";
+import { getManaCostMultiplier, getWeatherModifierFor } from "./weather-library.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -527,7 +528,9 @@ export function buildSpellUI({ actor, item }) {
   const auraMax = n(sys.aura?.range?.max, 0);
   const auraTarget = str(sys.aura?.target, "allies");
 
-  const manaCost = n(sys.coutMana, 0);
+  const _manaCostBase = n(sys.coutMana, 0);
+  const _weatherMult  = getManaCostMultiplier(sys.tag ?? "neutre");
+  const manaCost = Math.max(0, Math.round(_manaCostBase * _weatherMult));
   const speed = str(sys.speed, "normal");
   const diff = n(sys.difficulte, 0);
 
@@ -585,7 +588,9 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
   }
 
   // mana
-  const manaCost = n(sys.coutMana, 0);
+  const _manaCostBase = n(sys.coutMana, 0);
+  const _weatherMult  = getManaCostMultiplier(sys.tag ?? "neutre");
+  const manaCost = Math.max(0, Math.round(_manaCostBase * _weatherMult));
   const manaCur = n(actor.system?.ressources?.mana?.valeur, 0);
   if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
   if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
@@ -838,7 +843,9 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   }
 
   // mana
-  const manaCost = n(sys.coutMana, 0);
+  const _manaCostBase = n(sys.coutMana, 0);
+  const _weatherMult  = getManaCostMultiplier(sys.tag ?? "neutre");
+  const manaCost = Math.max(0, Math.round(_manaCostBase * _weatherMult));
   const manaCur  = n(actor.system?.ressources?.mana?.valeur, 0);
   if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
   if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
