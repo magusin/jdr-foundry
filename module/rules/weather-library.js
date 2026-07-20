@@ -31,49 +31,49 @@ export const WEATHER_LIBRARY = {
     key: "forte_pluie", label: "Forte pluie 🌧️", icon: "🌧️",
     boost:  ["eau", "eclair"],
     weaken: ["feu", "air"],
-    manaReduction: { eau: -2, eclair: -1, feu: 2, air: 1 },
+    manaReduction: { eau: -1, eclair: -1, feu: 1, air: 1 },
     desc: "Pluie battante. Eau −2, Éclair −1, Feu +2, Air +1."
   },
   orageux: {
     key: "orageux", label: "Orageux ⛈️", icon: "⛈️",
     boost:  ["eclair", "eau", "air"],
     weaken: ["feu", "terre"],
-    manaReduction: { eclair: -3, eau: -2, air: -1, feu: 3, terre: 1 },
+    manaReduction: { eclair: -2, eau: -1, air: -1, feu: 2, terre: 1 },
     desc: "Tempête. Éclair −3 mana, Eau −2, Air −1, Feu +3."
   },
   forte_chaleur: {
     key: "forte_chaleur", label: "Forte chaleur 🌡️", icon: "🌡️",
     boost:  ["feu", "terre"],
     weaken: ["glace", "eau", "air"],
-    manaReduction: { feu: -3, terre: -1, glace: 3, eau: 2, air: 1 },
+    manaReduction: { feu: -2, terre: -1, glace: 2, eau: 1, air: 1 },
     desc: "Canicule. Feu −3, Glace +3, Eau +2."
   },
   gel: {
     key: "gel", label: "Gel ❄️", icon: "❄️",
     boost:  ["glace", "air"],
     weaken: ["feu", "lumiere"],
-    manaReduction: { glace: -3, air: -1, feu: 3, lumiere: 1 },
+    manaReduction: { glace: -2, air: -1, feu: 2, lumiere: 1 },
     desc: "Froid intense. Glace −3, Feu +3."
   },
   vent_fort: {
     key: "vent_fort", label: "Vent fort 💨", icon: "💨",
     boost:  ["air"],
     weaken: ["feu", "terre"],
-    manaReduction: { air: -2, feu: 2, terre: 1 },
+    manaReduction: { air: -1, feu: 1, terre: 1 },
     desc: "Grand vent. Air −2, Feu +2, Terre +1."
   },
   brouillard: {
     key: "brouillard", label: "Brouillard 🌫️", icon: "🌫️",
     boost:  ["obscurite", "eau"],
     weaken: ["feu", "lumiere", "eclair"],
-    manaReduction: { obscurite: -2, eau: -1, feu: 2, lumiere: 2, eclair: 1 },
+    manaReduction: { obscurite: -1, eau: -1, feu: 1, lumiere: 1, eclair: 1 },
     desc: "Brouillard. Obscurité −2, Lumière +2, Feu +2."
   },
   nuit_claire: {
     key: "nuit_claire", label: "Nuit claire 🌙", icon: "🌙",
     boost:  ["obscurite", "glace"],
     weaken: ["feu", "lumiere"],
-    manaReduction: { obscurite: -2, glace: -1, feu: 1, lumiere: 2 },
+    manaReduction: { obscurite: -1, glace: -1, feu: 1, lumiere: 1 },
     desc: "Nuit étoilée. Obscurité −2, Glace −1, Lumière +2."
   }
 };
