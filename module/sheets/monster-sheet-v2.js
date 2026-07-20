@@ -303,12 +303,16 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       btn.addEventListener("click", async (ev) => {
         ev.preventDefault();
         if (!game.user.isGM) return;
-        const delta = Number(btn.dataset.delta ?? 0) || 0;
-        const cur = Number(foundry.utils.getProperty(this.document, "system.ressources.pv.valeur")) || 0;
-        const max = Number(foundry.utils.getProperty(this.document, "system.ressources.pv.max")) || 0;
-        const next = Math.max(0, Math.min(max > 0 ? max : 999999, cur + delta));
-        await this.document.update({ "system.ressources.pv.valeur": next });
-        this.render({ force: false });
+        if (this._btnUpdating) return;
+        this._btnUpdating = true;
+        try {
+          const delta = Number(btn.dataset.delta ?? 0) || 0;
+          const cur = Number(foundry.utils.getProperty(this.document, "system.ressources.pv.valeur")) || 0;
+          const max = Number(foundry.utils.getProperty(this.document, "system.ressources.pv.max")) || 0;
+          const next = Math.max(0, Math.min(max > 0 ? max : 999999, cur + delta));
+          if (next !== cur) await this.document.update({ "system.ressources.pv.valeur": next });
+        } catch(e) { console.error("[RPG] hpChange:", e); }
+        finally { setTimeout(() => { this._btnUpdating = false; }, 300); }
       });
     });
 

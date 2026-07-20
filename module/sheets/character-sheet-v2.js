@@ -543,7 +543,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       this._debouncedPodsUpdate = foundry.utils.debounce(() => this._updatePodsToActor(), 150);
     }
 
-    // Click delegation
+    // Click delegation — protégé contre les erreurs non-catchées
     root.addEventListener("click", async (ev) => {
       const btn = ev.target?.closest?.("[data-action], .item-edit");
       if (!btn) return;

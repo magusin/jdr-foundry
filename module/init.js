@@ -36,6 +36,7 @@ import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from ".
 import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/region-behaviors.js";
 import { MOVEMENT_TYPES, getActiveMovementTypes, isImmuneToTerrain, getEffectiveSpeedMult, getMovementTypeLabel } from "./rules/movement-types.js";
 import { showSpellRange, showSpellRangeFromItem, clearSpellRange } from "./rules/spell-range.js";
+import { installGlobalErrorHandler } from "./utils/error-handler.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
@@ -223,6 +224,9 @@ async function tickActorCooldowns(actor) {
 // ---------------------------
 Hooks.once("init", async () => {
   console.log("RPG init chargé");
+
+  // ✅ Protection globale contre les crashes non-catchés
+  installGlobalErrorHandler();
 
   // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
   registerRegionBehaviors();
@@ -1073,8 +1077,10 @@ Hooks.once("init", async () => {
 
   // Nettoyage post-création (plus besoin du hook createToken pour la génération)
   Hooks.on("createToken", async (tokenDoc, options, userId) => {
+    try {
     if (userId !== game.userId) return;
     await RPG_AURAS?.refreshAuras?.();
+      } catch(e) { console.error("[RPG] createToken:", e); }
   });
 
   // ---------------------------
