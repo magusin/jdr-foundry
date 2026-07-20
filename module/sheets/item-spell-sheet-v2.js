@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { getManaCostReduction, getActiveWeathers, ELEMENT_TAGS } from "../rules/weather-library.js";
+import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -259,23 +259,28 @@ static PARTS = foundry.utils.mergeObject(
 
     ctx.system.description = String(ctx.system.description ?? "");
 
-    // ── Effet météo combiné sur ce sort ──────────────────────────────────
-    const tag = String(ctx.system.tag ?? "neutre");
-    const reduc    = getManaCostReduction(tag);
-    const baseMana = n(ctx.system.coutMana, 0);
-    const effectifMana = Math.max(0, baseMana + reduc);
-    const actives  = getActiveWeathers();
-    const tagDef   = ELEMENT_TAGS[tag] ?? null;
-    if (reduc !== 0 && tagDef && actives.length) {
-      const isBoosted = reduc < 0;
-      const icons = actives
-        .filter(w => (w.manaReduction?.[tag] ?? 0) !== 0)
-        .map(w => w.icon).join("");
+    // ── Effets météo + terrain sur ce sort ───────────────────────────────
+    const tag       = String(ctx.system.tag ?? "neutre");
+    const wReduc    = getManaCostReduction(tag);
+    const bReduc    = getBiomeManaBonus(tag);
+    const totalReduc = wReduc + bReduc;
+    const baseMana  = n(ctx.system.coutMana, 0);
+    const effectifMana = Math.max(0, baseMana + totalReduc);
+    const actives   = getActiveWeathers();
+    const biome     = getActiveBiome();
+    const tagDef    = ELEMENT_TAGS[tag] ?? null;
+    if (totalReduc !== 0 && tagDef) {
+      const isBoosted = totalReduc < 0;
+      const wIcons = actives.filter(w => (w.manaReduction?.[tag] ?? 0) !== 0).map(w => w.icon).join("");
+      const bIcon  = biome && (biome.manaBonus?.[tag] ?? 0) !== 0 ? biome.icon : "";
+      const parts  = [];
+      if (wReduc !== 0) parts.push(`météo ${wReduc > 0 ? "+" : ""}${wReduc}`);
+      if (bReduc !== 0) parts.push(`terrain ${bReduc > 0 ? "+" : ""}${bReduc}`);
       ctx.weatherEffect = {
-        label:            actives.map(w => w.label).join(", "),
-        icon:             icons,
+        label:            (actives.map(w => w.label).join(", ") + (biome ? ` · ${biome.label}` : "")).replace(/^[, ]+/, ""),
+        icon:             wIcons + bIcon,
         manaCoutEffectif: effectifMana,
-        mult:             isBoosted ? `${reduc} mana` : `+${reduc} mana`,
+        mult:             parts.join(", "),
         color:            isBoosted ? "#1d9e75" : "#c0392b",
         isBoosted
       };

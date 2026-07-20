@@ -43,7 +43,7 @@ import * as Resistances from "./rules/resistances.js";
 import { appendToCampaignJournal } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
 import * as WeatherLibrary from "./rules/weather-library.js";
-import { initWeatherHUD } from "./rules/weather-library.js";
+import { initWeatherHUD, initBiomeHUD } from "./rules/weather-library.js";
 import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
@@ -255,6 +255,15 @@ Hooks.once("init", async () => {
     default: []
   });
 
+  // Terrain / Biome actif
+  game.settings.register("rpg", "activeBiome", {
+    name: "Terrain actuel",
+    scope: "world",
+    config: false,
+    type: String,
+    default: ""
+  });
+
   // ✅ Tendance du marché par région (monde) — influence les prix au marché
   game.settings.register("rpg", "regionMarketTrend", {
     name: "Tendance du marché par région",
@@ -436,8 +445,9 @@ Hooks.once("init", async () => {
   Hooks.once("ready", async () => {
     console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
 
-    // ✅ HUD Météo — affiché en haut de l'écran pour tous les joueurs
+    // ✅ HUD Météo + Terrain — affichés en haut de l'écran pour tous
     initWeatherHUD();
+    initBiomeHUD();
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;

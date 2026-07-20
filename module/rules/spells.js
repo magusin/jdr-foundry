@@ -2,7 +2,7 @@
 import { manhattanDistanceTokens } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { computeTN } from "./combat.js";
-import { getManaCostReduction, getWeatherModifierFor } from "./weather-library.js";
+import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -529,8 +529,10 @@ export function buildSpellUI({ actor, item }) {
   const auraTarget = str(sys.aura?.target, "allies");
 
   const _manaCostBase  = n(sys.coutMana, 0);
-  const _weatherReduc  = getManaCostReduction(sys.tag ?? "neutre");
-  const manaCost = Math.max(0, _manaCostBase + _weatherReduc);
+  const _tag           = sys.tag ?? "neutre";
+  const _weatherReduc  = getManaCostReduction(_tag);
+  const _biomeReduc    = getBiomeManaBonus(_tag);
+  const manaCost = Math.max(0, _manaCostBase + _weatherReduc + _biomeReduc);
   const speed = str(sys.speed, "normal");
   const diff = n(sys.difficulte, 0);
 
@@ -589,8 +591,10 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
 
   // mana
   const _manaCostBase  = n(sys.coutMana, 0);
-  const _weatherReduc  = getManaCostReduction(sys.tag ?? "neutre");
-  const manaCost = Math.max(0, _manaCostBase + _weatherReduc);
+  const _tag           = sys.tag ?? "neutre";
+  const _weatherReduc  = getManaCostReduction(_tag);
+  const _biomeReduc    = getBiomeManaBonus(_tag);
+  const manaCost = Math.max(0, _manaCostBase + _weatherReduc + _biomeReduc);
   const manaCur = n(actor.system?.ressources?.mana?.valeur, 0);
   if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
   if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
@@ -844,8 +848,10 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
   // mana
   const _manaCostBase  = n(sys.coutMana, 0);
-  const _weatherReduc  = getManaCostReduction(sys.tag ?? "neutre");
-  const manaCost = Math.max(0, _manaCostBase + _weatherReduc);
+  const _tag           = sys.tag ?? "neutre";
+  const _weatherReduc  = getManaCostReduction(_tag);
+  const _biomeReduc    = getBiomeManaBonus(_tag);
+  const manaCost = Math.max(0, _manaCostBase + _weatherReduc + _biomeReduc);
   const manaCur  = n(actor.system?.ressources?.mana?.valeur, 0);
   if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
   if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });

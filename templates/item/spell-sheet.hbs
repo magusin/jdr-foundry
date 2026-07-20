@@ -41,6 +41,36 @@
         </div>
 
         <div>
+          <label>Élément / Type</label>
+          {{#if canEdit}}
+          <select name="system.tag" style="width:100%">
+            <option value="neutre"    {{#if (eq system.tag "neutre")}}selected{{/if}}>⚪ Neutre</option>
+            <option value="feu"       {{#if (eq system.tag "feu")}}selected{{/if}}>🔥 Feu</option>
+            <option value="eau"       {{#if (eq system.tag "eau")}}selected{{/if}}>💧 Eau</option>
+            <option value="eclair"    {{#if (eq system.tag "eclair")}}selected{{/if}}>⚡ Éclair</option>
+            <option value="glace"     {{#if (eq system.tag "glace")}}selected{{/if}}>❄️ Glace</option>
+            <option value="air"       {{#if (eq system.tag "air")}}selected{{/if}}>💨 Air</option>
+            <option value="terre"     {{#if (eq system.tag "terre")}}selected{{/if}}>🌍 Terre</option>
+            <option value="lumiere"   {{#if (eq system.tag "lumiere")}}selected{{/if}}>✨ Lumière</option>
+            <option value="obscurite" {{#if (eq system.tag "obscurite")}}selected{{/if}}>🌑 Obscurité</option>
+          </select>
+          {{else}}
+          <div style="font-size:13px">
+            {{#if (eq system.tag "feu")}}🔥 Feu{{/if}}
+            {{#if (eq system.tag "eau")}}💧 Eau{{/if}}
+            {{#if (eq system.tag "eclair")}}⚡ Éclair{{/if}}
+            {{#if (eq system.tag "glace")}}❄️ Glace{{/if}}
+            {{#if (eq system.tag "air")}}💨 Air{{/if}}
+            {{#if (eq system.tag "terre")}}🌍 Terre{{/if}}
+            {{#if (eq system.tag "lumiere")}}✨ Lumière{{/if}}
+            {{#if (eq system.tag "obscurite")}}🌑 Obscurité{{/if}}
+            {{#if (eq system.tag "neutre")}}⚪ Neutre{{/if}}
+            {{#unless system.tag}}⚪ Neutre{{/unless}}
+          </div>
+          {{/if}}
+        </div>
+
+        <div>
           <label>Coût Mana</label>
           {{#if canEdit}}<input type="number" name="system.coutMana" value="{{system.coutMana}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.coutMana}}</b></div>{{/if}}

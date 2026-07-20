@@ -363,7 +363,8 @@
       },
       "damages": [],
       "effectsUI": [],
-      "description": ""
+      "description": "",
+      "tag": "neutre"
     },
     "recipe": {
       "templates": [

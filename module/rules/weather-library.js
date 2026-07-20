@@ -149,3 +149,114 @@ export function initWeatherHUD() {
     if (setting.key === "rpg.activeWeathers") refreshWeatherHUD();
   });
 }
+
+// ─── SYSTÈME DE TERRAIN / BIOME ──────────────────────────────────────────────
+// Le terrain représente l'environnement global où se trouvent les joueurs.
+// Un seul terrain actif à la fois. Bonus mana plus subtils que la météo (-1/+1 max).
+
+export const TERRAIN_BIOMES = {
+  plaine:      { key: "plaine",       label: "Plaine",          icon: "🌾", manaBonus: { air: -1 },                desc: "Vastes étendues dégagées. L'air circule librement." },
+  foret:       { key: "foret",        label: "Forêt",           icon: "🌲", manaBonus: { terre: -1, eau: -1 },     desc: "Sous-bois dense. La nature amplifie terre et eau." },
+  montagne:    { key: "montagne",     label: "Montagne",         icon: "⛰️", manaBonus: { terre: -1, air: -1 },    desc: "Hauteurs rocheuses. Terre et air y sont puissants." },
+  enneige:     { key: "enneige",      label: "Région enneigée", icon: "🏔️", manaBonus: { glace: -1, eau: -1 },   desc: "Neige et glace à perte de vue. Cryo-magie favorisée." },
+  desert:      { key: "desert",       label: "Désert",          icon: "🏜️", manaBonus: { feu: -1, terre: -1 },   desc: "Chaleur aride. Le sable et le feu dominent." },
+  marecage:    { key: "marecage",     label: "Marécage",        icon: "🌿", manaBonus: { eau: -1, obscurite: -1 }, desc: "Eaux stagnantes et brumes. Eau et obscurité renforcées." },
+  cote:        { key: "cote",         label: "Côte marine",     icon: "🌊", manaBonus: { eau: -1, air: -1 },      desc: "Embruns et vagues. L'eau et l'air y sont chez eux." },
+  volcan:      { key: "volcan",       label: "Région volcanique",icon: "🌋", manaBonus: { feu: -2, terre: -1 },  desc: "Lave et cendres. Le feu brûle sans contrainte." },
+  grotte:      { key: "grotte",       label: "Grotte / Sous-sol",icon: "🕳️", manaBonus: { terre: -1, obscurite: -1, air: 1 }, desc: "Profondeurs terrestres. La terre domine, l'air manque." },
+  ruines:      { key: "ruines",       label: "Ruines antiques", icon: "🏛️", manaBonus: { lumiere: -1, obscurite: -1 }, desc: "Anciens vestiges. La magie ancienne résonne encore." },
+  plaine_arc:  { key: "plaine_arc",   label: "Plaine arctique", icon: "🧊", manaBonus: { glace: -1, air: -1 },   desc: "Toundra gelée. La glace et les vents dominent." },
+};
+
+export function listBiomes() { return Object.values(TERRAIN_BIOMES); }
+export function getBiomeDef(key) { return TERRAIN_BIOMES[key] ?? null; }
+
+export function getActiveBiomeKey() {
+  try { return game.settings.get("rpg", "activeBiome") ?? ""; } catch { return ""; }
+}
+
+export function getActiveBiome() {
+  const key = getActiveBiomeKey();
+  return key ? TERRAIN_BIOMES[key] : null;
+}
+
+/**
+ * Retourne la réduction mana du terrain pour un tag.
+ * Se cumule avec la météo.
+ */
+export function getBiomeManaBonus(tag) {
+  if (!tag || tag === "neutre") return 0;
+  const biome = getActiveBiome();
+  return biome?.manaBonus?.[tag] ?? 0;
+}
+
+export async function setActiveBiome(key) {
+  const valid = key && TERRAIN_BIOMES[key] ? key : "";
+  await game.settings.set("rpg", "activeBiome", valid);
+  refreshBiomeHUD();
+  if (valid) {
+    const def = TERRAIN_BIOMES[valid];
+    const effects = Object.entries(def.manaBonus ?? {})
+      .filter(([, v]) => v !== 0)
+      .map(([tag, v]) => {
+        const td = ELEMENT_TAGS[tag];
+        return v < 0
+          ? `<span style="color:#1d9e75">${td?.label ?? tag} ${v} mana</span>`
+          : `<span style="color:#c0392b">${td?.label ?? tag} +${v} mana</span>`;
+      }).join(" · ");
+    await ChatMessage.create({
+      content: `<div style="text-align:center;font-size:13px;padding:4px">
+        ${def.icon} <b>Terrain : ${def.label}</b><br>
+        <span style="opacity:.7;font-size:11px">${def.desc}</span>
+        ${effects ? `<div style="margin-top:4px;font-size:11px">${effects}</div>` : ""}
+      </div>`
+    });
+  }
+}
+
+// ─── HUD TERRAIN ──────────────────────────────────────────────────────────────
+
+let _biomeHudEl = null;
+
+export function refreshBiomeHUD() {
+  if (_biomeHudEl) { _biomeHudEl.remove(); _biomeHudEl = null; }
+  const biome = getActiveBiome();
+  if (!biome && !game.user?.isGM) return;
+
+  const el = document.createElement("div");
+  el.id = "rpg-biome-hud";
+  el.style.cssText = `
+    position:fixed; top:48px; left:50%; transform:translateX(-50%);
+    z-index:90; display:flex; gap:6px; align-items:center;
+    background:rgba(20,12,0,0.6); border:1px solid rgba(180,140,60,0.3);
+    border-radius:20px; padding:3px 12px; backdrop-filter:blur(4px);
+    pointer-events:${game.user?.isGM ? "auto" : "none"};
+    cursor:${game.user?.isGM ? "pointer" : "default"};
+    font-size:13px; color:#eee; user-select:none;
+  `;
+
+  if (biome) {
+    el.innerHTML = `<span style="font-size:16px">${biome.icon}</span>
+      <span style="font-size:11px;opacity:.8">${biome.label}</span>`;
+  } else {
+    el.innerHTML = `<span style="opacity:.4;font-size:11px">🗺️ Aucun terrain</span>`;
+  }
+
+  if (game.user?.isGM) {
+    el.addEventListener("click", () => {
+      const macro = game.macros?.find(m => m.name === "Terrain (MJ)");
+      if (macro) macro.execute();
+    });
+    el.title = "Cliquer pour changer le terrain";
+  }
+
+  document.body.appendChild(el);
+  _biomeHudEl = el;
+}
+
+export function initBiomeHUD() {
+  refreshBiomeHUD();
+  Hooks.on("updateSetting", (setting) => {
+    if (setting.key === "rpg.activeBiome") refreshBiomeHUD();
+  });
+}
