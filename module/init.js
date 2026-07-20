@@ -43,6 +43,7 @@ import * as Resistances from "./rules/resistances.js";
 import { appendToCampaignJournal } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
 import * as WeatherLibrary from "./rules/weather-library.js";
+import { initWeatherHUD } from "./rules/weather-library.js";
 import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
@@ -242,7 +243,16 @@ Hooks.once("init", async () => {
     scope: "world",
     config: false,
     type: String,
-    default: "clair"
+    default: "nuageux"  // conservé pour compat — sera ignoré au profit de activeWeathers
+  });
+
+  // Nouveau : liste de conditions météo actives (array JSON)
+  game.settings.register("rpg", "activeWeathers", {
+    name: "Conditions météo actives",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
   });
 
   // ✅ Tendance du marché par région (monde) — influence les prix au marché
@@ -425,6 +435,9 @@ Hooks.once("init", async () => {
 
   Hooks.once("ready", async () => {
     console.log("Spell sheetClasses:", CONFIG.Item.sheetClasses?.spell);
+
+    // ✅ HUD Météo — affiché en haut de l'écran pour tous les joueurs
+    initWeatherHUD();
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;

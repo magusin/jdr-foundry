@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { getManaCostReduction, getCurrentWeather, ELEMENT_TAGS } from "../rules/weather-library.js";
+import { getManaCostReduction, getActiveWeathers, ELEMENT_TAGS } from "../rules/weather-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -259,18 +259,21 @@ static PARTS = foundry.utils.mergeObject(
 
     ctx.system.description = String(ctx.system.description ?? "");
 
-    // ── Effet météo sur ce sort ───────────────────────────────────────────
+    // ── Effet météo combiné sur ce sort ──────────────────────────────────
     const tag = String(ctx.system.tag ?? "neutre");
-    const reduc   = getManaCostReduction(tag);
+    const reduc    = getManaCostReduction(tag);
     const baseMana = n(ctx.system.coutMana, 0);
     const effectifMana = Math.max(0, baseMana + reduc);
-    const weather = getCurrentWeather();
-    const tagDef  = ELEMENT_TAGS[tag] ?? null;
-    if (reduc !== 0 && tagDef) {
+    const actives  = getActiveWeathers();
+    const tagDef   = ELEMENT_TAGS[tag] ?? null;
+    if (reduc !== 0 && tagDef && actives.length) {
       const isBoosted = reduc < 0;
+      const icons = actives
+        .filter(w => (w.manaReduction?.[tag] ?? 0) !== 0)
+        .map(w => w.icon).join("");
       ctx.weatherEffect = {
-        label:            weather.label,
-        icon:             weather.icon,
+        label:            actives.map(w => w.label).join(", "),
+        icon:             icons,
         manaCoutEffectif: effectifMana,
         mult:             isBoosted ? `${reduc} mana` : `+${reduc} mana`,
         color:            isBoosted ? "#1d9e75" : "#c0392b",
