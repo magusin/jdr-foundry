@@ -617,6 +617,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         this.render({ force: false });
         return;
       }
+
+      if (action === "useItem") {
         const itemId =
           btn.dataset.itemId ||
           btn.closest(".item")?.dataset?.itemId;
