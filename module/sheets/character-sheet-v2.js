@@ -591,15 +591,32 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       }
 
       if (action === "adjRes") {
-        const res = btn.dataset.res;
+        const res   = btn.dataset.res;
         const delta = Number(btn.dataset.delta) || 0;
-        const path = `system.ressources.${res}.valeur`;
-        const cur = Number(foundry.utils.getProperty(this.document, path)) || 0;
-        await this.document.update({ [path]: cur + delta });
+        if (!res || !delta) return;
+        const valPath = `system.ressources.${res}.valeur`;
+        const maxPath = `system.ressources.${res}.max`;
+        const cur = Number(foundry.utils.getProperty(this.document, valPath) ?? 0) || 0;
+        const max = Number(foundry.utils.getProperty(this.document, maxPath) ?? 9999) || 9999;
+        const next = Math.max(0, Math.min(max, cur + delta));
+        if (next === cur) return; // rien à faire
+        await this.document.update({ [valPath]: next }, { render: false });
+        this.render({ force: false });
         return;
       }
 
-      if (action === "useItem") {
+      if (action === "fatigueChange") {
+        if (!game.user.isGM) return;
+        const delta = Number(btn.dataset.delta ?? 0) || 0;
+        if (!delta) return;
+        const cur = Number(this.document.system?.ressources?.fatigue?.valeur ?? 0) || 0;
+        const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
+        const next = Math.max(0, Math.min(max, cur + delta));
+        if (next === cur) return;
+        await this.document.update({ "system.ressources.fatigue.valeur": next }, { render: false });
+        this.render({ force: false });
+        return;
+      }
         const itemId =
           btn.dataset.itemId ||
           btn.closest(".item")?.dataset?.itemId;
@@ -610,16 +627,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       // States actions (kept as placeholders so you can wire existing methods)
       if (action === "stateAdd") { await this._stateAdd?.(); return; }
-
-      if (action === "fatigueChange" && game.user.isGM) {
-        const delta = Number(btn.dataset.delta ?? 0) || 0;
-        if (!delta) return;
-        const cur = Number(this.document.system?.ressources?.fatigue?.valeur ?? 0) || 0;
-        const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
-        const next = Math.max(0, Math.min(max, cur + delta));
-        await this.document.update({ "system.ressources.fatigue.valeur": next });
-        return;
-      }
 
       if (action === "addBlessure" && game.user.isGM) {
         const raw  = this.document.system?.blessures;
@@ -633,7 +640,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
           notes: "",
           date: game.time?.worldTime ?? 0
         });
-        await this.document.update({ "system.blessures": list });
+        await this.document.update({ "system.blessures": list }, { render: false });
+        this.render({ force: false });
         return;
       }
 
@@ -671,7 +679,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const cur = Math.max(0, Number(quest.system?.etapeActuelle ?? 0) || 0);
         const next = Math.min(etapes.length - 1, cur + 1);
         if (next === cur) return;
-        await quest.update({ "system.etapeActuelle": next });
+        await quest.update({ "system.etapeActuelle": next }, { render: false });
+        this.render({ force: false });
 
         // ✅ Quête partagée : synchronise la même étape sur toutes les autres copies
         const { propagateQuestUpdate } = await import("../rules/quest-group.js");
