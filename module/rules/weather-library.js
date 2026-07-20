@@ -130,10 +130,7 @@ export function refreshWeatherHUD() {
 
   // Clic MJ → ouvre le sélecteur météo
   if (game.user.isGM) {
-    el.addEventListener("click", () => {
-      const macro = game.macros.find(m => m.name === "Météo (MJ)");
-      if (macro) macro.execute();
-    });
+    el.addEventListener("click", () => openWeatherDialog());
     el.title = "Cliquer pour changer la météo";
   }
 
@@ -155,17 +152,29 @@ export function initWeatherHUD() {
 // Un seul terrain actif à la fois. Bonus mana plus subtils que la météo (-1/+1 max).
 
 export const TERRAIN_BIOMES = {
-  plaine:      { key: "plaine",       label: "Plaine",          icon: "🌾", manaBonus: { air: -1 },                desc: "Vastes étendues dégagées. L'air circule librement." },
-  foret:       { key: "foret",        label: "Forêt",           icon: "🌲", manaBonus: { terre: -1, eau: -1 },     desc: "Sous-bois dense. La nature amplifie terre et eau." },
-  montagne:    { key: "montagne",     label: "Montagne",         icon: "⛰️", manaBonus: { terre: -1, air: -1 },    desc: "Hauteurs rocheuses. Terre et air y sont puissants." },
-  enneige:     { key: "enneige",      label: "Région enneigée", icon: "🏔️", manaBonus: { glace: -1, eau: -1 },   desc: "Neige et glace à perte de vue. Cryo-magie favorisée." },
-  desert:      { key: "desert",       label: "Désert",          icon: "🏜️", manaBonus: { feu: -1, terre: -1 },   desc: "Chaleur aride. Le sable et le feu dominent." },
-  marecage:    { key: "marecage",     label: "Marécage",        icon: "🌿", manaBonus: { eau: -1, obscurite: -1 }, desc: "Eaux stagnantes et brumes. Eau et obscurité renforcées." },
-  cote:        { key: "cote",         label: "Côte marine",     icon: "🌊", manaBonus: { eau: -1, air: -1 },      desc: "Embruns et vagues. L'eau et l'air y sont chez eux." },
-  volcan:      { key: "volcan",       label: "Région volcanique",icon: "🌋", manaBonus: { feu: -2, terre: -1 },  desc: "Lave et cendres. Le feu brûle sans contrainte." },
-  grotte:      { key: "grotte",       label: "Grotte / Sous-sol",icon: "🕳️", manaBonus: { terre: -1, obscurite: -1, air: 1 }, desc: "Profondeurs terrestres. La terre domine, l'air manque." },
-  ruines:      { key: "ruines",       label: "Ruines antiques", icon: "🏛️", manaBonus: { lumiere: -1, obscurite: -1 }, desc: "Anciens vestiges. La magie ancienne résonne encore." },
-  plaine_arc:  { key: "plaine_arc",   label: "Plaine arctique", icon: "🧊", manaBonus: { glace: -1, air: -1 },   desc: "Toundra gelée. La glace et les vents dominent." },
+  // ── Extérieur ─────────────────────────────────────────────────────────
+  plaine:      { key: "plaine",       label: "Plaine",            icon: "🌾", manaBonus: { air: -1 },                    desc: "Vastes étendues dégagées. L'air circule librement." },
+  foret:       { key: "foret",        label: "Forêt",             icon: "🌲", manaBonus: { terre: -1, eau: -1 },          desc: "Sous-bois dense. La nature amplifie terre et eau." },
+  montagne:    { key: "montagne",     label: "Montagne",          icon: "⛰️", manaBonus: { terre: -1, air: -1 },         desc: "Hauteurs rocheuses. Terre et air y sont puissants." },
+  enneige:     { key: "enneige",      label: "Région enneigée",  icon: "🏔️", manaBonus: { glace: -1, eau: -1 },        desc: "Neige et glace à perte de vue. Cryo-magie favorisée." },
+  desert:      { key: "desert",       label: "Désert",            icon: "🏜️", manaBonus: { feu: -1, terre: -1 },        desc: "Chaleur aride. Le sable et le feu dominent." },
+  marecage:    { key: "marecage",     label: "Marécage",          icon: "🌿", manaBonus: { eau: -1, obscurite: -1 },      desc: "Eaux stagnantes et brumes. Eau et obscurité renforcées." },
+  cote:        { key: "cote",         label: "Côte marine",       icon: "🌊", manaBonus: { eau: -1, air: -1 },           desc: "Embruns et vagues. L'eau et l'air y sont chez eux." },
+  volcan:      { key: "volcan",       label: "Zone volcanique",   icon: "🌋", manaBonus: { feu: -2, terre: -1 },         desc: "Lave et cendres. Le feu brûle sans contrainte." },
+  plaine_arc:  { key: "plaine_arc",   label: "Plaine arctique",   icon: "🧊", manaBonus: { glace: -1, air: -1 },        desc: "Toundra gelée. La glace et les vents dominent." },
+  foret_arc:   { key: "foret_arc",    label: "Forêt hivernale",   icon: "🎄", manaBonus: { glace: -1, terre: -1 },      desc: "Arbres givrés. Froid et nature entrelacés." },
+  jungle:      { key: "jungle",       label: "Jungle",            icon: "🦜", manaBonus: { terre: -1, eau: -1, air: -1 }, desc: "Végétation luxuriante. Énergie naturelle intense." },
+  // ── Intérieur / Souterrain ────────────────────────────────────────────
+  grotte:      { key: "grotte",       label: "Grotte naturelle",  icon: "🕳️", manaBonus: { terre: -1, obscurite: -1, air: 1 }, desc: "Cavités rocheuses. La terre domine, l'air manque." },
+  caverne_glace:{ key: "caverne_glace",label: "Caverne de glace", icon: "🌨️", manaBonus: { glace: -2, obscurite: -1 },  desc: "Glace éternelle. La cryo-magie est extrêmement puissante." },
+  donjon:      { key: "donjon",       label: "Donjon / Forteresse",icon: "🏰", manaBonus: { obscurite: -1, terre: -1 }, desc: "Pierre et ombre. La magie noire et terrestre y prospère." },
+  catacombe:   { key: "catacombe",    label: "Catacombes",        icon: "💀", manaBonus: { obscurite: -2, lumiere: 1 }, desc: "Couloirs de mort. L'obscurité est à son comble." },
+  temple:      { key: "temple",       label: "Temple / Sanctuaire",icon: "⛩️", manaBonus: { lumiere: -1, obscurite: -1 }, desc: "Lieu de culte. Les deux côtés de la magie répondent." },
+  mine:        { key: "mine",         label: "Mine",              icon: "⛏️", manaBonus: { terre: -2, air: 1 },         desc: "Galeries creusées. La terre est omniprésente, l'air rare." },
+  // ── Magique / Spécial ─────────────────────────────────────────────────
+  ruines:      { key: "ruines",       label: "Ruines antiques",   icon: "🏛️", manaBonus: { lumiere: -1, obscurite: -1 }, desc: "Anciens vestiges. La magie ancienne résonne encore." },
+  nexus:       { key: "nexus",        label: "Nexus magique",     icon: "✨", manaBonus: { feu: -1, eau: -1, eclair: -1, glace: -1, air: -1, terre: -1, lumiere: -1, obscurite: -1 }, desc: "Carrefour d'énergie. Tous les éléments sont amplifiés." },
+  abysses:     { key: "abysses",      label: "Abysses",           icon: "🌑", manaBonus: { obscurite: -2, eau: -1, lumiere: 2 }, desc: "Profondeurs insondables. L'obscurité règne en maître." },
 };
 
 export function listBiomes() { return Object.values(TERRAIN_BIOMES); }
@@ -243,10 +252,7 @@ export function refreshBiomeHUD() {
   }
 
   if (game.user?.isGM) {
-    el.addEventListener("click", () => {
-      const macro = game.macros?.find(m => m.name === "Terrain (MJ)");
-      if (macro) macro.execute();
-    });
+    el.addEventListener("click", () => openBiomeDialog());
     el.title = "Cliquer pour changer le terrain";
   }
 
@@ -259,4 +265,104 @@ export function initBiomeHUD() {
   Hooks.on("updateSetting", (setting) => {
     if (setting.key === "rpg.activeBiome") refreshBiomeHUD();
   });
+}
+
+// ─── DIALOGS APPELÉS DIRECTEMENT DEPUIS LES HUDS ─────────────────────────────
+
+export function openWeatherDialog() {
+  if (!game.user?.isGM) return;
+  const weathers = listWeathers();
+  const current  = getActiveWeatherKeys();
+
+  const rows = weathers.map(w => {
+    const checked = current.includes(w.key);
+    const effects = Object.entries(w.manaReduction ?? {}).filter(([,v]) => v !== 0)
+      .map(([tag,v]) => {
+        const td = ELEMENT_TAGS[tag];
+        const color = v < 0 ? "#1d9e75" : "#c0392b";
+        return `<span style="color:${color};font-size:10px;background:${color}18;border-radius:3px;padding:1px 4px">${td?.label ?? tag} ${v > 0 ? "+" : ""}${v}</span>`;
+      }).join(" ");
+    return `<label style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;margin-bottom:3px;
+        background:${checked ? "rgba(155,89,182,0.15)" : "rgba(255,255,255,0.03)"};
+        border:1px solid ${checked ? "rgba(155,89,182,0.5)" : "rgba(255,255,255,0.08)"}">
+      <input type="checkbox" name="weather" value="${w.key}" ${checked ? "checked" : ""} style="width:16px;height:16px;margin-top:2px;cursor:pointer"/>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:18px">${w.icon}</span><span style="font-weight:600;font-size:12px">${w.label}</span></div>
+        ${effects ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${effects}</div>` : `<div style="opacity:.3;font-size:10px">Aucun effet</div>`}
+      </div></label>`;
+  }).join("");
+
+  new Dialog({
+    title: "🌤️ Conditions météo",
+    content: `<div style="font-size:11px;opacity:.6;margin-bottom:6px">Plusieurs conditions possibles simultanément.</div>
+      <div style="max-height:60vh;overflow-y:auto">${rows}</div>`,
+    buttons: {
+      clear: { label: "✕ Effacer", callback: async () => { await setActiveWeathers([]); } },
+      ok: { label: "✅ Appliquer", callback: async (html) => {
+        const keys = [...html[0].querySelectorAll("input[name='weather']:checked")].map(e => e.value);
+        await setActiveWeathers(keys);
+        const labels = keys.map(k => weathers.find(w => w.key === k)?.icon + " " + weathers.find(w => w.key === k)?.label).join(", ");
+        if (keys.length) await ChatMessage.create({ content: `<div style="text-align:center;font-size:13px">🌤️ <b>Météo :</b> ${labels}</div>` });
+      }}
+    },
+    default: "ok", options: { width: 400 }
+  }).render(true);
+}
+
+export function openBiomeDialog() {
+  if (!game.user?.isGM) return;
+  const biomes  = listBiomes();
+  const current = getActiveBiomeKey();
+
+  // Grouper par catégorie
+  const groupes = [
+    { label: "🌍 Extérieur", keys: ["plaine","foret","montagne","enneige","desert","marecage","cote","volcan","plaine_arc","foret_arc","jungle"] },
+    { label: "⛏️ Intérieur / Souterrain", keys: ["grotte","caverne_glace","donjon","catacombe","temple","mine"] },
+    { label: "✨ Magique / Spécial", keys: ["ruines","nexus","abysses"] },
+  ];
+
+  const makeRow = (b) => {
+    const checked = current === b.key;
+    const effects = Object.entries(b.manaBonus ?? {}).filter(([,v]) => v !== 0)
+      .map(([tag,v]) => {
+        const td = ELEMENT_TAGS[tag];
+        const color = v < 0 ? "#1d9e75" : "#c0392b";
+        return `<span style="color:${color};font-size:10px;background:${color}18;border-radius:3px;padding:1px 4px">${td?.label ?? tag} ${v > 0 ? "+" : ""}${v}</span>`;
+      }).join(" ");
+    return `<label style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;margin-bottom:3px;
+        background:${checked ? "rgba(180,140,60,0.15)" : "rgba(255,255,255,0.03)"};
+        border:1px solid ${checked ? "rgba(180,140,60,0.5)" : "rgba(255,255,255,0.08)"}">
+      <input type="radio" name="biome" value="${b.key}" ${checked ? "checked" : ""} style="width:16px;height:16px;margin-top:2px;cursor:pointer"/>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:18px">${b.icon}</span><span style="font-weight:600;font-size:12px">${b.label}</span></div>
+        <div style="font-size:10px;opacity:.55;margin-top:1px">${b.desc}</div>
+        ${effects ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${effects}</div>` : ""}
+      </div></label>`;
+  };
+
+  const rows = groupes.map(g => {
+    const groupBiomes = g.keys.map(k => TERRAIN_BIOMES[k]).filter(Boolean);
+    return `<div style="margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;padding:0 4px">${g.label}</div>
+      ${groupBiomes.map(makeRow).join("")}
+    </div>`;
+  }).join("");
+
+  new Dialog({
+    title: "🗺️ Terrain / Lieu",
+    content: `<div style="font-size:11px;opacity:.6;margin-bottom:6px">Un seul endroit à la fois. Les bonus s'ajoutent à la météo.</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:8px;cursor:pointer;margin-bottom:6px;
+        background:${!current ? "rgba(100,100,100,0.2)" : "rgba(255,255,255,0.02)"};border:1px solid ${!current ? "rgba(180,180,180,0.4)" : "rgba(255,255,255,0.06)"}">
+        <input type="radio" name="biome" value="" ${!current ? "checked" : ""} style="width:16px;height:16px;cursor:pointer"/>
+        <span style="font-size:12px;opacity:.6">— Aucun lieu particulier —</span>
+      </label>
+      <div style="max-height:60vh;overflow-y:auto;padding-right:4px">${rows}</div>`,
+    buttons: {
+      ok: { label: "✅ Appliquer", callback: async (html) => {
+        const key = html[0]?.querySelector("input[name='biome']:checked")?.value ?? "";
+        await setActiveBiome(key);
+      }}
+    },
+    default: "ok", options: { width: 420 }
+  }).render(true);
 }
