@@ -197,7 +197,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       tabs: [
         { navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "stats" }
       ],
-      form: { closeOnSubmit: false, submitOnChange: false }
+      form: { closeOnSubmit: false, submitOnChange: true }
     },
     { inplace: false }
   );
@@ -507,19 +507,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     if (!root) return;
 
-    // ── Sauvegarde sur perte de focus (remplace submitOnChange) ──────────
-    // Déclenche un submit du formulaire quand un champ perd le focus
-    root.addEventListener("change", async (ev) => {
-      const el = ev.target;
-      if (!el || !["INPUT","SELECT","TEXTAREA"].includes(el.tagName)) return;
-      if (el.dataset.noAutoSave) return; // boutons avec data-no-auto-save ignorés
-      const form = root.querySelector("form") ?? root.closest("form") ?? root;
-      if (form && typeof this._onSubmit === "function") {
-        try { await this._onSubmit(new Event("submit"), { preventClose: true, updateData: null }); }
-        catch { /* ignore */ }
-      }
-    });
-
     // Drag & drop d'item (GM only) — doit être branché AVANT le early-return non-GM
     setupActorItemDrop(this, root);
 
@@ -603,33 +590,35 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         return;
       }
 
-      if (action === "adjRes") {
-        const res   = btn.dataset.res;
-        const delta = Number(btn.dataset.delta) || 0;
-        if (!res || !delta) return;
-        const valPath = `system.ressources.${res}.valeur`;
-        const maxPath = `system.ressources.${res}.max`;
-        const cur = Number(foundry.utils.getProperty(this.document, valPath) ?? 0) || 0;
-        const max = Number(foundry.utils.getProperty(this.document, maxPath) ?? 9999) || 9999;
-        const next = Math.max(0, Math.min(max, cur + delta));
-        if (next === cur) return;
-        btn.disabled = true;
-        try { await this.document.update({ [valPath]: next }); }
-        finally { btn.disabled = false; }
-        return;
-      }
+      if (action === "adjRes" || action === "fatigueChange") {
+        // Verrou anti-crash : empêche les clics rapides simultanés
+        if (this._btnUpdating) return;
+        this._btnUpdating = true;
 
-      if (action === "fatigueChange") {
-        if (!game.user.isGM) return;
-        const delta = Number(btn.dataset.delta ?? 0) || 0;
-        if (!delta) return;
-        const cur = Number(this.document.system?.ressources?.fatigue?.valeur ?? 0) || 0;
-        const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
-        const next = Math.max(0, Math.min(max, cur + delta));
-        if (next === cur) return;
-        btn.disabled = true;
-        try { await this.document.update({ "system.ressources.fatigue.valeur": next }); }
-        finally { btn.disabled = false; }
+        try {
+          if (action === "adjRes") {
+            const res   = btn.dataset.res;
+            const delta = Number(btn.dataset.delta) || 0;
+            if (!res || !delta) return;
+            const valPath = `system.ressources.${res}.valeur`;
+            const maxPath = `system.ressources.${res}.max`;
+            const cur = Number(foundry.utils.getProperty(this.document, valPath) ?? 0) || 0;
+            const max = Number(foundry.utils.getProperty(this.document, maxPath) ?? 9999) || 9999;
+            const next = Math.max(0, Math.min(max, cur + delta));
+            if (next !== cur) await this.document.update({ [valPath]: next });
+          } else {
+            if (!game.user.isGM) return;
+            const delta = Number(btn.dataset.delta ?? 0) || 0;
+            if (!delta) return;
+            const cur = Number(this.document.system?.ressources?.fatigue?.valeur ?? 0) || 0;
+            const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
+            const next = Math.max(0, Math.min(max, cur + delta));
+            if (next !== cur) await this.document.update({ "system.ressources.fatigue.valeur": next });
+          }
+        } finally {
+          // Délai court avant de déverrouiller — laisse le re-render se terminer
+          setTimeout(() => { this._btnUpdating = false; }, 300);
+        }
         return;
       }
 
