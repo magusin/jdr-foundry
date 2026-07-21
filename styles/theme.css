@@ -6,6 +6,21 @@
    ============================================================================ */
 
 .rpg-sheet, .rpg-spell-menu, #rpg-weather-hud, #rpg-biome-hud {
+  /* ── Fige les variables Foundry natives — indépendant du thème clair/sombre
+     choisi dans les réglages de Foundry. Nos fiches restent toujours dans
+     le thème "Grimoire Arcanique", peu importe le mode d'interface actif. ── */
+  --color-text-primary:      #ece4d3;
+  --color-text-secondary:    #b6ad9a;
+  --color-text-dark-primary: #ece4d3;
+  --color-text-dark-secondary: #b6ad9a;
+  --color-text-light-primary:  #ece4d3;
+  --color-text-light-secondary:#b6ad9a;
+  --color-text-hyperlink:    #a172e0;
+  --color-border-light-2:    rgba(255,255,255,0.10);
+  --color-border-light-1:    rgba(255,255,255,0.14);
+  --color-border-dark:       rgba(255,255,255,0.16);
+  --color-bg-option:         #1b1d2b;
+
   /* ── Fond & surfaces ────────────────────────────────────────────────── */
   --ink:          #14151f;
   --ink-2:        #1b1d2b;
@@ -128,13 +143,18 @@ div.rpg-sheet {
 .rpg-sheet input[type="number"],
 .rpg-sheet select,
 .rpg-sheet textarea {
-  background: rgba(0,0,0,0.22);
+  background: rgba(0,0,0,0.22) !important;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  color: var(--ink-text);
+  color: var(--ink-text) !important;
   padding: 5px 8px;
   font-size: 13px;
   transition: border-color .15s, background .15s;
+}
+
+.rpg-sheet select option {
+  background: var(--ink-2, #1b1d2b);
+  color: var(--ink-text, #ece4d3);
 }
 
 .rpg-sheet input:focus,
@@ -152,11 +172,16 @@ div.rpg-sheet {
 }
 
 .rpg-sheet label {
-  color: var(--ink-text-dim);
+  color: var(--ink-text-dim) !important;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.rpg-sheet, .rpg-sheet div, .rpg-sheet span, .rpg-sheet p,
+.rpg-sheet small, .rpg-sheet li {
+  color: var(--ink-text);
 }
 
 /* ============================================================================
