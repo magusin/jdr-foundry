@@ -48,6 +48,21 @@ export function bindImageEditors(root, document) {
 export function applyUiTheme(root) {
   if (!root) return;
   const theme = game.settings?.get?.("rpg", "uiTheme") ?? "sombre";
-  root.classList.remove("rpg-theme-sombre", "rpg-theme-clair", "rpg-theme-contraste");
-  root.classList.add(`rpg-theme-${theme}`);
+  const themeClasses = ["rpg-theme-sombre", "rpg-theme-clair", "rpg-theme-contraste"];
+
+  // ⚠️ Il existe DEUX éléments porteurs de « .rpg-sheet » :
+  //   1. la fenêtre externe (via DEFAULT_OPTIONS.classes) — c'est `root`
+  //   2. le <div>/<form> interne du template, dans .window-content
+  // Les variables de thème (.rpg-sheet.rpg-theme-clair) doivent être posées sur
+  // les DEUX. Sinon le div interne re-matche le bloc de base « .rpg-sheet » et
+  // redéfinit --ink/--ink-text en sombre, écrasant l'héritage clair de la fenêtre
+  // → seul le cadre change de couleur, jamais le contenu.
+  const targets = new Set();
+  if (root.classList) targets.add(root);
+  root.querySelectorAll?.(".rpg-sheet").forEach(el => targets.add(el));
+
+  for (const el of targets) {
+    el.classList.remove(...themeClasses);
+    el.classList.add(`rpg-theme-${theme}`);
+  }
 }
