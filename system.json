@@ -18,6 +18,7 @@
     "module/init.js"
   ],
   "styles": [
+    "styles/theme.css",
     "styles/character-sheet.css",
     "styles/menu-macro.css",
     "styles/spell-sheet.css",

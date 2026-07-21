@@ -1,14 +1,37 @@
-/* le conteneur principal occupe la hauteur de la fenêtre */
+/* ============================================================================
+   ARMOR SHEET — utilise les tokens de theme.css, liseré sarcelle (défense)
+   ============================================================================ */
+
 .armor-sheet {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  /* le body prend la hauteur restante et devient scrollable */
-  .armor-sheet .sheet-body {
-    flex: 1;
-    min-height: 0;     /* 🔥 indispensable en flex, sinon pas de scroll */
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.armor-sheet .sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.armor-sheet .card,
+.armor-sheet section {
+  border-left: 3px solid var(--teal, #45b8c4);
+}
+
+.armor-sheet h2 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+}
+
+.armor-sheet section {
+  background: linear-gradient(160deg, var(--surface, rgba(255,255,255,0.035)), transparent 60%), var(--ink-2, #1b1d2b);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  border-left: 3px solid var(--teal, #45b8c4);
+  border-radius: var(--r-md, 10px);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card, 0 2px 10px rgba(0,0,0,0.25));
+  margin-bottom: 10px;
+}

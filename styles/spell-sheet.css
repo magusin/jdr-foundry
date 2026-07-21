@@ -1,53 +1,63 @@
 /*  =========================================================
-   RPG Spell Sheet — Light / Parchment readable
+   RPG Spell Sheet — thème Grimoire Arcanique (liseré violet)
    Cible: fiches Item type "spell" (V2)
-   =========================================================*/ 
+   =========================================================*/
 
+.rpg.sheet.item.spell .window-content {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
 
-.rpg.sheet.item.spell .window-content{
-    overflow-y: auto !important;
-    overflow-x: hidden;
-  }
-  
-  
-  /* .rpg.sheet.item.spell .rpg-sheet,
-  .rpg.sheet.item.spell form{
-    background: transparent !important;
-    color: var(--color-text-dark-primary);
-  } */
-  
-/* ══ Fiche Sort V2 ══════════════════════════════════════════════════════ */
-
-.rpg-spell-sheet .sheet-body { padding: 8px; }
+.rpg-spell-sheet .sheet-body { padding: 10px; }
 
 .rpg-spell-sheet .card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--color-border-light-2);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-left: 3px solid var(--arcane, #a172e0);
 }
 
 .rpg-spell-sheet .card h2 {
   margin: 0 0 8px 0;
   font-size: 14px;
   font-weight: 700;
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--color-border-light-2);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft, rgba(255,255,255,0.06));
 }
 
-.rpg-spell-sheet .card label { font-size: 11px; display:block; margin-bottom:2px; opacity:.85; }
+.rpg-spell-sheet .card label {
+  font-size: 11px;
+  display: block;
+  margin-bottom: 2px;
+  opacity: .85;
+}
 
 .rpg-spell-sheet .dmg-row input,
 .rpg-spell-sheet .dmg-row select {
   font-size: 11px;
-  padding: 2px 4px;
+  padding: 3px 5px;
 }
 
-.rpg-spell-sheet details[data-fx-index] > summary { list-style: none; }
+.rpg-spell-sheet details[data-fx-index] > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink-text-dim, #b6ad9a);
+}
 .rpg-spell-sheet details[data-fx-index] > summary::before {
   content: "▶";
   font-size: 9px;
   margin-right: 6px;
+  display: inline-block;
   transition: transform .15s;
+  color: var(--arcane, #a172e0);
 }
 .rpg-spell-sheet details[data-fx-index][open] > summary::before { transform: rotate(90deg); }
+
+/* Portrait cliquable du sort */
+.rpg-spell-sheet .rpg-img-edit {
+  border-radius: var(--r-md, 10px);
+  border: 2px solid var(--arcane-dim, rgba(161,114,224,0.18));
+  transition: border-color .15s, transform .1s;
+}
+.rpg-spell-sheet .rpg-img-edit:hover {
+  border-color: var(--arcane, #a172e0);
+  transform: scale(1.02);
+}

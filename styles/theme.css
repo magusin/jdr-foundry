@@ -1,0 +1,320 @@
+/* ============================================================================
+   RPG SYSTEM — THEME "GRIMOIRE ARCANIQUE"
+   Design tokens partagés par toutes les fiches (acteur, monstre, items, menu).
+   Ce fichier est chargé EN PREMIER — toutes les autres feuilles de style
+   consomment ces variables.
+   ============================================================================ */
+
+.rpg-sheet, .rpg-spell-menu, #rpg-weather-hud, #rpg-biome-hud {
+  /* ── Fond & surfaces ────────────────────────────────────────────────── */
+  --ink:          #14151f;
+  --ink-2:        #1b1d2b;
+  --ink-3:        #232538;
+  --surface:      rgba(255,255,255,0.035);
+  --surface-2:    rgba(255,255,255,0.06);
+  --border:       rgba(255,255,255,0.10);
+  --border-soft:  rgba(255,255,255,0.06);
+
+  /* ── Texte ──────────────────────────────────────────────────────────── */
+  --ink-text:      #ece4d3;
+  --ink-text-dim:  #b6ad9a;
+  --ink-text-faint:#847c6d;
+
+  /* ── Accents principaux ─────────────────────────────────────────────── */
+  --arcane:       #a172e0;   /* violet — magie, illustration, focus */
+  --arcane-dim:   rgba(161,114,224,0.18);
+  --brass:        #d1a144;   /* laiton — niveau, XP, prestige */
+  --brass-dim:    rgba(209,161,68,0.16);
+  --ember:        #e0524a;   /* braise — PV, danger, combat */
+  --ember-dim:    rgba(224,82,74,0.16);
+  --teal:         #45b8c4;   /* sarcelle — mana, défense, eau */
+  --teal-dim:     rgba(69,184,196,0.16);
+  --sage:         #6fbf8b;   /* sauge — succès, régén, nature */
+  --sage-dim:     rgba(111,191,139,0.16);
+  --amber:        #dba13a;   /* ambre — fatigue, avertissement */
+  --amber-dim:    rgba(219,161,58,0.16);
+
+  /* ── Couleurs élémentaires (magie) ──────────────────────────────────── */
+  --el-feu:       #e0603a;
+  --el-eau:       #3f9fd1;
+  --el-eclair:    #e8c93a;
+  --el-glace:     #7fd0e0;
+  --el-air:       #8fe0b0;
+  --el-terre:     #a67c3d;
+  --el-lumiere:   #f0e3a0;
+  --el-obscurite: #9b6fd6;
+  --el-neutre:    #8a8a94;
+
+  /* ── Rayons & ombres ─────────────────────────────────────────────────── */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --shadow-card: 0 2px 10px rgba(0,0,0,0.25);
+  --shadow-pop:  0 8px 28px rgba(0,0,0,0.45);
+
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  color: var(--ink-text);
+}
+
+/* ============================================================================
+   TYPOGRAPHIE — titres de section en serif "grimoire", corps en sans lisible
+   ============================================================================ */
+
+.rpg-sheet h2, .rpg-sheet h3,
+.rpg-spell-menu h2, .rpg-spell-menu h3 {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================================
+   CARTES — composant de base réutilisé partout, liseré coloré par catégorie
+   ============================================================================ */
+
+.rpg-sheet .card,
+.rpg-sheet .rpg-card {
+  background: linear-gradient(160deg, var(--surface), transparent 60%), var(--ink-2);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--arcane);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 10px;
+}
+
+.rpg-sheet .card.accent-ember,  .rpg-sheet .card--combat  { border-left-color: var(--ember); }
+.rpg-sheet .card.accent-teal,   .rpg-sheet .card--defense { border-left-color: var(--teal); }
+.rpg-sheet .card.accent-brass,  .rpg-sheet .card--social  { border-left-color: var(--brass); }
+.rpg-sheet .card.accent-sage,   .rpg-sheet .card--nature  { border-left-color: var(--sage); }
+.rpg-sheet .card.accent-amber                              { border-left-color: var(--amber); }
+
+.rpg-sheet .card h2, .rpg-sheet .card > h2 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--ink-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rpg-sheet .card h3 {
+  font-size: 12.5px;
+  font-weight: 700;
+  margin: 10px 0 6px 0;
+  color: var(--ink-text-dim);
+}
+
+/* ============================================================================
+   CHAMPS DE SAISIE — inputs, selects, textareas
+   ============================================================================ */
+
+.rpg-sheet input[type="text"],
+.rpg-sheet input[type="number"],
+.rpg-sheet select,
+.rpg-sheet textarea {
+  background: rgba(0,0,0,0.22);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--ink-text);
+  padding: 5px 8px;
+  font-size: 13px;
+  transition: border-color .15s, background .15s;
+}
+
+.rpg-sheet input:focus,
+.rpg-sheet select:focus,
+.rpg-sheet textarea:focus {
+  outline: none;
+  border-color: var(--arcane);
+  background: rgba(161,114,224,0.08);
+  box-shadow: 0 0 0 2px var(--arcane-dim);
+}
+
+.rpg-sheet input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rpg-sheet label {
+  color: var(--ink-text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================================
+   BOUTONS — style unifié avec variantes de couleur
+   ============================================================================ */
+
+.rpg-sheet button,
+.rpg-spell-menu button {
+  font-family: inherit;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-text);
+  cursor: pointer;
+  transition: transform .08s ease, background .15s, border-color .15s, box-shadow .15s;
+}
+
+.rpg-sheet button:hover:not(:disabled),
+.rpg-spell-menu button:hover:not(:disabled) {
+  background: rgba(255,255,255,0.11);
+  border-color: rgba(255,255,255,0.22);
+}
+
+.rpg-sheet button:active:not(:disabled),
+.rpg-spell-menu button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.rpg-sheet button:disabled,
+.rpg-spell-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.rpg-sheet button.primary,
+.rpg-spell-menu button.primary {
+  background: linear-gradient(160deg, var(--arcane), #7d4fc0);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+
+.rpg-sheet button.success { background: linear-gradient(160deg, var(--sage), #4f9e6c); border-color: transparent; color: #06210f; font-weight: 700; }
+.rpg-sheet button.danger  { background: linear-gradient(160deg, var(--ember), #b8362e); border-color: transparent; color: #fff; font-weight: 700; }
+.rpg-sheet button.warn    { background: linear-gradient(160deg, var(--amber), #b57e1f); border-color: transparent; color: #23150a; font-weight: 700; }
+
+/* ============================================================================
+   BADGES — étiquettes rondes colorées (états, gravité, type)
+   ============================================================================ */
+
+.rpg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.rpg-badge--arcane { background: var(--arcane-dim); color: #cbb0f0; border-color: rgba(161,114,224,.35); }
+.rpg-badge--brass  { background: var(--brass-dim);  color: #ecc978; border-color: rgba(209,161,68,.35); }
+.rpg-badge--ember  { background: var(--ember-dim);  color: #f0958f; border-color: rgba(224,82,74,.35); }
+.rpg-badge--teal   { background: var(--teal-dim);   color: #8fdfe8; border-color: rgba(69,184,196,.35); }
+.rpg-badge--sage   { background: var(--sage-dim);   color: #a6e0bd; border-color: rgba(111,191,139,.35); }
+.rpg-badge--amber  { background: var(--amber-dim);  color: #eec27a; border-color: rgba(219,161,58,.35); }
+
+/* ============================================================================
+   BARRES DE RESSOURCE — PV / Mana / Fatigue avec lueur
+   ============================================================================ */
+
+.rpg-resbar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.rpg-resbar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width .25s ease;
+}
+.rpg-resbar.pv > span     { background: linear-gradient(90deg, #b8362e, var(--ember)); box-shadow: 0 0 8px rgba(224,82,74,.5); }
+.rpg-resbar.mana > span   { background: linear-gradient(90deg, #2f8892, var(--teal));  box-shadow: 0 0 8px rgba(69,184,196,.5); }
+.rpg-resbar.fatigue > span{ background: linear-gradient(90deg, #b57e1f, var(--amber)); box-shadow: 0 0 8px rgba(219,161,58,.5); }
+
+/* ============================================================================
+   ONGLETS — navigation de fiche
+   ============================================================================ */
+
+.rpg-sheet nav.sheet-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 0 8px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+.rpg-sheet nav.sheet-tabs .item {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-text-dim);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+
+.rpg-sheet nav.sheet-tabs .item:hover {
+  color: var(--ink-text);
+  background: var(--surface);
+}
+
+.rpg-sheet nav.sheet-tabs .item.active {
+  color: var(--arcane);
+  background: var(--ink-2);
+  border-color: var(--border-soft);
+  box-shadow: inset 0 2px 0 var(--arcane);
+}
+
+/* ============================================================================
+   SCROLLBAR — fine, discrète, cohérente avec le thème
+   ============================================================================ */
+
+.rpg-sheet *::-webkit-scrollbar,
+.rpg-spell-menu *::-webkit-scrollbar {
+  width: 8px; height: 8px;
+}
+.rpg-sheet *::-webkit-scrollbar-track,
+.rpg-spell-menu *::-webkit-scrollbar-track { background: transparent; }
+.rpg-sheet *::-webkit-scrollbar-thumb,
+.rpg-spell-menu *::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.14);
+  border-radius: 999px;
+}
+.rpg-sheet *::-webkit-scrollbar-thumb:hover,
+.rpg-spell-menu *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
+
+/* ============================================================================
+   DIVERS — hr, small, hint
+   ============================================================================ */
+
+.rpg-sheet hr {
+  border: 0;
+  height: 1px;
+  background: var(--border-soft);
+  margin: 10px 0;
+}
+
+.rpg-sheet .hint,
+.rpg-sheet small.muted {
+  color: var(--ink-text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Focus clavier visible (accessibilité) */
+.rpg-sheet button:focus-visible,
+.rpg-sheet a:focus-visible,
+.rpg-sheet input:focus-visible {
+  outline: 2px solid var(--arcane);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rpg-sheet *, .rpg-spell-menu * { transition: none !important; }
+}

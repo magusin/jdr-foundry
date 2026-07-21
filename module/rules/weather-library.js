@@ -111,12 +111,18 @@ export function refreshWeatherHUD() {
   el.style.cssText = `
     position:fixed; top:10px; left:50%; transform:translateX(-50%);
     z-index:90; display:flex; gap:6px; align-items:center;
-    background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15);
-    border-radius:20px; padding:4px 12px; backdrop-filter:blur(4px);
+    background:linear-gradient(160deg, rgba(161,114,224,0.16), rgba(20,21,31,0.75));
+    border:1px solid rgba(161,114,224,0.30); border-radius:20px; padding:5px 14px;
+    backdrop-filter:blur(6px); box-shadow:0 4px 16px rgba(0,0,0,0.35);
     pointer-events:${game.user.isGM ? "auto" : "none"};
     cursor:${game.user.isGM ? "pointer" : "default"};
-    font-size:13px; color:#eee; user-select:none;
+    font-size:13px; color:#ece4d3; user-select:none;
+    transition: box-shadow .15s, border-color .15s;
   `;
+  if (game.user.isGM) {
+    el.addEventListener("mouseenter", () => { el.style.borderColor = "rgba(161,114,224,0.6)"; el.style.boxShadow = "0 4px 20px rgba(161,114,224,0.25)"; });
+    el.addEventListener("mouseleave", () => { el.style.borderColor = "rgba(161,114,224,0.30)"; el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.35)"; });
+  }
 
   if (actives.length) {
     el.innerHTML = actives.map(w =>
@@ -235,14 +241,20 @@ export function refreshBiomeHUD() {
   const el = document.createElement("div");
   el.id = "rpg-biome-hud";
   el.style.cssText = `
-    position:fixed; top:48px; left:50%; transform:translateX(-50%);
+    position:fixed; top:50px; left:50%; transform:translateX(-50%);
     z-index:90; display:flex; gap:6px; align-items:center;
-    background:rgba(20,12,0,0.6); border:1px solid rgba(180,140,60,0.3);
-    border-radius:20px; padding:3px 12px; backdrop-filter:blur(4px);
+    background:linear-gradient(160deg, rgba(209,161,68,0.16), rgba(20,21,31,0.75));
+    border:1px solid rgba(209,161,68,0.30); border-radius:20px; padding:4px 14px;
+    backdrop-filter:blur(6px); box-shadow:0 4px 16px rgba(0,0,0,0.35);
     pointer-events:${game.user?.isGM ? "auto" : "none"};
     cursor:${game.user?.isGM ? "pointer" : "default"};
-    font-size:13px; color:#eee; user-select:none;
+    font-size:13px; color:#ece4d3; user-select:none;
+    transition: box-shadow .15s, border-color .15s;
   `;
+  if (game.user?.isGM) {
+    el.addEventListener("mouseenter", () => { el.style.borderColor = "rgba(209,161,68,0.6)"; el.style.boxShadow = "0 4px 20px rgba(209,161,68,0.25)"; });
+    el.addEventListener("mouseleave", () => { el.style.borderColor = "rgba(209,161,68,0.30)"; el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.35)"; });
+  }
 
   if (biome) {
     el.innerHTML = `<span style="font-size:16px">${biome.icon}</span>

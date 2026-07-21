@@ -42,3 +42,8 @@
     overflow-y: auto;
     overflow-x: hidden;
   }
+/* ── Thème Grimoire Arcanique — liseré laiton pour items génériques/recettes ── */
+.generic-sheet .card,
+.rpg-recipe-sheet .card {
+  border-left: 3px solid var(--brass, #d1a144);
+}
