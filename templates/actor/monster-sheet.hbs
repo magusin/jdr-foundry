@@ -150,7 +150,7 @@
               <span>Vitesse (m)</span>
               <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
               <span style="margin-top:6px">Mode de déplacement</span>
-              <select name="system.deplacement.type">
+              <select name="system.deplacement.type" style="width:100%">
                 <option value="terrestre"  {{#if (eq system.deplacement.type "terrestre")}}selected{{/if}}>🦶 Terrestre</option>
                 <option value="volant"     {{#if (eq system.deplacement.type "volant")}}selected{{/if}}>🦅 Volant</option>
                 <option value="aquatique"  {{#if (eq system.deplacement.type "aquatique")}}selected{{/if}}>🐟 Aquatique</option>

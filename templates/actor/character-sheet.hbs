@@ -68,10 +68,13 @@
             <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}}</small>
             {{/unless}}
           </div>
-          <div class="meta">
+        </div>
+
+        <div class="meta-row">
+          <div class="meta" style="grid-column: 1 / -1;">
             <label>Mode de déplacement</label>
             {{#if flags.isGM}}
-            <select name="system.deplacement.type">
+            <select name="system.deplacement.type" style="width:100%">
               <option value="terrestre" {{#if (eq system.deplacement.type "terrestre")}}selected{{/if}}>🦶 Terrestre</option>
               <option value="volant"    {{#if (eq system.deplacement.type "volant")}}selected{{/if}}>🦅 Volant</option>
               <option value="aquatique" {{#if (eq system.deplacement.type "aquatique")}}selected{{/if}}>🐟 Aquatique</option>
