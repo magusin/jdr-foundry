@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-weapon-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -315,6 +315,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const root = this.element;
     if (!root) return;
 
+    applyUiTheme(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
     // ── UUID cliquable → ouvre la fiche de l'item associé ─────────────────

@@ -40,3 +40,14 @@ export function bindImageEditors(root, document) {
     });
   });
 }
+
+/**
+ * Applique la classe de thème visuel choisie par le joueur (réglage client)
+ * sur l'élément racine de la fiche. À appeler dans chaque _onRender().
+ */
+export function applyUiTheme(root) {
+  if (!root) return;
+  const theme = game.settings?.get?.("rpg", "uiTheme") ?? "sombre";
+  root.classList.remove("rpg-theme-sombre", "rpg-theme-clair", "rpg-theme-contraste");
+  root.classList.add(`rpg-theme-${theme}`);
+}

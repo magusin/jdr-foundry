@@ -1,6 +1,6 @@
 // module/sheets/item-recipe-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 
 export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
@@ -49,6 +49,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     if (!root) return;
 
     bindImageEditors(root, this.document);
+    applyUiTheme(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
 
     // ── Clic sur bouton "Voir" (UUID) → ouvre la fiche de l'item ──────────

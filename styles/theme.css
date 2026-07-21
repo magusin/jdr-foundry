@@ -5,49 +5,40 @@
    consomment ces variables.
    ============================================================================ */
 
+/* ============================================================================
+   RPG SYSTEM — THÈMES MULTIPLES ("Grimoire Arcanique")
+   Design tokens partagés par toutes les fiches (acteur, monstre, items, menu).
+   Ce fichier est chargé EN PREMIER — toutes les autres feuilles de style
+   consomment ces variables.
+
+   3 thèmes au choix de chaque joueur (réglage client, dans Configuration) :
+     .rpg-theme-sombre   (par défaut) — encre profonde + violet/laiton
+     .rpg-theme-clair    — parchemin clair, mêmes accents adaptés
+     .rpg-theme-contraste— noir pur + accents vifs, lisibilité maximale
+   ============================================================================ */
+
 .rpg-sheet, .rpg-spell-menu, #rpg-weather-hud, #rpg-biome-hud {
   /* ── Fige les variables Foundry natives — indépendant du thème clair/sombre
-     choisi dans les réglages de Foundry. Nos fiches restent toujours dans
-     le thème "Grimoire Arcanique", peu importe le mode d'interface actif. ── */
-  --color-text-primary:      #ece4d3;
-  --color-text-secondary:    #b6ad9a;
-  --color-text-dark-primary: #ece4d3;
-  --color-text-dark-secondary: #b6ad9a;
-  --color-text-light-primary:  #ece4d3;
-  --color-text-light-secondary:#b6ad9a;
+     choisi dans les réglages CORE de Foundry. Nos fiches gèrent leur propre
+     thème via .rpg-theme-*, peu importe le mode d'interface Foundry actif. ── */
   --color-text-hyperlink:    #a172e0;
-  --color-border-light-2:    rgba(255,255,255,0.10);
-  --color-border-light-1:    rgba(255,255,255,0.14);
-  --color-border-dark:       rgba(255,255,255,0.16);
   --color-bg-option:         #1b1d2b;
 
-  /* ── Fond & surfaces ────────────────────────────────────────────────── */
-  --ink:          #14151f;
-  --ink-2:        #1b1d2b;
-  --ink-3:        #232538;
-  --surface:      rgba(255,255,255,0.035);
-  --surface-2:    rgba(255,255,255,0.06);
-  --border:       rgba(255,255,255,0.10);
-  --border-soft:  rgba(255,255,255,0.06);  /* ── Texte ──────────────────────────────────────────────────────────── */
-  --ink-text:      #ece4d3;
-  --ink-text-dim:  #b6ad9a;
-  --ink-text-faint:#847c6d;
-
-  /* ── Accents principaux ─────────────────────────────────────────────── */
+  /* ── Accents principaux (identiques dans les 3 thèmes) ──────────────── */
   --arcane:       #a172e0;   /* violet — magie, illustration, focus */
   --arcane-dim:   rgba(161,114,224,0.18);
   --brass:        #d1a144;   /* laiton — niveau, XP, prestige */
   --brass-dim:    rgba(209,161,68,0.16);
   --ember:        #e0524a;   /* braise — PV, danger, combat */
   --ember-dim:    rgba(224,82,74,0.16);
-  --teal:         #45b8c4;   /* sarcelle — mana, défense, eau */
+  --teal:         #33a3b0;   /* sarcelle — mana, défense, eau */
   --teal-dim:     rgba(69,184,196,0.16);
-  --sage:         #6fbf8b;   /* sauge — succès, régén, nature */
+  --sage:         #4a9e68;   /* sauge — succès, régén, nature */
   --sage-dim:     rgba(111,191,139,0.16);
-  --amber:        #dba13a;   /* ambre — fatigue, avertissement */
+  --amber:        #b9781e;   /* ambre — fatigue, avertissement */
   --amber-dim:    rgba(219,161,58,0.16);
 
-  /* ── Couleurs élémentaires (magie) ──────────────────────────────────── */
+  /* ── Couleurs élémentaires (magie) — identiques dans les 3 thèmes ────── */
   --el-feu:       #e0603a;
   --el-eau:       #3f9fd1;
   --el-eclair:    #e8c93a;
@@ -67,6 +58,94 @@
 
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   color: var(--ink-text);
+}
+
+/* ═══════════════ THÈME SOMBRE (par défaut) — encre + violet/laiton ═══════ */
+.rpg-sheet,
+.rpg-sheet.rpg-theme-sombre,
+.rpg-spell-menu, .rpg-spell-menu.rpg-theme-sombre,
+#rpg-weather-hud, #rpg-biome-hud {
+  --color-text-primary:      #ece4d3;
+  --color-text-secondary:    #b6ad9a;
+  --color-text-dark-primary: #ece4d3;
+  --color-text-dark-secondary: #b6ad9a;
+  --color-text-light-primary:  #ece4d3;
+  --color-text-light-secondary:#b6ad9a;
+  --color-border-light-2:    rgba(255,255,255,0.10);
+  --color-border-light-1:    rgba(255,255,255,0.14);
+  --color-border-dark:       rgba(255,255,255,0.16);
+
+  --ink:          #14151f;
+  --ink-2:        #1b1d2b;
+  --ink-3:        #232538;
+  --surface:      rgba(255,255,255,0.035);
+  --surface-2:    rgba(255,255,255,0.06);
+  --border:       rgba(255,255,255,0.10);
+  --border-soft:  rgba(255,255,255,0.06);
+  --ink-text:      #ece4d3;
+  --ink-text-dim:  #b6ad9a;
+  --ink-text-faint:#847c6d;
+  --field-bg:      rgba(0,0,0,0.22);
+}
+
+/* ═══════════════ THÈME CLAIR — parchemin, texte encre ═══════════════════ */
+.rpg-sheet.rpg-theme-clair,
+.rpg-spell-menu.rpg-theme-clair {
+  --color-text-primary:      #2b2418;
+  --color-text-secondary:    #5c5340;
+  --color-text-dark-primary: #2b2418;
+  --color-text-dark-secondary: #5c5340;
+  --color-text-light-primary:  #2b2418;
+  --color-text-light-secondary:#5c5340;
+  --color-border-light-2:    rgba(60,45,20,0.16);
+  --color-border-light-1:    rgba(60,45,20,0.22);
+  --color-border-dark:       rgba(60,45,20,0.30);
+
+  --ink:          #ece4d3;
+  --ink-2:        #e2d8c2;
+  --ink-3:        #d8ccb2;
+  --surface:      rgba(0,0,0,0.03);
+  --surface-2:    rgba(0,0,0,0.06);
+  --border:       rgba(60,45,20,0.18);
+  --border-soft:  rgba(60,45,20,0.10);
+  --ink-text:      #2b2418;
+  --ink-text-dim:  #5c5340;
+  --ink-text-faint:#8a8065;
+  --field-bg:      rgba(255,255,255,0.55);
+
+  /* accents assombris pour rester lisibles sur fond clair */
+  --arcane: #7a45c2; --brass: #a67a1e; --ember: #c23f38;
+  --teal: #1f7f8c;   --sage: #327a4c;  --amber: #96631a;
+}
+
+/* ═══════════════ THÈME CONTRASTE — noir pur, accents vifs ═══════════════ */
+.rpg-sheet.rpg-theme-contraste,
+.rpg-spell-menu.rpg-theme-contraste {
+  --color-text-primary:      #ffffff;
+  --color-text-secondary:    #e2e2e2;
+  --color-text-dark-primary: #ffffff;
+  --color-text-dark-secondary: #e2e2e2;
+  --color-text-light-primary:  #ffffff;
+  --color-text-light-secondary:#e2e2e2;
+  --color-border-light-2:    rgba(255,255,255,0.30);
+  --color-border-light-1:    rgba(255,255,255,0.40);
+  --color-border-dark:       rgba(255,255,255,0.45);
+
+  --ink:          #000000;
+  --ink-2:        #0c0c0f;
+  --ink-3:        #16161c;
+  --surface:      rgba(255,255,255,0.06);
+  --surface-2:    rgba(255,255,255,0.11);
+  --border:       rgba(255,255,255,0.30);
+  --border-soft:  rgba(255,255,255,0.18);
+  --ink-text:      #ffffff;
+  --ink-text-dim:  #e2e2e2;
+  --ink-text-faint:#b0b0b0;
+  --field-bg:      rgba(255,255,255,0.08);
+
+  /* accents plus saturés pour un contraste maximal */
+  --arcane: #b98bf5; --brass: #f0c060; --ember: #ff6b62;
+  --teal: #4fd6e6;   --sage: #7fe0a0;  --amber: #f0b040;
 }
 
 /* ── Fond opaque de la fenêtre — évite le voile clair par défaut de Foundry ── */
@@ -143,7 +222,7 @@ div.rpg-sheet {
 .rpg-sheet input[type="number"],
 .rpg-sheet select,
 .rpg-sheet textarea {
-  background: rgba(0,0,0,0.22) !important;
+  background: var(--field-bg, rgba(0,0,0,0.22)) !important;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--ink-text) !important;

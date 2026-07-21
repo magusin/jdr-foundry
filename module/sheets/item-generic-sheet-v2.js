@@ -99,6 +99,7 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     if (!root) return;
 
     // read-only joueur : désactive tout (sécurité)
+    applyUiTheme(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
   }

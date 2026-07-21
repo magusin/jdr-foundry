@@ -3,6 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
+import { applyUiTheme } from "./sheet-helpers.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 function parseLevels(csv) {
@@ -172,6 +173,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
     const root = this.element;
     if (!root) return;
+    applyUiTheme(root);
 
     // ✅ Clic images (illustration + token) — MJ only, portrait ne sync pas token
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

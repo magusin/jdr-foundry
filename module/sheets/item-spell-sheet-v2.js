@@ -1,6 +1,7 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
+import { applyUiTheme } from "./sheet-helpers.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -428,6 +429,7 @@ static PARTS = foundry.utils.mergeObject(
 
     const root = this.element;
     if (!root) return;
+    applyUiTheme(root);
 
     // ✅ Vue joueur : les champs readonly deviennent invisibles comme du texte,
     // les boutons d'action sont masqués. Le MJ voit tout et peut tout éditer.

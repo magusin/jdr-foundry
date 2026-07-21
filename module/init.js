@@ -242,6 +242,28 @@ Hooks.once("init", async () => {
   });
 
   // ✅ Setting météo courante (monde) — influence la magie élémentaire
+  // ✅ Thème visuel des fiches — choix INDIVIDUEL par joueur (scope client)
+  game.settings.register("rpg", "uiTheme", {
+    name: "Thème des fiches RPG",
+    hint: "Choisis l'apparence de tes fiches de personnage, sorts, objets... Ce réglage est personnel : chaque joueur peut choisir le sien.",
+    scope: "client",
+    config: true,
+    type: String,
+    choices: {
+      sombre:    "🌑 Sombre — Grimoire Arcanique (par défaut)",
+      clair:     "☀️ Clair — Parchemin",
+      contraste: "⚡ Contraste élevé — accessibilité"
+    },
+    default: "sombre",
+    requiresReload: false,
+    onChange: () => {
+      // Réapplique le thème sur toutes les fenêtres d'app ouvertes
+      for (const app of Object.values(ui.windows ?? {})) {
+        try { app.render({ force: false }); } catch { /* ignore */ }
+      }
+    }
+  });
+
   game.settings.register("rpg", "currentWeather", {
     name: "Météo actuelle",
     scope: "world",
