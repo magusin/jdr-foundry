@@ -156,8 +156,22 @@
   .rpg-sheet .resource-label {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
     font-weight: 800;
     margin-bottom: 6px;
+  }
+
+  /* Légende monétaire : titre + explication sur deux lignes, texte discret */
+  .rpg-sheet .currency-label {
+    flex-wrap: wrap;
+  }
+  .rpg-sheet .currency-legend {
+    flex-basis: 100%;
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--ink-text-dim);
+    letter-spacing: 0.01em;
   }
   
   .rpg-sheet .resource-grid {

@@ -7,6 +7,22 @@
   "RPG.Consommable": "Consommable",
   "RPG.Sort": "Sort",
   "RPG.Compétence": "Compétence",
+
+  "TYPES.Actor.character": "Personnage",
+  "TYPES.Actor.monster": "Monstre",
+
   "TYPES.Item.loot": "Objet",
-  "TYPES.Item.consumable": "Consommable"
+  "TYPES.Item.weapon": "Arme",
+  "TYPES.Item.armor": "Armure",
+  "TYPES.Item.consumable": "Consommable",
+  "TYPES.Item.spell": "Sort",
+  "TYPES.Item.recipe": "Recette",
+  "TYPES.Item.quest": "Quête",
+
+  "TYPES.RegionBehavior.terrainDifficile": "Terrain difficile",
+  "TYPES.RegionBehavior.vegetationDense": "Végétation dense",
+  "TYPES.RegionBehavior.eauPeuProfonde": "Eau peu profonde",
+  "TYPES.RegionBehavior.eauProfonde": "Eau profonde",
+  "TYPES.RegionBehavior.boue": "Boue",
+  "TYPES.RegionBehavior.courant": "Courant"
 }
