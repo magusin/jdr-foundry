@@ -14,7 +14,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     super.DEFAULT_OPTIONS,
     {
       id: "rpg-armor-sheet-v2",
-      classes: ["rpg", "sheet", "item", "armor"],
+      classes: ["rpg", "rpg-sheet", "sheet", "item", "armor"],
       position: { width: 640, height: 720 },
       window: { contentClasses: ["rpg-sheet-window"] },
 
@@ -202,7 +202,5 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
-
-    bindImageEditors(root, this.document);
   }
 }

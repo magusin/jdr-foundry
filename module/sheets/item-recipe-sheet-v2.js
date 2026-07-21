@@ -7,7 +7,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
     id: "rpg-recipe-sheet-v2",
-    classes: ["rpg", "sheet", "item", "recipe"],
+    classes: ["rpg", "rpg-sheet", "sheet", "item", "recipe"],
     position: { width: 500, height: 620 },
     window: { contentClasses: ["rpg-sheet-window"] },
     form: {

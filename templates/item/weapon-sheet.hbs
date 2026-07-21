@@ -2,7 +2,7 @@
 <div class="rpg-sheet weapon-sheet" autocomplete="off">
 
   <header class="sheet-header weapon-header">
-    <img class="profile" src="{{item.img}}" {{#if canEdit}}data-edit="img"{{/if}} title="{{item.name}}" height="64" width="64"/>
+    <img class="profile rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image" height="64" width="64"/>
     <div class="title-block">
       {{#if isReadOnly}}
         <div class="name-readonly"><b>{{item.name}}</b></div>

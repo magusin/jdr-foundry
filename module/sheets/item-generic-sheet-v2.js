@@ -13,7 +13,7 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     super.DEFAULT_OPTIONS,
     {
       id: "rpg-generic-item-sheet-v2",
-      classes: ["rpg", "sheet", "item", "generic"],
+      classes: ["rpg", "rpg-sheet", "sheet", "item", "generic"],
       position: { width: 520, height: 520 },
       window: { contentClasses: ["rpg-sheet-window"] },
 

@@ -76,7 +76,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
     id: "rpg-monster-sheet-v2",
-    classes: ["rpg", "sheet", "actor", "monster"],
+    classes: ["rpg", "rpg-sheet", "sheet", "actor", "monster"],
     position: { width: 1080, height: 820 },
     window: { resizable: true }
   });

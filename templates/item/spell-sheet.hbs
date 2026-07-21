@@ -150,7 +150,7 @@
 
       {{#each system.damages as |dmg i|}}
       <div class="dmg-row" data-idx="{{i}}"
-        style="display:grid;grid-template-columns:75px 50px 110px 50px 60px 75px 90px 28px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:6px">
+        style="display:grid;grid-template-columns:75px 50px 110px 50px 60px 75px 90px 28px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
         <input type="text"   name="system.damages.{{i}}.dice"     value="{{dmg.dice}}"     placeholder="1d6" style="font-size:12px"/>
         <input type="number" name="system.damages.{{i}}.flat"     value="{{dmg.flat}}"     placeholder="0"   style="font-size:12px"/>
         <select              name="system.damages.{{i}}.stat"                                                 style="font-size:12px">
@@ -192,9 +192,9 @@
       {{#each system.effectsUI as |fx i|}}
       <details class="fx-card" data-fx-index="{{i}}"
         style="border:1px solid var(--color-border-light-2);border-radius:10px;margin-bottom:6px;overflow:hidden">
-        <summary style="cursor:pointer;padding:8px 12px;background:rgba(255,255,255,0.03);display:flex;align-items:center;gap:8px;list-style:none">
+        <summary style="cursor:pointer;padding:8px 12px;background:var(--surface);display:flex;align-items:center;gap:8px;list-style:none">
           <span style="flex:1;font-weight:600">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
-          {{#if fx.tag}}<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.1)">{{fx.tag}}</span>{{/if}}
+          {{#if fx.tag}}<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface-2)">{{fx.tag}}</span>{{/if}}
           {{#if fx.dot.perTick}}<span style="font-size:11px;opacity:.7">{{fx.dot.perTick}} dég/tour</span>{{/if}}
           {{#if canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"

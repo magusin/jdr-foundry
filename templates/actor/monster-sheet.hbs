@@ -303,7 +303,7 @@
 
         {{#each system.butin.entries as |entry idx|}}
         <div class="loot-entry" data-idx="{{idx}}"
-          style="display:grid;grid-template-columns:32px 1fr 60px 55px 55px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:6px;background:rgba(255,255,255,0.03);border-radius:6px">
+          style="display:grid;grid-template-columns:32px 1fr 60px 55px 55px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:6px;background:var(--surface);border-radius:6px">
           <img src="{{entry.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover"/>
           <div>
             {{#if entry.uuid}}

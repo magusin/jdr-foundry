@@ -1,4 +1,6 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
+import { applyUiTheme, bindImageEditors } from "./sheet-helpers.js";
+
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -8,7 +10,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     super.DEFAULT_OPTIONS,
     {
       id: "rpg-quest-sheet-v2",
-      classes: ["rpg", "sheet", "item", "quest"],
+      classes: ["rpg", "rpg-sheet", "sheet", "item", "quest"],
       position: { width: 520, height: 700 },
       window: { contentClasses: ["rpg-sheet-window"] },
 
@@ -48,6 +50,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   get isEditable() {
     return game.user.isGM;
+  }
+
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    applyUiTheme(this.element);
+    bindImageEditors(this.element, this.document);
   }
 
   async _prepareContext(options) {

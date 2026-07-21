@@ -151,7 +151,7 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
     id: "rpg-spell-sheet-v2",
-    classes: ["rpg", "sheet", "item", "spell"],
+    classes: ["rpg", "rpg-sheet", "sheet", "item", "spell"],
     position: { width: 720, height: 920 },
     window: { contentClasses: ["rpg-sheet-window"] },
 

@@ -86,7 +86,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     super.DEFAULT_OPTIONS,
     {
       id: "rpg-weapon-sheet-v2",
-      classes: ["rpg", "sheet", "item", "weapon"],
+      classes: ["rpg", "rpg-sheet", "sheet", "item", "weapon"],
       position: { width: 700, height: 800 },
       window: { contentClasses: ["rpg-sheet-window"] },
 
@@ -331,8 +331,6 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
-
-    bindImageEditors(root, this.document);
   }
 
   async _actionAddEffect(event) {
