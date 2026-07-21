@@ -13,9 +13,7 @@
   --surface:      rgba(255,255,255,0.035);
   --surface-2:    rgba(255,255,255,0.06);
   --border:       rgba(255,255,255,0.10);
-  --border-soft:  rgba(255,255,255,0.06);
-
-  /* ── Texte ──────────────────────────────────────────────────────────── */
+  --border-soft:  rgba(255,255,255,0.06);  /* ── Texte ──────────────────────────────────────────────────────────── */
   --ink-text:      #ece4d3;
   --ink-text-dim:  #b6ad9a;
   --ink-text-faint:#847c6d;
@@ -54,6 +52,22 @@
 
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   color: var(--ink-text);
+}
+
+/* ── Fond opaque de la fenêtre — évite le voile clair par défaut de Foundry ── */
+.window-app:has(.rpg-sheet) .window-content,
+.rpg-sheet-window,
+form.rpg-sheet,
+div.rpg-sheet {
+  background: var(--ink, #14151f) !important;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(161,114,224,0.06), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(209,161,68,0.05), transparent 40%) !important;
+}
+
+.rpg-sheet .sheet-body,
+.rpg-sheet .tab {
+  background: transparent;
 }
 
 /* ============================================================================
