@@ -11,10 +11,10 @@
           {{#if flags.canEditImg}}
           <img class="profile-img rpg-img-edit" src="{{actor.img}}" data-field="img"
             title="Cliquer pour changer l'illustration"
-            style="cursor:pointer;width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid rgba(155,89,182,0.4)" />
+            style="cursor:pointer;width:80px;height:80px;object-fit:cover;border-radius:10px;border:2px solid rgba(155,89,182,0.4)" />
           {{else}}
           <img src="{{actor.img}}"
-            style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.1)" />
+            style="width:80px;height:80px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,0.1)" />
           {{/if}}
           <small style="font-size:9px;opacity:.6">Illustration</small>
         </div>
@@ -24,7 +24,7 @@
           <img class="rpg-img-edit rpg-token-img" src="{{actor.prototypeToken.texture.src}}"
             data-field="prototypeToken.texture.src"
             title="Cliquer pour changer l'image du token (MJ)"
-            style="width:48px;height:48px;cursor:pointer;border-radius:6px;border:1px solid var(--color-border-light-2);object-fit:cover" />
+            style="width:60px;height:60px;cursor:pointer;border-radius:8px;border:1px solid var(--color-border-light-2);object-fit:cover" />
           <small style="font-size:9px;opacity:.6">Token</small>
         </div>
         {{/if}}
