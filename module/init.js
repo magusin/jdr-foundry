@@ -16,6 +16,7 @@ import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
 import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
+import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -518,6 +519,9 @@ Hooks.once("init", async () => {
 
     // ✅ Aligne la règle de diagonale de Foundry sur le réglage RP (réaliste par défaut)
     rpgSyncCoreDiagonals();
+
+    // ✅ Réglette de déplacement custom : coût terrain + restant du tour en direct
+    try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;
