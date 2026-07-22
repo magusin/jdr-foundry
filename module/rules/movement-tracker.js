@@ -70,12 +70,6 @@ export function onPreUpdateToken(tokenDoc, changes) {
       return false;
     }
 
-    const budget = game.rpg?.budget?.getBudgetFor?.(game.combat, combatant.id);
-    if (budget && !game.rpg?.budget?.canUseSlot(budget, "deplacement")) {
-      ui.notifications?.warn?.("Slot de déplacement épuisé.");
-      return false;
-    }
-
     // Vérif vitesse + terrain (avec type de déplacement)
     const vitesse = getVitesse(actor);
     const startPos = _prevPos.get(tokenDoc.id) ?? { x: tokenDoc.x, y: tokenDoc.y };
