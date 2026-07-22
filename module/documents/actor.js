@@ -109,9 +109,30 @@ function sumSkillBonuses(actor) {
 export class RPGActor extends Actor {
   getRollData() {
     const data = super.getRollData();
-    data.eff = this.system?.derived?.effective ?? {};
-    data.effP = this.system?.derived?.effective?.principales ?? {};
-    data.effD = this.system?.derived?.effective?.defenses ?? {};
+    const eff  = this.system?.derived?.effective ?? {};
+    data.eff   = eff;
+
+    // ⚠️ Garantit des valeurs NUMÉRIQUES pour toutes les clés utilisées dans les
+    // formules (initiative : @effP.dexterite + @effP.acuite). Sinon un acteur
+    // dont les données dérivées ne sont pas encore calculées donne @effP.x =
+    // undefined → Roll crée un « StringTerm undefined » et rollInitiative crashe.
+    const num = (v) => Number(v) || 0;
+    const effPsrc = eff.principales ?? this.system?.principales ?? {};
+    data.effP = {
+      force:        num(effPsrc.force),
+      intelligence: num(effPsrc.intelligence),
+      dexterite:    num(effPsrc.dexterite),
+      acuite:       num(effPsrc.acuite),
+      endurance:    num(effPsrc.endurance)
+    };
+
+    const effDsrc = eff.defenses ?? this.system?.defenses ?? {};
+    data.effD = {
+      armureFixe:       num(effDsrc.armureFixe),
+      resistanceFixe:   num(effDsrc.resistanceFixe),
+      scoreArmure:      num(effDsrc.scoreArmure),
+      scoreResistance:  num(effDsrc.scoreResistance)
+    };
     return data;
   }
 
