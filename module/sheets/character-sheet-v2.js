@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/character-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -426,6 +427,30 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       ?? actor.system?.derived?.effective?.principales
       ?? actor.system?.principales
       ?? {};
+
+    // ── Déplacement restant ce tour (uniquement en combat) ──────────────
+    ctx.combatMove = null;
+    try {
+      const combat = game.combat;
+      if (combat?.started) {
+        const combatant = combat.combatants.find(c => c.actorId === actor.id);
+        if (combatant) {
+          const budget    = getBudget(combat, combatant.id);
+          const vitesse   = Number(actor.system?.deplacement?.vitesse ?? 6) || 6;
+          const remaining = movementRemaining(budget, vitesse);
+          const spent     = movementSpent(budget);
+          const r1 = (x) => Math.round((Number(x) || 0) * 10) / 10;
+          ctx.combatMove = {
+            vitesse:      r1(vitesse),
+            remaining:    r1(remaining),
+            spent:        r1(spent),
+            pct:          vitesse > 0 ? Math.max(0, Math.min(100, (remaining / vitesse) * 100)) : 0,
+            isActiveTurn: combat.combatant?.id === combatant.id,
+            depleted:     remaining <= 0.05
+          };
+        }
+      }
+    } catch (_e) { /* hors combat / pas de scène active */ }
 
     return ctx;
   }

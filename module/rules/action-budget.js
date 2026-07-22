@@ -34,7 +34,8 @@ const TOTAL_SLOTS = 2;
 function freshBudget() {
   return {
     slotsTotal:   { max: TOTAL_SLOTS, used: 0, pending: 0 },
-    deplacement:  { max: 1, used: 0, pending: 0 },
+    // metersUsed / metersPending : réserve de déplacement du tour (en mètres).
+    deplacement:  { max: 1, used: 0, pending: 0, metersUsed: 0, metersPending: 0 },
     attaque:      { max: 1, used: 0, pending: 0 },
     sortNormal:   { max: 1, used: 0, pending: 0 },
     sortRapide:   { max: 2, used: 0, pending: 0 },
@@ -123,6 +124,78 @@ export function releaseSlot(budget, slot, wasConfirmed = false) {
   } else {
     b.slotsTotal.pending = Math.max(0, (b.slotsTotal.pending ?? 0) - 1);
     if (b[slot]) b[slot].pending = Math.max(0, (b[slot].pending ?? 0) - 1);
+  }
+  return b;
+}
+
+// ── Réserve de déplacement (mètres par tour) ──────────────────────────────
+
+/** Mètres de déplacement encore disponibles ce tour (confirmés + en attente). */
+export function movementRemaining(budget, vitesse) {
+  const d = budget?.deplacement ?? {};
+  const used = (Number(d.metersUsed) || 0) + (Number(d.metersPending) || 0);
+  return Math.max(0, (Number(vitesse) || 0) - used);
+}
+
+/** Mètres déjà engagés ce tour (confirmés + en attente). */
+export function movementSpent(budget) {
+  const d = budget?.deplacement ?? {};
+  return (Number(d.metersUsed) || 0) + (Number(d.metersPending) || 0);
+}
+
+/**
+ * Réserve un déplacement de `cost` mètres (en attente de validation MJ).
+ * Le PREMIER déplacement du tour occupe aussi 1 slot d'action ; les suivants
+ * puisent seulement dans la réserve de mètres.
+ */
+export function reserveMovement(budget, cost) {
+  const b = foundry.utils.deepClone(budget);
+  const d = b.deplacement;
+  const already = (d.used ?? 0) + (d.pending ?? 0);
+  if (already === 0) {
+    b.slotsTotal.pending = (b.slotsTotal.pending ?? 0) + 1;
+    d.pending = (d.pending ?? 0) + 1;
+  }
+  d.metersPending = (Number(d.metersPending) || 0) + (Number(cost) || 0);
+  return b;
+}
+
+/** Confirme un déplacement pending → mètres définitifs (+ confirme le slot au 1er). */
+export function confirmMovement(budget, cost) {
+  const b = foundry.utils.deepClone(budget);
+  const d = b.deplacement;
+  const c = Number(cost) || 0;
+  d.metersPending = Math.max(0, (Number(d.metersPending) || 0) - c);
+  d.metersUsed    = (Number(d.metersUsed) || 0) + c;
+  if ((d.pending ?? 0) > 0) {
+    b.slotsTotal.pending = Math.max(0, (b.slotsTotal.pending ?? 0) - 1);
+    b.slotsTotal.used    = (b.slotsTotal.used ?? 0) + 1;
+    d.pending = Math.max(0, (d.pending ?? 0) - 1);
+    d.used    = (d.used ?? 0) + 1;
+  }
+  return b;
+}
+
+/**
+ * Libère un déplacement (annulation). Rend le slot d'action seulement si plus
+ * aucun mètre n'est engagé ce tour.
+ */
+export function releaseMovement(budget, cost, wasConfirmed = false) {
+  const b = foundry.utils.deepClone(budget);
+  const d = b.deplacement;
+  const c = Number(cost) || 0;
+  if (wasConfirmed) d.metersUsed    = Math.max(0, (Number(d.metersUsed) || 0) - c);
+  else              d.metersPending = Math.max(0, (Number(d.metersPending) || 0) - c);
+
+  const totalMeters = (Number(d.metersUsed) || 0) + (Number(d.metersPending) || 0);
+  if (totalMeters <= 0.001) {
+    if (wasConfirmed && (d.used ?? 0) > 0) {
+      b.slotsTotal.used = Math.max(0, (b.slotsTotal.used ?? 0) - 1);
+      d.used = Math.max(0, (d.used ?? 0) - 1);
+    } else if (!wasConfirmed && (d.pending ?? 0) > 0) {
+      b.slotsTotal.pending = Math.max(0, (b.slotsTotal.pending ?? 0) - 1);
+      d.pending = Math.max(0, (d.pending ?? 0) - 1);
+    }
   }
   return b;
 }
@@ -313,9 +386,11 @@ export async function undoAction(combat, actionId) {
     }
   }
 
-  // 5. Libère le slot budget
-  const budget     = getBudget(combat, combatantId);
-  const newBudget  = releaseSlot(budget, entry.slot, true);
+  // 5. Libère le slot budget (déplacement = rend les mètres + le slot si vide)
+  const budget    = getBudget(combat, combatantId);
+  const newBudget = entry.slot === "deplacement"
+    ? releaseMovement(budget, entry.snapshot?.cost ?? 0, true)
+    : releaseSlot(budget, entry.slot, true);
   await saveBudget(combat, combatantId, newBudget);
 
   // 6. Marque l'entrée comme annulée

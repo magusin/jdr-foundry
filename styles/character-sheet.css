@@ -921,3 +921,46 @@
 /* Titres de section colorés */
 .rpg-sheet .card h2 { color: var(--color-text-primary); }
 .rpg-sheet .card h2::before { content: ""; display: inline-block; width: 3px; height: 14px; background: #9b59b6; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* ── Déplacement restant ce tour (combat) ─────────────────────────────── */
+.rpg-sheet .move-budget {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-md, 10px);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  border-left: 3px solid var(--sage, #4a9e68);
+  background: var(--surface, rgba(255,255,255,0.035));
+}
+.rpg-sheet .move-budget--active {
+  border-left-color: var(--brass, #d1a144);
+  box-shadow: 0 0 0 1px var(--brass-dim, rgba(209,161,68,0.16));
+}
+.rpg-sheet .move-budget--empty { border-left-color: var(--ember, #e0524a); }
+.rpg-sheet .move-budget-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.rpg-sheet .move-budget-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255,255,255,0.06));
+  overflow: hidden;
+}
+.rpg-sheet .move-budget-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--sage, #4a9e68), var(--teal, #33a3b0));
+  transition: width .2s ease;
+}
+.rpg-sheet .move-budget--empty .move-budget-fill {
+  background: var(--ember, #e0524a);
+}
+.rpg-sheet .move-budget-hint {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--ink-text-dim, #b6ad9a);
+}

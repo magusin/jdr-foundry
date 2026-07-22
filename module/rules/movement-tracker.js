@@ -4,7 +4,8 @@
 
 import {
   getBudget, saveBudget, canUseSlot, reserveSlot,
-  releaseSlot, addLogEntry, updateLogEntry, findLogEntry
+  releaseSlot, addLogEntry, updateLogEntry, findLogEntry,
+  movementRemaining, reserveMovement, releaseMovement
 } from "./action-budget.js";
 import {
   calculateMovementCost, formatTerrainSummary, getTerrainAt, TERRAIN_TYPES,
@@ -92,10 +93,14 @@ export function onPreUpdateToken(tokenDoc, changes) {
     const distBrute = measureDist(startPos.x, startPos.y, newX, newY);
     const cost = mult > 0 ? distBrute / mult : 999;
 
-    if (cost > vitesse + 0.1) {
+    // Réserve de mètres du tour (ce qu'il reste après les déplacements déjà faits)
+    const budget    = getBudget(game.combat, combatant.id);
+    const remaining = movementRemaining(budget, vitesse);
+
+    if (cost > remaining + 0.1) {
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
       ui.notifications?.warn?.(
-        `Déplacement impossible — ${fmt(cost)} nécessaires${typeLabel} vs ${fmt(vitesse)} disponibles.`
+        `Déplacement impossible — ${fmt(cost)} nécessaires${typeLabel} vs ${fmt(remaining)} restants ce tour.`
       );
       return false;
     }
@@ -156,15 +161,21 @@ async function _processMove(tokenDoc, combatant, waypoints) {
 
   const combat  = game.combat;
   const budget  = getBudget(combat, combatant.id);
-  const hasSlot = canUseSlot(budget, "deplacement");
   const vitesse = getVitesse(actor);
 
   // ── Calcul du coût réel avec terrain + type de déplacement ─────────────
   const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints, actor);
   const distBrute = segments.reduce((s, seg) => s + seg.rawDist, 0);
   const terrainInfo = formatTerrainSummary(terrainsCrossed);
-  const overSpeed   = cost > vitesse + 0.05;
-  const overSlot    = !hasSlot;
+
+  // ── Réserve de mètres du tour ──────────────────────────────────────────
+  const dep         = budget.deplacement ?? {};
+  const firstMove   = ((dep.used ?? 0) + (dep.pending ?? 0)) === 0;
+  const hasSlot     = firstMove ? canUseSlot(budget, "deplacement") : true;
+  const remaining   = movementRemaining(budget, vitesse);
+  const remainAfter = Math.max(0, remaining - cost);
+  const overSpeed   = cost > remaining + 0.05;   // dépasse la réserve restante du tour
+  const overSlot    = !hasSlot;                   // 1er déplacement sans slot d'action libre
 
   // Résumé des segments terrain pour le chat
   const segSummary = segments
@@ -177,11 +188,12 @@ async function _processMove(tokenDoc, combatant, waypoints) {
     casterId: actor.id, tokenId: tokenDoc.id,
     oldX: startPos.x, oldY: startPos.y,
     newX: endPos.x,   newY: endPos.y,
-    waypoints
+    cost, waypoints
   };
 
+  // Réserve les mètres (+ 1 slot d'action au tout 1er déplacement du tour)
   if (hasSlot) {
-    await saveBudget(combat, combatant.id, reserveSlot(budget, "deplacement"));
+    await saveBudget(combat, combatant.id, reserveMovement(budget, cost));
   }
 
   await addLogEntry(combat, combatant.id, {
@@ -235,12 +247,14 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   }
 
   const warnings = [];
-  if (overSlot)  warnings.push(`⚠️ <b>Slot de déplacement épuisé</b>`);
-  if (overSpeed) warnings.push(`⚠️ Coût <b>${fmt(cost)}</b> > vitesse <b>${fmt(vitesse)}</b>`);
+  if (overSlot)  warnings.push(`⚠️ <b>Aucun slot d'action libre</b> pour amorcer le déplacement`);
+  if (overSpeed) warnings.push(`⚠️ Coût <b>${fmt(cost)}</b> > réserve restante <b>${fmt(remaining)}</b> ce tour`);
 
   const warnLine = warnings.length
-    ? `<div style="color:#c0392b;font-size:12px;margin:3px 0">${warnings.join("<br>")}</div>`
-    : `<div style="color:#1d9e75;font-size:11px">✓ ${fmt(distBrute)} (coût ${fmt(cost)}) / ${fmt(vitesse)}</div>`;
+    ? `<div style="color:#c0392b;font-size:12px;margin:3px 0">${warnings.join("<br>")}
+         <div style="font-size:10px;opacity:.75">Réserve du tour : ${fmt(vitesse)} — reste ${fmt(remaining)}</div>
+       </div>`
+    : `<div style="color:#1d9e75;font-size:11px">✓ coût ${fmt(cost)} — reste <b>${fmt(remainAfter)}</b> / ${fmt(vitesse)} ce tour</div>`;
 
   const msgContent = `
     <div style="font-size:13px;line-height:1.5">
@@ -334,7 +348,8 @@ export async function undoMovement(combat, actionId) {
     if (td) await td.update({ x: snap.oldX, y: snap.oldY });
   }
   const budget = getBudget(combat, combatantId);
-  await saveBudget(combat, combatantId, releaseSlot(budget, "deplacement", entry.status === "confirmed"));
+  await saveBudget(combat, combatantId,
+    releaseMovement(budget, snap.cost ?? 0, entry.status === "confirmed"));
   await updateLogEntry(combat, actionId, { status: "undone" });
   return { ok: true, label: entry.label ?? "Déplacement" };
 }

@@ -122,6 +122,24 @@
           <div class="state-badge state-badge--orange">🏋️ Surchargé — -1 vitesse</div>
           {{/if}}
         </div>
+
+        {{!-- Déplacement restant ce tour (combat) --}}
+        {{#if combatMove}}
+        <div class="move-budget {{#if combatMove.isActiveTurn}}move-budget--active{{/if}} {{#if combatMove.depleted}}move-budget--empty{{/if}}">
+          <div class="move-budget-label">
+            <span>🏃 Déplacement {{#if combatMove.isActiveTurn}}— ton tour{{/if}}</span>
+            <span><b>{{combatMove.remaining}}</b> / {{combatMove.vitesse}} m</span>
+          </div>
+          <div class="move-budget-bar">
+            <div class="move-budget-fill" style="width: {{combatMove.pct}}%;"></div>
+          </div>
+          {{#if combatMove.depleted}}
+          <div class="move-budget-hint">Plus de déplacement ce tour.</div>
+          {{else}}
+          <div class="move-budget-hint">{{combatMove.spent}} m déjà parcourus.</div>
+          {{/if}}
+        </div>
+        {{/if}}
       </div>
     </div>
 

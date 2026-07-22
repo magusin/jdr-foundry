@@ -3,6 +3,7 @@
 
 import {
   getBudget, saveBudget, confirmSlot, releaseSlot,
+  confirmMovement, releaseMovement,
   updateLogEntry, findLogEntry, undoAction, incrementFatigue
 } from "./action-budget.js";
 import { undoMovement } from "./movement-tracker.js";
@@ -187,8 +188,11 @@ async function handlePendingAction(message, result, actionId) {
   const budget = getBudget(combat, combatantId);
 
   if (result === "confirm") {
-    // Confirme le slot → passe pending → used
-    const newBudget = confirmSlot(budget, entry.slot);
+    // Confirme le slot → passe pending → used.
+    // Déplacement : confirme les mètres réservés (et le slot au 1er du tour).
+    const newBudget = entry.slot === "deplacement"
+      ? confirmMovement(budget, entry.snapshot?.cost ?? 0)
+      : confirmSlot(budget, entry.slot);
     await saveBudget(combat, combatantId, newBudget);
 
     // Cas déplacement : juste confirmer le slot, pas d'effet à appliquer
@@ -221,8 +225,10 @@ async function handlePendingAction(message, result, actionId) {
     await updateLogEntry(combat, actionId, { status: "confirmed" });
 
   } else {
-    // Refus ou correction → libère le slot pending
-    const newBudget = releaseSlot(budget, entry.slot, false);
+    // Refus ou correction → libère le pending (mètres pour un déplacement)
+    const newBudget = entry.slot === "deplacement"
+      ? releaseMovement(budget, entry.snapshot?.cost ?? 0, false)
+      : releaseSlot(budget, entry.slot, false);
     await saveBudget(combat, combatantId, newBudget);
     await updateLogEntry(combat, actionId, {
       status: result === "reject" ? "rejected" : "corrected"
