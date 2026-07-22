@@ -17,6 +17,7 @@ import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { measureDistanceManhattan } from "./rules/distance.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
+import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -403,6 +404,9 @@ Hooks.once("init", async () => {
     formula: "1d100 + @init",
     decimals: 0
   };
+
+  // ✅ États maison dans le menu clic-droit du token (icônes Foundry natives)
+  installCustomStatusEffects();
 
   // ---------------------------
   // Defaults Actor (création)
@@ -1181,6 +1185,16 @@ Hooks.once("init", async () => {
     } catch (e) {
       console.error("[RPG] Erreur level up automatique :", e);
     }
+  });
+
+  // ---------------------------
+  // Miroir : états maison (system.etatsActifs) → icônes de statut du token
+  // Les états posés par un sort ou l'éditeur s'affichent/disparaissent tout seuls.
+  // ---------------------------
+  Hooks.on("updateActor", async (actor, changed, options) => {
+    if (!game.user.isGM) return;
+    if (changed?.system?.etatsActifs === undefined) return;
+    await syncActorStatusIcons(actor);
   });
 
   // ---------------------------
