@@ -920,11 +920,11 @@ Hooks.once("init", async () => {
     };
 
     // ---------- Token move : budget + refresh auras ----------
-    Hooks.on("preUpdateToken", (tokenDoc, changes) => {
-      try { onPreUpdateToken(tokenDoc, changes); } catch (e) {}
+    Hooks.on("preUpdateToken", (tokenDoc, changes, options) => {
+      try { onPreUpdateToken(tokenDoc, changes, options); } catch (e) {}
     });
 
-    Hooks.on("updateToken", async (tokenDoc, changes) => {
+    Hooks.on("updateToken", async (tokenDoc, changes, options) => {
       if (!("x" in changes || "y" in changes)) return;
 
       // Pousse la position dans l'override aura
@@ -934,7 +934,7 @@ Hooks.once("init", async () => {
       requestAuraRefresh(0);
 
       // Suivi budget déplacement (GM seulement)
-      try { await onUpdateToken(tokenDoc, changes); } catch (e) {
+      try { await onUpdateToken(tokenDoc, changes, options); } catch (e) {
         console.warn("[RPG] movement-tracker:", e);
       }
 

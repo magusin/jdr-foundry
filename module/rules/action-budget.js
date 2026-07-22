@@ -332,7 +332,7 @@ export async function undoAction(combat, actionId) {
       const tokenDoc = canvas?.scene?.tokens?.get(snap.tokenId)
                     ?? game.scenes.active?.tokens?.get(snap.tokenId);
       if (tokenDoc) {
-        await tokenDoc.update({ x: snap.oldX, y: snap.oldY });
+        await tokenDoc.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true });
       } else {
         errors.push("Token introuvable pour restaurer la position");
       }

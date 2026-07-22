@@ -45,7 +45,8 @@ function fmt(m) { return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`; }
  * Hook preUpdateToken — capture position avant déplacement.
  * Garde-fous côté client.
  */
-export function onPreUpdateToken(tokenDoc, changes) {
+export function onPreUpdateToken(tokenDoc, changes, options) {
+  if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
   if (!game.combat?.active) return;
 
@@ -104,7 +105,8 @@ export function onPreUpdateToken(tokenDoc, changes) {
 /**
  * Hook updateToken (GM) — crée le message avec debounce.
  */
-export async function onUpdateToken(tokenDoc, changes) {
+export async function onUpdateToken(tokenDoc, changes, options) {
+  if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas recompter
   if (!("x" in changes) && !("y" in changes)) return;
   if (!game.user.isGM) return;
   if (!game.combat?.active) return;
@@ -339,7 +341,7 @@ export async function undoMovement(combat, actionId) {
   if (snap.tokenId && snap.oldX !== undefined) {
     const td = canvas?.scene?.tokens?.get(snap.tokenId)
       ?? game.scenes.active?.tokens?.get(snap.tokenId);
-    if (td) await td.update({ x: snap.oldX, y: snap.oldY });
+    if (td) await td.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true });
   }
   const budget = getBudget(combat, combatantId);
   await saveBudget(combat, combatantId,
