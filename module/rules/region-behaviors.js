@@ -170,20 +170,39 @@ export function calculateMovementCost(waypoints, actor = null) {
 /**
  * Mesure la distance d'un segment en mètres.
  */
-function _measureSegment(x1, y1, x2, y2) {
-  try {
-    if (canvas?.grid?.measurePath) {
-      const r = canvas.grid.measurePath([{ x: x1, y: y1 }, { x: x2, y: y2 }]);
-      return r.distance ?? r.totalDistance ?? _chebychev(x1, y1, x2, y2);
-    }
-  } catch { /* fallback */ }
-  return _chebychev(x1, y1, x2, y2);
+/**
+ * Facteur de coût d'un pas en diagonale, selon le réglage RP « rpg.diagonalRule » :
+ *   octile (défaut) = √2 ≈ 1,41 m — réaliste (une diagonale coûte plus qu'un pas droit)
+ *   alternating     = 1,5 m        — 1 puis 2 m en alternance (façon 5-10-5), moyenné
+ *   chebyshev       = 1 m          — diagonale « gratuite », tactique simple
+ */
+export function diagonalFactor() {
+  let rule = "octile";
+  try { rule = game.settings.get("rpg", "diagonalRule") || "octile"; } catch { /* avant init */ }
+  if (rule === "chebyshev")   return 1;
+  if (rule === "alternating") return 1.5;
+  return Math.SQRT2;
 }
 
-function _chebychev(x1, y1, x2, y2) {
+/**
+ * Distance RP en mètres entre deux points (pixels), diagonales pondérées.
+ * Décompose le trajet en composante droite + composante diagonale :
+ *   mètres = (droite + diagonale × facteur) × distanceParCase
+ * Indépendant de la règle de diagonale du cœur Foundry → le coût du système
+ * reste correct même si le MJ change les réglages du core.
+ */
+export function measureSegmentMeters(x1, y1, x2, y2) {
   const gs   = canvas?.scene?.grid?.size ?? 100;
   const dist = canvas?.scene?.grid?.distance ?? 1;
-  return Math.max(Math.abs(x2-x1), Math.abs(y2-y1)) / gs * dist;
+  const dx = Math.abs(x2 - x1) / gs;
+  const dy = Math.abs(y2 - y1) / gs;
+  const diag     = Math.min(dx, dy);
+  const straight = Math.abs(dx - dy);
+  return (straight + diag * diagonalFactor()) * dist;
+}
+
+function _measureSegment(x1, y1, x2, y2) {
+  return measureSegmentMeters(x1, y1, x2, y2);
 }
 
 /**

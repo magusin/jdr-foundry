@@ -219,6 +219,30 @@ async function tickActorCooldowns(actor) {
   if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
 }
 
+/**
+ * Aligne la règle de diagonale du cœur Foundry sur le réglage RP « diagonalRule »,
+ * pour que la réglette de déplacement de Foundry affiche le même coût que le
+ * système. Best-effort, MJ uniquement (réglage « monde »).
+ */
+async function rpgSyncCoreDiagonals() {
+  if (!game?.user?.isGM) return;
+  try {
+    const GD = CONST?.GRID_DIAGONALS ?? {};
+    const rule = game.settings.get("rpg", "diagonalRule");
+    const target =
+      rule === "chebyshev"   ? GD.EQUIDISTANT :
+      rule === "alternating" ? GD.ALTERNATING_1 :
+                               GD.EXACT;              // octile ≈ réaliste
+    if (target == null) return;
+    if (game.settings.get("core", "gridDiagonals") !== target) {
+      await game.settings.set("core", "gridDiagonals", target);
+      try { if (canvas?.ready) await canvas.draw(); } catch { /* redraw best-effort */ }
+    }
+  } catch (e) {
+    console.warn("[RPG] Synchronisation de la règle de diagonale impossible :", e);
+  }
+}
+
 // ---------------------------
 // INIT
 // ---------------------------
@@ -297,6 +321,23 @@ Hooks.once("init", async () => {
     config: false,
     type: Object,
     default: {}
+  });
+
+  // ✅ Règle des diagonales — coût d'un pas en diagonale (déplacement RP)
+  game.settings.register("rpg", "diagonalRule", {
+    name: "Règle des diagonales (déplacement)",
+    hint: "Coût d'un pas en diagonale. « Réaliste » (1,41 m) est recommandé pour du RP : marcher en biais coûte plus qu'un pas droit. Aligne aussi la réglette de mesure de Foundry.",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      octile:      "📐 Réaliste — diagonale = 1,41 m (recommandé)",
+      alternating: "♦️ Alterné — 1 puis 2 m (moyenne 1,5 m)",
+      chebyshev:   "▫️ Simple — diagonale = 1 m"
+    },
+    default: "octile",
+    requiresReload: false,
+    onChange: () => { rpgSyncCoreDiagonals(); }
   });
 
   game.rpg = game.rpg ?? {};
@@ -474,6 +515,9 @@ Hooks.once("init", async () => {
     // ✅ HUD Météo + Terrain — affichés en haut de l'écran pour tous
     initWeatherHUD();
     initBiomeHUD();
+
+    // ✅ Aligne la règle de diagonale de Foundry sur le réglage RP (réaliste par défaut)
+    rpgSyncCoreDiagonals();
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;

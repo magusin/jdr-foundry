@@ -7,7 +7,8 @@ import {
   releaseSlot, addLogEntry, updateLogEntry, findLogEntry
 } from "./action-budget.js";
 import {
-  calculateMovementCost, formatTerrainSummary, getTerrainAt, TERRAIN_TYPES
+  calculateMovementCost, formatTerrainSummary, getTerrainAt, TERRAIN_TYPES,
+  measureSegmentMeters
 } from "./region-behaviors.js";
 
 const htmlEsc = (s) =>
@@ -26,21 +27,13 @@ export function getVitesse(actor) {
   return Number(actor?.system?.deplacement?.vitesse ?? 6) || 6;
 }
 
-/** Mesure la distance réelle via canvas.grid.measurePath (Chebyshev/Pythagore). */
+/**
+ * Distance RP en mètres, diagonales pondérées selon le réglage « rpg.diagonalRule ».
+ * Source unique partagée avec le calcul de coût de terrain (region-behaviors.js)
+ * pour que déplacement, coût et adjacence utilisent EXACTEMENT la même règle.
+ */
 function measureDist(x1, y1, x2, y2) {
-  try {
-    if (canvas?.grid?.measurePath) {
-      const r = canvas.grid.measurePath([{ x: x1, y: y1 }, { x: x2, y: y2 }]);
-      return r.distance ?? r.totalDistance ?? _cheby(x1, y1, x2, y2);
-    }
-  } catch { /* fallback */ }
-  return _cheby(x1, y1, x2, y2);
-}
-
-function _cheby(x1, y1, x2, y2) {
-  const gs = canvas?.scene?.grid?.size ?? 100;
-  const d  = canvas?.scene?.grid?.distance ?? 1;
-  return Math.max(Math.abs(x2-x1), Math.abs(y2-y1)) / gs * d;
+  return measureSegmentMeters(x1, y1, x2, y2);
 }
 
 function fmt(m) { return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`; }
