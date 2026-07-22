@@ -133,6 +133,13 @@ export class RPGActor extends Actor {
       scoreArmure:      num(effDsrc.scoreArmure),
       scoreResistance:  num(effDsrc.scoreResistance)
     };
+
+    // Bonus d'initiative garanti numérique (utilisé par CONFIG.Combat.initiative
+    // = "1d100 + @init"). Repli calculé si les données dérivées manquent.
+    const derivedInit = this.system?.derived?.initiativeMod;
+    data.init = Number.isFinite(Number(derivedInit))
+      ? Number(derivedInit)
+      : Math.floor((data.effP.dexterite + data.effP.acuite) / 2);
     return data;
   }
 

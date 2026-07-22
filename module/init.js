@@ -396,9 +396,11 @@ Hooks.once("init", async () => {
   Items.registerSheet("rpg", RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
   Items.registerSheet("rpg", RPGQuestSheetV2, { types: ["quest"], makeDefault: true });
 
-  // Initiative (compat avec @effP.*)
+  // Initiative — formule volontairement SIMPLE et robuste : @init est un nombre
+  // garanti fourni par getRollData() (défaut 0). Évite tout terme non résolu
+  // (@effP.x undefined -> "Unresolved StringTerm undefined" au rollInitiative).
   CONFIG.Combat.initiative = {
-    formula: "1d100 + floor((@effP.dexterite + @effP.acuite) / 2)",
+    formula: "1d100 + @init",
     decimals: 0
   };
 
