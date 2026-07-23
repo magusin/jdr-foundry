@@ -939,7 +939,10 @@ Hooks.once("init", async () => {
 
     // ---------- Token move : budget + refresh auras ----------
     Hooks.on("preUpdateToken", (tokenDoc, changes, options) => {
-      try { onPreUpdateToken(tokenDoc, changes, options); } catch (e) {}
+      // ⚠️ On DOIT renvoyer le résultat : si onPreUpdateToken renvoie false
+      // (déplacement au-delà de la réserve, pas son tour, K.O.…), Foundry annule
+      // le déplacement. Sans ce return, la limite de Vitesse n'était jamais appliquée.
+      try { return onPreUpdateToken(tokenDoc, changes, options); } catch (e) { return; }
     });
 
     Hooks.on("updateToken", async (tokenDoc, changes, options) => {

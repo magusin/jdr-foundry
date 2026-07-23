@@ -29,6 +29,28 @@ export function getVitesse(actor) {
 }
 
 /**
+ * Allonge de menace au corps à corps d'un acteur, en mètres. Sert à savoir
+ * jusqu'où il « engage » un adversaire (zone d'attaque d'opportunité).
+ * = plus grande portée parmi ses armes ÉQUIPÉES de corps à corps (portée ≤ 3 m),
+ * plancher à 1 m (menace à mains nues / au contact). Les armes à distance
+ * (grande portée) ne comptent pas pour le désengagement.
+ */
+export function getMeleeReach(actor) {
+  const MELEE_MAX = 3; // au-delà = arme à distance, pas de menace de mêlée
+  let reach = 1;       // menace minimale au contact (1 m)
+  try {
+    const weapons = (actor?.items ?? []).filter(i => i.type === "weapon");
+    const equipped = weapons.filter(w => w.system?.equipe);
+    const pool = equipped.length ? equipped : weapons;
+    for (const w of pool) {
+      const p = Number(w.system?.portee ?? 1) || 1;
+      if (p <= MELEE_MAX && p > reach) reach = p;
+    }
+  } catch { /* défaut 1 m */ }
+  return reach;
+}
+
+/**
  * Distance RP en mètres, diagonales pondérées selon le réglage « rpg.diagonalRule ».
  * Source unique partagée avec le calcul de coût de terrain (region-behaviors.js)
  * pour que déplacement, coût et adjacence utilisent EXACTEMENT la même règle.
@@ -200,7 +222,10 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   });
 
   // ── Désengagement & attaque d'opportunité ────────────────────────────
-  const adjacentDist = 1.5; // 1m case + marge
+  // Un ennemi obtient une attaque d'opportunité si le personnage QUITTE sa
+  // zone de menace (allonge de son arme : 1 m, 1,5 m…) : il était engagé
+  // (dBefore ≤ allonge) et ne l'est plus après le déplacement (dAfter > allonge).
+  const MARGE = 0.1; // petite tolérance de mesure
   const opportunityTargets = [];
   if (canvas?.tokens?.placeables) {
     for (const enemyTok of canvas.tokens.placeables) {
@@ -209,10 +234,11 @@ async function _processMove(tokenDoc, combatant, waypoints) {
       if (ea.type === actor.type) continue;
       const ec = combat.combatants.find(c => c.actorId === ea.id);
       if (!ec || ec.getFlag("core","defeated")) continue;
+      const reach   = getMeleeReach(ea);
       const dBefore = measureDist(startPos.x, startPos.y, enemyTok.x, enemyTok.y);
       const dAfter  = measureDist(endPos.x,   endPos.y,   enemyTok.x, enemyTok.y);
-      if (dBefore <= adjacentDist && dAfter > adjacentDist) {
-        opportunityTargets.push({ id: ea.id, name: ea.name });
+      if (dBefore <= reach + MARGE && dAfter > reach + MARGE) {
+        opportunityTargets.push({ id: ea.id, name: ea.name, reach });
       }
     }
   }
@@ -224,7 +250,7 @@ async function _processMove(tokenDoc, combatant, waypoints) {
            <button type="button" class="rpg-opportunity-btn"
              data-enemy-id="${t.id}" data-mover-id="${actor.id}"
              style="display:block;width:100%;margin-bottom:3px;padding:3px 6px;cursor:pointer;font-size:11px">
-             ⚔️ ${htmlEsc(t.name)} attaque ${htmlEsc(actor.name)}
+             ⚔️ ${htmlEsc(t.name)} (allonge ${fmt(t.reach)}) attaque ${htmlEsc(actor.name)}
            </button>`).join("")}
        </div>`
     : "";
