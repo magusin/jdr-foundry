@@ -497,6 +497,19 @@ Hooks.once("init", async () => {
   Hooks.on("preUpdateActor", (doc, changed, options, userId) => {
     const user = game.users.get(userId);
 
+    // ✅ Barres de token : Foundry édite '.value' (miroir) → recopie dans
+    // '.valeur' (le vrai champ stocké) et retire '.value'. Fait AVANT le
+    // contrôle des droits joueur pour que l'édition de barre reste autorisée.
+    const rr = changed?.system?.ressources;
+    if (rr) {
+      for (const r of ["pv", "mana", "fatigue"]) {
+        if (rr[r] && rr[r].value !== undefined) {
+          rr[r].valeur = rr[r].value;
+          delete rr[r].value;
+        }
+      }
+    }
+
     // ✅ Empêche la synchro automatique portrait → token
     // Quand on change img avec noTokenUpdate:true, on retire la mise à jour du token
     if (options?.noTokenUpdate && "img" in changed) {

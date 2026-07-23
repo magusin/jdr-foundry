@@ -406,6 +406,15 @@ export class RPGActor extends Actor {
     sys.ressources.fatigue.valeur = clamp(Number(sys.ressources.fatigue.valeur) || 0, 0, fatigueMax);
     sys.ressources.fatigue.pct = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
 
+    // ── Compat barres de token Foundry ──────────────────────────────────────
+    // Foundry cherche un objet {value, max} pour une barre. Le système stocke
+    // 'valeur' (FR) : on expose en plus 'value' (miroir) pour que le token
+    // reconnaisse pv/mana/fatigue comme des barres "actuel / max".
+    for (const r of ["pv", "mana", "fatigue"]) {
+      const res = sys.ressources[r];
+      if (res && typeof res === "object") res.value = Number(res.valeur) || 0;
+    }
+
     // ✅ Épuisement : si fatigue au max → état "Fatigué" (-10% stats, -1 vitesse)
     // (appliqué APRÈS tous les autres mods)
     const isEpuise = sys.ressources.fatigue.valeur >= fatigueMax;

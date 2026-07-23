@@ -2,7 +2,7 @@
   "id": "rpg",
   "title": "RPG",
   "description": "Système maison (MMO-tabletop)",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "compatibility": {
     "minimum": "13",
     "verified": "13"
