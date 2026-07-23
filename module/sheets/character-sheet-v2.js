@@ -589,6 +589,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       const action = btn.dataset.action;
 
+      if (action === "configurePrototype") {
+        await this._openPrototypeToken();
+        return;
+      }
+
       if (action === "createItem") {
         await this._createItem(btn.dataset.type);
         this._debouncedPodsUpdate?.();
@@ -1065,6 +1070,28 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     updates.push({ _id: item.id, "system.emplacement": slot, "system.equipe": true });
 
     await this.document.updateEmbeddedDocuments("Item", updates);
+  }
+
+  /**
+   * Ouvre la configuration du Prototype Token de l'acteur (lien, vision, barres…).
+   * Défensif : tente plusieurs voies selon la version de l'API Foundry V13.
+   */
+  async _openPrototypeToken() {
+    if (!game.user.isGM) return;
+    try {
+      const pt = this.document?.prototypeToken;
+      // Voie 1 : PrototypeToken possède un getter .sheet (cas le plus courant)
+      if (pt?.sheet?.render) return pt.sheet.render(true);
+      // Voie 2 : classe de config de token exposée par l'API
+      const Cls = foundry.applications?.sheets?.PrototypeTokenConfig
+               ?? foundry.applications?.sheets?.TokenConfig
+               ?? globalThis.TokenConfig;
+      if (Cls && pt) return new Cls(pt, {}).render(true);
+      ui.notifications?.warn?.("Configuration du Prototype Token indisponible sur cette version.");
+    } catch (e) {
+      console.error("[RPG] Ouverture Prototype Token :", e);
+      ui.notifications?.error?.("Impossible d'ouvrir la config du Prototype Token (voir console).");
+    }
   }
 
   async _createItem(type) {

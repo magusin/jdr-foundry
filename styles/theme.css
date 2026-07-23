@@ -267,7 +267,10 @@ div.rpg-sheet {
    BOUTONS — style unifié avec variantes de couleur
    ============================================================================ */
 
-.rpg-sheet button,
+/* ⚠️ Scopé à .window-content : NE PAS styler les contrôles de la barre de titre
+   Foundry (.window-header button/.header-control), sinon leurs icônes Font
+   Awesome sont repeintes en carrés vides. */
+.rpg-sheet .window-content button,
 .rpg-spell-menu button {
   font-family: inherit;
   border-radius: var(--r-sm);
@@ -278,25 +281,25 @@ div.rpg-sheet {
   transition: transform .08s ease, background .15s, border-color .15s, box-shadow .15s;
 }
 
-.rpg-sheet button:hover:not(:disabled),
+.rpg-sheet .window-content button:hover:not(:disabled),
 .rpg-spell-menu button:hover:not(:disabled) {
   background: rgba(255,255,255,0.11);
   border-color: rgba(255,255,255,0.22);
 }
 
-.rpg-sheet button:active:not(:disabled),
+.rpg-sheet .window-content button:active:not(:disabled),
 .rpg-spell-menu button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-.rpg-sheet button:disabled,
+.rpg-sheet .window-content button:disabled,
 .rpg-spell-menu button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
 }
 
-.rpg-sheet button.primary,
+.rpg-sheet .window-content button.primary,
 .rpg-spell-menu button.primary {
   background: linear-gradient(160deg, var(--arcane), #7d4fc0);
   border-color: transparent;
@@ -304,9 +307,9 @@ div.rpg-sheet {
   font-weight: 700;
 }
 
-.rpg-sheet button.success { background: linear-gradient(160deg, var(--sage), #4f9e6c); border-color: transparent; color: #06210f; font-weight: 700; }
-.rpg-sheet button.danger  { background: linear-gradient(160deg, var(--ember), #b8362e); border-color: transparent; color: #fff; font-weight: 700; }
-.rpg-sheet button.warn    { background: linear-gradient(160deg, var(--amber), #b57e1f); border-color: transparent; color: #23150a; font-weight: 700; }
+.rpg-sheet .window-content button.success { background: linear-gradient(160deg, var(--sage), #4f9e6c); border-color: transparent; color: #06210f; font-weight: 700; }
+.rpg-sheet .window-content button.danger  { background: linear-gradient(160deg, var(--ember), #b8362e); border-color: transparent; color: #fff; font-weight: 700; }
+.rpg-sheet .window-content button.warn    { background: linear-gradient(160deg, var(--amber), #b57e1f); border-color: transparent; color: #23150a; font-weight: 700; }
 
 /* ============================================================================
    BADGES — étiquettes rondes colorées (états, gravité, type)
@@ -426,7 +429,7 @@ div.rpg-sheet {
 }
 
 /* Focus clavier visible (accessibilité) */
-.rpg-sheet button:focus-visible,
+.rpg-sheet .window-content button:focus-visible,
 .rpg-sheet a:focus-visible,
 .rpg-sheet input:focus-visible {
   outline: 2px solid var(--arcane);
