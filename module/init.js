@@ -637,6 +637,7 @@ Hooks.once("init", async () => {
         ["Auras Grille",                       "aura.js",               "icons/svg/aura.svg",            "gm"],
         ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
         ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
+        ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
       ];
       const getFolder = async (name) => {
         let f = game.folders.find(x => x.type === "Macro" && x.name === name);
