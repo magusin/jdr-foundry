@@ -30,6 +30,12 @@ export function iconForTag(tag) {
   return ICON_BY_TAG[tag] ?? DEFAULT_ICON;
 }
 
+// Icône dédiée UNIQUE par effet (SVG généré dans assets/effects/, emoji + anneau
+// coloré par élément). Repli sur l'icône de tag si le fichier venait à manquer.
+function iconForEffect(key, tag) {
+  return key ? `systems/rpg/assets/effects/${key}.svg` : iconForTag(tag);
+}
+
 const statusId = (key) => `rpg-${key}`;
 
 // Retrouver la clé du catalogue depuis le libellé d'un état appliqué.
@@ -47,7 +53,7 @@ export function installCustomStatusEffects() {
     for (const [key, def] of Object.entries(EFFECT_LIBRARY)) {
       const id = statusId(key);
       if (ids.has(id)) continue;
-      existing.push({ id, name: def.label, img: iconForTag(def.tag) });
+      existing.push({ id, name: def.label, img: iconForEffect(key, def.tag) });
     }
     CONFIG.statusEffects = existing;
   } catch (e) {
