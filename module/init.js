@@ -18,6 +18,7 @@ import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 import { measureDistanceManhattan } from "./rules/distance.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
+import { installThreatRangeIndicator } from "./rules/threat-range.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -541,6 +542,9 @@ Hooks.once("init", async () => {
 
     // ✅ Réglette de déplacement custom : coût terrain + restant du tour en direct
     try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
+
+    // ✅ Indicateur d'allonge (zone de menace) au survol d'un token
+    try { installThreatRangeIndicator(); } catch (e) { console.warn("[RPG] indicateur d'allonge:", e); }
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;
