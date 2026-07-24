@@ -219,6 +219,7 @@ static PARTS = foundry.utils.mergeObject(
       dmg.per = Number(dmg.per ?? 10) || 10;
       dmg.perStep = Number(dmg.perStep ?? 1) || 0;
       dmg.critDice = String(dmg.critDice ?? "");
+      dmg.critFlat = Number(dmg.critFlat ?? 0) || 0;
       dmg.livraison = String(dmg.livraison ?? "magique");
     }
 
@@ -392,6 +393,7 @@ static PARTS = foundry.utils.mergeObject(
           per:      Number(get("input[name*='.per']")?.value) || 10,
           perStep:  Number(get("input[name*='.perStep']")?.value) || 0,
           critDice: get("input[name*='.critDice']")?.value?.trim() || "",
+          critFlat: Number(get("input[name*='.critFlat']")?.value) || 0,
           livraison:get("select[name*='.livraison']")?.value || "magique",
         });
       });
@@ -553,6 +555,7 @@ static PARTS = foundry.utils.mergeObject(
       per: 10,
       perStep: 1,
       critDice: "",
+      critFlat: 0,
       livraison: "magique"
     });
     await this.document.update({ "system.damages": damages }, { render: true });

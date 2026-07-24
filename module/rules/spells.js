@@ -1096,6 +1096,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   }
 
   // Nouveau format system.damages[]
+  const isCrit = (res === "crit");
   for (const d of (Array.isArray(sys.damages) ? sys.damages : [])) {
     if (!d) continue;
     const statKey = String(d.stat ?? "");
@@ -1103,11 +1104,20 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const perStep = n(d.perStep, 0);
     const effP    = getEffP(actor);
     const statBonus = statKey ? Math.floor(n(effP?.[statKey], 0) / per) * perStep : 0;
-    const flat    = n(d.flat, 0) + statBonus;
-    const dice    = String(d.dice ?? "").trim() || null;
+
+    // Sur réussite critique, on utilise les valeurs de crit propres à la ligne :
+    //   - critDice (vide → mêmes dés que le coup normal)
+    //   - critFlat (bonus plat de crit ; remplace le plat normal)
+    // Le scaling de stat (stat/per × perStep) reste appliqué dans les deux cas.
+    // Ex : normal 1d6 + 0 + stat/10, crit 1d6 + 2 + stat/10.
+    const critDice = String(d.critDice ?? "").trim();
+    const baseFlat = isCrit ? n(d.critFlat, 0) : n(d.flat, 0);
+    const flat     = baseFlat + statBonus;
+    const dice     = (isCrit && critDice) ? critDice : (String(d.dice ?? "").trim() || null);
+    const livr     = String(d.livraison ?? sys.livraison ?? "magique");
     dmgBlocks.push({
-      dice, flat, livraison: String(d.livraison ?? sys.livraison ?? "magique"),
-      label: `Dégâts ${d.livraison ?? ""}`.trim(),
+      dice, flat, livraison: livr,
+      label: `Dégâts${isCrit ? " (crit)" : ""} ${livr}`.trim(),
       statKey, statBonus
     });
   }

@@ -84,6 +84,12 @@
         </div>
 
         <div>
+          <label title="Fatigue consommée à chaque lancement de ce sort">Coût fatigue</label>
+          {{#if canEdit}}<input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" style="width:100%"/>
+          {{else}}<div><b>{{system.fatigueCost}}</b></div>{{/if}}
+        </div>
+
+        <div>
           <label>Portée min</label>
           {{#if canEdit}}<input type="number" name="system.range.min" value="{{system.range.min}}" min="0" step="0.1" style="width:100%"/>
           {{else}}<div><b>{{system.range.min}}</b></div>{{/if}}
@@ -114,12 +120,6 @@
         </div>
 
         <div>
-          <label>Coût fatigue</label>
-          {{#if canEdit}}<input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" style="width:100%"/>
-          {{else}}<div><b>{{system.fatigueCost}}</b></div>{{/if}}
-        </div>
-
-        <div>
           <label>Recharge max</label>
           {{#if canEdit}}<input type="number" name="system.cooldown.max" value="{{system.cooldown.max}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.cooldown.max}}</b></div>{{/if}}
@@ -143,16 +143,16 @@
       </div>
 
       {{#if system.damages.length}}
-      <div style="display:grid;grid-template-columns:75px 50px 110px 50px 60px 75px 90px 28px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
-        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span>Crit dés</span><span>Livraison</span><span></span>
+      <div style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 82px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
+        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés de dégâts sur réussite critique">Crit dés</span><span title="Bonus plat de dégâts sur réussite critique (peut différer du plat normal)">Crit plat</span><span>Livraison</span><span></span>
       </div>
       {{/if}}
 
       {{#each system.damages as |dmg i|}}
       <div class="dmg-row" data-idx="{{i}}"
-        style="display:grid;grid-template-columns:75px 50px 110px 50px 60px 75px 90px 28px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
-        <input type="text"   name="system.damages.{{i}}.dice"     value="{{dmg.dice}}"     placeholder="1d6" style="font-size:12px"/>
-        <input type="number" name="system.damages.{{i}}.flat"     value="{{dmg.flat}}"     placeholder="0"   style="font-size:12px"/>
+        style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 82px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
+        <input type="text"   name="system.damages.{{i}}.dice"     value="{{dmg.dice}}"     placeholder="1d6" style="font-size:12px" title="Dés normaux (ex: 1d6)"/>
+        <input type="number" name="system.damages.{{i}}.flat"     value="{{dmg.flat}}"     placeholder="0"   style="font-size:12px" title="Bonus plat normal"/>
         <select              name="system.damages.{{i}}.stat"                                                 style="font-size:12px">
           <option value="intelligence" {{#if (eq dmg.stat "intelligence")}}selected{{/if}}>Intelligence</option>
           <option value="force"        {{#if (eq dmg.stat "force")}}selected{{/if}}>Force</option>
@@ -161,14 +161,15 @@
           <option value="endurance"    {{#if (eq dmg.stat "endurance")}}selected{{/if}}>Endurance</option>
           <option value=""             {{#unless dmg.stat}}selected{{/unless}}>— aucune</option>
         </select>
-        <input type="number" name="system.damages.{{i}}.per"      value="{{dmg.per}}"      placeholder="10"  style="font-size:12px"/>
-        <input type="number" name="system.damages.{{i}}.perStep"  value="{{dmg.perStep}}"  placeholder="1"   style="font-size:12px"/>
-        <input type="text"   name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6" style="font-size:12px"/>
+        <input type="number" name="system.damages.{{i}}.per"      value="{{dmg.per}}"      placeholder="10"  style="font-size:12px" title="Stat / N (ex: 10 = +gain tous les 10 points)"/>
+        <input type="number" name="system.damages.{{i}}.perStep"  value="{{dmg.perStep}}"  placeholder="1"   style="font-size:12px" title="Gain par palier de stat"/>
+        <input type="text"   name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6" style="font-size:12px" title="Dés sur critique (vide = mêmes dés que normal)"/>
+        <input type="number" name="system.damages.{{i}}.critFlat" value="{{dmg.critFlat}}" placeholder="0"   style="font-size:12px" title="Bonus plat sur critique (remplace le plat normal). Ex: normal 1d6+0, crit 1d6+2"/>
         <select              name="system.damages.{{i}}.livraison"                                            style="font-size:12px">
           <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Magique</option>
           <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Physique</option>
         </select>
-        {{#if canEdit}}
+        {{#if @root.canEdit}}
         <button type="button" data-action="removeDmgLine" data-idx="{{i}}"
           style="cursor:pointer;color:#c0392b;border:none;background:none;font-size:14px;padding:0">✕</button>
         {{else}}<span></span>{{/if}}
@@ -196,7 +197,7 @@
           <span style="flex:1;font-weight:600">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
           {{#if fx.tag}}<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface-2)">{{fx.tag}}</span>{{/if}}
           {{#if fx.dot.perTick}}<span style="font-size:11px;opacity:.7">{{fx.dot.perTick}} dég/tour</span>{{/if}}
-          {{#if canEdit}}
+          {{#if @root.canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"
             style="cursor:pointer;background:none;border:none;color:#c0392b;font-size:14px;padding:0 4px">✕</button>
           {{/if}}
@@ -208,7 +209,7 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div>
               <label style="font-size:11px">Effet du catalogue (auto-remplit nom + type)</label>
-              {{#if canEdit}}
+              {{#if @root.canEdit}}
               <select class="fx-catalogue-select" data-fx-idx="{{i}}" style="width:100%">
                 <option value="">— Nom libre —</option>
                 {{#each @root.EFFECT_CATALOG as |group gLabel|}}
@@ -224,7 +225,7 @@
             </div>
             <div>
               <label style="font-size:11px">Nom affiché</label>
-              {{#if canEdit}}
+              {{#if @root.canEdit}}
               <input type="text" name="system.effectsUI.{{i}}.label" value="{{fx.label}}"
                 placeholder="Nom de l'effet" style="width:100%"/>
               {{else}}<div><b>{{fx.label}}</b></div>{{/if}}
@@ -234,7 +235,7 @@
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
             <div>
               <label style="font-size:11px">Type / Élément</label>
-              {{#if canEdit}}
+              {{#if @root.canEdit}}
               <select name="system.effectsUI.{{i}}.tag" style="width:100%">
                 <option value="" {{#unless fx.tag}}selected{{/unless}}>— Aucun —</option>
                 <option value="magique"  {{#if (eq fx.tag "magique")}}selected{{/if}}>✨ Magique</option>
@@ -250,22 +251,22 @@
             </div>
             <div>
               <label style="font-size:11px">Durée (tours)</label>
-              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" style="width:100%"/>
+              {{#if @root.canEdit}}<input type="number" name="system.effectsUI.{{i}}.duration" value="{{fx.duration}}" min="0" style="width:100%"/>
               {{else}}<div><b>{{fx.duration}}</b></div>{{/if}}
             </div>
             <div>
               <label style="font-size:11px">TN retrait <span style="opacity:.6">(0=impossible)</span></label>
-              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" style="width:100%"/>
+              {{#if @root.canEdit}}<input type="number" name="system.effectsUI.{{i}}.removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" style="width:100%"/>
               {{else}}<div>{{#if fx.removeBaseTN}}<b>{{fx.removeBaseTN}}+</b>{{else}}—{{/if}}</div>{{/if}}
             </div>
             <div>
               <label style="font-size:11px">Mod retrait <span style="opacity:.6">(+/- au TN)</span></label>
-              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.retraitMod" value="{{fx.retraitMod}}" placeholder="0" style="width:100%"/>
+              {{#if @root.canEdit}}<input type="number" name="system.effectsUI.{{i}}.retraitMod" value="{{fx.retraitMod}}" placeholder="0" style="width:100%"/>
               {{else}}<div>{{#if fx.retraitMod}}<span style="color:{{#if (gt fx.retraitMod 0)}}#c0392b{{else}}#1d9e75{{/if}}">{{#if (gt fx.retraitMod 0)}}+{{/if}}{{fx.retraitMod}}</span>{{else}}—{{/if}}</div>{{/if}}
             </div>
             <div>
               <label style="font-size:11px">🏃 Mode déplacement accordé</label>
-              {{#if canEdit}}
+              {{#if @root.canEdit}}
               <select name="system.effectsUI.{{i}}.movementTypeGrant" style="width:100%">
                 <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
                 <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
@@ -281,12 +282,12 @@
             </div>
             <div>
               <label style="font-size:11px">Dégâts/tour <span style="opacity:.6">(négatif=soin)</span></label>
-              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" placeholder="0" style="width:100%"/>
+              {{#if @root.canEdit}}<input type="number" name="system.effectsUI.{{i}}.damage.flat" value="{{fx.damage.flat}}" placeholder="0" style="width:100%"/>
               {{else}}<div>{{fx.damage.flat}}</div>{{/if}}
             </div>
             <div>
               <label style="font-size:11px">Fatigue/tour <span style="opacity:.6">(négatif=repos)</span></label>
-              {{#if canEdit}}<input type="number" name="system.effectsUI.{{i}}.fatigueDot" value="{{fx.fatigueDot}}" placeholder="0" style="width:100%"/>
+              {{#if @root.canEdit}}<input type="number" name="system.effectsUI.{{i}}.fatigueDot" value="{{fx.fatigueDot}}" placeholder="0" style="width:100%"/>
               {{else}}<div>{{fx.fatigueDot}}</div>{{/if}}
             </div>
           </div>
@@ -311,7 +312,7 @@
           </div>
 
           {{!-- Modificateurs de stat --}}
-          {{#if canEdit}}
+          {{#if @root.canEdit}}
           <div>
             <div style="font-size:11px;font-weight:600;margin-bottom:4px">Modificateurs de stat
               <span style="font-weight:400;opacity:.7">— Fixe / %</span>
