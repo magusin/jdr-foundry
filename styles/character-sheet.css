@@ -798,33 +798,49 @@
 
 .gen-pair-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
 }
 
+/* Étiquette au-dessus, min–max en dessous : les valeurs ne sont jamais rognées. */
 .gen-pair {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
   padding: 6px 8px;
+  min-width: 0;
 }
 
 .gen-pair label {
-  flex: 1;
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0.85;
+  cursor: help;
+}
+
+.gen-pair .gen-pair-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
 }
 
 .gen-pair input.num.sm {
-  width: 48px;
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: 64px;
   text-align: center;
   padding: 2px 4px;
 }
 
 .gen-pair .sep {
+  flex: 0 0 auto;
   opacity: 0.5;
   font-size: 11px;
 }
