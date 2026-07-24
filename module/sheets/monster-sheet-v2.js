@@ -250,13 +250,18 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
         // Cas spécial : levelsCsv → re-render pour recalculer les bands
         const isLevelsCsv = name === "system.gen.levelsCsv";
+        // Les fourchettes de génération sont de la config brute : aucun
+        // affichage dérivé n'en dépend, donc on n'a PAS besoin de re-rendre
+        // la fiche. Sans re-render, la fenêtre ne remonte plus tout en haut
+        // à chaque valeur saisie (pratique pour remplir les niveaux du bas).
+        const isGenBand = name.startsWith("system.gen.bands.");
 
         let value;
         if (el.type === "checkbox") value = el.checked;
         else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
         else value = el.value;
 
-        await this.document.update({ [name]: value });
+        await this.document.update({ [name]: value }, isGenBand ? { render: false } : {});
 
         if (isLevelsCsv) this.render({ force: false });
       });
