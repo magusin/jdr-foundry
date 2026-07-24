@@ -35,6 +35,16 @@ export function getVitesse(actor) {
  * plancher à 1 m (menace à mains nues / au contact). Les armes à distance
  * (grande portée) ne comptent pas pour le désengagement.
  */
+/**
+ * Deux camps : ami (FRIENDLY) vs ennemi (HOSTILE), d'après la DISPOSITION du token
+ * (et non le type d'acteur — un PNJ hostile est un « character » comme un joueur).
+ * Le neutre (0) ne menace personne et n'est menacé par personne par défaut.
+ */
+export function areOpposedDisp(a, b) {
+  const D = CONST?.TOKEN_DISPOSITIONS ?? { FRIENDLY: 1, HOSTILE: -1 };
+  return (a === D.FRIENDLY && b === D.HOSTILE) || (a === D.HOSTILE && b === D.FRIENDLY);
+}
+
 export function getMeleeReach(actor) {
   // Monstre : allonge propre (les monstres n'ont pas d'armes, juste des compétences)
   if (actor?.type === "monster") {
@@ -232,12 +242,15 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   // zone de menace (allonge de son arme : 1 m, 1,5 m…) : il était engagé
   // (dBefore ≤ allonge) et ne l'est plus après le déplacement (dAfter > allonge).
   const MARGE = 0.1; // petite tolérance de mesure
+  const moverDisp = tokenDoc.disposition;
   const opportunityTargets = [];
   if (canvas?.tokens?.placeables) {
     for (const enemyTok of canvas.tokens.placeables) {
       const ea = enemyTok.actor;
       if (!ea || ea.id === actor.id) continue;
-      if (ea.type === actor.type) continue;
+      // Ennemi = camp opposé (disposition), pas type d'acteur : un PNJ hostile
+      // est un « character » comme un joueur.
+      if (!areOpposedDisp(moverDisp, enemyTok.document?.disposition)) continue;
       const ec = combat.combatants.find(c => c.actorId === ea.id);
       if (!ec || ec.getFlag("core","defeated")) continue;
       const reach   = getMeleeReach(ea);

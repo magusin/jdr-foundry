@@ -7,7 +7,7 @@
 // s'ils la quittent). Marche pour tout le monde (le joueur voit l'allonge d'un
 // monstre visible en le survolant ; le MJ voit qui est engagé).
 
-import { getMeleeReach } from "./movement-tracker.js";
+import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 
 let _gfx = null;
 
@@ -57,15 +57,15 @@ function _draw(token) {
     g.addChild(label);
   } catch { /* texte optionnel */ }
 
-  // Surligne les autres tokens DANS la zone de menace (engagés)
+  // Surligne les ENNEMIS (camp opposé) présents dans la zone de menace = engagés
   try {
     for (const other of canvas.tokens?.placeables ?? []) {
       if (other === token || !other.actor) continue;
+      if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
       const dx = other.center.x - cx, dy = other.center.y - cy;
       if (Math.hypot(dx, dy) <= radius + 1) {
-        const oc = _colorFor(other.document?.disposition);
         const marker = new PIXI.Graphics();
-        marker.lineStyle(3, oc, 0.95);
+        marker.lineStyle(3, 0xffd700, 0.95); // liseré or = engagé
         marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
         g.addChild(marker);
       }
