@@ -46,23 +46,23 @@ export function areOpposedDisp(a, b) {
 }
 
 export function getMeleeReach(actor) {
-  // Monstre : allonge propre (les monstres n'ont pas d'armes, juste des compétences)
+  // Monstre : allonge propre. 0 = pas de menace (aucune attaque d'opportunité).
+  // Non défini → 1 m par défaut (valeur du template). 0 explicite est respecté.
   if (actor?.type === "monster") {
-    return Math.max(0, Number(actor.system?.allonge ?? 1) || 1) || 1;
+    return Math.max(0, Number(actor.system?.allonge ?? 1) || 0);
   }
-  // Personnage : plus grande ALLONGE parmi les armes équipées de corps à corps
-  // (allonge ≤ 3 m ; au-delà = arme à distance, pas de menace de mêlée).
+  // Personnage/PNJ : plus grande ALLONGE parmi les armes ÉQUIPÉES de corps à corps
+  // (allonge > 0 et ≤ 3 m). Aucune arme de mêlée équipée (ou allonge 0) → 0 =
+  // pas de menace, donc pas d'attaque d'opportunité.
   const MELEE_MAX = 3;
-  let reach = 1; // menace minimale au contact (1 m, mains nues)
+  let reach = 0;
   try {
-    const weapons = (actor?.items ?? []).filter(i => i.type === "weapon");
-    const equipped = weapons.filter(w => w.system?.equipe);
-    const pool = equipped.length ? equipped : weapons;
-    for (const w of pool) {
-      const a = Number(w.system?.allonge ?? w.system?.portee ?? 1) || 1;
-      if (a <= MELEE_MAX && a > reach) reach = a;
+    const equipped = (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipe);
+    for (const w of equipped) {
+      const a = Number(w.system?.allonge ?? 0) || 0;
+      if (a > 0 && a <= MELEE_MAX && a > reach) reach = a;
     }
-  } catch { /* défaut 1 m */ }
+  } catch { /* défaut 0 */ }
   return reach;
 }
 
