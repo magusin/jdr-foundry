@@ -82,6 +82,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
   });
 
   _activeTab = "main";
+  _scrollTop = 0;
 
   async _prepareContext(options) {
     const ctx = (await super._prepareContext(options)) ?? {};
@@ -222,6 +223,22 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     });
 
     switchTab(this._activeTab);
+
+    // ── Préserve la position de défilement entre les re-renders ──────────
+    // Chaque modification de champ déclenche un re-render de la fiche qui
+    // remettait la fenêtre tout en haut (très pénible dans l'onglet
+    // Génération). On mémorise le scrollTop et on le restaure après render.
+    const scroller = root.querySelector(".window-content") ?? root;
+    if (scroller) {
+      if (this._scrollTop) {
+        scroller.scrollTop = this._scrollTop;
+        requestAnimationFrame(() => { scroller.scrollTop = this._scrollTop; });
+      }
+      if (!scroller.dataset.rpgScrollBound) {
+        scroller.dataset.rpgScrollBound = "1";
+        scroller.addEventListener("scroll", () => { this._scrollTop = scroller.scrollTop; });
+      }
+    }
 
     // ── AUTO-SAVE tous les champs ─────────────────────
     // En V2 les inputs ne sont plus soumis automatiquement,
