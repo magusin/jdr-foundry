@@ -149,6 +149,9 @@
             <div class="mm-line">
               <span>Vitesse (m)</span>
               <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" />
+              <span style="margin-top:6px">Allonge / menace (mêlée, m)</span>
+              <input type="number" name="system.allonge" value="{{system.allonge}}" min="0" step="0.1"
+                title="Distance de menace au corps à corps (attaque d'opportunité au désengagement)" />
               <span style="margin-top:6px">Mode de déplacement</span>
               <select name="system.deplacement.type" style="width:100%">
                 <option value="terrestre"  {{#if (eq system.deplacement.type "terrestre")}}selected{{/if}}>🦶 Terrestre</option>

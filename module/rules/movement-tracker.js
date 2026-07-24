@@ -36,15 +36,21 @@ export function getVitesse(actor) {
  * (grande portée) ne comptent pas pour le désengagement.
  */
 export function getMeleeReach(actor) {
-  const MELEE_MAX = 3; // au-delà = arme à distance, pas de menace de mêlée
-  let reach = 1;       // menace minimale au contact (1 m)
+  // Monstre : allonge propre (les monstres n'ont pas d'armes, juste des compétences)
+  if (actor?.type === "monster") {
+    return Math.max(0, Number(actor.system?.allonge ?? 1) || 1) || 1;
+  }
+  // Personnage : plus grande ALLONGE parmi les armes équipées de corps à corps
+  // (allonge ≤ 3 m ; au-delà = arme à distance, pas de menace de mêlée).
+  const MELEE_MAX = 3;
+  let reach = 1; // menace minimale au contact (1 m, mains nues)
   try {
     const weapons = (actor?.items ?? []).filter(i => i.type === "weapon");
     const equipped = weapons.filter(w => w.system?.equipe);
     const pool = equipped.length ? equipped : weapons;
     for (const w of pool) {
-      const p = Number(w.system?.portee ?? 1) || 1;
-      if (p <= MELEE_MAX && p > reach) reach = p;
+      const a = Number(w.system?.allonge ?? w.system?.portee ?? 1) || 1;
+      if (a <= MELEE_MAX && a > reach) reach = a;
     }
   } catch { /* défaut 1 m */ }
   return reach;
@@ -310,17 +316,75 @@ async function _processMove(tokenDoc, combatant, waypoints) {
 }
 
 // ── Attaque d'opportunité ────────────────────────────────────────────────────
+
+/** Demande confirmation MJ (Oui/Non) pour une attaque d'opportunité de PJ. */
+async function _confirmOpportunity(ea, ma, item) {
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  const content = `<p><b>${htmlEsc(ea.name)}</b> peut porter une attaque d'opportunité sur
+    <b>${htmlEsc(ma.name)}</b> qui se désengage, avec <b>${htmlEsc(item.name)}</b>.</p>
+    <p>Confirmer l'attaque ?</p>`;
+  try {
+    if (DialogV2?.confirm) {
+      return await DialogV2.confirm({
+        window: { title: "Attaque d'opportunité" },
+        content, modal: true, rejectClose: false
+      });
+    }
+  } catch (e) { console.warn("[RPG] confirm opportunité:", e); }
+  return true; // fallback : pas de DialogV2 → considère confirmé
+}
+
+/** Laisse le MJ choisir la compétence d'un monstre (cooldown ignoré). null = annulé. */
+async function _chooseOpportunityAbility(ea, ma, abilities) {
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  const opts = abilities.map(a =>
+    `<option value="${a.id}">${htmlEsc(a.name)}${a.type === "spell" ? " (compétence)" : " (arme)"}</option>`
+  ).join("");
+  const content = `
+    <p><b>${htmlEsc(ea.name)}</b> peut réagir contre <b>${htmlEsc(ma.name)}</b> qui se désengage.</p>
+    <p>Compétence à utiliser <i>(cooldown ignoré)</i> :</p>
+    <select name="ability" style="width:100%">${opts}</select>`;
+  try {
+    if (DialogV2?.wait) {
+      const chosenId = await DialogV2.wait({
+        window: { title: "Attaque d'opportunité — compétence" },
+        content, modal: true, rejectClose: false,
+        buttons: [
+          { action: "ok", label: "⚔️ Attaquer", default: true,
+            callback: (event, button) => button.form?.elements?.ability?.value ?? null },
+          { action: "cancel", label: "Annuler", callback: () => null }
+        ]
+      });
+      return chosenId ? (ea.items.get(chosenId) ?? null) : null;
+    }
+  } catch (e) { console.warn("[RPG] choix compétence opportunité:", e); }
+  return abilities[0] ?? null; // fallback : 1re compétence
+}
+
 export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
   if (!game.user.isGM) return;
   const ea = game.actors.get(enemyActorId);
   const ma = game.actors.get(moverActorId);
   if (!ea || !ma) { ui.notifications?.warn?.("Acteur introuvable."); return; }
 
-  const weapon = ea.items.find(i => i.type === "weapon" && i.system?.equipe)
-    ?? ea.items.find(i => i.type === "weapon");
-  if (!weapon) { ui.notifications?.warn?.(`${ea.name} n'a aucune arme.`); return; }
+  // ── Choix de l'attaque + confirmation MJ ──────────────────────────────
+  let item = null;
+  if (ea.type === "monster") {
+    // Les monstres n'ont pas d'armes : ils attaquent avec leurs compétences (sorts/armes)
+    const abilities = ea.items.filter(i => i.type === "spell" || i.type === "weapon");
+    if (!abilities.length) { ui.notifications?.warn?.(`${ea.name} n'a aucune compétence.`); return; }
+    item = await _chooseOpportunityAbility(ea, ma, abilities);
+    if (!item) return; // MJ a annulé
+  } else {
+    item = ea.items.find(i => i.type === "weapon" && i.system?.equipe)
+        ?? ea.items.find(i => i.type === "weapon");
+    if (!item) { ui.notifications?.warn?.(`${ea.name} n'a aucune arme.`); return; }
+    if (!(await _confirmOpportunity(ea, ma, item))) return; // MJ a refusé
+  }
 
-  const tnData = game.rpg?.combat?.computeTN?.(ea, ma, weapon) ?? { tnFinal: 11, livraison: "physique" };
+  // ── Résolution — même mécanisme qu'une attaque normale, cooldown NON consommé ──
+  const tnData = game.rpg?.combat?.computeTN?.(ea, ma, item)
+    ?? { tnFinal: 11, livraison: item.system?.livraison ?? "physique" };
   const roll = await (new Roll("1d20")).evaluate();
   await roll.toMessage({ speaker: { alias: ea.name },
     flavor: `⚔️ Attaque d'opportunité — ${ea.name} → ${ma.name} (TN ${tnData.tnFinal}+)` });
@@ -328,7 +392,7 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
   await ChatMessage.create({
     speaker: { alias: ea.name },
     content: `<div style="font-size:13px">
-      Attaque d'opportunité : <b>${htmlEsc(weapon.name)}</b> → <b>${htmlEsc(ma.name)}</b><br>
+      Attaque d'opportunité : <b>${htmlEsc(item.name)}</b> → <b>${htmlEsc(ma.name)}</b><br>
       🎲 d20 = <b>${roll.total}</b> (TN ${tnData.tnFinal}+)
       <div class="rpg-attack-gm" style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="rpg-attack-resolve" data-result="fail" style="flex:1;padding:4px;cursor:pointer">Échec</button>
@@ -337,7 +401,7 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
       </div>
     </div>`,
     flags: { rpg: { type: "attackDeclaration", actionId: foundry.utils.randomID(),
-      attackDeclaration: { actorId: ea.id, weaponId: weapon.id, targetId: ma.id,
+      attackDeclaration: { actorId: ea.id, weaponId: item.id, targetId: ma.id,
         d20: roll.total, tnFinal: tnData.tnFinal, livraison: tnData.livraison } } }
   });
 }

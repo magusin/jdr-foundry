@@ -129,11 +129,21 @@
         {{/if}}
 
         <div class="mm-line">
-          <span class="mm-label">Portée (mètres)</span>
+          <span class="mm-label">Portée (jet/distance, m)</span>
           {{#if canEdit}}
-            <input class="mm-input" type="number" name="system.portee" value="{{system.portee}}" min="1"/>
+            <input class="mm-input" type="number" name="system.portee" value="{{system.portee}}" min="0" step="0.1"/>
           {{else}}
-            <div class="mm-value"><b>{{system.portee}}</b></div>
+            <div class="mm-value"><b>{{system.portee}}</b> m</div>
+          {{/if}}
+        </div>
+
+        <div class="mm-line">
+          <span class="mm-label">Allonge (mêlée, m)</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.allonge" value="{{system.allonge}}" min="0" step="0.1"
+              title="Distance de menace au corps à corps (attaque d'opportunité au désengagement)"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.allonge}}</b> m</div>
           {{/if}}
         </div>
 

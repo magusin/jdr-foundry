@@ -154,6 +154,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
     ctx.system.portee = n(ctx.system.portee, 1);
+    ctx.system.allonge = n(ctx.system.allonge, 1);
 
     // Compat ancien stockage
     const legacyDice = String(ctx.system.degats ?? "1d6");
@@ -256,6 +257,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       if (expanded.system.poids != null) expanded.system.poids = n(expanded.system.poids, 0);
       if (expanded.system.difficulte != null) expanded.system.difficulte = n(expanded.system.difficulte, 0);
       if (expanded.system.portee != null) expanded.system.portee = n(expanded.system.portee, 1);
+      if (expanded.system.allonge != null) expanded.system.allonge = n(expanded.system.allonge, 1);
 
       // bonus
       if (expanded.system.bonus) {

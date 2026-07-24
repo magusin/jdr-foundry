@@ -85,13 +85,13 @@
 
         <div>
           <label>Portée min</label>
-          {{#if canEdit}}<input type="number" name="system.range.min" value="{{system.range.min}}" min="0" style="width:100%"/>
+          {{#if canEdit}}<input type="number" name="system.range.min" value="{{system.range.min}}" min="0" step="0.1" style="width:100%"/>
           {{else}}<div><b>{{system.range.min}}</b></div>{{/if}}
         </div>
 
         <div>
           <label>Portée max</label>
-          {{#if canEdit}}<input type="number" name="system.range.max" value="{{system.range.max}}" min="0" style="width:100%"/>
+          {{#if canEdit}}<input type="number" name="system.range.max" value="{{system.range.max}}" min="0" step="0.1" style="width:100%"/>
           {{else}}<div><b>{{system.range.max}}</b></div>{{/if}}
         </div>
 
@@ -303,9 +303,9 @@
             {{#if fx.isAura}}
             <span style="font-size:11px;display:flex;align-items:center;gap:4px">
               Portée :
-              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" style="width:45px" />
+              <input type="number" name="system.effectsUI.{{i}}.auraMin" value="{{fx.auraMin}}" min="0" step="0.1" style="width:45px" />
               –
-              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" style="width:45px" />
+              <input type="number" name="system.effectsUI.{{i}}.auraMax" value="{{fx.auraMax}}" min="0" step="0.1" style="width:45px" />
             </span>
             {{/if}}
           </div>

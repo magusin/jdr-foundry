@@ -173,6 +173,7 @@
       "templates": [
         "base"
       ],
+      "allonge": 1,
       "gen": {
         "levelsCsv": "2,4,6",
         "bands": {},
@@ -268,6 +269,7 @@
       "difficulte": 0,
       "livraison": "physique",
       "portee": 1,
+      "allonge": 1,
       "damage": {
         "dice": "1d6",
         "flat": 0,
