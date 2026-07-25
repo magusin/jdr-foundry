@@ -429,7 +429,14 @@ export class RPGActor extends Actor {
 
     // ✅ Surcharge : si charge >= 90% du max → -1 vitesse (état automatique)
     const chargeCur = Number(sys.charge?.actuelle ?? sys.charge?.pods ?? 0) || 0;
-    const chargeMax = Number(sys.podsMax ?? 50) || 50;
+    // Pods max : les états/équipements peuvent le modifier (le mod existait
+    // dans la table des stats mais n'était jamais consommé ici).
+    let chargeMax = Number(sys.podsMax ?? 50) || 50;
+    chargeMax += Number(flat?.charge?.podsMax ?? 0) || 0;
+    chargeMax = applyPct(chargeMax, pct?.charge?.podsMax);
+    chargeMax = Math.max(1, Math.floor(chargeMax));
+    sys.podsMax = chargeMax;
+    sys.derived.effective.podsMax = chargeMax;
     const isSurcharge = chargeMax > 0 && (chargeCur / chargeMax) >= 0.9;
     sys.derived.surcharge = isSurcharge;
     const surchargeVitesseMalus = isSurcharge ? 1 : 0;

@@ -53,8 +53,14 @@ function auraHasHarm(auraState) {
   return false;
 }
 
-// buff => allies ; malus/DOT => enemies
+/**
+ * Cible de l'aura : la valeur choisie par le MJ sur l'effet
+ * (aura.target = allies | enemies | both) fait foi. Sans choix explicite,
+ * on déduit du contenu : buff => alliés, malus/DOT => ennemis.
+ */
 function computeAuraTarget(auraState) {
+  const explicit = String(auraState?.aura?.target ?? "").trim().toLowerCase();
+  if (explicit === "allies" || explicit === "enemies" || explicit === "both") return explicit;
   return auraHasHarm(auraState) ? "enemies" : "allies";
 }
 
@@ -99,6 +105,53 @@ function stableDocCenterPixels(token) {
     x: (Number(doc.x) || 0) + (w * gs) / 2 - eps,
     y: (Number(doc.y) || 0) + (h * gs) / 2 - eps
   };
+}
+
+/**
+ * Distance entre deux tokens en MÈTRES, avec la même règle de diagonale que
+ * le système de déplacement (diagonale pondérée, cf. measureSegmentMeters).
+ * Les portées d'aura sont saisies en mètres sur la fiche de sort : il faut
+ * mesurer dans la même unité, sinon 3 m se comportait comme 3 cases avec
+ * une diagonale comptée double.
+ */
+function auraDistanceMeters(tokenA, tokenB) {
+  try {
+    const gs = canvas?.scene?.grid?.size ?? canvas?.grid?.size ?? 100;
+    const dist = canvas?.scene?.grid?.distance ?? 1;
+
+    const axy = getTokenXY(tokenA);
+    const bxy = getTokenXY(tokenB);
+
+    const aw = Math.max(1, Number(tokenA.document.width ?? 1) || 1);
+    const ah = Math.max(1, Number(tokenA.document.height ?? 1) || 1);
+    const bw = Math.max(1, Number(tokenB.document.width ?? 1) || 1);
+    const bh = Math.max(1, Number(tokenB.document.height ?? 1) || 1);
+
+    const ac = { x: axy.x + (aw * gs) / 2, y: axy.y + (ah * gs) / 2 };
+    const bc = { x: bxy.x + (bw * gs) / 2, y: bxy.y + (bh * gs) / 2 };
+
+    const dx = Math.abs(bc.x - ac.x) / gs;
+    const dy = Math.abs(bc.y - ac.y) / gs;
+    const diag = Math.min(dx, dy);
+    const straight = Math.abs(dx - dy);
+
+    let factor = 1.41;
+    try {
+      const D = CONST.GRID_DIAGONALS ?? {};
+      const rule = canvas?.scene?.grid?.diagonals;
+      if (rule === D.EQUIDISTANT) factor = 1;
+      else if (rule === D.ALTERNATING_1 || rule === D.ALTERNATING_2) factor = 1.5;
+    } catch { /* défaut 1.41 */ }
+
+    // Bord à bord : on retire le rayon des deux tokens pour qu'un grand
+    // token soit "dans" l'aura dès que son corps l'atteint.
+    const radiusA = (Math.max(aw, ah) - 1) / 2;
+    const radiusB = (Math.max(bw, bh) - 1) / 2;
+    const centers = (straight + diag * factor);
+    return Math.max(0, centers - radiusA - radiusB) * dist;
+  } catch (e) {
+    return 999999;
+  }
 }
 
 // ✅ 1 case = 1, diagonale = 2
@@ -189,6 +242,7 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
   const target = computeAuraTarget(auraState);
   const auraKey = String(auraState?.aura?.key ?? auraState?.label ?? "Aura");
   const dotFlat = Number(auraState?.dot?.perTick ?? auraState?.dot?.flat ?? 0) || 0;
+  const fatigueTick = Number(auraState?.dot?.fatiguePerTick ?? 0) || 0;
 
   return {
     id: `aura:${sourceActor.id}:${auraState.id}:${targetActor.id}:${targetToken.id}`,
@@ -198,7 +252,11 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
     duration: 999999,
     remaining: 999999,
     cleanseDC: 0,
-    dot: { flat: dotFlat, formula: "", perTick: dotFlat },
+    // On reporte le type/élément et la clé de l'effet source : sans eux, les
+    // résistances et les icônes d'état ne reconnaissaient pas l'effet d'aura.
+    tag: auraState?.tag ?? null,
+    effectKey: auraState?.effectKey ?? null,
+    dot: { flat: dotFlat, formula: "", perTick: dotFlat, fatiguePerTick: fatigueTick },
     mods: foundry.utils.deepClone(auraState.mods ?? {}),
     auraApplied: {
       sourceActorId: sourceActor.id,
@@ -256,11 +314,14 @@ export const RPG_AURAS = {
           const auraTarget = computeAuraTarget(auraState);
           if (!targetMatches(auraTarget, sourceToken, targetToken)) continue;
 
-          const dist = gridDistanceSquares(sourceToken, targetToken);
+          // Portées d'aura en MÈTRES (comme saisies sur la fiche de sort)
+          const dist = auraDistanceMeters(sourceToken, targetToken);
 
-          // ✅ bornes inclusives : 0..3 => dist 3 OK / dist 4 NON
-          if (dist < min) continue;
-          if (dist > max) continue;
+          // ✅ bornes inclusives, avec une petite tolérance pour absorber
+          // les arrondis des diagonales pondérées (ex: 1.41 vs 1.4)
+          const EPS = 0.05;
+          if (dist < min - EPS) continue;
+          if (dist > max + EPS) continue;
 
           applied.push(makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, targetToken }));
         }

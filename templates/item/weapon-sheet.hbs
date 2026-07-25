@@ -398,6 +398,34 @@
         </div>
       </section>
     {{/if}}
+    {{!-- AMPLIFICATION DES EFFETS (MJ ONLY) --}}
+    {{#if canEdit}}
+      <section class="card">
+        <h2>Amplification des effets</h2>
+        <div class="rpg-amplifications">
+          {{#each system.amplifications as |a idx|}}
+          <div class="amplification-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+            <select name="system.amplifications.{{idx}}.tag" style="flex:1.5">
+              {{#each ../EFFECT_TAGS as |label tag|}}
+                <option value="{{tag}}" {{#if (eq a.tag tag)}}selected{{/if}}>{{label}}</option>
+              {{/each}}
+            </select>
+            <input type="text" name="system.amplifications.{{idx}}.effectKey" value="{{a.effectKey}}"
+              placeholder="Effet précis (ex: Brûlure) — vide = tout le type" style="flex:1.5;font-size:11px"/>
+            <label style="font-size:11px;white-space:nowrap" title="Tours ajoutés à la durée de l'effet appliqué.">Durée +<input type="number" name="system.amplifications.{{idx}}.durationBonus" value="{{a.durationBonus}}" style="width:50px"/></label>
+            <label style="font-size:11px;white-space:nowrap" title="Renforce les dégâts ou le soin par tour de l'effet.">Puissance +<input type="number" name="system.amplifications.{{idx}}.dotBonusPct" value="{{a.dotBonusPct}}" min="-100" max="500" style="width:50px"/>%</label>
+            <label style="font-size:11px;white-space:nowrap" title="Renforce les bonus et malus de stats portés par l'effet.">Bonus/Malus +<input type="number" name="system.amplifications.{{idx}}.modBonusPct" value="{{a.modBonusPct}}" min="-100" max="500" style="width:50px"/>%</label>
+            <button type="button" data-action="removeAmplification" data-idx="{{idx}}" title="Retirer">✕</button>
+          </div>
+          {{/each}}
+        </div>
+        <button type="button" data-action="addAmplification" style="margin-top:4px">+ Ajouter une amplification</button>
+        <div style="font-size:11px;opacity:0.8;margin-top:4px">
+          Renforce les effets que <b>le porteur applique</b> aux autres (durée, dégâts/soin par tour, bonus/malus).
+          C'est le pendant offensif des résistances. Valeurs négatives = affaiblissement.
+        </div>
+      </section>
+    {{/if}}
 
     {{!-- DESCRIPTION --}}
     <section class="card">

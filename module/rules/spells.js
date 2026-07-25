@@ -1214,7 +1214,21 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         target: String(fx.auraTarget ?? "allies")
       };
 
-      const resistResult = await upsertState(applyTo, state);
+      // Amplification côté LANCEUR (équipement + états) : allonge la durée,
+      // renforce les dégâts/soin par tour et les bonus/malus. S'applique
+      // AVANT les résistances de la cible.
+      let ampInfo = null;
+      let outgoing = state;
+      try {
+        const { amplifyState } = await import("./amplification.js");
+        const amped = amplifyState(actor, state);
+        outgoing = amped.state;
+        ampInfo = amped.info;
+      } catch (e) {
+        console.warn("[RPG] amplification d'effet :", e);
+      }
+
+      const resistResult = await upsertState(applyTo, outgoing);
       const info = resistResult?.resistanceInfo;
 
       if (resistResult?.resisted) {
@@ -1224,8 +1238,14 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       }
       addedStatesTracker.push({ actorId: applyTo.id, stateId });
       const modSummary = summarizeMods(mods);
-      const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? duration} tours`;
-      fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}`);
+      const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? n(outgoing.duration, duration)} tours`;
+      // Trace l'amplification pour que le MJ voie d'où vient le renfort
+      const ampBits = [];
+      if (ampInfo?.durationBonus) ampBits.push(`durée ${ampInfo.durationBonus > 0 ? "+" : ""}${ampInfo.durationBonus}`);
+      if (ampInfo?.dotBonusPct)   ampBits.push(`puissance ${ampInfo.dotBonusPct > 0 ? "+" : ""}${ampInfo.dotBonusPct}%`);
+      if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
+      const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
+      fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
     }
   }
 

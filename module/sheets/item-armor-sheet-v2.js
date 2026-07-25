@@ -28,7 +28,9 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
       actions: {
         addResistance:    async function (event) { await this._actionAddResistance(event); },
-        removeResistance: async function (event) { await this._actionRemoveResistance(event); }
+        removeResistance: async function (event) { await this._actionRemoveResistance(event); },
+        addAmplification:    async function (event) { await this._actionAddAmplification(event); },
+        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); }
       }
     },
     { inplace: false }
@@ -116,6 +118,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     // ✅ résistances (tag, durationReduction, dotReductionPct, immune)
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
+    ctx.system.amplifications = Array.isArray(ctx.system.amplifications) ? ctx.system.amplifications : [];
     ctx.EFFECT_TAGS = {
       "": "(N'importe quel type — filtre seulement par nom d'effet)",
       magique: "Magique", physique: "Physique",
@@ -160,6 +163,20 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       }
     }
 
+    // amplifications : normalise Object -> Array + types
+    const ampRaw = expanded?.system?.amplifications;
+    if (ampRaw && !Array.isArray(ampRaw)) expanded.system.amplifications = Object.values(ampRaw);
+    if (Array.isArray(expanded?.system?.amplifications)) {
+      for (const a of expanded.system.amplifications) {
+        if (!a) continue;
+        a.tag = String(a.tag ?? "").trim();
+        a.durationBonus = n(a.durationBonus, 0);
+        a.dotBonusPct = Math.min(500, Math.max(-100, n(a.dotBonusPct, 0)));
+        a.modBonusPct = Math.min(500, Math.max(-100, n(a.modBonusPct, 0)));
+      }
+    }
+
+
     await this.document.update(expanded, { render: false });
     await this.render({ force: true });
   }
@@ -202,5 +219,21 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
+  }
+
+  async _actionAddAmplification(event) {
+    event?.preventDefault?.();
+    const list = foundry.utils.deepClone(this.document.system?.amplifications ?? []);
+    list.push({ tag: "feu", effectKey: "", durationBonus: 0, dotBonusPct: 0, modBonusPct: 0 });
+    await this.document.update({ "system.amplifications": list }, { render: true });
+  }
+
+  async _actionRemoveAmplification(event) {
+    event?.preventDefault?.();
+    const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
+    if (!Number.isFinite(idx)) return;
+    const list = foundry.utils.deepClone(this.document.system?.amplifications ?? []);
+    list.splice(idx, 1);
+    await this.document.update({ "system.amplifications": list }, { render: true });
   }
 }
