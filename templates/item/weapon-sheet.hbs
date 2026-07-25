@@ -260,8 +260,9 @@
                   <div class="mm-line">
                     <span class="mm-label" title="Quand l'effet s'applique : sur une touche normale (le critique la déclenche aussi) ou uniquement sur un coup critique.">⚡ Déclenchement</span>
                     <select class="mm-input" name="system.effects.{{idx}}.when">
-                      <option value="hit"  {{#if (eq e.when "hit")}}selected{{/if}}>Touche normale (+ crit)</option>
-                      <option value="crit" {{#if (eq e.when "crit")}}selected{{/if}}>Critique uniquement</option>
+                      <option value="hit"     {{#if (eq e.when "hit")}}selected{{/if}}>Touche normale + crit</option>
+                      <option value="hitOnly" {{#if (eq e.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
+                      <option value="crit"    {{#if (eq e.when "crit")}}selected{{/if}}>Critique uniquement</option>
                     </select>
                   </div>
                 </div>
@@ -287,9 +288,17 @@
 
                 <hr style="margin:10px 0; opacity:.3"/>
 
-                <h3 style="margin:0 0 6px;">DOT (optionnel)</h3>
+                <h3 style="margin:0 0 6px;">Effet par tour (optionnel)</h3>
                 <div class="grid-mm-4">
-                  <div class="mm-line"><span class="mm-label">Base</span><input class="mm-input" type="number" name="system.effects.{{idx}}.dot.base" value="{{e.dot.base}}" /></div>
+                  <div class="mm-line">
+                    <span class="mm-label" title="Cet effet inflige des dégâts, rend des PV, ou ne fait ni l'un ni l'autre.">Nature</span>
+                    <select class="mm-input" name="system.effects.{{idx}}.dot.mode">
+                      <option value="none"   {{#if (eq e.dot.mode "none")}}selected{{/if}}>— Aucun —</option>
+                      <option value="damage" {{#if (eq e.dot.mode "damage")}}selected{{/if}}>💥 Dégâts</option>
+                      <option value="heal"   {{#if (eq e.dot.mode "heal")}}selected{{/if}}>💚 Soin</option>
+                    </select>
+                  </div>
+                  <div class="mm-line"><span class="mm-label" title="Part fixe par tour, toujours positive.">Base</span><input class="mm-input" type="number" name="system.effects.{{idx}}.dot.base" value="{{e.dot.base}}" min="0"/></div>
                   <div class="mm-line">
                     <span class="mm-label">Stat source</span>
                     <select class="mm-input" name="system.effects.{{idx}}.dot.stat">

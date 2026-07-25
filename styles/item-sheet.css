@@ -164,7 +164,7 @@
 
 .rpg-spell-sheet .fx-mod-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 0.9fr) 24px;
   gap: 5px;
   align-items: center;
   margin-bottom: 4px;
@@ -201,3 +201,13 @@
 .weapon-sheet .grid-mm-2 > .mm-line,
 .weapon-sheet .grid-mm-3 > .mm-line,
 .weapon-sheet .grid-mm-4 > .mm-line { min-width: 0; }
+
+/* ── Cartes : ne jamais se comprimer ───────────────────────────────────
+   .sheet-body est un conteneur flex vertical scrollable. Sans cette règle
+   les cartes (flex-shrink:1 par défaut) sont écrasées quand le contenu
+   dépasse la hauteur de la fenêtre, au lieu de laisser le body défiler —
+   les blocs du bas (Soin, Aura, Bonus/Malus) devenaient invisibles.        */
+.rpg-sheet .sheet-body > .card,
+.rpg-sheet .sheet-body > section.card {
+  flex: 0 0 auto;
+}

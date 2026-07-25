@@ -38,7 +38,9 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
   const list = Array.isArray(weapon?.system?.effects) ? weapon.system.effects : [];
   if (!list.length || !target) return [];
 
-  const allowed = new Set(isCrit ? ["hit", "crit"] : ["hit"]);
+  // "hit" = toute touche réussie (critique compris)
+  // "hitOnly" = touche normale seulement, "crit" = critique seulement
+  const allowed = new Set(isCrit ? ["hit", "crit"] : ["hit", "hitonly"]);
   const rows = [];
 
   const effP = attacker?.system?.derived?.effective?.principales
@@ -53,11 +55,19 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
     const label = String(fx?.label ?? weapon.name ?? "Effet").trim() || "Effet";
     const duration = Math.max(1, n(fx?.duration, 1));
 
+    // La nature (dégâts / soin) est explicite ; la quantité reste positive.
+    // En interne un perTick négatif = soin. Ancien format sans `mode` :
+    // on garde le signe de la base pour ne rien casser.
     const base = n(fx?.dot?.base, 0);
     const stat = String(fx?.dot?.stat ?? "").trim();
     const per  = Math.max(1, n(fx?.dot?.per, 10) || 10);
     const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) : 0;
-    const perTick = base + bonus;
+    const mode = String(fx?.dot?.mode ?? "").toLowerCase();
+    let perTick;
+    if (mode === "none") perTick = 0;
+    else if (mode === "damage") perTick = Math.abs(base) + Math.abs(bonus);
+    else if (mode === "heal")   perTick = -(Math.abs(base) + Math.abs(bonus));
+    else perTick = base + bonus; // ancien format signé
 
     const id = `weapon_${weapon.id}_${fx?.id ?? label}_${target.id}`;
     const state = {

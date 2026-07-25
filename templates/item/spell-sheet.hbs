@@ -250,12 +250,13 @@
               {{else}}<div><b>{{fx.tag}}</b></div>{{/if}}
             </div>
             <div>
-              <label title="Quand l'effet s'applique : sur une touche normale (et aussi sur un critique), uniquement sur un critique, ou dès le lancement du sort quel que soit le résultat.">⚡ Déclenchement</label>
+              <label title="Quand l'effet s'applique : sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement du sort quel que soit le résultat.">⚡ Déclenchement</label>
               {{#if @root.canEdit}}
               <select data-fx-field="when">
-                <option value="hit"  {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale (+ crit)</option>
-                <option value="crit" {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
-                <option value="cast" {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (toujours)</option>
+                <option value="hit"     {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale + crit</option>
+                <option value="hitOnly" {{#if (eq fx.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
+                <option value="crit"    {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
+                <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (toujours)</option>
               </select>
               {{else}}<div><b>{{fx.when}}</b></div>{{/if}}
             </div>
@@ -268,7 +269,7 @@
               <label>Permanent</label>
               <label class="fx-check" title="L'effet ne expire jamais (la durée est ignorée).">
                 <input type="checkbox" data-fx-field="permanent" {{#if fx.permanent}}checked{{/if}} />
-                <span>Ne expire pas</span>
+                <span>N'expire pas</span>
               </label>
             </div>
           </div>
@@ -306,76 +307,53 @@
             </div>
           </div>
 
-          {{!-- ═══ DÉGÂTS PAR TOUR ═══ --}}
+          {{!-- ═══ EFFET PAR TOUR (dégâts OU soin) ═══ --}}
           <fieldset class="fx-fieldset">
-            <legend>💥 Dégâts par tour</legend>
+            <legend>🩸 Effet par tour</legend>
             <div class="fx-grid-5">
               <div>
-                <label title="Dégâts fixes infligés à chaque tour.">Fixe</label>
-                <input type="number" data-fx-field="dot.flat" value="{{fx.dot.flat}}" placeholder="0" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <label title="Cet effet inflige des dégâts, rend des PV, ou ne fait ni l'un ni l'autre.">Nature</label>
+                <select data-fx-field="tick.mode" {{#unless @root.canEdit}}disabled{{/unless}}>
+                  <option value="none"   {{#if (eq fx.tick.mode "none")}}selected{{/if}}>— Aucun —</option>
+                  <option value="damage" {{#if (eq fx.tick.mode "damage")}}selected{{/if}}>💥 Dégâts</option>
+                  <option value="heal"   {{#if (eq fx.tick.mode "heal")}}selected{{/if}}>💚 Soin</option>
+                </select>
               </div>
               <div>
-                <label title="Stat du lanceur qui augmente les dégâts (ex: Intelligence / 10).">Stat</label>
-                <select data-fx-field="dot.stat" {{#unless @root.canEdit}}disabled{{/unless}}>
-                  <option value="" {{#unless fx.dot.stat}}selected{{/unless}}>— aucune —</option>
-                  <option value="intelligence" {{#if (eq fx.dot.stat "intelligence")}}selected{{/if}}>Intelligence</option>
-                  <option value="force"        {{#if (eq fx.dot.stat "force")}}selected{{/if}}>Force</option>
-                  <option value="dexterite"    {{#if (eq fx.dot.stat "dexterite")}}selected{{/if}}>Dextérité</option>
-                  <option value="acuite"       {{#if (eq fx.dot.stat "acuite")}}selected{{/if}}>Acuité</option>
-                  <option value="endurance"    {{#if (eq fx.dot.stat "endurance")}}selected{{/if}}>Endurance</option>
+                <label title="Part fixe appliquée à chaque tour. Toujours un nombre positif.">Fixe</label>
+                <input type="number" data-fx-field="tick.flat" value="{{fx.tick.flat}}" min="0" placeholder="0" {{#unless @root.canEdit}}readonly{{/unless}}/>
+              </div>
+              <div>
+                <label title="Stat du lanceur qui renforce l'effet (ex : Intelligence ÷ 10).">Stat</label>
+                <select data-fx-field="tick.stat" {{#unless @root.canEdit}}disabled{{/unless}}>
+                  <option value="" {{#unless fx.tick.stat}}selected{{/unless}}>— aucune —</option>
+                  <option value="intelligence" {{#if (eq fx.tick.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+                  <option value="force"        {{#if (eq fx.tick.stat "force")}}selected{{/if}}>Force</option>
+                  <option value="dexterite"    {{#if (eq fx.tick.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+                  <option value="acuite"       {{#if (eq fx.tick.stat "acuite")}}selected{{/if}}>Acuité</option>
+                  <option value="endurance"    {{#if (eq fx.tick.stat "endurance")}}selected{{/if}}>Endurance</option>
                 </select>
               </div>
               <div>
                 <label title="Diviseur : 10 = un palier tous les 10 points de stat.">Par</label>
-                <input type="number" data-fx-field="dot.per" value="{{fx.dot.per}}" min="1" placeholder="10" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <input type="number" data-fx-field="tick.per" value="{{fx.tick.per}}" min="1" placeholder="10" {{#unless @root.canEdit}}readonly{{/unless}}/>
               </div>
               <div>
-                <label title="Dégâts gagnés à chaque palier de stat.">Gain/palier</label>
-                <input type="number" data-fx-field="dot.perStep" value="{{fx.dot.perStep}}" placeholder="1" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <label title="Points gagnés à chaque palier de stat.">Gain/palier</label>
+                <input type="number" data-fx-field="tick.perStep" value="{{fx.tick.perStep}}" min="0" placeholder="1" {{#unless @root.canEdit}}readonly{{/unless}}/>
               </div>
+            </div>
+            <div class="fx-grid-5" style="margin-top:6px">
               <div>
-                <label>Livraison</label>
-                <select data-fx-field="dot.livraison" {{#unless @root.canEdit}}disabled{{/unless}}>
-                  <option value="magique"  {{#if (eq fx.dot.livraison "magique")}}selected{{/if}}>Magique</option>
-                  <option value="physique" {{#if (eq fx.dot.livraison "physique")}}selected{{/if}}>Physique</option>
+                <label title="Type de dégâts (ignoré pour un soin).">Livraison</label>
+                <select data-fx-field="tick.livraison" {{#unless @root.canEdit}}disabled{{/unless}}>
+                  <option value="magique"  {{#if (eq fx.tick.livraison "magique")}}selected{{/if}}>Magique</option>
+                  <option value="physique" {{#if (eq fx.tick.livraison "physique")}}selected{{/if}}>Physique</option>
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Total/tour : Fixe + (stat ÷ Par) × Gain/palier — laisse tout à 0 s'il n'y a pas de dégâts.</small>
+            <small class="fx-hint">Total par tour : <b>Fixe + (stat ÷ Par) × Gain/palier</b>. Choisis <b>Dégâts</b> ou <b>Soin</b> — pas besoin de valeur négative.</small>
           </fieldset>
-
-          {{!-- ═══ SOIN PAR TOUR ═══ --}}
-          <fieldset class="fx-fieldset">
-            <legend>💚 Soin par tour</legend>
-            <div class="fx-grid-5">
-              <div>
-                <label title="PV rendus à chaque tour.">Fixe</label>
-                <input type="number" data-fx-field="hot.flat" value="{{fx.hot.flat}}" placeholder="0" {{#unless @root.canEdit}}readonly{{/unless}}/>
-              </div>
-              <div>
-                <label title="Stat du lanceur qui augmente le soin (ex: Intelligence / 10).">Stat</label>
-                <select data-fx-field="hot.stat" {{#unless @root.canEdit}}disabled{{/unless}}>
-                  <option value="" {{#unless fx.hot.stat}}selected{{/unless}}>— aucune —</option>
-                  <option value="intelligence" {{#if (eq fx.hot.stat "intelligence")}}selected{{/if}}>Intelligence</option>
-                  <option value="force"        {{#if (eq fx.hot.stat "force")}}selected{{/if}}>Force</option>
-                  <option value="dexterite"    {{#if (eq fx.hot.stat "dexterite")}}selected{{/if}}>Dextérité</option>
-                  <option value="acuite"       {{#if (eq fx.hot.stat "acuite")}}selected{{/if}}>Acuité</option>
-                  <option value="endurance"    {{#if (eq fx.hot.stat "endurance")}}selected{{/if}}>Endurance</option>
-                </select>
-              </div>
-              <div>
-                <label title="Diviseur : 10 = un palier tous les 10 points de stat.">Par</label>
-                <input type="number" data-fx-field="hot.per" value="{{fx.hot.per}}" min="1" placeholder="10" {{#unless @root.canEdit}}readonly{{/unless}}/>
-              </div>
-              <div>
-                <label title="Soin gagné à chaque palier de stat.">Gain/palier</label>
-                <input type="number" data-fx-field="hot.perStep" value="{{fx.hot.perStep}}" placeholder="1" {{#unless @root.canEdit}}readonly{{/unless}}/>
-              </div>
-              <div></div>
-            </div>
-            <small class="fx-hint">Total/tour : Fixe + (stat ÷ Par) × Gain/palier. Le soin est déduit des dégâts ci-dessus.</small>
-          </fieldset>
-
           {{!-- ═══ AURA ═══ --}}
           <fieldset class="fx-fieldset">
             <legend>🌀 Aura (zone autour de la cible)</legend>
@@ -444,12 +422,17 @@
                     <option value="podsMax"    {{#if (eq mod.stat "podsMax")}}selected{{/if}}>Pods max</option>
                   </optgroup>
                 </select>
-                <select data-mod-field="mode" {{#unless @root.canEdit}}disabled{{/unless}}>
-                  <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe (+/-)</option>
-                  <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>Pourcent (%)</option>
+                <select data-mod-field="sens" {{#unless @root.canEdit}}disabled{{/unless}}>
+                  <option value="bonus" {{#unless mod.isMalus}}selected{{/unless}}>⬆️ Bonus</option>
+                  <option value="malus" {{#if mod.isMalus}}selected{{/if}}>⬇️ Malus</option>
                 </select>
-                <input type="number" data-mod-field="value" value="{{mod.value}}" placeholder="0"
-                  title="Positif = bonus, négatif = malus" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <select data-mod-field="mode" {{#unless @root.canEdit}}disabled{{/unless}}>
+                  <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe</option>
+                  <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
+                </select>
+                <input type="number" data-mod-field="value" value="{{mod.absValue}}" min="0" placeholder="0"
+                  title="Quantité, toujours positive — le sens (bonus ou malus) est choisi à gauche."
+                  {{#unless @root.canEdit}}readonly{{/unless}}/>
                 {{#if @root.canEdit}}
                 <button type="button" data-action="removeMod" data-fx-idx="{{i}}" data-mod-index="{{mi}}"
                   class="fx-del-btn" title="Retirer cette stat">✕</button>
@@ -457,7 +440,7 @@
               </div>
               {{/each}}
             </div>
-            <small class="fx-hint">Valeur <b>positive = bonus</b>, <b>négative = malus</b>. Ex : Force −10 (fixe) ou Vitesse −25 (%).</small>
+            <small class="fx-hint">Choisis la stat, puis <b>Bonus</b> ou <b>Malus</b>, en valeur <b>Fixe</b> ou en <b>%</b>. Ex. Enlisement : Vitesse · Malus · % · 25.</small>
           </fieldset>
 
         </div>

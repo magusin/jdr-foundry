@@ -345,7 +345,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       duration: 1,
       cleanseDC: 0,
       stacking: "replace",
-      dot: { base: 0, stat: "intelligence", per: 10, livraison: "physique" },
+      dot: { mode: "none", base: 0, stat: "intelligence", per: 10, livraison: "physique" },
       modsFlat: { principales: {} },
       modsPct: { principales: {} }
     });

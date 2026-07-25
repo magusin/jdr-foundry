@@ -38,19 +38,25 @@ function normDamage(d) {
 /**
  * Normalise les modificateurs de stat d'un effet vers le format tableau
  * [{ stat, mode:"flat"|"pct", value }] attendu par buildModsFromFxMods().
+ * `value` reste SIGNÉE en base (négatif = malus) car c'est ce que le moteur
+ * applique ; l'UI, elle, expose un sens explicite (bonus/malus) + une
+ * quantité positive via isMalus/absValue.
  * Accepte aussi l'ancien format objet { force: { flat, pct }, ... }.
  */
 function normMods(raw) {
   const out = [];
+  const push = (stat, mode, value) => {
+    const v = n(value, 0);
+    out.push({
+      stat, mode: mode === "pct" ? "pct" : "flat", value: v,
+      isMalus: v < 0, absValue: Math.abs(v)
+    });
+  };
   if (Array.isArray(raw)) {
     for (const m of raw) {
       const stat = String(m?.stat ?? "").trim();
       if (!stat) continue;
-      out.push({
-        stat,
-        mode: m?.mode === "pct" ? "pct" : "flat",
-        value: n(m?.value, 0)
-      });
+      push(stat, m?.mode, m?.value);
     }
     return out;
   }
@@ -59,12 +65,60 @@ function normMods(raw) {
       if (!stat) continue;
       const flat = n(v?.flat, 0);
       const pct = n(v?.pct, 0);
-      if (flat) out.push({ stat, mode: "flat", value: flat });
-      if (pct) out.push({ stat, mode: "pct", value: pct });
-      if (!flat && !pct) out.push({ stat, mode: "flat", value: 0 });
+      if (flat) push(stat, "flat", flat);
+      if (pct) push(stat, "pct", pct);
+      if (!flat && !pct) push(stat, "flat", 0);
     }
   }
   return out;
+}
+
+/**
+ * Normalise l'« effet par tour » d'un effet secondaire.
+ * Format cible : { mode:"none"|"damage"|"heal", flat, stat, per, perStep, livraison }
+ * avec `flat` toujours positif — c'est `mode` qui dit s'il s'agit de dégâts
+ * ou de soin. Migre les anciens formats (dot/hot séparés, puis damage.flat signé).
+ */
+function normTick(fx) {
+  const t = fx?.tick;
+  if (t && typeof t === "object" && t.mode) {
+    return {
+      mode: ["damage", "heal", "none"].includes(t.mode) ? t.mode : "none",
+      flat: Math.abs(n(t.flat, 0)),
+      stat: String(t.stat ?? ""),
+      per: Math.max(1, n(t.per, 10) || 10),
+      perStep: Math.abs(n(t.perStep, 0)),
+      livraison: String(t.livraison ?? "magique")
+    };
+  }
+
+  // Migration depuis dot{} / hot{}
+  const dot = fx?.dot ?? {};
+  const hot = fx?.hot ?? {};
+  const dotHas = n(dot.flat, 0) !== 0 || n(dot.perStep, 0) !== 0;
+  const hotHas = n(hot.flat, 0) !== 0 || n(hot.perStep, 0) !== 0;
+  if (dotHas || hotHas) {
+    const src = dotHas ? dot : hot;
+    return {
+      mode: dotHas ? "damage" : "heal",
+      flat: Math.abs(n(src.flat, 0)),
+      stat: String(src.stat ?? ""),
+      per: Math.max(1, n(src.per, 10) || 10),
+      perStep: Math.abs(n(src.perStep, 0)),
+      livraison: String(dot.livraison ?? "magique")
+    };
+  }
+
+  // Migration depuis l'ancien champ unique signé
+  const legacy = n(fx?.damage?.flat, 0);
+  return {
+    mode: legacy > 0 ? "damage" : (legacy < 0 ? "heal" : "none"),
+    flat: Math.abs(legacy),
+    stat: "",
+    per: 10,
+    perStep: 0,
+    livraison: String(dot.livraison ?? "magique")
+  };
 }
 
 function getEffP(actor) {
@@ -340,22 +394,11 @@ static PARTS = foundry.utils.mergeObject(
       fx.duration = n(fx.duration, 0);
       fx.details = fx.details ?? "";
 
-      // ── DOT (dégâts/tour) et HOT (soin/tour) : blocs SÉPARÉS, chacun
-      //    fixe + montée en puissance sur une stat (stat ÷ per × perStep).
-      //    Repli sur l'ancien champ unique damage.flat (négatif = soin).
-      const legacyFlat = n(fx.damage?.flat, 0);
-      fx.dot = fx.dot ?? {};
-      fx.dot.flat    = n(fx.dot.flat, legacyFlat > 0 ? legacyFlat : 0);
-      fx.dot.stat    = String(fx.dot.stat ?? "");
-      fx.dot.per     = Math.max(1, n(fx.dot.per, 10) || 10);
-      fx.dot.perStep = n(fx.dot.perStep, 0);
-      fx.dot.livraison = String(fx.dot.livraison ?? "magique");
-
-      fx.hot = fx.hot ?? {};
-      fx.hot.flat    = n(fx.hot.flat, legacyFlat < 0 ? Math.abs(legacyFlat) : 0);
-      fx.hot.stat    = String(fx.hot.stat ?? "");
-      fx.hot.per     = Math.max(1, n(fx.hot.per, 10) || 10);
-      fx.hot.perStep = n(fx.hot.perStep, 0);
+      // ── Effet par tour : UN seul bloc dont la nature est explicite
+      //    (aucun / dégâts / soin). Plus de valeur négative à interpréter.
+      //    Migration : ancien couple dot{} / hot{}, ou plus ancien encore
+      //    damage.flat signé (négatif = soin).
+      fx.tick = normTick(fx);
 
       fx.fatigueDot   = n(fx.fatigueDot, 0);
       fx.removeBaseTN = n(fx.removeBaseTN, 0);
@@ -436,14 +479,16 @@ static PARTS = foundry.utils.mergeObject(
         return e ? !!e.checked : !!prev?.[field];
       };
 
-      // Modificateurs de stat (bonus positif / malus négatif)
+      // Modificateurs de stat : l'UI saisit un sens (bonus/malus) + une
+      // quantité positive ; on stocke une valeur signée pour le moteur.
       const mods = [];
       card.querySelectorAll(".fx-mod-row[data-mod-index]").forEach(row => {
         const stat = row.querySelector('[data-mod-field="stat"]')?.value ?? "";
         if (!stat) return;
         const mode = row.querySelector('[data-mod-field="mode"]')?.value === "pct" ? "pct" : "flat";
-        const value = Number(row.querySelector('[data-mod-field="value"]')?.value) || 0;
-        mods.push({ stat: String(stat), mode, value });
+        const isMalus = row.querySelector('[data-mod-field="sens"]')?.value === "malus";
+        const qty = Math.abs(Number(row.querySelector('[data-mod-field="value"]')?.value) || 0);
+        mods.push({ stat: String(stat), mode, value: isMalus ? -qty : qty });
       });
 
       out.push({
@@ -460,18 +505,13 @@ static PARTS = foundry.utils.mergeObject(
         retraitMod:   num("retraitMod", 0),
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
         fatigueDot: num("fatigueDot", 0),
-        dot: {
-          flat:      num("dot.flat", 0),
-          stat:      str("dot.stat", ""),
-          per:       Math.max(1, num("dot.per", 10) || 10),
-          perStep:   num("dot.perStep", 0),
-          livraison: str("dot.livraison", "magique") || "magique"
-        },
-        hot: {
-          flat:    num("hot.flat", 0),
-          stat:    str("hot.stat", ""),
-          per:     Math.max(1, num("hot.per", 10) || 10),
-          perStep: num("hot.perStep", 0)
+        tick: {
+          mode:      str("tick.mode", "none") || "none",
+          flat:      Math.abs(num("tick.flat", 0)),
+          stat:      str("tick.stat", ""),
+          per:       Math.max(1, num("tick.per", 10) || 10),
+          perStep:   Math.abs(num("tick.perStep", 0)),
+          livraison: str("tick.livraison", "magique") || "magique"
         },
         isAura:     bool("isAura"),
         auraMin:    num("auraMin", 0),
@@ -679,8 +719,7 @@ static PARTS = foundry.utils.mergeObject(
       auraTarget: "allies",
       details: "",
       fatigueDot: 0,
-      dot: { flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
-      hot: { flat: 0, stat: "", per: 10, perStep: 0 },
+      tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
       mods: []
     });
     await this.document.update({ "system.effectsUI": effects }, { render: true });
