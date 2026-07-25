@@ -57,6 +57,52 @@ const WHEN_LABELS = {
 
 const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous" };
 
+/** Décore un modificateur pour l'affichage (sens, quantité, libellé). */
+function decorateMod(m) {
+  const isMalus = m.sens === "malus";
+  const abs = Math.abs(n(m.value, 0));
+  const label = STAT_LABELS[m.stat] ?? m.stat;
+  return {
+    ...m,
+    isMalus,
+    absValue: abs,
+    statLabel: label,
+    text: `${isMalus ? "⬇️" : "⬆️"} ${label} ${isMalus ? "−" : "+"}${abs}${m.mode === "pct" ? "%" : ""}`
+  };
+}
+
+/**
+ * Résumé lisible d'un effet (pastilles d'en-tête). Partagé entre le rendu
+ * Handlebars et la mise à jour en place après une saisie, pour que les deux
+ * ne divergent jamais.
+ */
+function buildFxUi(fx) {
+  const tick = fx.tick ?? {};
+  let uiTick = null;
+  if (tick.mode === "damage" || tick.mode === "heal") {
+    const icon = tick.mode === "heal" ? "💚" : "💥";
+    const word = tick.mode === "heal" ? "soin" : "dégâts";
+    const scale = tick.stat && n(tick.perStep, 0)
+      ? ` + ${STAT_LABELS[tick.stat] ?? tick.stat}÷${n(tick.per, 10)}×${n(tick.perStep, 0)}`
+      : "";
+    uiTick = `${icon} ${n(tick.flat, 0)}${scale} ${word}/tour`;
+  }
+  const mods = (fx.mods ?? []).map(decorateMod);
+  return {
+    uiTick,
+    uiWhen: WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? fx.when,
+    uiDuration: fx.permanent ? "♾️ Permanent" : `⏳ ${n(fx.duration, 0)} tour(s)`,
+    uiAura: fx.isAura
+      ? `🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m · ${AURA_TARGET_LABELS[fx.auraTarget] ?? fx.auraTarget}`
+      : null,
+    uiMove: fx.movementTypeGrant ? `🏃 ${fx.movementTypeGrant}` : null,
+    uiRemove: n(fx.removeBaseTN, 0)
+      ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+${n(fx.retraitMod, 0) ? ` (${n(fx.retraitMod, 0) > 0 ? "+" : ""}${n(fx.retraitMod, 0)})` : ""}`
+      : null,
+    mods
+  };
+}
+
 /**
  * Normalise les modificateurs de stat d'un effet vers le format tableau
  * [{ stat, mode:"flat"|"pct", value }] attendu par buildModsFromFxMods().
@@ -67,14 +113,25 @@ const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous"
  */
 function normMods(raw) {
   const out = [];
-  const push = (stat, mode, value) => {
-    out.push({ stat, mode: mode === "pct" ? "pct" : "flat", value: n(value, 0) });
+  // `sens` est stocké EXPLICITEMENT : le déduire du signe cassait le choix
+  // « Malus » tant que la quantité valait 0 (−0 n'est pas < 0, le select
+  // repassait donc sur « Bonus » au rendu suivant).
+  const push = (stat, mode, value, sens) => {
+    const v = n(value, 0);
+    const s = (sens === "malus" || sens === "bonus") ? sens : (v < 0 ? "malus" : "bonus");
+    const qty = Math.abs(v);
+    out.push({
+      stat,
+      mode: mode === "pct" ? "pct" : "flat",
+      sens: s,
+      value: s === "malus" ? -qty : qty
+    });
   };
   if (Array.isArray(raw)) {
     for (const m of raw) {
       const stat = String(m?.stat ?? "").trim();
       if (!stat) continue;
-      push(stat, m?.mode, m?.value);
+      push(stat, m?.mode, m?.value, m?.sens);
     }
     return out;
   }
@@ -260,15 +317,18 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     window: { contentClasses: ["rpg-sheet-window"] },
 
     /**
-     * IMPORTANT V2:
-     * - submitOnChange déclenche la soumission sur changement
-     * - handler reçoit (event, form, formData, options)
+     * submitOnChange est VOLONTAIREMENT désactivé.
+     *
+     * Il déclenchait une soumission + un re-render complet à chaque frappe :
+     * la fenêtre remontait en haut, les accordéons d'effets se refermaient et
+     * une saisie pouvait être écrasée par le rendu suivant (le champ semblait
+     * revenir à sa valeur d'origine). On enregistre désormais champ par champ
+     * dans _onRender, sans re-render — voir _bindLiveSave().
      */
     form: {
       closeOnSubmit: false,
-      submitOnChange: true,
+      submitOnChange: false,
       handler: async function(event, form, formData, options) {
-        // "this" = l'instance d'application (bind implicite côté Foundry)
         await this._onFormSubmitV2(event, form, formData, options);
       }
     },
@@ -425,13 +485,7 @@ static PARTS = foundry.utils.mergeObject(
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
       // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
       // l'affichage seulement, le sens (bonus/malus) et la quantité positive.
-      fx.mods = normMods(fx.mods).map(m => ({
-        ...m,
-        isMalus: m.value < 0,
-        absValue: Math.abs(m.value),
-        statLabel: STAT_LABELS[m.stat] ?? m.stat,
-        text: `${m.value < 0 ? "⬇️" : "⬆️"} ${STAT_LABELS[m.stat] ?? m.stat} ${m.value > 0 ? "+" : "−"}${Math.abs(m.value)}${m.mode === "pct" ? "%" : ""}`
-      }));
+      fx.mods = normMods(fx.mods).map(decorateMod);
 
       fx.damage = normDamage(fx.damage);
       fx.damage.preview = buildPreview(fx.damage, effP);
@@ -455,24 +509,7 @@ static PARTS = foundry.utils.mergeObject(
 
       // ── Résumé lisible (pastilles) : visible replié pour le MJ et
       //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
-      fx.uiTick = null;
-      if (fx.tick.mode === "damage" || fx.tick.mode === "heal") {
-        const icon = fx.tick.mode === "heal" ? "💚" : "💥";
-        const word = fx.tick.mode === "heal" ? "soin" : "dégâts";
-        const scale = fx.tick.stat && fx.tick.perStep
-          ? ` + ${STAT_LABELS[fx.tick.stat] ?? fx.tick.stat}÷${fx.tick.per}×${fx.tick.perStep}`
-          : "";
-        fx.uiTick = `${icon} ${n(fx.tick.flat, 0)}${scale} ${word}/tour`;
-      }
-      fx.uiWhen = WHEN_LABELS[String(fx.when).toLowerCase()] ?? fx.when;
-      fx.uiDuration = fx.permanent ? "♾️ Permanent" : `⏳ ${n(fx.duration, 0)} tour(s)`;
-      fx.uiAura = fx.isAura
-        ? `🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m · ${AURA_TARGET_LABELS[fx.auraTarget] ?? fx.auraTarget}`
-        : null;
-      fx.uiMove = fx.movementTypeGrant ? `🏃 ${fx.movementTypeGrant}` : null;
-      fx.uiRemove = n(fx.removeBaseTN, 0)
-        ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+${n(fx.retraitMod, 0) ? ` (${n(fx.retraitMod, 0) > 0 ? "+" : ""}${n(fx.retraitMod, 0)})` : ""}`
-        : null;
+      Object.assign(fx, buildFxUi(fx));
       fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.mods.length);
     }
 
@@ -526,15 +563,17 @@ static PARTS = foundry.utils.mergeObject(
       };
 
       // Modificateurs de stat : l'UI saisit un sens (bonus/malus) + une
-      // quantité positive ; on stocke une valeur signée pour le moteur.
+      // quantité positive. On stocke le sens ET la valeur signée : sans le
+      // sens stocké, choisir « Malus » avec une quantité encore à 0 était
+      // perdu au rendu suivant (−0 n'est pas négatif).
       const mods = [];
       card.querySelectorAll(".fx-mod-row[data-mod-index]").forEach(row => {
         const stat = row.querySelector('[data-mod-field="stat"]')?.value ?? "";
         if (!stat) return;
         const mode = row.querySelector('[data-mod-field="mode"]')?.value === "pct" ? "pct" : "flat";
-        const isMalus = row.querySelector('[data-mod-field="sens"]')?.value === "malus";
+        const sens = row.querySelector('[data-mod-field="sens"]')?.value === "malus" ? "malus" : "bonus";
         const qty = Math.abs(Number(row.querySelector('[data-mod-field="value"]')?.value) || 0);
-        mods.push({ stat: String(stat), mode, value: isMalus ? -qty : qty });
+        mods.push({ stat: String(stat), mode, sens, value: sens === "malus" ? -qty : qty });
       });
 
       out.push({
@@ -570,6 +609,126 @@ static PARTS = foundry.utils.mergeObject(
     });
 
     return out;
+  }
+
+  /**
+   * Enregistrement « au fil de l'eau », sans re-render.
+   *
+   * Un re-render complet à chaque changement remettait la fenêtre en haut,
+   * refermait les accordéons d'effets et pouvait écraser la saisie en cours.
+   * Ici chaque champ écrit uniquement ce qu'il touche, avec { render: false } :
+   *   - champ d'effet (data-fx-field / data-mod-field) → tout system.effectsUI
+   *   - ligne de dégâts (name="system.damages.…")      → tout system.damages
+   *   - autre champ nommé                              → ce champ seul
+   * Seules les actions structurelles (ajout/suppression) re-rendent la fiche.
+   */
+  _bindLiveSave(root) {
+    if (root.dataset.rpgLiveSave) return;
+    root.dataset.rpgLiveSave = "1";
+
+    root.addEventListener("change", async (ev) => {
+      const el = ev.target;
+      if (!el || !(el.matches?.("input, select, textarea"))) return;
+      if (!game.user.isGM && !this.isEditable) return;
+
+      try {
+        // 1) Champs d'un effet secondaire
+        if (el.closest?.("details[data-fx-index]") &&
+            (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field"))) {
+          ev.stopPropagation();
+          await this._saveEffects(root);
+          return;
+        }
+
+        const name = el.getAttribute?.("name");
+        if (!name) return;
+
+        // 2) Lignes de dégâts : on réécrit le tableau complet
+        if (name.startsWith("system.damages.")) {
+          ev.stopPropagation();
+          await this._saveDamages(root);
+          return;
+        }
+
+        // 3) Champ simple (carte Général, description, nom…)
+        ev.stopPropagation();
+        let value;
+        if (el.type === "checkbox") value = el.checked;
+        else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
+        else value = el.value;
+
+        await this.document.update({ [name]: value }, { render: false });
+      } catch (e) {
+        console.error("[RPG] enregistrement de la fiche de sort :", e);
+        ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
+      }
+    });
+  }
+
+  /** Écrit tous les effets lus dans le DOM, puis rafraîchit les pastilles. */
+  async _saveEffects(root) {
+    const cards = root.querySelectorAll("details[data-fx-index]");
+    if (!cards.length) return;
+    const effects = this._collectEffectsFromDOM(cards);
+    await this.document.update({ "system.effectsUI": effects }, { render: false });
+    this._refreshFxChips(root, effects);
+  }
+
+  /** Écrit toutes les lignes de dégâts lues dans le DOM. */
+  async _saveDamages(root) {
+    const rows = root.querySelectorAll(".dmg-row[data-idx]");
+    const damages = [];
+    rows.forEach(row => {
+      const get = (sel) => row.querySelector(sel);
+      damages.push({
+        id:        get("input[name*='.id']")?.value ?? foundry.utils.randomID(),
+        dice:      get("input[name*='.dice']")?.value?.trim() || "1d6",
+        flat:      Number(get("input[name*='.flat']")?.value) || 0,
+        stat:      get("select[name*='.stat']")?.value || "intelligence",
+        per:       Number(get("input[name*='.per']")?.value) || 10,
+        perStep:   Number(get("input[name*='.perStep']")?.value) || 0,
+        critDice:  get("input[name*='.critDice']")?.value?.trim() || "",
+        critFlat:  Number(get("input[name*='.critFlat']")?.value) || 0,
+        livraison: get("select[name*='.livraison']")?.value || "magique"
+      });
+    });
+    await this.document.update({ "system.damages": damages }, { render: false });
+  }
+
+  /**
+   * Met à jour les pastilles de résumé (et le nom) de chaque effet en place,
+   * sans re-render : la fenêtre ne bouge pas et les accordéons restent ouverts.
+   */
+  _refreshFxChips(root, effects) {
+    root.querySelectorAll("details[data-fx-index]").forEach(card => {
+      const idx = Number(card.dataset.fxIndex);
+      const fx = effects[idx];
+      if (!fx) return;
+
+      const title = card.querySelector(".fx-title");
+      if (title) title.textContent = String(fx.label ?? "").trim() || `Effet ${idx}`;
+
+      const box = card.querySelector(".fx-chips");
+      if (!box) return;
+
+      const ui = buildFxUi(fx);
+      const chips = [];
+      const esc = (s) => String(s ?? "")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+      chips.push(`<span class="fx-chip fx-chip-when">${esc(ui.uiWhen)}</span>`);
+      chips.push(`<span class="fx-chip">${esc(ui.uiDuration)}</span>`);
+      if (fx.tag)     chips.push(`<span class="fx-chip fx-chip-tag">${esc(fx.tag)}</span>`);
+      if (ui.uiTick)  chips.push(`<span class="fx-chip fx-chip-tick">${esc(ui.uiTick)}</span>`);
+      for (const m of ui.mods) {
+        chips.push(`<span class="fx-chip ${m.isMalus ? "fx-chip-malus" : "fx-chip-bonus"}">${esc(m.text)}</span>`);
+      }
+      if (ui.uiAura)   chips.push(`<span class="fx-chip fx-chip-aura">${esc(ui.uiAura)}</span>`);
+      if (ui.uiMove)   chips.push(`<span class="fx-chip">${esc(ui.uiMove)}</span>`);
+      if (ui.uiRemove) chips.push(`<span class="fx-chip">${esc(ui.uiRemove)}</span>`);
+
+      box.innerHTML = chips.join("");
+    });
   }
 
   /**
@@ -649,16 +808,13 @@ static PARTS = foundry.utils.mergeObject(
       prepared.system.effectsUI = collectedFx;
     }
 
+    // Soumission explicite uniquement (touche Entrée) : submitOnChange est
+    // désactivé, la saisie courante passe par _bindLiveSave sans re-render.
+    // On enregistre sans re-rendre pour ne pas perdre la position ni les
+    // accordéons ; les pastilles sont rafraîchies en place.
     await this.document.update(prepared, { render: false });
-    await this.render({ force: true });
-
-    // ── Restaure l'état des accordéons après le re-render ──────────────────
-    if (openDetails.size) {
-      const newRoot = this.element;
-      newRoot?.querySelectorAll("details[data-fx-index]").forEach(d => {
-        if (openDetails.has(d.dataset.fxIndex)) d.open = true;
-      });
-    }
+    if (collectedFx) this._refreshFxChips(root, collectedFx);
+    void openDetails;
   }
 
   async _onRender(context, options) {
@@ -680,6 +836,9 @@ static PARTS = foundry.utils.mergeObject(
       root.querySelectorAll("button[data-action]").forEach(el => el.style.display = "none");
       return;
     }
+
+    // Enregistrement au fil de la saisie, SANS re-render
+    this._bindLiveSave(root);
 
     // MJ : image cliquable
     root.querySelectorAll(".rpg-img-edit").forEach(img => {
@@ -729,22 +888,16 @@ static PARTS = foundry.utils.mergeObject(
         const def = lib.getEffectDef(key);
         if (!def) return;
 
-        // Remplit les champs visibles immédiatement
+        // Remplit les champs visibles immédiatement…
         const card = sel.closest("details");
         const labelInput = card?.querySelector('[data-fx-field="label"]');
         const tagSel = card?.querySelector('[data-fx-field="tag"]');
         if (labelInput && !labelInput.value.trim()) labelInput.value = def.label;
-        if (tagSel && def.tag) tagSel.value = def.tag;
+        if (tagSel && def.tag && !tagSel.value) tagSel.value = def.tag;
 
-        // Persiste sur le document
-        const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
-        const idx = Number(fxIdx);
-        if (effects[idx]) {
-          effects[idx].effectKey = key;
-          if (!effects[idx].label) effects[idx].label = def.label;
-          if (def.tag && !effects[idx].tag) effects[idx].tag = def.tag;
-          await this.document.update({ "system.effectsUI": effects });
-        }
+        // …puis on enregistre depuis le DOM, sans re-render (la fenêtre ne
+        // remonte pas et l'accordéon reste ouvert).
+        await this._saveEffects(root);
       }
     });
   }
@@ -769,7 +922,7 @@ static PARTS = foundry.utils.mergeObject(
       tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
       mods: []
     });
-    await this.document.update({ "system.effectsUI": effects }, { render: true });
+    await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 
   async _actionRemoveEffect(event) {
@@ -778,7 +931,7 @@ static PARTS = foundry.utils.mergeObject(
     if (!Number.isFinite(fxIndex) || fxIndex < 0) return;
     const effects = this._currentEffects();
     effects.splice(fxIndex, 1);
-    await this.document.update({ "system.effectsUI": effects }, { render: true });
+    await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 
   async _actionAddDmgLine(event) {
@@ -794,7 +947,7 @@ static PARTS = foundry.utils.mergeObject(
       critFlat: 0,
       livraison: "magique"
     });
-    await this.document.update({ "system.damages": damages }, { render: true });
+    await this._updateAndKeepView({ "system.damages": damages });
   }
 
   async _actionRemoveDmgLine(event) {
@@ -803,7 +956,7 @@ static PARTS = foundry.utils.mergeObject(
     if (!Number.isFinite(idx) || idx < 0) return;
     const damages = foundry.utils.deepClone(this.document.system.damages ?? []);
     damages.splice(idx, 1);
-    await this.document.update({ "system.damages": damages }, { render: true });
+    await this._updateAndKeepView({ "system.damages": damages });
   }
 
   async _actionAddMod(event) {
@@ -824,7 +977,7 @@ static PARTS = foundry.utils.mergeObject(
     effects[fxIndex].mods = normMods(effects[fxIndex].mods);
     effects[fxIndex].mods.push({ stat: "force", mode: "flat", value: 0 });
 
-    await this.document.update({ "system.effectsUI": effects }, { render: true });
+    await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 
   /** État courant des effets : le DOM s'il est rendu, sinon le document. */
@@ -832,6 +985,42 @@ static PARTS = foundry.utils.mergeObject(
     const cards = this.element?.querySelectorAll("details[data-fx-index]");
     if (cards?.length) return this._collectEffectsFromDOM(cards);
     return foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+  }
+
+  /**
+   * Mémorise accordéons ouverts + défilement avant un re-render structurel
+   * (ajout/suppression), et les restaure juste après.
+   */
+  _snapshotView() {
+    const root = this.element;
+    const open = new Set();
+    root?.querySelectorAll("details[data-fx-index]").forEach(d => {
+      if (d.open) open.add(d.dataset.fxIndex);
+    });
+    const scroller = root?.querySelector(".sheet-body") ?? root?.querySelector(".window-content");
+    return { open, scrollTop: scroller?.scrollTop ?? 0 };
+  }
+
+  _restoreView(snap) {
+    if (!snap) return;
+    const root = this.element;
+    if (!root) return;
+    root.querySelectorAll("details[data-fx-index]").forEach(d => {
+      if (snap.open.has(d.dataset.fxIndex)) d.open = true;
+    });
+    const scroller = root.querySelector(".sheet-body") ?? root.querySelector(".window-content");
+    if (scroller && snap.scrollTop) {
+      scroller.scrollTop = snap.scrollTop;
+      requestAnimationFrame(() => { scroller.scrollTop = snap.scrollTop; });
+    }
+  }
+
+  /** Applique une modification structurelle puis re-rend en gardant la vue. */
+  async _updateAndKeepView(data) {
+    const snap = this._snapshotView();
+    await this.document.update(data, { render: false });
+    await this.render({ force: true });
+    this._restoreView(snap);
   }
 
   async _actionRemoveMod(event) {
@@ -849,6 +1038,6 @@ static PARTS = foundry.utils.mergeObject(
 
     effects[fxIndex].mods = normMods(effects[fxIndex].mods);
     effects[fxIndex].mods.splice(modIndex, 1);
-    await this.document.update({ "system.effectsUI": effects }, { render: true });
+    await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 }
