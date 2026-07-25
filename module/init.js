@@ -298,12 +298,42 @@ Hooks.once("init", async () => {
     config: true,
     type: String,
     choices: {
-      all:     "🔒 Tout le monde, MJ compris (recommandé)",
-      players: "👥 Joueurs seulement — le MJ peut déplacer librement",
+      players: "👥 Joueurs seulement — le MJ déplace librement (recommandé)",
+      all:     "🔒 Tout le monde, MJ compris en permanence",
       off:     "🔓 Désactivée — simple avertissement dans le chat"
     },
-    default: "all",
+    default: "players",
     requiresReload: false
+  });
+
+  // Interrupteur MJ : le MJ reste libre par défaut (poussées, téléportations,
+  // repositionnements), et active la limite à la volée quand il veut jouer un
+  // monstre « à la règle ». Basculé par le raccourci clavier ci-dessous.
+  game.settings.register("rpg", "gmMovementLimit", {
+    name: "MJ : appliquer la limite de vitesse",
+    hint: "Quand c'est actif, tes propres déplacements de tokens sont bloqués au-delà de la Vitesse du token, comme pour un joueur. Bascule avec le raccourci « Limite de déplacement (MJ) ».",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: false,
+    requiresReload: false
+  });
+
+  // Raccourci MJ : bascule la limite de vitesse pour ses propres déplacements.
+  game.keybindings.register("rpg", "toggleGmMovementLimit", {
+    name: "Limite de déplacement (MJ)",
+    hint: "Active ou désactive la limite de vitesse pour les tokens que TU déplaces. Utile pour jouer un monstre à la règle, sans t'empêcher de repousser ou téléporter un token le reste du temps.",
+    editable: [{ key: "KeyM", modifiers: ["Shift"] }],
+    restricted: true,   // MJ uniquement
+    onDown: () => {
+      const cur = game.settings.get("rpg", "gmMovementLimit") === true;
+      const next = !cur;
+      game.settings.set("rpg", "gmMovementLimit", next);
+      ui.notifications?.info?.(next
+        ? "🔒 Limite de déplacement ACTIVE — tes tokens ne dépasseront plus leur Vitesse."
+        : "🔓 Limite de déplacement LEVÉE — tu peux déplacer les tokens librement.");
+      return true;
+    }
   });
 
   game.settings.register("rpg", "currentWeather", {

@@ -1043,3 +1043,33 @@
   border: 1px solid rgba(192, 57, 43, 0.40);
   color: #e8756a;
 }
+
+/* Valeurs de départ (MJ) — repliées, hors du flux de lecture principal */
+.rpg-sheet .raw-stats {
+  margin-top: 10px;
+  border-top: 1px dashed var(--color-border-light-2);
+  padding-top: 8px;
+}
+.rpg-sheet .raw-stats > summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.65;
+  list-style: none;
+}
+.rpg-sheet .raw-stats > summary::-webkit-details-marker { display: none; }
+.rpg-sheet .raw-stats[open] > summary { opacity: 0.85; margin-bottom: 8px; }
+.rpg-sheet .raw-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+.rpg-sheet .raw-stats-grid > div { min-width: 0; }
+.rpg-sheet .raw-stats-grid small { display: block; margin-bottom: 3px; font-size: 10px; }
+.rpg-sheet .raw-stats-grid input { width: 100%; box-sizing: border-box; }
+.rpg-sheet .raw-stats-hint {
+  display: block;
+  font-size: 10px;
+  opacity: 0.55;
+  margin-top: 6px;
+}

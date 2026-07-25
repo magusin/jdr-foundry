@@ -345,8 +345,8 @@
         <section class="card">
           <h2>Caractéristiques</h2>
           <div class="stats-legend">
-            <span><b>Permanent</b> = base + niveau ({{system.niveau}}×1) + compétences + équipement</span>
-            <span><b>En combat</b> = permanent + effets temporaires actifs</span>
+            <span><b>Base</b> = valeur de départ + niveau ({{system.niveau}}×1) + compétences + équipement</span>
+            <span><b>En combat</b> = base + effets temporaires actifs</span>
           </div>
 
           <div class="stats-grid">
@@ -354,14 +354,8 @@
             <div class="stat-row">
               <label>{{s.label}}</label>
               <div class="stat-cols">
-                {{#if ../flags.isGM}}
-                <div class="stat-col" title="Valeur brute, modifiable par le MJ">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.principales.{{s.key}}" value="{{s.base}}" style="width:100%"/>
-                </div>
-                {{/if}}
                 <div class="stat-col">
-                  <small class="muted" title="{{s.permTooltip}}">Permanent</small>
+                  <small class="muted" title="{{s.permTooltip}}">Base</small>
                   <input type="number" value="{{s.perm}}" disabled class="stat-perm"/>
                 </div>
                 <div class="stat-col">
@@ -381,6 +375,23 @@
             </div>
             {{/each}}
           </div>
+
+          {{#if flags.isGM}}
+          {{!-- Valeurs de depart : rarement touchees une fois le PJ cree,
+                donc repliees pour ne pas encombrer la lecture. --}}
+          <details class="raw-stats">
+            <summary>⚙️ Valeurs de départ (MJ)</summary>
+            <div class="raw-stats-grid">
+              {{#each stats as |s|}}
+              <div>
+                <small class="muted">{{s.label}}</small>
+                <input type="number" name="system.principales.{{s.key}}" value="{{s.base}}"/>
+              </div>
+              {{/each}}
+            </div>
+            <small class="raw-stats-hint">Valeur brute avant niveau, compétences et équipement.</small>
+          </details>
+          {{/if}}
         </section>
 
         <section class="card">
@@ -390,15 +401,8 @@
             <div class="stat-row">
               <label>Armure fixe (physique)</label>
               <div class="stat-cols">
-                {{#if flags.isGM}}
                 <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}"
-                    {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Permanent</small>
+                  <small class="muted" title="Valeur de départ + niveau + compétences + équipement">Base</small>
                   <input type="number" value="{{defStats.armureFixe.perm}}" disabled class="stat-perm"/>
                 </div>
                 <div class="stat-col">
@@ -417,15 +421,8 @@
             <div class="stat-row">
               <label>Résistance fixe (magique)</label>
               <div class="stat-cols">
-                {{#if flags.isGM}}
                 <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}"
-                    {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Permanent</small>
+                  <small class="muted" title="Valeur de départ + niveau + compétences + équipement">Base</small>
                   <input type="number" value="{{defStats.resistanceFixe.perm}}" disabled class="stat-perm"/>
                 </div>
                 <div class="stat-col">
@@ -444,15 +441,8 @@
             <div class="stat-row">
               <label>Score Armure (physique)</label>
               <div class="stat-cols">
-                {{#if flags.isGM}}
                 <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}"
-                    {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Permanent</small>
+                  <small class="muted" title="Valeur de départ + niveau + compétences + équipement">Base</small>
                   <input type="number" value="{{defStats.scoreArmure.perm}}" disabled class="stat-perm"/>
                 </div>
                 <div class="stat-col">
@@ -481,15 +471,8 @@
             <div class="stat-row">
               <label>Score Résistance (magique)</label>
               <div class="stat-cols">
-                {{#if flags.isGM}}
                 <div class="stat-col">
-                  <small class="muted">Base</small>
-                  <input type="number" name="system.defenses.scoreResistance"
-                    value="{{system.defenses.scoreResistance}}" {{#unless flags.isGM}}disabled{{/unless}} />
-                </div>
-                {{/if}}
-                <div class="stat-col">
-                  <small class="muted">Permanent</small>
+                  <small class="muted" title="Valeur de départ + niveau + compétences + équipement">Base</small>
                   <input type="number" value="{{defStats.scoreResistance.perm}}" disabled class="stat-perm"/>
                 </div>
                 <div class="stat-col">
@@ -515,6 +498,31 @@
               </div>
             </div>
           </div>
+
+          {{#if flags.isGM}}
+          <details class="raw-stats">
+            <summary>⚙️ Valeurs de départ (MJ)</summary>
+            <div class="raw-stats-grid">
+              <div>
+                <small class="muted">Armure fixe</small>
+                <input type="number" name="system.defenses.armureFixe" value="{{system.defenses.armureFixe}}"/>
+              </div>
+              <div>
+                <small class="muted">Résistance fixe</small>
+                <input type="number" name="system.defenses.resistanceFixe" value="{{system.defenses.resistanceFixe}}"/>
+              </div>
+              <div>
+                <small class="muted">Score Armure</small>
+                <input type="number" name="system.defenses.scoreArmure" value="{{system.defenses.scoreArmure}}"/>
+              </div>
+              <div>
+                <small class="muted">Score Résistance</small>
+                <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}"/>
+              </div>
+            </div>
+            <small class="raw-stats-hint">Valeur brute avant niveau, compétences et équipement.</small>
+          </details>
+          {{/if}}
         </section>
 
         <section class="card">

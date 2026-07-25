@@ -111,13 +111,20 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
   }
 
   // ── Limite de vitesse ────────────────────────────────────────────────────
-  // S'applique au joueur, et au MJ selon le réglage « Limite de déplacement »
-  // (le MJ garde toute liberté hors combat : ce hook sort plus haut si aucun
-  // combat n'est actif).
-  let enforce = "all";
-  try { enforce = String(game.settings.get("rpg", "movementLimitScope") ?? "all"); } catch { /* défaut */ }
+  // Joueur : toujours limité (sauf si le MJ a désactivé la règle).
+  // MJ     : libre par défaut — il doit pouvoir repousser, téléporter ou
+  //          replacer un token — et active la limite à la volée avec le
+  //          raccourci « Limite de déplacement (MJ) » (Maj+M par défaut),
+  //          par exemple pour jouer un monstre à la règle.
+  // Hors combat, personne n'est limité (sortie plus haut).
+  let enforce = "players";
+  try { enforce = String(game.settings.get("rpg", "movementLimitScope") ?? "players"); } catch { /* défaut */ }
+  if (enforce === "off") return;
 
-  const applies = enforce === "all" || (enforce === "players" && !game.user.isGM);
+  let gmLimit = false;
+  try { gmLimit = game.settings.get("rpg", "gmMovementLimit") === true; } catch { /* défaut */ }
+
+  const applies = game.user.isGM ? (enforce === "all" || gmLimit) : true;
 
   if (applies) {
     // Vérif vitesse + terrain (avec type de déplacement)
