@@ -81,14 +81,47 @@ function scaleFrom(actor, scaling) {
 // ── API publique ────────────────────────────────────────────────────
 
 /**
- * Affichage "flat + dé + stat(bonus)" (pas de jet, prévisualisation).
+ * Prévisualisation des dégâts (pas de jet).
+ *
+ * Le texte affiche le TOTAL fixe déjà calculé, pas le détail interne :
+ * « 10 + 1d6 » plutôt que « 0 + 1d6 + stat(10) ». Une part fixe nulle est
+ * simplement omise (« 1d6 »), et un sort sans dés affiche juste son total.
  */
+function formatDamageText(flatTotal, die) {
+  const d = String(die ?? "").trim();
+  const hasDie = !!d && d !== "0" && d !== "—";
+  if (!hasDie) return `${flatTotal}`;
+  if (!flatTotal) return d;
+  return `${flatTotal} + ${d}`;
+}
+
 export function damagePreview(attackerActor, item) {
   const effP = attackerActor?.system?.derived?.effective?.principales
             ?? attackerActor?.system?.principales
             ?? {};
 
-  // Nouveau modèle (system.damage.flat / .dice / .scaling)
+  // ── Format multi-lignes system.damages[] (fiche de sort actuelle) ────────
+  const lines = Array.isArray(item?.system?.damages) ? item.system.damages : [];
+  if (lines.length) {
+    const parts = [];
+    let flatSum = 0;
+    for (const d of lines) {
+      const stat      = String(d?.stat ?? "").trim();
+      const per       = Math.max(1, Number(d?.per ?? 10) || 10);
+      const perStep   = Number(d?.perStep ?? 0) || 0;
+      const statVal   = Number(effP?.[stat] ?? 0) || 0;
+      const statBonus = stat ? Math.floor(statVal / per) * perStep : 0;
+      const flat      = (Number(d?.flat ?? 0) || 0) + statBonus;
+      flatSum += flat;
+      parts.push(formatDamageText(flat, d?.dice));
+    }
+    return {
+      flat: flatSum, die: null, statBonus: 0, scalingStat: null,
+      text: parts.filter(Boolean).join(" + ")
+    };
+  }
+
+  // ── Ancien bloc unique system.damage ─────────────────────────────────────
   const dmg = item?.system?.damage ?? null;
   if (dmg) {
     const flat        = Number(dmg.flat  ?? 0) || 0;
@@ -98,17 +131,19 @@ export function damagePreview(attackerActor, item) {
     const perStep     = Number(dmg.scaling?.perStep ?? 1) || 1;
     const statVal     = Number(effP?.[scalingStat] ?? 0) || 0;
     const statBonus   = Math.floor(statVal / per) * perStep;
-    return { flat, die, statBonus, scalingStat, text: `${flat} + ${die} + stat(${statBonus})` };
+    const flatTotal   = flat + statBonus;
+    return { flat: flatTotal, die, statBonus, scalingStat, text: formatDamageText(flatTotal, die) };
   }
 
-  // Ancien modèle (fallback compat)
+  // ── Très ancien modèle (fallback compat) ─────────────────────────────────
   const flat        = Number(item?.system?.degatsFixes ?? 0) || 0;
   const die         = String(item?.system?.degats ?? "1d6");
   const add         = Number(item?.system?.degatsAdd ?? 0) || 0;
   const scalingStat = String(item?.system?.scaling?.stat ?? (item?.type === "spell" ? "intelligence" : "force"));
   const statVal     = Number(effP?.[scalingStat] ?? 0) || 0;
   const statBonus   = Math.floor(Math.max(0, statVal) / 10);
-  return { flat, die, add, statBonus, scalingStat, text: `${flat} + ${die} + ${add} + stat(${statBonus})` };
+  const flatTotal   = flat + add + statBonus;
+  return { flat: flatTotal, die, add, statBonus, scalingStat, text: formatDamageText(flatTotal, die) };
 }
 
 /**
@@ -159,6 +194,10 @@ export function computeTN(attacker, target, item) {
 
   const r       = (100 + atk) / (100 + def);
   const tnBase  = tnFromRatio(r);
+  // La difficulté est bornée à 0–4 par applyDifficulty : on renvoie la valeur
+  // RÉELLEMENT appliquée pour que les messages de chat ne puissent pas
+  // annoncer « +11 » alors que le moteur n'en a appliqué que 4.
+  const diffApplied = clamp(diff, 0, 4);
   let   tnFinal = applyDifficulty(tnBase, diff);
 
   // ✅ Bonus/malus direct à la chance de toucher (équipement, sorts/effets,
@@ -168,7 +207,7 @@ export function computeTN(attacker, target, item) {
     : Number(attacker?.system?.derived?.toucherMagique ?? 0) || 0;
   tnFinal = clamp(tnFinal - toucherBonus, 6, 16);
 
-  return { livraison, diff, atk, def, r, tnBase, tnFinal, toucherBonus };
+  return { livraison, diff: diffApplied, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus };
 }
 
 /**

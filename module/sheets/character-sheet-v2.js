@@ -1204,62 +1204,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const cd = Number(item.system?.cooldown?.restant ?? item.system?.recharge?.restant ?? 0) || 0;
     if (cd > 0) return ui.notifications.warn(`Sort en recharge : ${cd} tour(s).`);
 
-    const type = item.type;
-    const livraison = item.system?.livraison ?? (type === "spell" ? "magique" : "physique");
-    const diff = Number(item.system?.difficulte ?? 0) || 0;
-
-    const Combat = game.rpg?.combat;
-    if (!Combat?.computeTN) {
-      ui.notifications.error("Combat API introuvable: game.rpg.combat.computeTN");
-      return;
-    }
-
-    const tnRes = Combat.computeTN(this.document, target, item);
-    let tnBase = 11;
-    let tnFinal = 11;
-
-    if (typeof tnRes === "number") {
-      tnBase = tnRes;
-      tnFinal = tnRes + diff;
-    } else if (tnRes && typeof tnRes === "object") {
-      tnBase = Number(tnRes.tnBase ?? tnRes.base ?? tnRes.tn ?? 11) || 11;
-      tnFinal = Number(tnRes.tnFinal ?? tnRes.final ?? (tnBase + diff)) || (tnBase + diff);
-    } else {
-      tnBase = 11;
-      tnFinal = 11 + diff;
-    }
-
-    tnFinal = Math.max(2, Math.min(20, tnFinal));
-
-    const effP =
-      this.document.system?.derived?.effP ??
-      this.document.system?.derived?.effective?.principales ??
-      this.document.system?.principales ??
-      {};
-
-    const dmgStat = (livraison === "physique")
-      ? Number(effP.force ?? 0)
-      : Number(effP.intelligence ?? 0);
-
-    const statBonus = game.rpg?.combat?.bonusFromStat ? game.rpg.combat.bonusFromStat(dmgStat) : 0;
-
-    // ✅ si tu as migré les armes/sorts vers system.damage, tu peux le lire ici aussi
-    const flatFixe = Number(item.system?.degatsFixes ?? item.system?.damage?.flat ?? 0) || 0;
-    const flatAdd = Number(item.system?.degatsAdd ?? 0) || 0;
-
-    const flatTotal = statBonus + flatFixe + flatAdd;
-    const degatsFormula = String(item.system?.degats ?? item.system?.damage?.dice ?? "1d6");
-
-    const content =
-      `<b>${this.document.name}</b> utilise <b>${item.name}</b> sur <b>${target.name}</b> ` +
-      `(${livraison === "physique" ? "Physique" : "Magique"})<br>` +
-      `Seuil toucher: <b>${tnFinal}+</b> (base ${tnBase}+ ; difficulté +${diff})<br>` +
-      `Dégâts: <b>${flatTotal}</b> + <b>${degatsFormula}</b><br>`;
-
-    await ChatMessage.create({
-      speaker: ChatMessage.getSpeaker({ actor: this.document }),
-      content
-    });
+    // Passe par la déclaration d'attaque commune : jet de touché + boutons
+    // de validation MJ. On publiait auparavant un simple aperçu, sans jet ni
+    // validation, ce qui laissait l'attaque sans résolution possible.
+    const { declareAttack } = await import("../rules/attack-declare.js");
+    await declareAttack(this.document, item, target);
   }
 
   _statePath() { return "system.etatsActifs"; }

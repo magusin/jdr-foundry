@@ -369,15 +369,18 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
           const dist = canvas.grid.measureDistance(casterToken.center, targetToken.center);
           if (dist < rmin || dist > rmax) return ui.notifications.warn(`Hors portée: ${dist.toFixed(1)} cases (min ${rmin}, max ${rmax}).`);
         }
-        const tn = Combat.computeTN(this.document, targetToken.actor, item);
-        const dmgPrev = Combat.damagePreview(this.document, item);
-        await ChatMessage.create({
-          speaker: ChatMessage.getSpeaker({ actor: this.document }),
-          content:
-            `<b>${this.document.name}</b> utilise <b>${item.name}</b> sur <b>${targetToken.actor.name}</b> (${tn.livraison})<br>` +
-            `Seuil toucher: <b>${tn.tnFinal}+</b> (base ${tn.tnBase}+ ; difficulté +${tn.diff})<br>` +
-            `Dégâts: <b>${dmgPrev.text}</b>`
-        });
+        // Un sort passe par le workflow de sort (coût mana/fatigue, effets,
+        // validation MJ) ; une arme/attaque physique par la déclaration
+        // d'attaque commune (jet de touché + boutons de validation MJ).
+        // Auparavant on publiait ici un simple aperçu : ni jet, ni validation.
+        if (item.type === "spell") {
+          const res = await declareSpell(this.document, item, { casterToken, targetToken });
+          if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
+        } else {
+          const { declareAttack } = await import("../rules/attack-declare.js");
+          await declareAttack(this.document, item, targetToken.actor);
+        }
+        this.render({ force: false });
       });
     });
 
