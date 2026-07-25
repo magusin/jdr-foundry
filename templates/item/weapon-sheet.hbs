@@ -252,9 +252,18 @@
           <ol class="items-list simple" style="margin-top:10px; padding-left:18px;">
             {{#each system.effects as |e idx|}}
               <li class="item" style="border:1px solid rgba(0,0,0,.12); border-radius:12px; padding:10px; margin-bottom:10px;">
-                <div class="mm-line">
-                  <span class="mm-label">Nom</span>
-                  <input class="mm-input" type="text" name="system.effects.{{idx}}.label" value="{{e.label}}" />
+                <div class="grid-mm-2">
+                  <div class="mm-line">
+                    <span class="mm-label">Nom</span>
+                    <input class="mm-input" type="text" name="system.effects.{{idx}}.label" value="{{e.label}}" />
+                  </div>
+                  <div class="mm-line">
+                    <span class="mm-label" title="Quand l'effet s'applique : sur une touche normale (le critique la déclenche aussi) ou uniquement sur un coup critique.">⚡ Déclenchement</span>
+                    <select class="mm-input" name="system.effects.{{idx}}.when">
+                      <option value="hit"  {{#if (eq e.when "hit")}}selected{{/if}}>Touche normale (+ crit)</option>
+                      <option value="crit" {{#if (eq e.when "crit")}}selected{{/if}}>Critique uniquement</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="grid-mm-3">

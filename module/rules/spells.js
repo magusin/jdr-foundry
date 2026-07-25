@@ -209,9 +209,11 @@ function effectsForResult(item, result) {
   const allowWhen = new Set();
   allowWhen.add("cast"); // toujours
   if (res === "success") allowWhen.add("hit");
-  if (res === "crit") allowWhen.add("crit");
+  // Un critique EST une touche réussie : il déclenche les effets "hit"
+  // ET ceux réservés au critique.
+  if (res === "crit") { allowWhen.add("hit"); allowWhen.add("crit"); }
 
-  return arr.filter(fx => allowWhen.has(String(fx?.when ?? "").toLowerCase()));
+  return arr.filter(fx => allowWhen.has(String(fx?.when ?? "hit").toLowerCase()));
 }
 
 function classifyMods(mods = {}) {
@@ -863,9 +865,21 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const dmgHit = computeDamageExpr({ actor, block: sys.damage });
   const dmgCrit = computeDamageExpr({ actor, block: sys.damageCrit });
 
-  const fxHit = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "hit");
-  const fxCrit = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "crit");
-  const fxCast = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).filter(f => String(f?.when ?? "") === "cast");
+  const fxAll  = Array.isArray(sys.effectsUI) ? sys.effectsUI : [];
+  const fxHit  = fxAll.filter(f => String(f?.when ?? "hit") === "hit");
+  const fxCrit = fxAll.filter(f => String(f?.when ?? "hit") === "crit");
+  const fxCast = fxAll.filter(f => String(f?.when ?? "hit") === "cast");
+
+  // Montée en puissance d'un bloc dot/hot sur une stat du lanceur.
+  const fxScaled = (blk) => {
+    if (!blk) return 0;
+    const effP = getEffP(actor);
+    const stat = String(blk.stat ?? "").trim();
+    const per = Math.max(1, n(blk.per, 10) || 10);
+    const perStep = n(blk.perStep, 0);
+    const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) * perStep : 0;
+    return n(blk.flat, 0) + bonus;
+  };
 
   const summarizeFxList = (list) => {
     if (!list?.length) return null;
@@ -875,9 +889,16 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
       const mods = buildModsFromFxMods(fx.mods);
       const modInfo = summarizeModsWithKind(mods);
 
-      const fxDmg = computeDamageExpr({ actor, block: fx.damage });
       const parts = [];
-      if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
+      const dmgTick = fxScaled(fx.dot);
+      const healTick = fxScaled(fx.hot);
+      if (dmgTick) parts.push(`💥 ${dmgTick}/tour`);
+      if (healTick) parts.push(`💚 ${healTick} soin/tour`);
+      if (!dmgTick && !healTick) {
+        const fxDmg = computeDamageExpr({ actor, block: fx.damage });
+        if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
+      }
+      if (fx.isAura) parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${str(fx.auraTarget, "allies")})`);
       if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ Debuff" : "⬆️ Buff"}: ${modInfo.summary}`);
 
       // si l'effet n'a rien, on ne l'affiche pas
@@ -941,8 +962,8 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     </div>
 
     ${summarizeFxList(fxCast) ? `<div style="margin-top:6px;"><b>Effets (au lancement)</b>${summarizeFxList(fxCast)}</div>` : ``}
-    ${summarizeFxList(fxHit)  ? `<div style="margin-top:6px;"><b>Effets (touché)</b>${summarizeFxList(fxHit)}</div>`   : ``}
-    ${summarizeFxList(fxCrit) ? `<div style="margin-top:6px;"><b>Effets (crit)</b>${summarizeFxList(fxCrit)}</div>`     : ``}
+    ${summarizeFxList(fxHit)  ? `<div style="margin-top:6px;"><b>Effets (touché + crit)</b>${summarizeFxList(fxHit)}</div>`   : ``}
+    ${summarizeFxList(fxCrit) ? `<div style="margin-top:6px;"><b>Effets (crit uniquement)</b>${summarizeFxList(fxCrit)}</div>`     : ``}
 
     <hr style="margin:8px 0;opacity:.2"/>
 
@@ -1136,7 +1157,24 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     for (const applyTo of applyToList) {
       if (!applyTo) continue;
       const stateId  = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
-      const dotFlat  = n(fx.damage?.flat, 0);
+
+      // Dégâts/tour et soin/tour sont configurés SÉPARÉMENT, chacun avec une
+      // part fixe et une montée en puissance sur une stat du lanceur
+      // (stat ÷ per × perStep), figée au moment du lancement.
+      const casterP = getEffP(actor);
+      const scaled = (blk) => {
+        if (!blk) return 0;
+        const stat = String(blk.stat ?? "").trim();
+        const per = Math.max(1, n(blk.per, 10) || 10);
+        const perStep = n(blk.perStep, 0);
+        const bonus = stat ? Math.floor(n(casterP?.[stat], 0) / per) * perStep : 0;
+        return n(blk.flat, 0) + bonus;
+      };
+      const dmgPerTick  = scaled(fx.dot);
+      const healPerTick = scaled(fx.hot);
+      // Le moteur de tour traite un perTick négatif comme un soin.
+      const legacyFlat = n(fx.damage?.flat, 0);
+      const dotFlat  = (fx.dot || fx.hot) ? (dmgPerTick - healPerTick) : legacyFlat;
       const dotDice  = String(fx.damage?.dice ?? "").trim();
       const tag = String(fx.tag ?? "").trim() || null;
       const effectKey = String(fx.effectKey ?? "").trim() || null;
@@ -1155,7 +1193,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         removeBaseTN: n(fx.removeBaseTN, 0) || null,
         retraitMod:   n(fx.retraitMod, 0)
       };
-      if (isAura) state.aura = { min: n(fx.auraMin, 0), max: n(fx.auraMax, 3), key: state.label };
+      if (isAura) state.aura = {
+        min: n(fx.auraMin, 0),
+        max: n(fx.auraMax, 3),
+        key: state.label,
+        target: String(fx.auraTarget ?? "allies")
+      };
 
       const resistResult = await upsertState(applyTo, state);
       const info = resistResult?.resistanceInfo;

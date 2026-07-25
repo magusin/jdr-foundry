@@ -24,6 +24,64 @@ function pickRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+/**
+ * Applique les effets d'une arme à la cible touchée.
+ *
+ * Chaque effet porte un déclencheur `when` :
+ *   - "hit"  : touche normale — un critique la déclenche aussi
+ *   - "crit" : uniquement sur coup critique
+ * Le DOT vaut base + (stat de l'attaquant ÷ per), figé au moment du coup.
+ *
+ * @returns {Promise<string[]>} lignes à afficher dans le message de résolution
+ */
+async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
+  const list = Array.isArray(weapon?.system?.effects) ? weapon.system.effects : [];
+  if (!list.length || !target) return [];
+
+  const allowed = new Set(isCrit ? ["hit", "crit"] : ["hit"]);
+  const rows = [];
+
+  const effP = attacker?.system?.derived?.effective?.principales
+            ?? attacker?.system?.principales ?? {};
+
+  const states = Array.isArray(target.system?.etatsActifs)
+    ? foundry.utils.deepClone(target.system.etatsActifs) : [];
+
+  for (const fx of list) {
+    if (!allowed.has(String(fx?.when ?? "hit").toLowerCase())) continue;
+
+    const label = String(fx?.label ?? weapon.name ?? "Effet").trim() || "Effet";
+    const duration = Math.max(1, n(fx?.duration, 1));
+
+    const base = n(fx?.dot?.base, 0);
+    const stat = String(fx?.dot?.stat ?? "").trim();
+    const per  = Math.max(1, n(fx?.dot?.per, 10) || 10);
+    const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) : 0;
+    const perTick = base + bonus;
+
+    const id = `weapon_${weapon.id}_${fx?.id ?? label}_${target.id}`;
+    const state = {
+      id, label, type: "weaponEffect",
+      duration, remaining: duration,
+      cleanseDC: Math.max(0, n(fx?.cleanseDC, 0)),
+      dot: { flat: perTick, perTick, formula: "", fatiguePerTick: 0 },
+      mods: {}
+    };
+
+    const idx = states.findIndex(s => String(s?.id) === id);
+    if (idx >= 0) states[idx] = { ...states[idx], ...state };
+    else states.push(state);
+
+    rows.push(`✨ <b>${label}</b> → ${target.name}${perTick ? ` (${perTick > 0 ? `${perTick} dég` : `${Math.abs(perTick)} soin`}/tour)` : ""} — ${duration} tour(s)${isCrit && String(fx?.when).toLowerCase() === "crit" ? " <i>(crit)</i>" : ""}`);
+  }
+
+  if (rows.length) {
+    await target.update({ "system.etatsActifs": states });
+    if (game.rpg?.status?.recompute) await game.rpg.status.recompute(target);
+  }
+  return rows;
+}
+
 function formatTemplate(template, attackerName, targetName) {
   return template.replace("{attacker}", attackerName).replace("{target}", targetName || "la cible");
 }
@@ -186,12 +244,21 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`
         : `🛡️ Aucune mitigation`;
 
+      // Effets de l'arme (déclencheur touche normale / critique uniquement)
+      let fxLines = [];
+      try {
+        fxLines = await applyWeaponEffects({ weapon, attacker, target, isCrit });
+      } catch (e) {
+        console.warn("[RPG] effets d'arme :", e);
+      }
+
       content =
         `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
         `${bonusLine}<br>` +
         `${mitigLine}<br>` +
         `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>` +
-        pvLine;
+        pvLine +
+        (fxLines.length ? `<br>${fxLines.join("<br>")}` : "");
     }
   }
 

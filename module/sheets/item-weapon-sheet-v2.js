@@ -341,6 +341,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     effects.push({
       id: foundry.utils.randomID(8),
       label: "Nouvel effet",
+      when: "hit",
       duration: 1,
       cleanseDC: 0,
       stacking: "replace",

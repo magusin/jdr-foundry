@@ -35,6 +35,38 @@ function normDamage(d) {
   };
 }
 
+/**
+ * Normalise les modificateurs de stat d'un effet vers le format tableau
+ * [{ stat, mode:"flat"|"pct", value }] attendu par buildModsFromFxMods().
+ * Accepte aussi l'ancien format objet { force: { flat, pct }, ... }.
+ */
+function normMods(raw) {
+  const out = [];
+  if (Array.isArray(raw)) {
+    for (const m of raw) {
+      const stat = String(m?.stat ?? "").trim();
+      if (!stat) continue;
+      out.push({
+        stat,
+        mode: m?.mode === "pct" ? "pct" : "flat",
+        value: n(m?.value, 0)
+      });
+    }
+    return out;
+  }
+  if (raw && typeof raw === "object") {
+    for (const [stat, v] of Object.entries(raw)) {
+      if (!stat) continue;
+      const flat = n(v?.flat, 0);
+      const pct = n(v?.pct, 0);
+      if (flat) out.push({ stat, mode: "flat", value: flat });
+      if (pct) out.push({ stat, mode: "pct", value: pct });
+      if (!flat && !pct) out.push({ stat, mode: "flat", value: 0 });
+    }
+  }
+  return out;
+}
+
 function getEffP(actor) {
   return actor?.system?.effP ??
     actor?.system?.derived?.effective?.principales ??
@@ -308,14 +340,31 @@ static PARTS = foundry.utils.mergeObject(
       fx.duration = n(fx.duration, 0);
       fx.details = fx.details ?? "";
 
-      fx.mods = Array.isArray(fx.mods) ? fx.mods : [];
-      for (const m of fx.mods) {
-        m.stat = m.stat ?? "armureFixe";
-        m.mode = m.mode ?? "flat";
-        m.valueType = m.valueType ?? "fixed";
-        m.value = n(m.value, 0);
-        m.formula = m.formula ?? "";
-      }
+      // ── DOT (dégâts/tour) et HOT (soin/tour) : blocs SÉPARÉS, chacun
+      //    fixe + montée en puissance sur une stat (stat ÷ per × perStep).
+      //    Repli sur l'ancien champ unique damage.flat (négatif = soin).
+      const legacyFlat = n(fx.damage?.flat, 0);
+      fx.dot = fx.dot ?? {};
+      fx.dot.flat    = n(fx.dot.flat, legacyFlat > 0 ? legacyFlat : 0);
+      fx.dot.stat    = String(fx.dot.stat ?? "");
+      fx.dot.per     = Math.max(1, n(fx.dot.per, 10) || 10);
+      fx.dot.perStep = n(fx.dot.perStep, 0);
+      fx.dot.livraison = String(fx.dot.livraison ?? "magique");
+
+      fx.hot = fx.hot ?? {};
+      fx.hot.flat    = n(fx.hot.flat, legacyFlat < 0 ? Math.abs(legacyFlat) : 0);
+      fx.hot.stat    = String(fx.hot.stat ?? "");
+      fx.hot.per     = Math.max(1, n(fx.hot.per, 10) || 10);
+      fx.hot.perStep = n(fx.hot.perStep, 0);
+
+      fx.fatigueDot   = n(fx.fatigueDot, 0);
+      fx.removeBaseTN = n(fx.removeBaseTN, 0);
+      fx.retraitMod   = n(fx.retraitMod, 0);
+      fx.auraTarget   = String(fx.auraTarget ?? "allies");
+
+      // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
+      // par buildModsFromFxMods() dans rules/spells.js.
+      fx.mods = normMods(fx.mods);
 
       fx.damage = normDamage(fx.damage);
       fx.damage.preview = buildPreview(fx.damage, effP);
@@ -353,6 +402,86 @@ static PARTS = foundry.utils.mergeObject(
     ctx.ui.damageCritStatBonus = ctx.system?.damageCrit?.preview?.scalingBonus ?? 0;
 
     return ctx;
+  }
+
+  /**
+   * Lit tous les effets depuis le DOM (data-fx-field / data-mod-field) et
+   * renvoie le tableau system.effectsUI complet, prêt à être enregistré.
+   * Les champs non représentés dans l'UI (id, effectKey, target…) sont
+   * repris depuis le document pour ne rien perdre.
+   */
+  _collectEffectsFromDOM(fxCards) {
+    const current = Array.isArray(this.document.system?.effectsUI)
+      ? foundry.utils.deepClone(this.document.system.effectsUI)
+      : [];
+
+    const out = [];
+    fxCards.forEach(card => {
+      const idx = Number(card.dataset.fxIndex);
+      const prev = current[idx] ?? {};
+
+      const el  = (field) => card.querySelector(`[data-fx-field="${field}"]`);
+      const str = (field, dflt = "") => {
+        const e = el(field);
+        if (e) return String(e.value ?? "").trim();
+        return String(foundry.utils.getProperty(prev, field) ?? dflt);
+      };
+      const num = (field, dflt = 0) => {
+        const e = el(field);
+        if (!e) return n(foundry.utils.getProperty(prev, field), dflt);
+        return e.value === "" ? dflt : (Number(e.value) || 0);
+      };
+      const bool = (field) => {
+        const e = el(field);
+        return e ? !!e.checked : !!prev?.[field];
+      };
+
+      // Modificateurs de stat (bonus positif / malus négatif)
+      const mods = [];
+      card.querySelectorAll(".fx-mod-row[data-mod-index]").forEach(row => {
+        const stat = row.querySelector('[data-mod-field="stat"]')?.value ?? "";
+        if (!stat) return;
+        const mode = row.querySelector('[data-mod-field="mode"]')?.value === "pct" ? "pct" : "flat";
+        const value = Number(row.querySelector('[data-mod-field="value"]')?.value) || 0;
+        mods.push({ stat: String(stat), mode, value });
+      });
+
+      out.push({
+        ...prev,
+        id:        prev.id ?? foundry.utils.randomID(),
+        effectKey: str("effectKey", prev.effectKey ?? ""),
+        label:     str("label", prev.label ?? ""),
+        tag:       str("tag", prev.tag ?? ""),
+        when:      str("when", prev.when ?? "hit") || "hit",
+        target:    String(prev.target ?? "target"),
+        duration:  num("duration", 0),
+        permanent: bool("permanent"),
+        removeBaseTN: num("removeBaseTN", 0),
+        retraitMod:   num("retraitMod", 0),
+        movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
+        fatigueDot: num("fatigueDot", 0),
+        dot: {
+          flat:      num("dot.flat", 0),
+          stat:      str("dot.stat", ""),
+          per:       Math.max(1, num("dot.per", 10) || 10),
+          perStep:   num("dot.perStep", 0),
+          livraison: str("dot.livraison", "magique") || "magique"
+        },
+        hot: {
+          flat:    num("hot.flat", 0),
+          stat:    str("hot.stat", ""),
+          per:     Math.max(1, num("hot.per", 10) || 10),
+          perStep: num("hot.perStep", 0)
+        },
+        isAura:     bool("isAura"),
+        auraMin:    num("auraMin", 0),
+        auraMax:    num("auraMax", 0),
+        auraTarget: str("auraTarget", "allies") || "allies",
+        mods
+      });
+    });
+
+    return out;
   }
 
   /**
@@ -404,6 +533,19 @@ static PARTS = foundry.utils.mergeObject(
       });
     }
 
+    // ── effectsUI : collecte directement depuis le DOM ─────────────────────
+    // Les champs d'effet utilisent data-fx-field (et non name=) : le merge
+    // générique via formData perdait les valeurs saisies, qui revenaient à
+    // leur état d'origine au re-render. On lit le DOM et on écrit le tableau
+    // complet, comme pour les lignes de dégâts.
+    const fxCards = root?.querySelectorAll("details[data-fx-index]") ?? [];
+    const collectedFx = fxCards.length ? this._collectEffectsFromDOM(fxCards) : null;
+    if (collectedFx) {
+      Object.keys(raw).forEach(k => {
+        if (k.startsWith("system.effectsUI")) delete raw[k];
+      });
+    }
+
     const expanded = foundry.utils.expandObject(raw);
 
     // Si damages est un array direct on le place bien
@@ -413,6 +555,11 @@ static PARTS = foundry.utils.mergeObject(
     }
 
     const prepared = normalizeAndMergeEffects(this.document, expanded);
+
+    if (collectedFx) {
+      prepared.system = prepared.system ?? {};
+      prepared.system.effectsUI = collectedFx;
+    }
 
     await this.document.update(prepared, { render: false });
     await this.render({ force: true });
@@ -496,8 +643,8 @@ static PARTS = foundry.utils.mergeObject(
 
         // Remplit les champs visibles immédiatement
         const card = sel.closest("details");
-        const labelInput = card?.querySelector(`input[name="system.effectsUI.${fxIdx}.label"]`);
-        const tagSel = card?.querySelector(`select[name="system.effectsUI.${fxIdx}.tag"]`);
+        const labelInput = card?.querySelector('[data-fx-field="label"]');
+        const tagSel = card?.querySelector('[data-fx-field="tag"]');
         if (labelInput && !labelInput.value.trim()) labelInput.value = def.label;
         if (tagSel && def.tag) tagSel.value = def.tag;
 
@@ -529,8 +676,11 @@ static PARTS = foundry.utils.mergeObject(
       isAura: false,
       auraMin: 0,
       auraMax: 3,
+      auraTarget: "allies",
       details: "",
-      damage: { enabled: false, dice: "0", flat: 0, scaling: { stat: "intelligence", per: 10, perStep: 0 } },
+      fatigueDot: 0,
+      dot: { flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
+      hot: { flat: 0, stat: "", per: 10, perStep: 0 },
       mods: []
     });
     await this.document.update({ "system.effectsUI": effects }, { render: true });
@@ -578,14 +728,8 @@ static PARTS = foundry.utils.mergeObject(
     const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
     if (!effects[fxIndex]) return;
 
-    effects[fxIndex].mods = Array.isArray(effects[fxIndex].mods) ? effects[fxIndex].mods : [];
-    effects[fxIndex].mods.push({
-      stat: "armureFixe",
-      mode: "flat",
-      valueType: "fixed",
-      value: 0,
-      formula: ""
-    });
+    effects[fxIndex].mods = normMods(effects[fxIndex].mods);
+    effects[fxIndex].mods.push({ stat: "force", mode: "flat", value: 0 });
 
     await this.document.update({ "system.effectsUI": effects }, { render: true });
   }
@@ -598,8 +742,9 @@ static PARTS = foundry.utils.mergeObject(
     if (!Number.isFinite(modIndex) || modIndex < 0) return;
 
     const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
-    if (!effects[fxIndex]?.mods) return;
+    if (!effects[fxIndex]) return;
 
+    effects[fxIndex].mods = normMods(effects[fxIndex].mods);
     effects[fxIndex].mods.splice(modIndex, 1);
     await this.document.update({ "system.effectsUI": effects }, { render: true });
   }
