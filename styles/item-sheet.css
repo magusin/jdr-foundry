@@ -96,6 +96,60 @@
 /* ══════════════════════════════════════════════════════════════════════
    Fiche de sort — bloc « Effets secondaires »
    ══════════════════════════════════════════════════════════════════════ */
+.rpg-spell-sheet .fx-card {
+  border: 1px solid var(--color-border-light-2, rgba(255,255,255,0.12));
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+/* En-tête : nom + pastilles resumant l'effet, lisible replie */
+.rpg-spell-sheet .fx-summary {
+  cursor: pointer;
+  padding: 7px 10px;
+  background: var(--surface, rgba(255,255,255,0.04));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+}
+.rpg-spell-sheet .fx-summary::-webkit-details-marker { display: none; }
+.rpg-spell-sheet .fx-title {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+.rpg-spell-sheet .fx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rpg-spell-sheet .fx-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  white-space: nowrap;
+}
+.rpg-spell-sheet .fx-chip-when  { background: rgba(209,161,68,0.18);  border-color: rgba(209,161,68,0.40); }
+.rpg-spell-sheet .fx-chip-tick  { background: rgba(192,57,43,0.16);   border-color: rgba(192,57,43,0.38); }
+.rpg-spell-sheet .fx-chip-aura  { background: rgba(120,110,200,0.18); border-color: rgba(120,110,200,0.40); }
+.rpg-spell-sheet .fx-chip-bonus { background: rgba(29,158,117,0.18);  border-color: rgba(29,158,117,0.40); }
+.rpg-spell-sheet .fx-chip-malus { background: rgba(192,57,43,0.18);   border-color: rgba(192,57,43,0.40); }
+
+.rpg-spell-sheet .fx-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Grilles internes */
 .rpg-spell-sheet .fx-grid-2,
 .rpg-spell-sheet .fx-grid-4,
 .rpg-spell-sheet .fx-grid-5 {
@@ -103,16 +157,14 @@
   gap: 8px;
 }
 .rpg-spell-sheet .fx-grid-2 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.rpg-spell-sheet .fx-grid-4 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-.rpg-spell-sheet .fx-grid-5 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.rpg-spell-sheet .fx-grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.rpg-spell-sheet .fx-grid-5 { grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); }
 
 .rpg-spell-sheet .fx-grid-2 > div,
 .rpg-spell-sheet .fx-grid-4 > div,
 .rpg-spell-sheet .fx-grid-5 > div { min-width: 0; }
 
-.rpg-spell-sheet .fx-grid-2 label,
-.rpg-spell-sheet .fx-grid-4 > div > label,
-.rpg-spell-sheet .fx-grid-5 > div > label {
+.rpg-spell-sheet .fx-body label {
   display: block;
   font-size: 11px;
   opacity: 0.8;
@@ -122,14 +174,13 @@
   text-overflow: ellipsis;
   cursor: help;
 }
-.rpg-spell-sheet .fx-grid-2 input,
-.rpg-spell-sheet .fx-grid-2 select,
-.rpg-spell-sheet .fx-grid-4 input[type="number"],
-.rpg-spell-sheet .fx-grid-4 select,
-.rpg-spell-sheet .fx-grid-5 input[type="number"],
-.rpg-spell-sheet .fx-grid-5 select {
-  width: 100%;
-  min-width: 0;
+.rpg-spell-sheet .fx-body input,
+.rpg-spell-sheet .fx-body select { width: 100%; min-width: 0; }
+
+.rpg-spell-sheet .fx-inline-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
 }
 
 .rpg-spell-sheet .fx-check {
@@ -139,6 +190,8 @@
   font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
+  margin-bottom: 0;
+  opacity: 1;
 }
 .rpg-spell-sheet .fx-check input[type="checkbox"] { width: auto; margin: 0; }
 
@@ -152,16 +205,17 @@
   font-size: 11px;
   font-weight: 700;
   padding: 0 6px;
-  opacity: 0.9;
+  color: var(--brass, #d1a144);
 }
 .rpg-spell-sheet .fx-hint {
   display: block;
   font-size: 10px;
   opacity: 0.6;
-  margin-top: 5px;
+  margin-top: 6px;
   white-space: normal;
 }
 
+/* Lignes Bonus / Malus */
 .rpg-spell-sheet .fx-mod-row {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 0.9fr) 24px;
@@ -169,14 +223,19 @@
   align-items: center;
   margin-bottom: 4px;
 }
-.rpg-spell-sheet .fx-mod-row select,
-.rpg-spell-sheet .fx-mod-row input { width: 100%; min-width: 0; }
+.rpg-spell-sheet .fx-mod-head {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.55;
+  margin-bottom: 2px;
+}
+.rpg-spell-sheet .fx-mod-head > span { padding-left: 2px; }
 
 .rpg-spell-sheet .fx-add-btn {
   font-size: 11px;
   cursor: pointer;
-  padding: 2px 8px;
-  margin-bottom: 6px;
+  padding: 3px 10px;
+  margin-top: 2px;
 }
 .rpg-spell-sheet .fx-del-btn {
   cursor: pointer;
@@ -185,6 +244,15 @@
   background: none;
   font-size: 14px;
   padding: 0;
+  flex: 0 0 auto;
+}
+
+/* Vue joueur : liste lisible, pas de formulaire */
+.rpg-spell-sheet .fx-readonly .fx-read-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* ── Fiche d'arme : grilles des blocs « effets » ───────────────────────── */

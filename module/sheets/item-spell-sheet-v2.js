@@ -35,22 +35,40 @@ function normDamage(d) {
   };
 }
 
+/** Libellés lisibles des stats modifiables par un effet. */
+const STAT_LABELS = {
+  force: "Force", dexterite: "Dextérité", intelligence: "Intelligence",
+  acuite: "Acuité", endurance: "Endurance",
+  armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
+  scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
+  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+  initiativeMod: "Initiative", vitesse: "Vitesse",
+  pvMax: "PV max", manaMax: "Mana max",
+  regenPv: "Régén PV", regenMana: "Régén Mana",
+  fatigueMax: "Fatigue max", podsMax: "Pods max"
+};
+
+const WHEN_LABELS = {
+  hit: "⚡ Touche + crit",
+  hitonly: "⚡ Touche normale",
+  crit: "✦ Crit uniquement",
+  cast: "🪄 Au lancement"
+};
+
+const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous" };
+
 /**
  * Normalise les modificateurs de stat d'un effet vers le format tableau
  * [{ stat, mode:"flat"|"pct", value }] attendu par buildModsFromFxMods().
  * `value` reste SIGNÉE en base (négatif = malus) car c'est ce que le moteur
  * applique ; l'UI, elle, expose un sens explicite (bonus/malus) + une
- * quantité positive via isMalus/absValue.
+ * quantité positive, décorés dans _prepareContext.
  * Accepte aussi l'ancien format objet { force: { flat, pct }, ... }.
  */
 function normMods(raw) {
   const out = [];
   const push = (stat, mode, value) => {
-    const v = n(value, 0);
-    out.push({
-      stat, mode: mode === "pct" ? "pct" : "flat", value: v,
-      isMalus: v < 0, absValue: Math.abs(v)
-    });
+    out.push({ stat, mode: mode === "pct" ? "pct" : "flat", value: n(value, 0) });
   };
   if (Array.isArray(raw)) {
     for (const m of raw) {
@@ -400,14 +418,20 @@ static PARTS = foundry.utils.mergeObject(
       //    damage.flat signé (négatif = soin).
       fx.tick = normTick(fx);
 
-      fx.fatigueDot   = n(fx.fatigueDot, 0);
       fx.removeBaseTN = n(fx.removeBaseTN, 0);
       fx.retraitMod   = n(fx.retraitMod, 0);
       fx.auraTarget   = String(fx.auraTarget ?? "allies");
 
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
-      // par buildModsFromFxMods() dans rules/spells.js.
-      fx.mods = normMods(fx.mods);
+      // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
+      // l'affichage seulement, le sens (bonus/malus) et la quantité positive.
+      fx.mods = normMods(fx.mods).map(m => ({
+        ...m,
+        isMalus: m.value < 0,
+        absValue: Math.abs(m.value),
+        statLabel: STAT_LABELS[m.stat] ?? m.stat,
+        text: `${m.value < 0 ? "⬇️" : "⬆️"} ${STAT_LABELS[m.stat] ?? m.stat} ${m.value > 0 ? "+" : "−"}${Math.abs(m.value)}${m.mode === "pct" ? "%" : ""}`
+      }));
 
       fx.damage = normDamage(fx.damage);
       fx.damage.preview = buildPreview(fx.damage, effP);
@@ -428,6 +452,28 @@ static PARTS = foundry.utils.mergeObject(
       fx.isAura = !!fx.isAura;
       fx.auraMin = n(fx.auraMin, 0);
       fx.auraMax = n(fx.auraMax, 3);
+
+      // ── Résumé lisible (pastilles) : visible replié pour le MJ et
+      //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
+      fx.uiTick = null;
+      if (fx.tick.mode === "damage" || fx.tick.mode === "heal") {
+        const icon = fx.tick.mode === "heal" ? "💚" : "💥";
+        const word = fx.tick.mode === "heal" ? "soin" : "dégâts";
+        const scale = fx.tick.stat && fx.tick.perStep
+          ? ` + ${STAT_LABELS[fx.tick.stat] ?? fx.tick.stat}÷${fx.tick.per}×${fx.tick.perStep}`
+          : "";
+        fx.uiTick = `${icon} ${n(fx.tick.flat, 0)}${scale} ${word}/tour`;
+      }
+      fx.uiWhen = WHEN_LABELS[String(fx.when).toLowerCase()] ?? fx.when;
+      fx.uiDuration = fx.permanent ? "♾️ Permanent" : `⏳ ${n(fx.duration, 0)} tour(s)`;
+      fx.uiAura = fx.isAura
+        ? `🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m · ${AURA_TARGET_LABELS[fx.auraTarget] ?? fx.auraTarget}`
+        : null;
+      fx.uiMove = fx.movementTypeGrant ? `🏃 ${fx.movementTypeGrant}` : null;
+      fx.uiRemove = n(fx.removeBaseTN, 0)
+        ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+${n(fx.retraitMod, 0) ? ` (${n(fx.retraitMod, 0) > 0 ? "+" : ""}${n(fx.retraitMod, 0)})` : ""}`
+        : null;
+      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.mods.length);
     }
 
     // ui flags joueur
@@ -504,7 +550,9 @@ static PARTS = foundry.utils.mergeObject(
         removeBaseTN: num("removeBaseTN", 0),
         retraitMod:   num("retraitMod", 0),
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
-        fatigueDot: num("fatigueDot", 0),
+        // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
+        // via la stat « Fatigue max » dans les bonus/malus.
+        fatigueDot: 0,
         tick: {
           mode:      str("tick.mode", "none") || "none",
           flat:      Math.abs(num("tick.flat", 0)),
@@ -704,7 +752,7 @@ static PARTS = foundry.utils.mergeObject(
   // ===== Actions V2 =====
 
   async _actionAddEffect(event) {
-    const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+    const effects = this._currentEffects();
     effects.push({
       id: foundry.utils.randomID(),
       effectKey: "",
@@ -718,7 +766,6 @@ static PARTS = foundry.utils.mergeObject(
       auraMax: 3,
       auraTarget: "allies",
       details: "",
-      fatigueDot: 0,
       tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
       mods: []
     });
@@ -729,7 +776,7 @@ static PARTS = foundry.utils.mergeObject(
     const btn = event?.target?.closest?.("[data-action]");
     const fxIndex = Number(btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? btn?.dataset?.fxIndex ?? -1);
     if (!Number.isFinite(fxIndex) || fxIndex < 0) return;
-    const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+    const effects = this._currentEffects();
     effects.splice(fxIndex, 1);
     await this.document.update({ "system.effectsUI": effects }, { render: true });
   }
@@ -761,10 +808,17 @@ static PARTS = foundry.utils.mergeObject(
 
   async _actionAddMod(event) {
     const btn = event?.target?.closest?.("[data-action]");
-    const fxIndex = Number(btn?.dataset?.fxIndex ?? -1);
+    // Le bouton porte data-fx-idx (→ dataset.fxIdx) ; on accepte aussi
+    // data-fx-index et, en dernier recours, la carte d'effet parente.
+    const fxIndex = Number(
+      btn?.dataset?.fxIdx ?? btn?.dataset?.fxIndex ??
+      btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? -1
+    );
     if (!Number.isFinite(fxIndex) || fxIndex < 0) return;
 
-    const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+    // On repart de l'état affiché (et non du document) pour ne pas perdre
+    // une saisie en cours dans un autre champ de l'effet.
+    const effects = this._currentEffects();
     if (!effects[fxIndex]) return;
 
     effects[fxIndex].mods = normMods(effects[fxIndex].mods);
@@ -773,14 +827,24 @@ static PARTS = foundry.utils.mergeObject(
     await this.document.update({ "system.effectsUI": effects }, { render: true });
   }
 
+  /** État courant des effets : le DOM s'il est rendu, sinon le document. */
+  _currentEffects() {
+    const cards = this.element?.querySelectorAll("details[data-fx-index]");
+    if (cards?.length) return this._collectEffectsFromDOM(cards);
+    return foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+  }
+
   async _actionRemoveMod(event) {
     const btn = event?.target?.closest?.("[data-action]");
-    const fxIndex = Number(btn?.dataset?.fxIndex ?? -1);
+    const fxIndex = Number(
+      btn?.dataset?.fxIdx ?? btn?.dataset?.fxIndex ??
+      btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? -1
+    );
     const modIndex = Number(btn?.dataset?.modIndex ?? -1);
     if (!Number.isFinite(fxIndex) || fxIndex < 0) return;
     if (!Number.isFinite(modIndex) || modIndex < 0) return;
 
-    const effects = foundry.utils.deepClone(this.document.system.effectsUI ?? []);
+    const effects = this._currentEffects();
     if (!effects[fxIndex]) return;
 
     effects[fxIndex].mods = normMods(effects[fxIndex].mods);

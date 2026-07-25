@@ -191,141 +191,123 @@
       </div>
 
       {{#each system.effectsUI as |fx i|}}
-      <details class="fx-card" data-fx-index="{{i}}"
-        style="border:1px solid var(--color-border-light-2);border-radius:10px;margin-bottom:6px;overflow:hidden">
-        <summary style="cursor:pointer;padding:8px 12px;background:var(--surface);display:flex;align-items:center;gap:8px;list-style:none">
-          <span style="flex:1;font-weight:600">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
-          {{#if fx.tag}}<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface-2)">{{fx.tag}}</span>{{/if}}
-          {{#if fx.dot.perTick}}<span style="font-size:11px;opacity:.7">{{fx.dot.perTick}} dég/tour</span>{{/if}}
+      <details class="fx-card" data-fx-index="{{i}}" {{#unless @root.canEdit}}open{{/unless}}>
+        <summary class="fx-summary">
+          <span class="fx-title">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
+          <span class="fx-chips">
+            <span class="fx-chip fx-chip-when">{{fx.uiWhen}}</span>
+            <span class="fx-chip">{{fx.uiDuration}}</span>
+            {{#if fx.tag}}<span class="fx-chip fx-chip-tag">{{fx.tag}}</span>{{/if}}
+            {{#if fx.uiTick}}<span class="fx-chip fx-chip-tick">{{fx.uiTick}}</span>{{/if}}
+            {{#each fx.mods as |mod mi|}}
+            <span class="fx-chip {{#if mod.isMalus}}fx-chip-malus{{else}}fx-chip-bonus{{/if}}">{{mod.text}}</span>
+            {{/each}}
+            {{#if fx.uiAura}}<span class="fx-chip fx-chip-aura">{{fx.uiAura}}</span>{{/if}}
+            {{#if fx.uiMove}}<span class="fx-chip">{{fx.uiMove}}</span>{{/if}}
+            {{#if fx.uiRemove}}<span class="fx-chip">{{fx.uiRemove}}</span>{{/if}}
+          </span>
           {{#if @root.canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"
-            style="cursor:pointer;background:none;border:none;color:#c0392b;font-size:14px;padding:0 4px">✕</button>
+            class="fx-del-btn" title="Supprimer cet effet">✕</button>
           {{/if}}
         </summary>
 
-        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:10px">
+        {{#if @root.canEdit}}
+        {{!-- ════════ FORMULAIRE MJ ════════ --}}
+        <div class="fx-body">
 
-          {{!-- Sélecteur catalogue + nom --}}
-          <div class="fx-grid-2">
-            <div>
-              <label>Effet du catalogue (auto-remplit nom + type)</label>
-              {{#if @root.canEdit}}
-              <select class="fx-catalogue-select" data-fx-idx="{{i}}" data-fx-field="effectKey">
-                <option value="">— Nom libre —</option>
-                {{#each @root.EFFECT_CATALOG as |group gLabel|}}
-                <optgroup label="{{gLabel}}">
-                  {{#each group as |e|}}
-                  <option value="{{e.key}}" data-tag="{{e.tag}}" data-label="{{e.label}}"
-                    {{#if (eq fx.effectKey e.key)}}selected{{/if}}>{{e.label}}</option>
-                  {{/each}}
-                </optgroup>
-                {{/each}}
-              </select>
-              {{/if}}
-            </div>
-            <div>
-              <label>Nom affiché</label>
-              {{#if @root.canEdit}}
-              <input type="text" data-fx-field="label" value="{{fx.label}}" placeholder="Nom de l'effet"/>
-              {{else}}<div><b>{{fx.label}}</b></div>{{/if}}
-            </div>
-          </div>
-
-          {{!-- Ligne 1 : type, déclenchement, durée, permanent --}}
-          <div class="fx-grid-4">
-            <div>
-              <label>Type / Élément</label>
-              {{#if @root.canEdit}}
-              <select data-fx-field="tag">
-                <option value="" {{#unless fx.tag}}selected{{/unless}}>— Aucun —</option>
-                <option value="magique"  {{#if (eq fx.tag "magique")}}selected{{/if}}>✨ Magique</option>
-                <option value="physique" {{#if (eq fx.tag "physique")}}selected{{/if}}>⚔️ Physique</option>
-                <option value="feu"    {{#if (eq fx.tag "feu")}}selected{{/if}}>🔥 Feu</option>
-                <option value="air"    {{#if (eq fx.tag "air")}}selected{{/if}}>🌬️ Air</option>
-                <option value="eau"    {{#if (eq fx.tag "eau")}}selected{{/if}}>💧 Eau</option>
-                <option value="glace"  {{#if (eq fx.tag "glace")}}selected{{/if}}>❄️ Glace</option>
-                <option value="eclair" {{#if (eq fx.tag "eclair")}}selected{{/if}}>⚡ Éclair</option>
-                <option value="terre"  {{#if (eq fx.tag "terre")}}selected{{/if}}>🌿 Terre</option>
-              </select>
-              {{else}}<div><b>{{fx.tag}}</b></div>{{/if}}
-            </div>
-            <div>
-              <label title="Quand l'effet s'applique : sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement du sort quel que soit le résultat.">⚡ Déclenchement</label>
-              {{#if @root.canEdit}}
-              <select data-fx-field="when">
-                <option value="hit"     {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale + crit</option>
-                <option value="hitOnly" {{#if (eq fx.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
-                <option value="crit"    {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
-                <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (toujours)</option>
-              </select>
-              {{else}}<div><b>{{fx.when}}</b></div>{{/if}}
-            </div>
-            <div>
-              <label>Durée (tours)</label>
-              {{#if @root.canEdit}}<input type="number" data-fx-field="duration" value="{{fx.duration}}" min="0"/>
-              {{else}}<div><b>{{fx.duration}}</b></div>{{/if}}
-            </div>
-            <div>
-              <label>Permanent</label>
-              <label class="fx-check" title="L'effet ne expire jamais (la durée est ignorée).">
-                <input type="checkbox" data-fx-field="permanent" {{#if fx.permanent}}checked{{/if}} />
-                <span>N'expire pas</span>
-              </label>
-            </div>
-          </div>
-
-          {{!-- Ligne 2 : retrait, déplacement, fatigue --}}
-          <div class="fx-grid-4">
-            <div>
-              <label>TN retrait <span class="fx-hint">(0=impossible)</span></label>
-              {{#if @root.canEdit}}<input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0"/>
-              {{else}}<div>{{#if fx.removeBaseTN}}<b>{{fx.removeBaseTN}}+</b>{{else}}—{{/if}}</div>{{/if}}
-            </div>
-            <div>
-              <label>Mod retrait <span class="fx-hint">(+/- au TN)</span></label>
-              {{#if @root.canEdit}}<input type="number" data-fx-field="retraitMod" value="{{fx.retraitMod}}" placeholder="0"/>
-              {{else}}<div>{{#if fx.retraitMod}}{{fx.retraitMod}}{{else}}—{{/if}}</div>{{/if}}
-            </div>
-            <div>
-              <label>🏃 Mode déplacement accordé</label>
-              {{#if @root.canEdit}}
-              <select data-fx-field="movementTypeGrant">
-                <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
-                <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
-                <option value="aquatique"  {{#if (eq fx.movementTypeGrant "aquatique")}}selected{{/if}}>🐟 Nage</option>
-                <option value="amphibie"   {{#if (eq fx.movementTypeGrant "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
-                <option value="ethere"     {{#if (eq fx.movementTypeGrant "ethere")}}selected{{/if}}>👻 Éthéré</option>
-                <option value="montagnard" {{#if (eq fx.movementTypeGrant "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
-                <option value="forestier"  {{#if (eq fx.movementTypeGrant "forestier")}}selected{{/if}}>🌲 Forestier</option>
-              </select>
-              {{else}}<div>{{#if fx.movementTypeGrant}}{{fx.movementTypeGrant}}{{else}}—{{/if}}</div>{{/if}}
-            </div>
-            <div>
-              <label>Fatigue/tour <span class="fx-hint">(négatif=repos)</span></label>
-              {{#if @root.canEdit}}<input type="number" data-fx-field="fatigueDot" value="{{fx.fatigueDot}}" placeholder="0"/>
-              {{else}}<div>{{fx.fatigueDot}}</div>{{/if}}
-            </div>
-          </div>
-
-          {{!-- ═══ EFFET PAR TOUR (dégâts OU soin) ═══ --}}
+          {{!-- 1 · Identité --}}
           <fieldset class="fx-fieldset">
-            <legend>🩸 Effet par tour</legend>
+            <legend>1 · Identité</legend>
+            <div class="fx-grid-2">
+              <div>
+                <label title="Choisir un effet du catalogue remplit automatiquement le nom et le type.">Effet du catalogue</label>
+                <select class="fx-catalogue-select" data-fx-idx="{{i}}" data-fx-field="effectKey">
+                  <option value="">— Nom libre —</option>
+                  {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+                  <optgroup label="{{gLabel}}">
+                    {{#each group as |e|}}
+                    <option value="{{e.key}}" data-tag="{{e.tag}}" data-label="{{e.label}}"
+                      {{#if (eq fx.effectKey e.key)}}selected{{/if}}>{{e.label}}</option>
+                    {{/each}}
+                  </optgroup>
+                  {{/each}}
+                </select>
+              </div>
+              <div>
+                <label>Nom affiché</label>
+                <input type="text" data-fx-field="label" value="{{fx.label}}" placeholder="Nom de l'effet"/>
+              </div>
+              <div>
+                <label>Type / Élément</label>
+                <select data-fx-field="tag">
+                  <option value="" {{#unless fx.tag}}selected{{/unless}}>— Aucun —</option>
+                  <option value="magique"  {{#if (eq fx.tag "magique")}}selected{{/if}}>✨ Magique</option>
+                  <option value="physique" {{#if (eq fx.tag "physique")}}selected{{/if}}>⚔️ Physique</option>
+                  <option value="feu"    {{#if (eq fx.tag "feu")}}selected{{/if}}>🔥 Feu</option>
+                  <option value="air"    {{#if (eq fx.tag "air")}}selected{{/if}}>🌬️ Air</option>
+                  <option value="eau"    {{#if (eq fx.tag "eau")}}selected{{/if}}>💧 Eau</option>
+                  <option value="glace"  {{#if (eq fx.tag "glace")}}selected{{/if}}>❄️ Glace</option>
+                  <option value="eclair" {{#if (eq fx.tag "eclair")}}selected{{/if}}>⚡ Éclair</option>
+                  <option value="terre"  {{#if (eq fx.tag "terre")}}selected{{/if}}>🌿 Terre</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          {{!-- 2 · Quand et combien de temps --}}
+          <fieldset class="fx-fieldset">
+            <legend>2 · Déclenchement &amp; durée</legend>
+            <div class="fx-grid-4">
+              <div>
+                <label title="Sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement quel que soit le résultat.">⚡ Se déclenche</label>
+                <select data-fx-field="when">
+                  <option value="hit"     {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale + crit</option>
+                  <option value="hitOnly" {{#if (eq fx.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
+                  <option value="crit"    {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
+                  <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (toujours)</option>
+                </select>
+              </div>
+              <div>
+                <label>⏳ Durée (tours)</label>
+                <input type="number" data-fx-field="duration" value="{{fx.duration}}" min="0"/>
+              </div>
+              <div>
+                <label>♾️ Permanent</label>
+                <label class="fx-check" title="L'effet ne disparaît jamais tout seul ; la durée est ignorée.">
+                  <input type="checkbox" data-fx-field="permanent" {{#if fx.permanent}}checked{{/if}} />
+                  <span>N'expire pas</span>
+                </label>
+              </div>
+              <div>
+                <label title="Jet permettant à la cible de se débarrasser de l'effet. 0 = impossible à retirer.">🧹 TN retrait</label>
+                <div class="fx-inline-2">
+                  <input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" title="0 = impossible"/>
+                  <input type="number" data-fx-field="retraitMod" value="{{fx.retraitMod}}" placeholder="±0" title="Modificateur appliqué au TN de retrait"/>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          {{!-- 3 · Effet par tour --}}
+          <fieldset class="fx-fieldset">
+            <legend>3 · Effet par tour</legend>
             <div class="fx-grid-5">
               <div>
                 <label title="Cet effet inflige des dégâts, rend des PV, ou ne fait ni l'un ni l'autre.">Nature</label>
-                <select data-fx-field="tick.mode" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-fx-field="tick.mode">
                   <option value="none"   {{#if (eq fx.tick.mode "none")}}selected{{/if}}>— Aucun —</option>
                   <option value="damage" {{#if (eq fx.tick.mode "damage")}}selected{{/if}}>💥 Dégâts</option>
                   <option value="heal"   {{#if (eq fx.tick.mode "heal")}}selected{{/if}}>💚 Soin</option>
                 </select>
               </div>
               <div>
-                <label title="Part fixe appliquée à chaque tour. Toujours un nombre positif.">Fixe</label>
-                <input type="number" data-fx-field="tick.flat" value="{{fx.tick.flat}}" min="0" placeholder="0" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <label title="Part fixe appliquée à chaque tour. Toujours positive.">Fixe</label>
+                <input type="number" data-fx-field="tick.flat" value="{{fx.tick.flat}}" min="0" placeholder="0"/>
               </div>
               <div>
                 <label title="Stat du lanceur qui renforce l'effet (ex : Intelligence ÷ 10).">Stat</label>
-                <select data-fx-field="tick.stat" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-fx-field="tick.stat">
                   <option value="" {{#unless fx.tick.stat}}selected{{/unless}}>— aucune —</option>
                   <option value="intelligence" {{#if (eq fx.tick.stat "intelligence")}}selected{{/if}}>Intelligence</option>
                   <option value="force"        {{#if (eq fx.tick.stat "force")}}selected{{/if}}>Force</option>
@@ -335,65 +317,36 @@
                 </select>
               </div>
               <div>
-                <label title="Diviseur : 10 = un palier tous les 10 points de stat.">Par</label>
-                <input type="number" data-fx-field="tick.per" value="{{fx.tick.per}}" min="1" placeholder="10" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <label title="Diviseur : 10 = un palier tous les 10 points de stat.">÷ Par</label>
+                <input type="number" data-fx-field="tick.per" value="{{fx.tick.per}}" min="1" placeholder="10"/>
               </div>
               <div>
-                <label title="Points gagnés à chaque palier de stat.">Gain/palier</label>
-                <input type="number" data-fx-field="tick.perStep" value="{{fx.tick.perStep}}" min="0" placeholder="1" {{#unless @root.canEdit}}readonly{{/unless}}/>
+                <label title="Points gagnés à chaque palier de stat.">× Gain</label>
+                <input type="number" data-fx-field="tick.perStep" value="{{fx.tick.perStep}}" min="0" placeholder="1"/>
               </div>
-            </div>
-            <div class="fx-grid-5" style="margin-top:6px">
               <div>
                 <label title="Type de dégâts (ignoré pour un soin).">Livraison</label>
-                <select data-fx-field="tick.livraison" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-fx-field="tick.livraison">
                   <option value="magique"  {{#if (eq fx.tick.livraison "magique")}}selected{{/if}}>Magique</option>
                   <option value="physique" {{#if (eq fx.tick.livraison "physique")}}selected{{/if}}>Physique</option>
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Total par tour : <b>Fixe + (stat ÷ Par) × Gain/palier</b>. Choisis <b>Dégâts</b> ou <b>Soin</b> — pas besoin de valeur négative.</small>
-          </fieldset>
-          {{!-- ═══ AURA ═══ --}}
-          <fieldset class="fx-fieldset">
-            <legend>🌀 Aura (zone autour de la cible)</legend>
-            <div class="fx-grid-4">
-              <div>
-                <label>Activer</label>
-                <label class="fx-check" title="L'effet rayonne autour du porteur et touche les tokens dans la zone.">
-                  <input type="checkbox" data-fx-field="isAura" {{#if fx.isAura}}checked{{/if}} />
-                  <span>Aura</span>
-                </label>
-              </div>
-              <div>
-                <label>Portée min (m)</label>
-                <input type="number" data-fx-field="auraMin" value="{{fx.auraMin}}" min="0" step="0.1" {{#unless @root.canEdit}}readonly{{/unless}}/>
-              </div>
-              <div>
-                <label>Portée max (m)</label>
-                <input type="number" data-fx-field="auraMax" value="{{fx.auraMax}}" min="0" step="0.1" {{#unless @root.canEdit}}readonly{{/unless}}/>
-              </div>
-              <div>
-                <label>Cible de l'aura</label>
-                <select data-fx-field="auraTarget" {{#unless @root.canEdit}}disabled{{/unless}}>
-                  <option value="allies"  {{#if (eq fx.auraTarget "allies")}}selected{{/if}}>🟢 Alliés</option>
-                  <option value="enemies" {{#if (eq fx.auraTarget "enemies")}}selected{{/if}}>🔴 Ennemis</option>
-                  <option value="both"    {{#if (eq fx.auraTarget "both")}}selected{{/if}}>⚪ Tout le monde</option>
-                </select>
-              </div>
-            </div>
+            <small class="fx-hint">Par tour : <b>Fixe + (stat ÷ Par) × Gain</b>. Choisis <b>Dégâts</b> ou <b>Soin</b> — jamais de valeur négative.</small>
           </fieldset>
 
-          {{!-- ═══ BONUS / MALUS DE STATS ═══ --}}
+          {{!-- 4 · Bonus / Malus --}}
           <fieldset class="fx-fieldset">
-            <legend>📊 Bonus / Malus de stats</legend>
-            {{#if @root.canEdit}}
-            <button type="button" data-action="addMod" data-fx-idx="{{i}}" class="fx-add-btn">+ Ajouter une stat</button>
-            {{/if}}
+            <legend>4 · Bonus / Malus de stats</legend>
             <div class="fx-mods-list" data-fx-idx="{{i}}">
+              {{#if fx.mods.length}}
+              <div class="fx-mod-row fx-mod-head">
+                <span>Stat</span><span>Sens</span><span>Type</span><span>Valeur</span><span></span>
+              </div>
+              {{/if}}
               {{#each fx.mods as |mod mi|}}
               <div class="fx-mod-row" data-mod-index="{{mi}}">
-                <select data-mod-field="stat" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-mod-field="stat">
                   <optgroup label="Caractéristiques">
                     <option value="force"        {{#if (eq mod.stat "force")}}selected{{/if}}>Force</option>
                     <option value="dexterite"    {{#if (eq mod.stat "dexterite")}}selected{{/if}}>Dextérité</option>
@@ -422,28 +375,83 @@
                     <option value="podsMax"    {{#if (eq mod.stat "podsMax")}}selected{{/if}}>Pods max</option>
                   </optgroup>
                 </select>
-                <select data-mod-field="sens" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-mod-field="sens">
                   <option value="bonus" {{#unless mod.isMalus}}selected{{/unless}}>⬆️ Bonus</option>
                   <option value="malus" {{#if mod.isMalus}}selected{{/if}}>⬇️ Malus</option>
                 </select>
-                <select data-mod-field="mode" {{#unless @root.canEdit}}disabled{{/unless}}>
+                <select data-mod-field="mode">
                   <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe</option>
                   <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
                 </select>
                 <input type="number" data-mod-field="value" value="{{mod.absValue}}" min="0" placeholder="0"
-                  title="Quantité, toujours positive — le sens (bonus ou malus) est choisi à gauche."
-                  {{#unless @root.canEdit}}readonly{{/unless}}/>
-                {{#if @root.canEdit}}
+                  title="Quantité, toujours positive — le sens est choisi à gauche."/>
                 <button type="button" data-action="removeMod" data-fx-idx="{{i}}" data-mod-index="{{mi}}"
                   class="fx-del-btn" title="Retirer cette stat">✕</button>
-                {{else}}<span></span>{{/if}}
               </div>
               {{/each}}
             </div>
-            <small class="fx-hint">Choisis la stat, puis <b>Bonus</b> ou <b>Malus</b>, en valeur <b>Fixe</b> ou en <b>%</b>. Ex. Enlisement : Vitesse · Malus · % · 25.</small>
+            <button type="button" data-action="addMod" data-fx-idx="{{i}}" class="fx-add-btn">+ Ajouter une stat</button>
+            <small class="fx-hint">Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>. La <b>Fatigue max</b> se gère ici aussi.</small>
+          </fieldset>
+
+          {{!-- 5 · Aura & déplacement --}}
+          <fieldset class="fx-fieldset">
+            <legend>5 · Aura &amp; déplacement</legend>
+            <div class="fx-grid-4">
+              <div>
+                <label>🌀 Aura</label>
+                <label class="fx-check" title="L'effet rayonne autour du porteur et touche les tokens dans la zone.">
+                  <input type="checkbox" data-fx-field="isAura" {{#if fx.isAura}}checked{{/if}} />
+                  <span>Activer</span>
+                </label>
+              </div>
+              <div>
+                <label>Portée (m)</label>
+                <div class="fx-inline-2">
+                  <input type="number" data-fx-field="auraMin" value="{{fx.auraMin}}" min="0" step="0.1" title="Portée minimale"/>
+                  <input type="number" data-fx-field="auraMax" value="{{fx.auraMax}}" min="0" step="0.1" title="Portée maximale"/>
+                </div>
+              </div>
+              <div>
+                <label>Cible de l'aura</label>
+                <select data-fx-field="auraTarget">
+                  <option value="allies"  {{#if (eq fx.auraTarget "allies")}}selected{{/if}}>🟢 Alliés</option>
+                  <option value="enemies" {{#if (eq fx.auraTarget "enemies")}}selected{{/if}}>🔴 Ennemis</option>
+                  <option value="both"    {{#if (eq fx.auraTarget "both")}}selected{{/if}}>⚪ Tout le monde</option>
+                </select>
+              </div>
+              <div>
+                <label>🏃 Mode déplacement accordé</label>
+                <select data-fx-field="movementTypeGrant">
+                  <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
+                  <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
+                  <option value="aquatique"  {{#if (eq fx.movementTypeGrant "aquatique")}}selected{{/if}}>🐟 Nage</option>
+                  <option value="amphibie"   {{#if (eq fx.movementTypeGrant "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
+                  <option value="ethere"     {{#if (eq fx.movementTypeGrant "ethere")}}selected{{/if}}>👻 Éthéré</option>
+                  <option value="montagnard" {{#if (eq fx.movementTypeGrant "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
+                  <option value="forestier"  {{#if (eq fx.movementTypeGrant "forestier")}}selected{{/if}}>🌲 Forestier</option>
+                </select>
+              </div>
+            </div>
           </fieldset>
 
         </div>
+        {{else}}
+        {{!-- ════════ VUE JOUEUR — lecture seule, sans formulaire ════════ --}}
+        <div class="fx-body fx-readonly">
+          {{#if fx.uiHasSummary}}
+          <ul class="fx-read-list">
+            {{#if fx.uiTick}}<li>{{fx.uiTick}}</li>{{/if}}
+            {{#each fx.mods as |mod mi|}}<li>{{mod.text}}</li>{{/each}}
+            {{#if fx.uiAura}}<li>{{fx.uiAura}}</li>{{/if}}
+            {{#if fx.uiMove}}<li>{{fx.uiMove}}</li>{{/if}}
+            {{#if fx.uiRemove}}<li>{{fx.uiRemove}}</li>{{/if}}
+          </ul>
+          {{else}}
+          <div class="fx-hint">Aucun effet chiffré — voir la description du sort.</div>
+          {{/if}}
+        </div>
+        {{/if}}
       </details>
       {{/each}}
     </section>
