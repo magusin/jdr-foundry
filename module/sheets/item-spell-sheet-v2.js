@@ -633,9 +633,11 @@ static PARTS = foundry.utils.mergeObject(
 
       try {
         // 1) Champs d'un effet secondaire
-        if (el.closest?.("details[data-fx-index]") &&
-            (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field"))) {
+        const fxCard = el.closest?.("details[data-fx-index]");
+        if (fxCard && (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field"))) {
           ev.stopPropagation();
+          // Affiche/masque les champs dépendants avant d'enregistrer
+          this._syncOptionalFields(root, fxCard);
           await this._saveEffects(root);
           return;
         }
@@ -663,6 +665,27 @@ static PARTS = foundry.utils.mergeObject(
         ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
       }
     });
+  }
+
+  /**
+   * Affichage progressif des blocs facultatifs d'un effet.
+   *
+   * Tous les champs restent dans le DOM (donc toujours enregistrés), mais on
+   * masque ceux qui ne servent à rien tant que le bloc n'est pas activé :
+   *   - « Effet par tour » : Fixe/Stat/Par/Gain/Livraison n'apparaissent que
+   *     si la Nature est Dégâts ou Soin ;
+   *   - « Aura » : portée et cible n'apparaissent que si la case est cochée.
+   * Un bloc laissé au repos est ignoré par le moteur.
+   */
+  _syncOptionalFields(root, card = null) {
+    const cards = card ? [card] : Array.from(root.querySelectorAll("details[data-fx-index]"));
+    for (const c of cards) {
+      const mode = c.querySelector('[data-fx-field="tick.mode"]')?.value ?? "none";
+      c.querySelectorAll('[data-fx-when="tick"]').forEach(el => { el.hidden = (mode === "none"); });
+
+      const aura = !!c.querySelector('[data-fx-field="isAura"]')?.checked;
+      c.querySelectorAll('[data-fx-when="aura"]').forEach(el => { el.hidden = !aura; });
+    }
   }
 
   /** Écrit tous les effets lus dans le DOM, puis rafraîchit les pastilles. */
@@ -839,6 +862,10 @@ static PARTS = foundry.utils.mergeObject(
 
     // Enregistrement au fil de la saisie, SANS re-render
     this._bindLiveSave(root);
+
+    // Affichage progressif : on ne montre les champs d'un bloc facultatif
+    // que s'il est réellement utilisé (Nature ≠ Aucun, Aura cochée).
+    this._syncOptionalFields(root);
 
     // MJ : image cliquable
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

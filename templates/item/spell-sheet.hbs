@@ -280,11 +280,12 @@
                 </label>
               </div>
               <div>
-                <label title="Jet permettant à la cible de se débarrasser de l'effet. 0 = impossible à retirer.">🧹 TN retrait</label>
-                <div class="fx-inline-2">
-                  <input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" title="0 = impossible"/>
-                  <input type="number" data-fx-field="retraitMod" value="{{fx.retraitMod}}" placeholder="±0" title="Modificateur appliqué au TN de retrait"/>
-                </div>
+                <label title="Difficulté du jet que la cible doit réussir pour se débarrasser de l'effet (macro « Retirer un État »). 0 = l'effet ne peut pas être retiré par un jet.">🧹 TN de retrait</label>
+                <input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" title="0 = impossible à retirer par un jet"/>
+              </div>
+              <div>
+                <label title="Modificateur ajouté au TN de retrait : positif = plus difficile à dissiper, négatif = plus facile. S'ajoute aux modificateurs d'équipement et d'états.">↕️ Modif. de retrait</label>
+                <input type="number" data-fx-field="retraitMod" value="{{fx.retraitMod}}" placeholder="0" title="+ = plus dur à retirer, − = plus facile"/>
               </div>
             </div>
           </fieldset>
@@ -301,11 +302,11 @@
                   <option value="heal"   {{#if (eq fx.tick.mode "heal")}}selected{{/if}}>💚 Soin</option>
                 </select>
               </div>
-              <div>
+              <div data-fx-when="tick">
                 <label title="Part fixe appliquée à chaque tour. Toujours positive.">Fixe</label>
                 <input type="number" data-fx-field="tick.flat" value="{{fx.tick.flat}}" min="0" placeholder="0"/>
               </div>
-              <div>
+              <div data-fx-when="tick">
                 <label title="Stat du lanceur qui renforce l'effet (ex : Intelligence ÷ 10).">Stat</label>
                 <select data-fx-field="tick.stat">
                   <option value="" {{#unless fx.tick.stat}}selected{{/unless}}>— aucune —</option>
@@ -316,15 +317,15 @@
                   <option value="endurance"    {{#if (eq fx.tick.stat "endurance")}}selected{{/if}}>Endurance</option>
                 </select>
               </div>
-              <div>
+              <div data-fx-when="tick">
                 <label title="Diviseur : 10 = un palier tous les 10 points de stat.">÷ Par</label>
                 <input type="number" data-fx-field="tick.per" value="{{fx.tick.per}}" min="1" placeholder="10"/>
               </div>
-              <div>
+              <div data-fx-when="tick">
                 <label title="Points gagnés à chaque palier de stat.">× Gain</label>
                 <input type="number" data-fx-field="tick.perStep" value="{{fx.tick.perStep}}" min="0" placeholder="1"/>
               </div>
-              <div>
+              <div data-fx-when="tick">
                 <label title="Type de dégâts (ignoré pour un soin).">Livraison</label>
                 <select data-fx-field="tick.livraison">
                   <option value="magique"  {{#if (eq fx.tick.livraison "magique")}}selected{{/if}}>Magique</option>
@@ -332,7 +333,7 @@
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Par tour : <b>Fixe + (stat ÷ Par) × Gain</b>. Choisis <b>Dégâts</b> ou <b>Soin</b> — jamais de valeur négative.</small>
+            <small class="fx-hint">Laisse sur <b>Aucun</b> si l'effet n'inflige ni dégâts ni soin. Sinon : <b>Fixe + (stat ÷ Par) × Gain</b> par tour.</small>
           </fieldset>
 
           {{!-- 4 · Bonus / Malus --}}
@@ -391,7 +392,7 @@
               {{/each}}
             </div>
             <button type="button" data-action="addMod" data-fx-idx="{{i}}" class="fx-add-btn">+ Ajouter une stat</button>
-            <small class="fx-hint">Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>. La <b>Fatigue max</b> se gère ici aussi.</small>
+            <small class="fx-hint">Facultatif — laisse vide si l'effet ne change aucune stat. Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>. La <b>Fatigue max</b> se gère ici aussi.</small>
           </fieldset>
 
           {{!-- 5 · Aura & déplacement --}}
@@ -405,14 +406,14 @@
                   <span>Activer</span>
                 </label>
               </div>
-              <div>
+              <div data-fx-when="aura">
                 <label>Portée (m)</label>
                 <div class="fx-inline-2">
                   <input type="number" data-fx-field="auraMin" value="{{fx.auraMin}}" min="0" step="0.1" title="Portée minimale"/>
                   <input type="number" data-fx-field="auraMax" value="{{fx.auraMax}}" min="0" step="0.1" title="Portée maximale"/>
                 </div>
               </div>
-              <div>
+              <div data-fx-when="aura">
                 <label>Cible de l'aura</label>
                 <select data-fx-field="auraTarget">
                   <option value="allies"  {{#if (eq fx.auraTarget "allies")}}selected{{/if}}>🟢 Alliés</option>
@@ -433,6 +434,7 @@
                 </select>
               </div>
             </div>
+            <small class="fx-hint">Facultatif — coche <b>Aura</b> seulement si l'effet doit rayonner autour de la cible.</small>
           </fieldset>
 
         </div>
