@@ -516,3 +516,28 @@
   border-top: 1px solid rgba(0,0,0,.12) !important;
   */
 }
+
+/* ── Filtres avancés des sorts : élément / coût / nature ─────────────────── */
+.rpg-spell-menu .rpg-filter-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.rpg-spell-menu .rpg-filter-extras select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.rpg-spell-menu .rpg-filter-extras .rpg-f-reset {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}

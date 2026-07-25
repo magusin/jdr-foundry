@@ -192,7 +192,10 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   const f = message?.flags?.rpg?.attackDeclaration ?? message?.flags?.rpg ?? {};
   const attacker = game.actors.get(f.actorId);
   const target   = game.actors.get(f.targetId);
-  const weapon   = attacker?.items.get(f.weaponId);
+  // resolveWeapon gère le cas « Mains nues » : arme reconstruite à la volée,
+  // absente de l'inventaire.
+  const { resolveWeapon } = await import("./unarmed.js");
+  const weapon   = resolveWeapon(attacker, f.weaponId);
 
   const attackerName = attacker?.name ?? "?";
   const targetName   = target?.name ?? "?";

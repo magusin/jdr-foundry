@@ -269,6 +269,10 @@
       "difficulte": 0,
       "livraison": "physique",
       "portee": 1,
+      "range": {
+        "min": 0,
+        "max": 1
+      },
       "allonge": 1,
       "damage": {
         "dice": "1d6",

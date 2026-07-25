@@ -92,9 +92,15 @@
   const requiresTarget = (it) => !!(it?.system?.damage?.enabled || isAura(it));
 
   // ── listes ─────────────────────────────────────────────────────────────────
-  const weaponsEquipped = actor.items
+  const weaponsReal = actor.items
     .filter((i) => i.type === "weapon" && !!i.system?.equipe)
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"));
+
+  // Attaque de base : sans arme équipée, on se bat à mains nues. Le
+  // personnage n'est jamais privé d'attaque.
+  const weaponsEquipped = weaponsReal.length
+    ? weaponsReal
+    : [game.rpg?.unarmed?.buildUnarmedWeapon?.(actor)].filter(Boolean);
 
   const spellsAll = actor.items
     .filter((i) => i.type === "spell")
@@ -106,7 +112,7 @@
   const spellsNormal  = spellsActive.filter(s => s.system?.speed !== "rapide" && s.system?.speed !== "quick");
 
   if (!weaponsEquipped.length && !spellsAll.length)
-    return notify("info", `${actor.name} n'a ni arme équipée ni sort.`);
+    return notify("info", `${actor.name} ne peut rien faire (aucune attaque disponible).`);
 
   // ── état UI ────────────────────────────────────────────────────────────────
   const defaultSection = weaponsEquipped.length ? "weapons"
@@ -114,7 +120,7 @@
     : spellsRapide.length ? "spells_rapide"
     : spellsPassif.length ? "spells_passif"
     : "weapons";
-  const state = { q: "", tab: "all", section: defaultSection };
+  const state = { q: "", tab: "all", section: defaultSection, elem: "", cost: "", kind: "" };
 
   const THEME_SCOPE = "rpg";
   const THEME_FLAG  = "menuSpellsTheme";
@@ -122,10 +128,35 @@
   if (theme !== "dark") theme = "light";
 
   // ── filtrage sorts ─────────────────────────────────────────────────────────
+  // Un sort inflige-t-il des dégâts / soigne-t-il / pose-t-il un effet ?
+  const spellKinds = (sp) => {
+    const kinds = new Set();
+    const lines = Array.isArray(sp?.system?.damages) ? sp.system.damages : [];
+    if (lines.length || sp?.system?.damage?.enabled) kinds.add("damage");
+    for (const fx of (Array.isArray(sp?.system?.effectsUI) ? sp.system.effectsUI : [])) {
+      const mode = String(fx?.tick?.mode ?? "");
+      if (mode === "damage") kinds.add("damage");
+      if (mode === "heal")   kinds.add("heal");
+      if (fx?.isAura) kinds.add("aura");
+      if (Array.isArray(fx?.mods) && fx.mods.length) {
+        if (fx.mods.some(m => n(m?.value, 0) > 0)) kinds.add("buff");
+        if (fx.mods.some(m => n(m?.value, 0) < 0)) kinds.add("debuff");
+      }
+      kinds.add("effect");
+    }
+    if (isAura(sp)) kinds.add("aura");
+    return kinds;
+  };
+
   const computeFilteredSpells = (src = null) => {
     const q = state.q.trim().toLowerCase();
+    const manaNow = n(actor.system?.ressources?.mana?.valeur, 0);
     return (src ?? spellsActive).filter((s) => {
-      if (q && !(s.name ?? "").toLowerCase().includes(q)) return false;
+      // Recherche sur le nom ET la description
+      if (q) {
+        const hay = `${s.name ?? ""} ${s.system?.description ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       const cd      = getCD(s);
       const ready   = cd.restant <= 0;
       const aura    = isAura(s);
@@ -134,8 +165,38 @@
       if (state.tab === "cd"     && ready)    return false;
       if (state.tab === "auras"  && !aura)    return false;
       if (state.tab === "target" && !needTgt) return false;
+
+      // Élément / type
+      if (state.elem && String(s.system?.tag ?? "neutre") !== state.elem) return false;
+
+      // Coût en mana : uniquement ceux que je peux payer maintenant
+      if (state.cost === "affordable" && n(s.system?.coutMana, 0) > manaNow) return false;
+      if (state.cost === "free" && n(s.system?.coutMana, 0) > 0) return false;
+
+      // Nature de l'effet
+      if (state.kind && !spellKinds(s).has(state.kind)) return false;
       return true;
     });
+  };
+
+
+  // Barre de filtres avancés (élément / coût / nature), commune aux sections
+  const buildFilterExtras = () => {
+    const ELEMS = { "": "Tous éléments", neutre: "⚪ Neutre", feu: "🔥 Feu", eau: "💧 Eau",
+      eclair: "⚡ Éclair", glace: "❄️ Glace", air: "💨 Air", terre: "🌍 Terre",
+      lumiere: "✨ Lumière", obscurite: "🌑 Obscurité" };
+    const COSTS = { "": "Tous coûts", affordable: "💧 Mana suffisant", free: "🆓 Gratuit" };
+    const KINDS = { "": "Tous effets", damage: "💥 Dégâts", heal: "💚 Soin",
+      buff: "⬆️ Bonus", debuff: "⬇️ Malus", aura: "🌀 Aura", effect: "✨ Pose un effet" };
+    const sel = (cls, map, cur) =>
+      `<select class="${cls}">` + Object.entries(map).map(([v, l]) =>
+        `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`).join("") + `</select>`;
+    return `<div class="rpg-filter-extras">
+      ${sel("rpg-f-elem", ELEMS, state.elem)}
+      ${sel("rpg-f-cost", COSTS, state.cost)}
+      ${sel("rpg-f-kind", KINDS, state.kind)}
+      <button type="button" class="rpg-f-reset" title="Réinitialiser les filtres">↺</button>
+    </div>`;
   };
 
   // ── section ARMES ──────────────────────────────────────────────────────────
@@ -176,12 +237,16 @@
       const atkBlocked = !hasAtkSlot;
 
       // Vérification de portée (distance case caster -> cible)
-      const portee = n(w.system?.portee, 1);
+      // Portée min ET max : un arc ne tire pas à bout portant.
+      const porteeMax = n(w.system?.range?.max ?? w.system?.portee, 1);
+      const porteeMin = n(w.system?.range?.min, 0);
       let distCases = null;
       let outOfRange = false;
+      let tooClose = false;
       if (token && targetToken && game.rpg?.measureDistance) {
         distCases = game.rpg.measureDistance(token.center, targetToken.center);
-        outOfRange = distCases > portee;
+        tooClose = distCases < porteeMin;
+        outOfRange = distCases > porteeMax || tooClose;
       }
 
       const targets = Array.from(game.user.targets ?? []);
@@ -190,7 +255,9 @@
       const reasons = [];
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
-      if (outOfRange) reasons.push(`Hors portée (${distCases?.toFixed?.(1) ?? distCases}m, portée ${portee}m)`);
+      if (outOfRange) reasons.push(tooClose
+        ? `Trop près (${distCases?.toFixed?.(1) ?? distCases}m, portée mini ${porteeMin}m)`
+        : `Hors portée (${distCases?.toFixed?.(1) ?? distCases}m, portée max ${porteeMax}m)`);
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
@@ -499,6 +566,7 @@
                 }</button>`
               ).join("")}
             </div>
+            ${buildFilterExtras()}
           </div>
           <div style="font-size:11px;color:var(--color-text-secondary);padding:2px 0 6px">
             <b>1 sort normal</b> par tour • Coûte 1 slot
@@ -519,6 +587,7 @@
                 }</button>`
               ).join("")}
             </div>
+            ${buildFilterExtras()}
           </div>
           <div style="font-size:11px;color:var(--color-text-secondary);padding:2px 0 6px">
             <b>2 sorts rapides</b> par tour • 1 slot chacun
@@ -665,6 +734,30 @@
       rerenderSpells();
     });
 
+    // Filtres avancés : élément, coût en mana, nature de l'effet
+    const syncExtras = () => {
+      $root.find(".rpg-f-elem").val(state.elem);
+      $root.find(".rpg-f-cost").val(state.cost);
+      $root.find(".rpg-f-kind").val(state.kind);
+    };
+    $root.on("change.rpgMenu", ".rpg-f-elem", (ev) => {
+      state.elem = String(ev.currentTarget.value ?? ""); syncExtras(); rerenderSpells();
+    });
+    $root.on("change.rpgMenu", ".rpg-f-cost", (ev) => {
+      state.cost = String(ev.currentTarget.value ?? ""); syncExtras(); rerenderSpells();
+    });
+    $root.on("change.rpgMenu", ".rpg-f-kind", (ev) => {
+      state.kind = String(ev.currentTarget.value ?? ""); syncExtras(); rerenderSpells();
+    });
+    $root.on("click.rpgMenu", ".rpg-f-reset", () => {
+      state.q = ""; state.tab = "all"; state.elem = ""; state.cost = ""; state.kind = "";
+      $root.find(".rpg-search").val("");
+      $root.find(".tab").removeClass("active");
+      $root.find('.tab[data-tab="all"]').addClass("active");
+      syncExtras();
+      rerenderSpells();
+    });
+
     // Ouvrir fiche
     $root.on("click.rpgMenu", "[data-action='open']", (ev) => {
       const row    = ev.currentTarget.closest("[data-item-id]");
@@ -685,7 +778,9 @@
       }
 
       const row    = btn.closest("[data-item-id]");
-      const weapon = actor.items.get(row?.dataset?.itemId);
+      // resolveWeapon gère l'attaque à mains nues, absente de l'inventaire
+      const weapon = game.rpg?.unarmed?.resolveWeapon?.(actor, row?.dataset?.itemId)
+                  ?? actor.items.get(row?.dataset?.itemId);
       if (!weapon) { btn.disabled = false; return notify("warn", "Arme introuvable."); }
 
       const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;

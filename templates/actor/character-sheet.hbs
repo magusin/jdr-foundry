@@ -839,9 +839,51 @@
           {{/if}}
         </div>
 
+        {{!-- Filtres : recherche + élément, vitesse, disponibilité, nature --}}
+        <div class="spell-filters">
+          <input type="search" class="spell-filter-q" placeholder="🔎 Rechercher un sort…" />
+          <select class="spell-filter" data-filter="elem">
+            <option value="">Tous éléments</option>
+            <option value="neutre">⚪ Neutre</option>
+            <option value="feu">🔥 Feu</option>
+            <option value="eau">💧 Eau</option>
+            <option value="eclair">⚡ Éclair</option>
+            <option value="glace">❄️ Glace</option>
+            <option value="air">💨 Air</option>
+            <option value="terre">🌍 Terre</option>
+            <option value="lumiere">✨ Lumière</option>
+            <option value="obscurite">🌑 Obscurité</option>
+          </select>
+          <select class="spell-filter" data-filter="speed">
+            <option value="">Toutes vitesses</option>
+            <option value="normal">Normal</option>
+            <option value="rapide">Rapide</option>
+            <option value="passif">Passif</option>
+          </select>
+          <select class="spell-filter" data-filter="avail">
+            <option value="">Tous</option>
+            <option value="ready">✅ Prêt</option>
+            <option value="cd">⏳ En recharge</option>
+            <option value="affordable">💧 Mana suffisant</option>
+          </select>
+          <select class="spell-filter" data-filter="kind">
+            <option value="">Tous effets</option>
+            <option value="damage">💥 Dégâts</option>
+            <option value="heal">💚 Soin</option>
+            <option value="buff">⬆️ Bonus</option>
+            <option value="debuff">⬇️ Malus</option>
+            <option value="aura">🌀 Aura</option>
+          </select>
+          <button type="button" class="spell-filter-reset" title="Réinitialiser">↺</button>
+        </div>
+        <div class="spell-filter-count" hidden></div>
+
         <ol class="items-list simple">
   {{#each items.sorts as |it|}}
-  <li class="item" data-item-id="{{it._id}}">
+  <li class="item" data-item-id="{{it._id}}"
+      data-elem="{{it._ui.tag}}" data-speed="{{it._ui.speed}}"
+      data-cd="{{it._ui.cdRestant}}" data-mana="{{it._ui.coutMana}}"
+      data-kinds="{{it._ui.kinds}}">
     <span class="name">
       <img src="{{it.img}}" alt="" />
       <a class="item-edit"><b>{{it.name}}</b></a>

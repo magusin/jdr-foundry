@@ -578,9 +578,27 @@ export function buildSpellUI({ actor, item }) {
   const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods) : {};
   const modsSummary = summarizeMods(hitMods);
 
+  // Natures du sort, pour le filtrage des listes (« kinds » séparés par |)
+  const kinds = new Set();
+  if ((Array.isArray(sys.damages) && sys.damages.length) || sys.damage?.enabled) kinds.add("damage");
+  for (const fx of (Array.isArray(sys.effectsUI) ? sys.effectsUI : [])) {
+    const mode = String(fx?.tick?.mode ?? "");
+    if (mode === "damage") kinds.add("damage");
+    if (mode === "heal")   kinds.add("heal");
+    if (fx?.isAura) kinds.add("aura");
+    for (const m of (Array.isArray(fx?.mods) ? fx.mods : [])) {
+      const v = n(m?.value, 0);
+      if (v > 0) kinds.add("buff");
+      if (v < 0) kinds.add("debuff");
+    }
+  }
+  if (auraEnabled) kinds.add("aura");
+
   return {
     text: {
       speed,
+      tag: _tag,
+      kinds: Array.from(kinds).join("|"),
       coutMana: manaCost,
       difficulte: diff,
       rangeMin,

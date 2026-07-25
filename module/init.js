@@ -416,6 +416,21 @@ Hooks.once("init", async () => {
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 
   game.rpg.combat = Combat;
+
+  // Attaque de base (mains nues) — exposée pour la macro « Menu Combat »,
+  // qui n'est pas un module ES et ne peut pas importer.
+  try {
+    const _unarmed = await import("./rules/unarmed.js");
+    game.rpg.unarmed = {
+      UNARMED_ID: _unarmed.UNARMED_ID,
+      buildUnarmedWeapon: _unarmed.buildUnarmedWeapon,
+      getAttackWeapon: _unarmed.getAttackWeapon,
+      resolveWeapon: _unarmed.resolveWeapon
+    };
+  } catch (e) {
+    console.warn("[RPG] API mains nues indisponible :", e);
+  }
+
   console.log("[RPG] Combat API OK:", Object.keys(game.rpg.combat ?? {}));
   // API publique
   game[MODULE_ID].api = {

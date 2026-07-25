@@ -441,14 +441,27 @@ export class RPGActor extends Actor {
 
     // ✅ Surcharge : si charge >= 90% du max → -1 vitesse (état automatique)
     const chargeCur = Number(sys.charge?.actuelle ?? sys.charge?.pods ?? 0) || 0;
-    // Pods max : les états/équipements peuvent le modifier (le mod existait
-    // dans la table des stats mais n'était jamais consommé ici).
-    let chargeMax = Number(sys.podsMax ?? 50) || 50;
-    chargeMax += Number(flat?.charge?.podsMax ?? 0) || 0;
-    chargeMax = applyPct(chargeMax, pct?.charge?.podsMax);
-    chargeMax = Math.max(1, Math.floor(chargeMax));
-    sys.podsMax = chargeMax;
+
+    // ── Capacité de charge (pods) — calculée UNE SEULE FOIS ────────────────
+    // Elle sert ici (détection de surcharge) et en section 7 : la calculer
+    // aux deux endroits appliquait les modificateurs deux fois.
+    let chargeMax;
+    if (isMonster) {
+      chargeMax = 0;
+    } else {
+      const basePodsMax = Number(sys.base.podsMax ?? sys.podsMax ?? 50) || 50;
+      // Barème : 3 points de Force donnent 1 pod.
+      const PODS_PER_FOR_STEP = 3;
+      const podsFromFor = Math.floor((Number(effP.force) || 0) / PODS_PER_FOR_STEP);
+
+      chargeMax = basePodsMax + podsFromFor;
+      chargeMax += Number(flat?.charge?.podsMax ?? 0) || 0;
+      chargeMax = applyPct(chargeMax, pct?.charge?.podsMax);
+      chargeMax = Math.max(0, Math.floor(chargeMax));
+    }
+    sys.derived.podsFromForce = isMonster ? 0 : Math.floor((Number(effP.force) || 0) / 3);
     sys.derived.effective.podsMax = chargeMax;
+
     const isSurcharge = chargeMax > 0 && (chargeCur / chargeMax) >= 0.9;
     sys.derived.surcharge = isSurcharge;
     const surchargeVitesseMalus = isSurcharge ? 1 : 0;
@@ -519,28 +532,9 @@ export class RPGActor extends Actor {
     // 7) Pods (monstre = 0)
     // -----------------------
     sys.charge = sys.charge ?? {};
-
-    if (isMonster) {
-      sys.charge.podsMax = 0;
-    } else {
-      const basePodsMax = Number(
-        sys.base.podsMax ??
-        sys.podsMax ??          // ✅ template base podsMax: 50
-        50
-      ) || 50;
-
-      // Scaling : Force => pods
-      const PODS_PER_FOR_STEP = 2;     // 2 FOR => +1 pods
-      const podsFromFor = Math.floor((Number(effP.force) || 0) / PODS_PER_FOR_STEP);
-
-      let podsMax = basePodsMax + podsFromFor;
-
-      // états éventuels si tu veux (optionnel)
-      podsMax += Number(flat?.charge?.podsMax ?? 0) || 0;
-      podsMax = applyPct(podsMax, pct?.charge?.podsMax);
-
-      sys.charge.podsMax = Math.max(0, Math.floor(podsMax));
-    }
+    // Déjà calculée plus haut (une seule fois) — on ne fait que la publier.
+    sys.charge.podsMax = chargeMax;
+    sys.podsMax = chargeMax;
 
   }
 }

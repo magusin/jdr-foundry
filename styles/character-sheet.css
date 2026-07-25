@@ -1073,3 +1073,38 @@
   opacity: 0.55;
   margin-top: 6px;
 }
+
+/* ── Filtres de la liste des sorts ─────────────────────────────────────── */
+.rpg-sheet .spell-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rpg-sheet .spell-filters .spell-filter-q {
+  flex: 2 1 160px;
+  min-width: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+.rpg-sheet .spell-filters .spell-filter {
+  flex: 1 1 110px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.rpg-sheet .spell-filters .spell-filter-reset {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1;
+}
+.rpg-sheet .spell-filter-count {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}

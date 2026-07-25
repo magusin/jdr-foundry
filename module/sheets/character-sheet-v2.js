@@ -521,11 +521,76 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   /* Render + listeners                            */
   /* -------------------------------------------- */
 
+  /**
+   * Filtrage de la liste des sorts, entièrement côté DOM (aucun re-render) :
+   * recherche par nom, élément, vitesse, disponibilité et nature de l'effet.
+   * Chaque <li> porte ses critères en data-*, posés par buildSpellUI().
+   */
+  _bindSpellFilters(root) {
+    const bar = root?.querySelector(".spell-filters");
+    if (!bar || bar.dataset.rpgBound) return;
+    bar.dataset.rpgBound = "1";
+
+    const list = () => Array.from(root.querySelectorAll('[data-tab="spells"] .items-list .item'));
+    const counter = root.querySelector(".spell-filter-count");
+    const manaNow = Number(this.document.system?.ressources?.mana?.valeur ?? 0) || 0;
+
+    const apply = () => {
+      const q = (bar.querySelector(".spell-filter-q")?.value ?? "").trim().toLowerCase();
+      const get = (f) => bar.querySelector(`.spell-filter[data-filter="${f}"]`)?.value ?? "";
+      const elem = get("elem"), speed = get("speed"), avail = get("avail"), kind = get("kind");
+
+      let shown = 0;
+      for (const li of list()) {
+        const name  = (li.querySelector(".name")?.textContent ?? "").toLowerCase();
+        const cd    = Number(li.dataset.cd ?? 0) || 0;
+        const mana  = Number(li.dataset.mana ?? 0) || 0;
+        const kinds = String(li.dataset.kinds ?? "").split("|").filter(Boolean);
+
+        let ok = true;
+        if (q && !name.includes(q)) ok = false;
+        if (ok && elem && String(li.dataset.elem || "neutre") !== elem) ok = false;
+        if (ok && speed && String(li.dataset.speed || "normal") !== speed) ok = false;
+        if (ok && avail === "ready" && cd > 0) ok = false;
+        if (ok && avail === "cd" && cd <= 0) ok = false;
+        if (ok && avail === "affordable" && mana > manaNow) ok = false;
+        if (ok && kind && !kinds.includes(kind)) ok = false;
+
+        li.hidden = !ok;
+        if (ok) shown++;
+      }
+
+      const total = list().length;
+      if (counter) {
+        const filtered = shown !== total;
+        counter.hidden = !filtered;
+        counter.textContent = filtered ? `${shown} sort(s) sur ${total}` : "";
+      }
+    };
+
+    bar.addEventListener("input", (ev) => {
+      if (ev.target?.matches?.(".spell-filter-q")) apply();
+    });
+    bar.addEventListener("change", (ev) => {
+      if (ev.target?.matches?.(".spell-filter")) apply();
+    });
+    bar.addEventListener("click", (ev) => {
+      if (!ev.target?.closest?.(".spell-filter-reset")) return;
+      ev.preventDefault();
+      const q = bar.querySelector(".spell-filter-q");
+      if (q) q.value = "";
+      bar.querySelectorAll(".spell-filter").forEach(s => { s.value = ""; });
+      apply();
+    });
+  }
+
   async _onRender(context, options) {
     await super._onRender(context, options);
 
     const root = this.element;
     applyUiTheme(root);
+
+    this._bindSpellFilters(root);
 
     // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

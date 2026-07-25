@@ -156,8 +156,14 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
-    ctx.system.portee = n(ctx.system.portee, 1);
     ctx.system.allonge = n(ctx.system.allonge, 1);
+
+    // Portée min/max (un arc ne tire pas à bout portant). L'ancien champ
+    // unique `portee` sert de valeur de départ pour le max.
+    ctx.system.portee = n(ctx.system.portee, 1);
+    ctx.system.range = ctx.system.range ?? {};
+    ctx.system.range.min = n(ctx.system.range.min, 0);
+    ctx.system.range.max = n(ctx.system.range.max, ctx.system.portee);
 
     // Compat ancien stockage
     const legacyDice = String(ctx.system.degats ?? "1d6");
@@ -261,6 +267,12 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       if (expanded.system.difficulte != null) expanded.system.difficulte = n(expanded.system.difficulte, 0);
       if (expanded.system.portee != null) expanded.system.portee = n(expanded.system.portee, 1);
       if (expanded.system.allonge != null) expanded.system.allonge = n(expanded.system.allonge, 1);
+      if (expanded.system.range) {
+        expanded.system.range.min = Math.max(0, n(expanded.system.range.min, 0));
+        expanded.system.range.max = Math.max(0, n(expanded.system.range.max, 0));
+        // `portee` reste synchronisée sur le max pour tout le code existant
+        expanded.system.portee = expanded.system.range.max;
+      }
 
       // bonus
       if (expanded.system.bonus) {
