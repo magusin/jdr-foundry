@@ -95,9 +95,9 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
     _prevPos.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y });
   }
 
-  if (!game.user.isGM) {
-    const actor = tokenDoc.actor;
+  const actor = tokenDoc.actor;
 
+  if (!game.user.isGM) {
     if (actor?.system?.derived?.ko) {
       ui.notifications?.warn?.("K.O. — impossible de se déplacer.");
       return false;
@@ -108,7 +108,18 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
       ui.notifications?.warn?.("Ce n'est pas ton tour.");
       return false;
     }
+  }
 
+  // ── Limite de vitesse ────────────────────────────────────────────────────
+  // S'applique au joueur, et au MJ selon le réglage « Limite de déplacement »
+  // (le MJ garde toute liberté hors combat : ce hook sort plus haut si aucun
+  // combat n'est actif).
+  let enforce = "all";
+  try { enforce = String(game.settings.get("rpg", "movementLimitScope") ?? "all"); } catch { /* défaut */ }
+
+  const applies = enforce === "all" || (enforce === "players" && !game.user.isGM);
+
+  if (applies) {
     // Vérif vitesse + terrain (avec type de déplacement)
     const vitesse = getVitesse(actor);
     const startPos = _prevPos.get(tokenDoc.id) ?? { x: tokenDoc.x, y: tokenDoc.y };

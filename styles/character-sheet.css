@@ -644,7 +644,7 @@
 
 .rpg-sheet.actor .stats-grid .stat-cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 8px;
   align-items: end;
 }
@@ -980,4 +980,66 @@
   margin-top: 4px;
   font-size: 10px;
   color: var(--ink-text-dim, #b6ad9a);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   Stats : trois couches lisibles — Base / Permanent / En combat
+   ══════════════════════════════════════════════════════════════════════ */
+.rpg-sheet .stats-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  opacity: 0.65;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+/* Valeur permanente : sobre, c'est la référence hors combat */
+.rpg-sheet .stat-perm {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Valeur en combat : mise en avant, colorée si un effet la modifie */
+.rpg-sheet .stat-total-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rpg-sheet .stat-total {
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--field-bg);
+}
+.rpg-sheet .stat-total.is-buffed {
+  color: #4ec48a;
+  border-color: rgba(29, 158, 117, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(29, 158, 117, 0.25) inset;
+}
+.rpg-sheet .stat-total.is-debuffed {
+  color: #e8756a;
+  border-color: rgba(192, 57, 43, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.25) inset;
+}
+
+.rpg-sheet .stat-delta {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.rpg-sheet .stat-delta.up {
+  background: rgba(29, 158, 117, 0.18);
+  border: 1px solid rgba(29, 158, 117, 0.40);
+  color: #4ec48a;
+}
+.rpg-sheet .stat-delta.down {
+  background: rgba(192, 57, 43, 0.18);
+  border: 1px solid rgba(192, 57, 43, 0.40);
+  color: #e8756a;
 }

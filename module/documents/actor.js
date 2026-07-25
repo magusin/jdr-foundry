@@ -232,11 +232,21 @@ export class RPGActor extends Actor {
       endurance:    bonusSkills.principales.endurance,
     };
 
+    // ✅ Photo AVANT les effets temporaires : c'est la valeur « permanente »
+    // du personnage (base + niveau + compétences + équipement). La fiche
+    // l'affiche à côté du total pour que le joueur voie ce que le combat
+    // ajoute ou retire.
+    sys.derived.permanent = sys.derived.permanent ?? {};
+    sys.derived.permanent.principales = { ...effP };
+
     for (const s of ["force", "intelligence", "dexterite", "acuite", "endurance"]) {
       effP[s] += Number(flat?.principales?.[s] ?? 0) || 0;
       effP[s] = applyPct(effP[s], pct?.principales?.[s]);
       // ✅ clamp à 0 pour respecter ta règle "pas en dessous de 0"
       effP[s] = Math.max(0, Math.floor(Number(effP[s]) || 0));
+    }
+    for (const s of ["force", "intelligence", "dexterite", "acuite", "endurance"]) {
+      sys.derived.permanent.principales[s] = Math.max(0, Math.floor(Number(sys.derived.permanent.principales[s]) || 0));
     }
 
     // -----------------------
@@ -253,7 +263,9 @@ export class RPGActor extends Actor {
       scoreResistance: (Number(baseD.scoreResistance ?? 0) || 0) + bonus.defenses.scoreResistance + scoreFromEnd
     };
 
+    sys.derived.permanent.defenses = {};
     for (const k of ["armureFixe", "resistanceFixe", "scoreArmure", "scoreResistance"]) {
+      sys.derived.permanent.defenses[k] = Math.max(0, Math.floor(Number(effD[k]) || 0));
       effD[k] += Number(flat?.defenses?.[k] ?? 0) || 0;
       effD[k] = applyPct(effD[k], pct?.defenses?.[k]);
       effD[k] = Math.max(0, Math.floor(Number(effD[k]) || 0));
@@ -444,6 +456,11 @@ export class RPGActor extends Actor {
     // move — épuisement -1 vitesse + surcharge -1 vitesse
     sys.deplacement = sys.deplacement ?? {};
     const baseVit = (Number(sys.base.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
+    // Vitesse « permanente » = base + équipement/compétences, sans les effets
+    // temporaires ni les malus d'épuisement/surcharge.
+    sys.derived.permanent = sys.derived.permanent ?? {};
+    sys.derived.permanent.vitesse = Math.max(0, Math.floor(baseVit));
+
     let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus - surchargeVitesseMalus;
     vit = applyPct(vit, pct?.move?.vitesse);
     sys.deplacement.vitesse = Math.max(0, Math.floor(vit));

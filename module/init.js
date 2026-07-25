@@ -291,6 +291,21 @@ Hooks.once("init", async () => {
     }
   });
 
+  game.settings.register("rpg", "movementLimitScope", {
+    name: "Limite de déplacement en combat",
+    hint: "Empêche un token de dépasser sa Vitesse pendant son tour. Hors combat, personne n'est limité.",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      all:     "🔒 Tout le monde, MJ compris (recommandé)",
+      players: "👥 Joueurs seulement — le MJ peut déplacer librement",
+      off:     "🔓 Désactivée — simple avertissement dans le chat"
+    },
+    default: "all",
+    requiresReload: false
+  });
+
   game.settings.register("rpg", "currentWeather", {
     name: "Météo actuelle",
     scope: "world",

@@ -267,18 +267,66 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       .filter(s => s.type === "wound" || s.permanent)
       .map(s => ({ label: s.label, summary: s.summary ?? "" }));
 
-    // ── Tableau des stats pour la vue lisible ─────────────────────────
+    // ── Tableau des stats : trois couches lisibles ────────────────────
+    //   base      = valeur brute saisie par le MJ
+    //   permanent = base + niveau + compétences + équipement (hors combat)
+    //   total     = permanent + effets temporaires actifs (en combat)
     const effP  = actor.system?.derived?.effective?.principales ?? {};
+    const permP = actor.system?.derived?.permanent?.principales ?? effP;
     const baseP = actor.system?.principales ?? {};
     const fsb   = actor.system?.derived?.fromSkills ?? {};
+    const equip = actor.system?.derived?.bonus?.principales ?? {};
     const niv   = Number(actor.system?.niveau ?? 1) || 1;
+
+    const mkStat = (key, label) => {
+      const base = Number(baseP[key] ?? 0) || 0;
+      const perm = Number(permP[key] ?? 0) || 0;
+      const total = Number(effP[key] ?? 0) || 0;
+      const skills = Number(fsb[key] ?? 0) || 0;
+      const gear = (Number(equip[key] ?? 0) || 0) - skills; // bonus items seuls
+      const fromEffects = total - perm;
+      return {
+        key, label, base, perm, total,
+        fromLevel: niv,
+        fromSkills: skills,
+        fromGear: gear,
+        fromEffects,
+        hasEffects: fromEffects !== 0,
+        effectsUp: fromEffects > 0,
+        // Détail affiché en infobulle sur la valeur permanente
+        permTooltip: `Base ${base} + Niveau ${niv} + Compétences ${skills >= 0 ? "+" : ""}${skills} + Équipement ${gear >= 0 ? "+" : ""}${gear}`,
+        // Conservé pour compatibilité avec l'ancien affichage
+        fromBonus: total - base - niv - skills
+      };
+    };
+
     ctx.stats = [
-      { key:"force",        label:"Force",        base: baseP.force        ?? 0, total: effP.force        ?? 0, fromSkills: fsb.force        || 0, fromBonus: (effP.force        ?? 0) - (baseP.force        ?? 0) - niv - (fsb.force        || 0) },
-      { key:"intelligence", label:"Intelligence",  base: baseP.intelligence ?? 0, total: effP.intelligence ?? 0, fromSkills: fsb.intelligence || 0, fromBonus: (effP.intelligence ?? 0) - (baseP.intelligence ?? 0) - niv - (fsb.intelligence || 0) },
-      { key:"dexterite",    label:"Dextérité",     base: baseP.dexterite    ?? 0, total: effP.dexterite    ?? 0, fromSkills: fsb.dexterite    || 0, fromBonus: (effP.dexterite    ?? 0) - (baseP.dexterite    ?? 0) - niv - (fsb.dexterite    || 0) },
-      { key:"acuite",       label:"Acuité",        base: baseP.acuite       ?? 0, total: effP.acuite       ?? 0, fromSkills: fsb.acuite       || 0, fromBonus: (effP.acuite       ?? 0) - (baseP.acuite       ?? 0) - niv - (fsb.acuite       || 0) },
-      { key:"endurance",    label:"Endurance",     base: baseP.endurance    ?? 0, total: effP.endurance    ?? 0, fromSkills: fsb.endurance    || 0, fromBonus: (effP.endurance    ?? 0) - (baseP.endurance    ?? 0) - niv - (fsb.endurance    || 0) },
+      mkStat("force", "Force"),
+      mkStat("intelligence", "Intelligence"),
+      mkStat("dexterite", "Dextérité"),
+      mkStat("acuite", "Acuité"),
+      mkStat("endurance", "Endurance")
     ];
+
+    // Défenses : mêmes trois couches
+    const effD  = actor.system?.derived?.effective?.defenses ?? {};
+    const permD = actor.system?.derived?.permanent?.defenses ?? effD;
+    ctx.defStats = ["armureFixe", "resistanceFixe", "scoreArmure", "scoreResistance"].map(k => {
+      const perm = Number(permD[k] ?? 0) || 0;
+      const total = Number(effD[k] ?? 0) || 0;
+      return { key: k, perm, total, fromEffects: total - perm, hasEffects: (total - perm) !== 0, effectsUp: (total - perm) > 0 };
+    }).reduce((acc, r) => { acc[r.key] = r; return acc; }, {});
+
+    // Vitesse : permanente vs effective (épuisement, surcharge, effets)
+    const vitPerm = Number(actor.system?.derived?.permanent?.vitesse ?? 0) || 0;
+    const vitTot  = Number(actor.system?.deplacement?.vitesse ?? 0) || 0;
+    ctx.vitesseInfo = {
+      perm: vitPerm, total: vitTot,
+      fromEffects: vitTot - vitPerm,
+      hasEffects: vitTot !== vitPerm,
+      effectsUp: vitTot > vitPerm
+    };
+
     ctx.equipSlots = this._buildEquipSlotsUI(itemsObj);
 
     ctx.flags = {

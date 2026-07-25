@@ -344,8 +344,9 @@
 
         <section class="card">
           <h2>Caractéristiques</h2>
-          <div style="font-size:10px;opacity:.6;margin-bottom:8px">
-            Base + Niveau ({{system.niveau}}×1) + Compétences + Équipements/Effets = <b>Total</b>
+          <div class="stats-legend">
+            <span><b>Permanent</b> = base + niveau ({{system.niveau}}×1) + compétences + équipement</span>
+            <span><b>En combat</b> = permanent + effets temporaires actifs</span>
           </div>
 
           <div class="stats-grid">
@@ -354,18 +355,27 @@
               <label>{{s.label}}</label>
               <div class="stat-cols">
                 {{#if ../flags.isGM}}
-                <div class="stat-col" title="Base (éditable MJ)">
+                <div class="stat-col" title="Valeur brute, modifiable par le MJ">
                   <small class="muted">Base</small>
                   <input type="number" name="system.principales.{{s.key}}" value="{{s.base}}" style="width:100%"/>
                 </div>
                 {{/if}}
                 <div class="stat-col">
-                  <small class="muted">
-                    {{#if ../flags.isGM}}Total{{else}}Total{{/if}}
-                    {{#if s.fromBonus}}<span style="color:#1d9e75;font-size:10px" title="Équipements/Effets"> +{{s.fromBonus}}</span>{{/if}}
-                  </small>
-                  <input type="number" value="{{s.total}}" disabled
-                    style="font-size:16px;font-weight:700;background:var(--field-bg)"/>
+                  <small class="muted" title="{{s.permTooltip}}">Permanent</small>
+                  <input type="number" value="{{s.perm}}" disabled class="stat-perm"/>
+                </div>
+                <div class="stat-col">
+                  <small class="muted">En combat</small>
+                  <div class="stat-total-wrap">
+                    <input type="number" value="{{s.total}}" disabled
+                      class="stat-total {{#if s.hasEffects}}{{#if s.effectsUp}}is-buffed{{else}}is-debuffed{{/if}}{{/if}}"/>
+                    {{#if s.hasEffects}}
+                    <span class="stat-delta {{#if s.effectsUp}}up{{else}}down{{/if}}"
+                      title="Apport des effets temporaires en cours">
+                      {{#if s.effectsUp}}+{{/if}}{{s.fromEffects}}
+                    </span>
+                    {{/if}}
+                  </div>
                 </div>
               </div>
             </div>
@@ -388,8 +398,18 @@
                 </div>
                 {{/if}}
                 <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.defenses.armureFixe}}" disabled />
+                  <small class="muted">Permanent</small>
+                  <input type="number" value="{{defStats.armureFixe.perm}}" disabled class="stat-perm"/>
+                </div>
+                <div class="stat-col">
+                  <small class="muted">En combat</small>
+                  <div class="stat-total-wrap">
+                    <input type="number" value="{{system.derived.effective.defenses.armureFixe}}" disabled
+                      class="stat-total {{#if defStats.armureFixe.hasEffects}}{{#if defStats.armureFixe.effectsUp}}is-buffed{{else}}is-debuffed{{/if}}{{/if}}"/>
+                    {{#if defStats.armureFixe.hasEffects}}
+                    <span class="stat-delta {{#if defStats.armureFixe.effectsUp}}up{{else}}down{{/if}}" title="Apport des effets temporaires">{{#if defStats.armureFixe.effectsUp}}+{{/if}}{{defStats.armureFixe.fromEffects}}</span>
+                    {{/if}}
+                  </div>
                 </div>
               </div>
             </div>
@@ -405,8 +425,18 @@
                 </div>
                 {{/if}}
                 <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.defenses.resistanceFixe}}" disabled />
+                  <small class="muted">Permanent</small>
+                  <input type="number" value="{{defStats.resistanceFixe.perm}}" disabled class="stat-perm"/>
+                </div>
+                <div class="stat-col">
+                  <small class="muted">En combat</small>
+                  <div class="stat-total-wrap">
+                    <input type="number" value="{{system.derived.effective.defenses.resistanceFixe}}" disabled
+                      class="stat-total {{#if defStats.resistanceFixe.hasEffects}}{{#if defStats.resistanceFixe.effectsUp}}is-buffed{{else}}is-debuffed{{/if}}{{/if}}"/>
+                    {{#if defStats.resistanceFixe.hasEffects}}
+                    <span class="stat-delta {{#if defStats.resistanceFixe.effectsUp}}up{{else}}down{{/if}}" title="Apport des effets temporaires">{{#if defStats.resistanceFixe.effectsUp}}+{{/if}}{{defStats.resistanceFixe.fromEffects}}</span>
+                    {{/if}}
+                  </div>
                 </div>
               </div>
             </div>
@@ -422,8 +452,18 @@
                 </div>
                 {{/if}}
                 <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.defenses.scoreArmure}}" disabled />
+                  <small class="muted">Permanent</small>
+                  <input type="number" value="{{defStats.scoreArmure.perm}}" disabled class="stat-perm"/>
+                </div>
+                <div class="stat-col">
+                  <small class="muted">En combat</small>
+                  <div class="stat-total-wrap">
+                    <input type="number" value="{{system.derived.effective.defenses.scoreArmure}}" disabled
+                      class="stat-total {{#if defStats.scoreArmure.hasEffects}}{{#if defStats.scoreArmure.effectsUp}}is-buffed{{else}}is-debuffed{{/if}}{{/if}}"/>
+                    {{#if defStats.scoreArmure.hasEffects}}
+                    <span class="stat-delta {{#if defStats.scoreArmure.effectsUp}}up{{else}}down{{/if}}" title="Apport des effets temporaires">{{#if defStats.scoreArmure.effectsUp}}+{{/if}}{{defStats.scoreArmure.fromEffects}}</span>
+                    {{/if}}
+                  </div>
                 </div>
               </div>
             </div>
@@ -449,8 +489,18 @@
                 </div>
                 {{/if}}
                 <div class="stat-col">
-                  <small class="muted">Total</small>
-                  <input type="number" value="{{system.derived.effective.defenses.scoreResistance}}" disabled />
+                  <small class="muted">Permanent</small>
+                  <input type="number" value="{{defStats.scoreResistance.perm}}" disabled class="stat-perm"/>
+                </div>
+                <div class="stat-col">
+                  <small class="muted">En combat</small>
+                  <div class="stat-total-wrap">
+                    <input type="number" value="{{system.derived.effective.defenses.scoreResistance}}" disabled
+                      class="stat-total {{#if defStats.scoreResistance.hasEffects}}{{#if defStats.scoreResistance.effectsUp}}is-buffed{{else}}is-debuffed{{/if}}{{/if}}"/>
+                    {{#if defStats.scoreResistance.hasEffects}}
+                    <span class="stat-delta {{#if defStats.scoreResistance.effectsUp}}up{{else}}down{{/if}}" title="Apport des effets temporaires">{{#if defStats.scoreResistance.effectsUp}}+{{/if}}{{defStats.scoreResistance.fromEffects}}</span>
+                    {{/if}}
+                  </div>
                 </div>
               </div>
             </div>
