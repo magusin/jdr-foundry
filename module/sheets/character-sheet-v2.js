@@ -168,7 +168,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -703,11 +703,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     }, { capture: true });
 
     // Player: disable inputs and most actions
+    // ⚠️ Uniquement dans le CONTENU : la barre de titre porte les boutons
+    // Fermer/Épingler (eux aussi data-action) — les désactiver empêchait les
+    // joueurs de fermer leur fiche avec la croix.
     if (!game.user.isGM) {
-      root.querySelectorAll("input, select, textarea").forEach(el => el.disabled = true);
-      root.querySelectorAll("button[data-action]:not([data-action='toggleEquip'])").forEach(el => el.disabled = true);
+      const scope = sheetContent(root);
+      scope.querySelectorAll("input, select, textarea").forEach(el => el.disabled = true);
+      sheetActionButtons(root, ":not([data-action='toggleEquip'])")
+        .forEach(el => { el.disabled = true; });
       if (!this.document.isOwner) {
-        root.querySelectorAll("button[data-action='toggleEquip']").forEach(el => el.disabled = true);
+        sheetActionButtons(root, "[data-action='toggleEquip']")
+          .forEach(el => { el.disabled = true; });
       }
       return;
     }

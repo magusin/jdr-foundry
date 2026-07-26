@@ -3,6 +3,26 @@
 // Utilitaires partagés par toutes les fiches (acteurs et objets).
 
 /**
+ * Contenu de la fiche, à l'EXCLUSION de la barre de titre de la fenêtre.
+ *
+ * `this.element` d'une ApplicationV2 englobe l'en-tête de fenêtre, dont les
+ * boutons Fermer / Épingler sont eux aussi des `button[data-action]`. Verrouiller
+ * la fiche depuis la racine les neutralisait : les joueurs ne pouvaient plus
+ * fermer leur fiche avec la croix. On ne touche donc jamais qu'au contenu.
+ */
+export function sheetContent(root) {
+  return root?.querySelector?.(".window-content") ?? root;
+}
+
+/** Boutons d'action de la fiche, jamais ceux de la barre de titre. */
+export function sheetActionButtons(root, extraSelector = "") {
+  const scope = sheetContent(root);
+  if (!scope) return [];
+  return Array.from(scope.querySelectorAll(`button[data-action]${extraSelector}`))
+    .filter(el => !el.closest(".window-header") && !el.classList.contains("header-control"));
+}
+
+/**
  * Applique la vue MJ ou joueur sur un élément racine de fiche.
  * - MJ : peut tout voir et tout éditer
  * - Joueur : voit les valeurs remplies, ne peut rien modifier
@@ -12,11 +32,12 @@ export function applySheetViewMode(root, { isGM = false } = {}) {
 
   if (!isGM) {
     root.classList.add("joueur-view");
-    root.querySelectorAll("select[readonly]").forEach(el => {
+    const scope = sheetContent(root);
+    scope.querySelectorAll("select[readonly]").forEach(el => {
       el.disabled = true;
       el.style.cssText = "background:transparent;border-color:transparent;pointer-events:none;color:inherit";
     });
-    root.querySelectorAll("button[data-action]").forEach(el => el.style.display = "none");
+    sheetActionButtons(root).forEach(el => { el.style.display = "none"; });
   }
 }
 

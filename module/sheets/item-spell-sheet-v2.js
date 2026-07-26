@@ -1,7 +1,7 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
-import { applyUiTheme } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -852,11 +852,15 @@ static PARTS = foundry.utils.mergeObject(
     if (!game.user.isGM) {
       root.classList.add("joueur-view");
       // Les selects readonly ne gèrent pas bien CSS — on les désactive visuellement
-      root.querySelectorAll("select[readonly]").forEach(el => {
+      // ⚠️ Cantonné au contenu : les boutons Fermer/Épingler de la barre de
+      // titre sont eux aussi des button[data-action] — les masquer privait le
+      // joueur de la croix de fermeture.
+      const scope = sheetContent(root);
+      scope.querySelectorAll("select[readonly]").forEach(el => {
         el.disabled = true;
         el.style.cssText = "background:transparent;border-color:transparent;pointer-events:none";
       });
-      root.querySelectorAll("button[data-action]").forEach(el => el.style.display = "none");
+      sheetActionButtons(root).forEach(el => { el.style.display = "none"; });
       return;
     }
 
