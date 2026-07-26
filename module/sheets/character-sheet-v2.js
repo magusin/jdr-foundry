@@ -617,6 +617,42 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     });
   }
 
+  /**
+   * Rend les lignes d'objets (sorts, armes, consommables) glissables vers la
+   * barre d'actions. Foundry lit le JSON déposé et déclenche le hook
+   * « hotbarDrop », que le système intercepte pour créer la macro d'usage.
+   */
+  _bindItemDragOut(root) {
+    if (!root || root.dataset.rpgItemDrag) return;
+    root.dataset.rpgItemDrag = "1";
+
+    for (const li of root.querySelectorAll("[data-item-id]")) {
+      const item = this.document.items.get(li.dataset.itemId);
+      if (!item) continue;
+      li.setAttribute("draggable", "true");
+      li.classList.add("rpg-draggable");
+      li.title = li.title || "Glisse-moi dans la barre d'actions en bas de l'écran";
+    }
+
+    root.addEventListener("dragstart", (ev) => {
+      const li = ev.target?.closest?.("[data-item-id]");
+      if (!li) return;
+      const item = this.document.items.get(li.dataset.itemId);
+      if (!item) return;
+      try {
+        ev.dataTransfer.setData("text/plain", JSON.stringify({
+          type: "Item",
+          uuid: item.uuid,
+          actorId: this.document.id,
+          itemId: item.id
+        }));
+        ev.dataTransfer.effectAllowed = "copy";
+      } catch (e) {
+        console.warn("[RPG] glisser d'un objet :", e);
+      }
+    });
+  }
+
   async _onRender(context, options) {
     await super._onRender(context, options);
 
@@ -625,6 +661,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     this._bindSpellFilters(root);
     this._bindRangePreview(root);
+    this._bindItemDragOut(root);
 
     // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

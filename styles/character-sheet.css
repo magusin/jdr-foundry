@@ -1108,3 +1108,27 @@
   opacity: 0.6;
   margin-bottom: 6px;
 }
+
+/* ── Objets glissables vers la barre d'actions ─────────────────────────── */
+.rpg-sheet .rpg-draggable {
+  cursor: grab;
+}
+.rpg-sheet .rpg-draggable:active {
+  cursor: grabbing;
+}
+.rpg-sheet .rpg-draggable:hover {
+  background: var(--surface, rgba(255, 255, 255, 0.04));
+  border-radius: 6px;
+}
+/* Petite poignée discrète, visible au survol seulement */
+.rpg-sheet .rpg-draggable .name::before {
+  content: "⠿";
+  opacity: 0;
+  margin-right: 4px;
+  font-size: 11px;
+  color: var(--ink-text-faint);
+  transition: opacity 0.12s;
+}
+.rpg-sheet .rpg-draggable:hover .name::before {
+  opacity: 0.7;
+}

@@ -21,6 +21,7 @@ import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status
 import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
 import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
 import { applyGlobalTheme, themeWindow } from "./sheets/sheet-helpers.js";
+import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -440,6 +441,9 @@ Hooks.once("init", async () => {
     game.rpg.debugMovement = _mt.debugMovement;
   } catch (e) { console.warn("[RPG] diagnostic déplacement indisponible :", e); }
 
+  // Barre d'actions — appelée par les macros créées au glisser-déposer
+  game.rpg.useItemFromHotbar = useItemFromHotbar;
+
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
 
@@ -634,6 +638,9 @@ Hooks.once("init", async () => {
 
     // ✅ Blocage du déplacement au glisser : le token bute sur sa réserve
     try { installDragLimit(); } catch (e) { console.warn("[RPG] blocage au glisser:", e); }
+
+    // ✅ Barre d'actions : glisser un sort/arme depuis une fiche y crée sa macro
+    try { installHotbarSupport(); } catch (e) { console.warn("[RPG] barre d'actions:", e); }
 
     // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
     //    (y compris les dialogues de macro) héritent des variables de thème.
