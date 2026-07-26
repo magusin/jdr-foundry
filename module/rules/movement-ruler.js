@@ -52,12 +52,23 @@ export function installRPGTokenRuler() {
         // Restant du tour si en combat pour cet acteur
         const combat = game.combat;
         if (combat?.started && actor) {
-          const combatant = combat.combatants.find(c => c.actorId === actor.id);
+          // Priorité au tokenId : plusieurs tokens non liés peuvent partager
+          // le même acteur, seul le tokenId identifie le bon combattant.
+          const tokenId = this.token?.id ?? this.token?.document?.id ?? null;
+          const combatant = combat.combatants.find(c => tokenId && c.tokenId === tokenId)
+                         ?? combat.combatants.find(c => c.actorId === actor.id);
           if (combatant) {
-            const budget  = getBudget(combat, combatant.id);
-            const vitesse = Number(actor.system?.deplacement?.vitesse ?? 6) || 6;
-            const after   = Math.max(0, movementRemaining(budget, vitesse) - cost);
-            text += ` · reste ${fmtM(after)}`;
+            const budget    = getBudget(combat, combatant.id);
+            const vitesse   = Number(actor.system?.deplacement?.vitesse ?? 6) || 6;
+            const remaining = movementRemaining(budget, vitesse);
+            const after     = Math.max(0, remaining - cost);
+
+            if (cost > remaining + 0.1) {
+              // Au-delà de la réserve : on annonce le point d'arrêt
+              text += ` · ⛔ arrêt à ${fmtM(remaining)}`;
+            } else {
+              text += ` · reste ${fmtM(after)}`;
+            }
           }
         }
 

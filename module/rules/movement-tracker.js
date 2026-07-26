@@ -22,10 +22,11 @@ const DEBOUNCE_MS = 350;
 // Position avant le move (capturée dans preUpdateToken)
 const _prevPos = new Map();
 
-// Déplacements refusés dont il faut annuler l'effet si Foundry a quand même
-// appliqué la mise à jour. Renvoyer false depuis preUpdateToken suffit en
-// principe, mais le pipeline de déplacement de la V13 ne l'honore pas
-// toujours : on remet alors le token en place dans updateToken.
+// Position à laquelle le token DOIT se retrouver après un déplacement bridé :
+//   - refus complet        → sa position de départ
+//   - déplacement raccourci→ le dernier point atteignable
+// Le pipeline de déplacement de la V13 n'honore pas toujours le refus ni la
+// modification de `changes` : updateToken corrige alors la position.
 // tokenId → { x, y, at }
 const _pendingRevert = new Map();
 const REVERT_TTL_MS = 3000;
@@ -101,6 +102,22 @@ function _refuseMove(tokenDoc, message) {
   return false;
 }
 
+/**
+ * Point le plus éloigné atteignable sur le trajet start → dest avec `budget`
+ * mètres de réserve. La métrique de distance est homogène (mesurer un vecteur
+ * réduit de moitié donne la moitié du coût), on peut donc simplement mettre le
+ * vecteur à l'échelle.
+ */
+function _clampToBudget(startPos, destX, destY, distBrute, mult, budget) {
+  const maxDist = budget * (mult > 0 ? mult : 1);   // distance brute payable
+  const t = distBrute > 0 ? Math.max(0, Math.min(1, maxDist / distBrute)) : 0;
+  return {
+    x: Math.round(startPos.x + t * (destX - startPos.x)),
+    y: Math.round(startPos.y + t * (destY - startPos.y)),
+    t
+  };
+}
+
 export function onPreUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
@@ -168,10 +185,23 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
     const remaining = movementRemaining(budget, vitesse);
 
     if (cost > remaining + 0.1) {
+      // Plutôt que de tout refuser, on ARRÊTE le token au dernier point
+      // qu'il peut atteindre avec sa réserve : on ne va jamais plus loin que
+      // ce qu'il reste, sans perdre le déplacement déjà entamé.
+      if (remaining <= 0.05) {
+        return _refuseMove(tokenDoc, "Plus de déplacement ce tour.");
+      }
+
+      const stop = _clampToBudget(startPos, newX, newY, distBrute, mult, remaining);
+      changes.x = stop.x;
+      changes.y = stop.y;
+      _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
+
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
-      return _refuseMove(tokenDoc,
-        `Déplacement impossible — ${fmt(cost)} nécessaires${typeLabel} vs ${fmt(remaining)} restants ce tour.`
+      ui.notifications?.info?.(
+        `Déplacement arrêté à ${fmt(remaining)}${typeLabel} — c'est tout ce qu'il te reste ce tour.`
       );
+      return;   // le déplacement raccourci est accepté
     }
   }
 }
@@ -183,23 +213,39 @@ export async function onUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas recompter
   if (!("x" in changes) && !("y" in changes)) return;
 
-  // ── Filet de sécurité : le refus n'a pas été honoré ──────────────────────
-  // preUpdateToken a renvoyé false, mais le déplacement a quand même été
-  // appliqué (le pipeline de déplacement de la V13 n'annule pas toujours) :
-  // on remet le token à sa place. Ne s'exécute que sur le client qui a tenté
-  // le déplacement, seul à avoir mémorisé le refus.
-  const revert = _pendingRevert.get(tokenDoc.id);
-  if (revert) {
+  // ── Filet de sécurité : la position bridée n'a pas été appliquée ─────────
+  // preUpdateToken a refusé le déplacement ou l'a raccourci, mais le pipeline
+  // de déplacement de la V13 n'honore pas toujours le refus ni la modification
+  // de `changes` : on replace alors le token là où il devait s'arrêter.
+  // Ne s'exécute que sur le client qui a tenté le déplacement, seul à avoir
+  // mémorisé la position attendue.
+  const target = _pendingRevert.get(tokenDoc.id);
+  if (target) {
     _pendingRevert.delete(tokenDoc.id);
-    if (Date.now() - revert.at < REVERT_TTL_MS) {
-      _prevPos.delete(tokenDoc.id);
+    const fresh = Date.now() - target.at < REVERT_TTL_MS;
+    const landedX = "x" in changes ? changes.x : tokenDoc.x;
+    const landedY = "y" in changes ? changes.y : tokenDoc.y;
+    const offBy = Math.hypot(landedX - target.x, landedY - target.y);
+
+    if (fresh && offBy > 1) {
+      // Le token n'est pas là où il devait s'arrêter → on corrige.
       try {
-        await tokenDoc.update({ x: revert.x, y: revert.y },
+        await tokenDoc.update({ x: target.x, y: target.y },
                               { rpgNoTrack: true, animate: false });
       } catch (e) {
-        console.warn("[RPG] annulation du déplacement refusé :", e);
+        console.warn("[RPG] correction du déplacement bridé :", e);
       }
-      return;
+
+      const start = _prevPos.get(tokenDoc.id);
+      const wasRefusal = !start || (start.x === target.x && start.y === target.y);
+      if (wasRefusal) {
+        // Refus complet : rien à décompter.
+        _prevPos.delete(tokenDoc.id);
+        return;
+      }
+      // Déplacement raccourci : il a bien eu lieu jusqu'au point d'arrêt,
+      // on continue le décompte normal avec les bonnes coordonnées.
+      changes = { ...changes, x: target.x, y: target.y };
     }
   }
 
