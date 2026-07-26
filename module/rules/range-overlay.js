@@ -189,6 +189,75 @@ export function showSpellRangeOverlay(actor, spell) {
   drawRanges(token, layers, true);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Limite de déplacement — le « mur » visible
+   Quand un token est sélectionné pendant son tour de combat, on trace le
+   cercle de ce qu'il peut encore parcourir. Calque distinct de l'aperçu de
+   portée : il reste affiché tant que le token est sélectionné.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+let _moveGfx = null;
+
+function _clearMoveLimit() {
+  try { _moveGfx?.destroy({ children: true }); } catch { /* ignore */ }
+  _moveGfx = null;
+}
+
+/** Trace la réserve de déplacement restante autour du token contrôlé. */
+export async function showMovementLimit(token) {
+  _clearMoveLimit();
+  if (!token?.actor || !canvas?.ready) return;
+
+  const combat = game.combat;
+  if (!combat?.active || !combat.started) return;
+
+  const cbt = combat.combatants.find(c => c.tokenId === token.id);
+  if (!cbt) return;
+  if (combat.combatant?.id !== cbt.id) return;   // seulement pendant son tour
+
+  let remaining = 0;
+  try {
+    const { getBudget, movementRemaining } = await import("./action-budget.js");
+    const vitesse = Number(token.actor.system?.deplacement?.vitesse ?? 6) || 6;
+    remaining = movementRemaining(getBudget(combat, cbt.id), vitesse);
+  } catch (e) {
+    console.warn("[RPG] réserve de déplacement :", e);
+    return;
+  }
+  if (!(remaining > 0)) return;
+
+  const r = metersToPixels(remaining);
+  const cx = token.center.x, cy = token.center.y;
+  const g = new PIXI.Graphics();
+
+  // Zone atteignable : trait plein, remplissage très léger
+  g.lineStyle(2, 0x4ec48a, 0.85);
+  g.beginFill(0x4ec48a, 0.05);
+  g.drawCircle(cx, cy, r);
+  g.endFill();
+
+  try {
+    const style = new PIXI.TextStyle({
+      fontFamily: "Signika, sans-serif", fontSize: 15, fontWeight: "700",
+      fill: "#9ff0c4", stroke: "#000000", strokeThickness: 4
+    });
+    const t = new PIXI.Text(`🏃 ${fmtM(remaining)} restants`, style);
+    t.anchor.set(0.5, 0);
+    t.position.set(cx, cy + r + 4);
+    g.addChild(t);
+  } catch { /* étiquette optionnelle */ }
+
+  (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
+  _moveGfx = g;
+}
+
+/** Rafraîchit la limite pour le token actuellement contrôlé. */
+export function refreshMovementLimit() {
+  const token = canvas?.tokens?.controlled?.[0] ?? null;
+  if (token) showMovementLimit(token);
+  else _clearMoveLimit();
+}
+
 /** Efface l'affichage éphémère (sauf si une portée est épinglée). */
 export function clearRanges({ force = false } = {}) {
   if (_pinnedTokenId && !force) {
@@ -241,6 +310,19 @@ export function installRangeOverlay() {
     } catch (e) { console.warn("[RPG] affichage des portées :", e); }
   });
 
+  // ── Limite de déplacement : le « mur » de la réserve restante ────────────
+  // Affichée dès qu'on sélectionne un token pendant son tour, et mise à jour
+  // après chaque déplacement pour que le cercle suive ce qu'il reste.
+  Hooks.on("controlToken", (token, controlled) => {
+    try {
+      if (controlled) showMovementLimit(token);
+      else _clearMoveLimit();
+    } catch (e) { console.warn("[RPG] limite de déplacement :", e); }
+  });
+  Hooks.on("updateToken", () => setTimeout(() => refreshMovementLimit(), 80));
+  Hooks.on("updateCombat", () => setTimeout(() => refreshMovementLimit(), 80));
+  Hooks.on("deleteCombat", () => _clearMoveLimit());
+
   // Suit le token épinglé quand il bouge / change d'équipement
   Hooks.on("updateToken", (doc) => {
     if (_pinnedTokenId === doc.id) setTimeout(() => refreshPinned(), 60);
@@ -249,5 +331,5 @@ export function installRangeOverlay() {
   Hooks.on("deleteToken", (doc) => {
     if (_pinnedTokenId === doc.id) { _pinnedTokenId = null; _clear(); }
   });
-  Hooks.on("canvasTearDown", () => { _pinnedTokenId = null; _clear(); });
+  Hooks.on("canvasTearDown", () => { _pinnedTokenId = null; _clear(); _clearMoveLimit(); });
 }

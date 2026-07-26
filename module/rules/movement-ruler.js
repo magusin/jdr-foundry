@@ -72,10 +72,28 @@ export function installRPGTokenRuler() {
           }
         }
 
-        // Injecte notre texte dans les champs les plus courants du template
-        if (typeof context.cost === "string") context.cost = text;
-        else if (context.cost && typeof context.cost === "object") context.cost.total = text;
-        if (typeof context.distance === "string") context.distance = fmtM(cost);
+        // Une seule fois : publie la forme du contexte, pour pouvoir cibler le
+        // bon champ si Foundry change son gabarit d'étiquette.
+        if (!globalThis.__rpgRulerCtxLogged) {
+          globalThis.__rpgRulerCtxLogged = true;
+          console.log("[RPG] Réglette — champs disponibles :", Object.keys(context),
+                      JSON.parse(JSON.stringify(context)));
+        }
+
+        // Injecte notre texte dans tous les champs plausibles du gabarit :
+        // selon la version, l'étiquette lit cost, distance ou action.
+        const setField = (key) => {
+          const v = context[key];
+          if (typeof v === "string") { context[key] = text; return true; }
+          if (v && typeof v === "object") {
+            if (typeof v.total === "string") { v.total = text; return true; }
+            if (typeof v.text === "string")  { v.text = text;  return true; }
+            if (typeof v.label === "string") { v.label = text; return true; }
+          }
+          return false;
+        };
+        const injected = ["cost", "distance", "action", "label"].map(setField).some(Boolean);
+        if (!injected && typeof context.units === "string") context.units = text;
         context.rpgLabel = text;
       } catch (e) {
         console.warn("[RPG] Réglette de déplacement custom :", e);
