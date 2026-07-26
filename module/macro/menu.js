@@ -758,6 +758,23 @@
       rerenderSpells();
     });
 
+    // Aperçu de portée au survol d'une ligne (sort ou arme) : le cercle
+    // correspondant s'affiche sur le canevas autour du token du personnage.
+    $root.on("mouseenter.rpgMenu", ".rpg-list [data-item-id]", (ev) => {
+      try {
+        const api = game.rpg?.ranges;
+        if (!api) return;
+        const id = ev.currentTarget?.dataset?.itemId;
+        const it = game.rpg?.unarmed?.resolveWeapon?.(actor, id) ?? actor.items.get(id);
+        if (!it) return;
+        if (it.type === "spell") api.showSpellRange?.(actor, it);
+        else if (token) api.showTokenRanges?.(token);
+      } catch (e) { console.warn("[RPG] aperçu de portée :", e); }
+    });
+    $root.on("mouseleave.rpgMenu", ".rpg-list [data-item-id]", () => {
+      try { game.rpg?.ranges?.clearRanges?.(); } catch { /* ignore */ }
+    });
+
     // Ouvrir fiche
     $root.on("click.rpgMenu", "[data-action='open']", (ev) => {
       const row    = ev.currentTarget.closest("[data-item-id]");

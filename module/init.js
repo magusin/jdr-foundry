@@ -18,7 +18,7 @@ import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 import { measureDistanceManhattan } from "./rules/distance.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
-import { installThreatRangeIndicator } from "./rules/threat-range.js";
+import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -336,6 +336,19 @@ Hooks.once("init", async () => {
     }
   });
 
+  // Affiche/masque en permanence les portées du token sélectionné (allonge de
+  // mêlée + portée de l'arme équipée), sans avoir à garder la souris dessus.
+  game.keybindings.register("rpg", "togglePinnedRanges", {
+    name: "Afficher les portées du token sélectionné",
+    hint: "Garde à l'écran la zone de mêlée et la portée de l'arme équipée du token sélectionné. Sinon, il suffit de survoler un token pour les voir brièvement.",
+    editable: [{ key: "KeyR", modifiers: ["Shift"] }],
+    restricted: false,
+    onDown: () => {
+      try { togglePinnedRanges(); } catch (e) { console.warn("[RPG] portées :", e); }
+      return true;
+    }
+  });
+
   game.settings.register("rpg", "currentWeather", {
     name: "Météo actuelle",
     scope: "world",
@@ -416,6 +429,9 @@ Hooks.once("init", async () => {
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 
   game.rpg.combat = Combat;
+
+  // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
+  game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
 
   // Attaque de base (mains nues) — exposée pour la macro « Menu Combat »,
   // qui n'est pas un module ES et ne peut pas importer.
@@ -604,7 +620,7 @@ Hooks.once("init", async () => {
     try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
 
     // ✅ Indicateur d'allonge (zone de menace) au survol d'un token
-    try { installThreatRangeIndicator(); } catch (e) { console.warn("[RPG] indicateur d'allonge:", e); }
+    try { installRangeOverlay(); } catch (e) { console.warn("[RPG] affichage des portées:", e); }
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;

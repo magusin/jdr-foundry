@@ -584,6 +584,39 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     });
   }
 
+  /**
+   * Survoler une ligne de sort, d'arme ou d'équipement dessine sa portée sur
+   * le canevas, autour du token de ce personnage. Beaucoup plus lisible que
+   * d'aller relire les chiffres dans la fiche de l'objet.
+   */
+  _bindRangePreview(root) {
+    if (!root || root.dataset.rpgRangePreview) return;
+    root.dataset.rpgRangePreview = "1";
+
+    const api = () => game.rpg?.ranges;
+
+    root.addEventListener("mouseover", (ev) => {
+      const li = ev.target?.closest?.("[data-item-id]");
+      if (!li) return;
+      const item = this.document.items.get(li.dataset.itemId);
+      if (!item) return;
+      try {
+        if (item.type === "spell") api()?.showSpellRange?.(this.document, item);
+        else if (item.type === "weapon") {
+          // Pour une arme, on montre les portées du personnage tel qu'il est
+          // équipé (mêlée + tir), ce qui reflète ce qu'il peut réellement faire.
+          const token = this.document.getActiveTokens?.()?.[0] ?? canvas?.tokens?.controlled?.[0];
+          if (token) api()?.showTokenRanges?.(token);
+        }
+      } catch (e) { console.warn("[RPG] aperçu de portée :", e); }
+    });
+
+    root.addEventListener("mouseout", (ev) => {
+      if (!ev.target?.closest?.("[data-item-id]")) return;
+      try { api()?.clearRanges?.(); } catch { /* ignore */ }
+    });
+  }
+
   async _onRender(context, options) {
     await super._onRender(context, options);
 
@@ -591,6 +624,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     applyUiTheme(root);
 
     this._bindSpellFilters(root);
+    this._bindRangePreview(root);
 
     // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
     root.querySelectorAll(".rpg-img-edit").forEach(img => {
