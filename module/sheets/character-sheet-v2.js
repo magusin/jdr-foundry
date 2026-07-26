@@ -659,6 +659,19 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const root = this.element;
     applyUiTheme(root);
 
+    // ⚠️ _onRender est rappelé à CHAQUE rendu, mais `root` (l'élément de la
+    // fenêtre) survit aux rendus : réenregistrer les écouteurs délégués les
+    // empilait, si bien qu'un clic déclenchait l'action autant de fois qu'il y
+    // avait eu de rendus — d'où les suppressions en double (« Item does not
+    // exist ») et les XP comptées plusieurs fois. On ne branche qu'une fois.
+    const NOOP_TARGET = { addEventListener() {} };
+    const bindOnce = (key) => {
+      const flag = `rpgBound_${key}`;
+      if (root.dataset[flag]) return NOOP_TARGET;
+      root.dataset[flag] = "1";
+      return root;
+    };
+
     this._bindSpellFilters(root);
     this._bindRangePreview(root);
     this._bindItemDragOut(root);
@@ -723,7 +736,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     // ── Handler toggleEquip (joueurs ET MJ) ─────────────────────────────
     // Doit être branché avant le return joueur pour que les boutons fonctionnent
-    root.addEventListener("click", async (evEquip) => {
+    bindOnce("equip").addEventListener("click", async (evEquip) => {
       const btn = evEquip.target?.closest("[data-action='toggleEquip']");
       if (!btn || btn.disabled) return;
       evEquip.preventDefault();
@@ -749,7 +762,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // ── Ouvrir la fiche d'un objet possédé (joueurs ET MJ) ───────────────
     // Doit être branché AVANT le retour joueur : sinon les joueurs ne
     // pouvaient pas consulter leurs propres armes/armures/objets.
-    root.addEventListener("click", (ev) => {
+    bindOnce("itemEdit").addEventListener("click", (ev) => {
       const link = ev.target?.closest?.(".item-edit");
       if (!link) return;
       ev.preventDefault();
@@ -781,7 +794,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     }
 
     // Click delegation — protégé contre les erreurs non-catchées
-    root.addEventListener("click", async (ev) => {
+    bindOnce("actions").addEventListener("click", async (ev) => {
       const btn = ev.target?.closest?.("[data-action], .item-edit");
       if (!btn) return;
 
@@ -815,7 +828,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const li = btn.closest(".item");
         const itemId = btn.dataset.itemId || li?.dataset?.itemId;
         if (!itemId) return;
-        await this.document.deleteEmbeddedDocuments("Item", [itemId]);
+        // L'objet peut déjà avoir disparu (double clic, ligne obsolète après
+        // un rendu) : on ne demande la suppression que s'il existe encore,
+        // sinon le serveur renvoie « Item does not exist ».
+        if (this.document.items.get(itemId)) {
+          await this.document.deleteEmbeddedDocuments("Item", [itemId]);
+        }
         this._debouncedPodsUpdate?.();
         await this.render({ force: true });
         return;
@@ -959,7 +977,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     }, { passive: false });
 
     // Change delegation
-    root.addEventListener("change", async (ev) => {
+    bindOnce("change").addEventListener("change", async (ev) => {
       const el = ev.target;
 
       if (el?.matches?.("select[data-action='equipSlotSelect']")) {
