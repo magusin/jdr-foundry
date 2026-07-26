@@ -22,6 +22,14 @@ const DEBOUNCE_MS = 350;
 // Position avant le move (capturée dans preUpdateToken)
 const _prevPos = new Map();
 
+// Déplacements refusés dont il faut annuler l'effet si Foundry a quand même
+// appliqué la mise à jour. Renvoyer false depuis preUpdateToken suffit en
+// principe, mais le pipeline de déplacement de la V13 ne l'honore pas
+// toujours : on remet alors le token en place dans updateToken.
+// tokenId → { x, y, at }
+const _pendingRevert = new Map();
+const REVERT_TTL_MS = 3000;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getVitesse(actor) {
@@ -83,6 +91,16 @@ function fmt(m) { return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`; }
  * Hook preUpdateToken — capture position avant déplacement.
  * Garde-fous côté client.
  */
+/**
+ * Refuse un déplacement : mémorise la position de départ pour pouvoir la
+ * restaurer si Foundry applique quand même la mise à jour, puis renvoie false.
+ */
+function _refuseMove(tokenDoc, message) {
+  if (message) ui.notifications?.warn?.(message);
+  _pendingRevert.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y, at: Date.now() });
+  return false;
+}
+
 export function onPreUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
@@ -90,6 +108,9 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
+
+  // Nouvelle tentative : tout refus précédent est caduc
+  _pendingRevert.delete(tokenDoc.id);
 
   if (!_prevPos.has(tokenDoc.id)) {
     _prevPos.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y });
@@ -99,14 +120,12 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
 
   if (!game.user.isGM) {
     if (actor?.system?.derived?.ko) {
-      ui.notifications?.warn?.("K.O. — impossible de se déplacer.");
-      return false;
+      return _refuseMove(tokenDoc, "K.O. — impossible de se déplacer.");
     }
 
     const current = game.combat.combatant;
     if (current && current.tokenId !== tokenDoc.id) {
-      ui.notifications?.warn?.("Ce n'est pas ton tour.");
-      return false;
+      return _refuseMove(tokenDoc, "Ce n'est pas ton tour.");
     }
   }
 
@@ -150,10 +169,9 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
 
     if (cost > remaining + 0.1) {
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
-      ui.notifications?.warn?.(
+      return _refuseMove(tokenDoc,
         `Déplacement impossible — ${fmt(cost)} nécessaires${typeLabel} vs ${fmt(remaining)} restants ce tour.`
       );
-      return false;
     }
   }
 }
@@ -164,6 +182,27 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
 export async function onUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas recompter
   if (!("x" in changes) && !("y" in changes)) return;
+
+  // ── Filet de sécurité : le refus n'a pas été honoré ──────────────────────
+  // preUpdateToken a renvoyé false, mais le déplacement a quand même été
+  // appliqué (le pipeline de déplacement de la V13 n'annule pas toujours) :
+  // on remet le token à sa place. Ne s'exécute que sur le client qui a tenté
+  // le déplacement, seul à avoir mémorisé le refus.
+  const revert = _pendingRevert.get(tokenDoc.id);
+  if (revert) {
+    _pendingRevert.delete(tokenDoc.id);
+    if (Date.now() - revert.at < REVERT_TTL_MS) {
+      _prevPos.delete(tokenDoc.id);
+      try {
+        await tokenDoc.update({ x: revert.x, y: revert.y },
+                              { rpgNoTrack: true, animate: false });
+      } catch (e) {
+        console.warn("[RPG] annulation du déplacement refusé :", e);
+      }
+      return;
+    }
+  }
+
   if (!game.user.isGM) return;
   if (!game.combat?.active) return;
 
@@ -469,4 +508,45 @@ export async function undoMovement(combat, actionId) {
     releaseMovement(budget, snap.cost ?? 0, entry.status === "confirmed"));
   await updateLogEntry(combat, actionId, { status: "undone" });
   return { ok: true, label: entry.label ?? "Déplacement" };
+}
+
+/**
+ * Diagnostic de la limite de déplacement — à lancer dans la console (F12) :
+ *     game.rpg.debugMovement()
+ * avec le token concerné SÉLECTIONNÉ. Affiche chaque condition et indique
+ * laquelle bloque, pour savoir si la règle s'applique et pourquoi.
+ */
+export function debugMovement() {
+  const out = {};
+  const token = canvas?.tokens?.controlled?.[0] ?? null;
+  out["token sélectionné"] = token?.name ?? "❌ AUCUN — sélectionne un token";
+  if (!token) { console.table(out); return out; }
+
+  out["combat actif"] = game.combat?.active ? "✔ oui" : "❌ non (aucune limite hors combat)";
+  const cbt = game.combat?.combatants?.find(c => c.tokenId === token.id) ?? null;
+  out["token dans le combat"] = cbt ? "✔ oui" : "❌ non (ce token n'est pas un combattant)";
+
+  let scope = "?", gmLimit = "?";
+  try { scope = String(game.settings.get("rpg", "movementLimitScope")); } catch (e) { scope = "❌ réglage absent"; }
+  try { gmLimit = game.settings.get("rpg", "gmMovementLimit") === true; } catch (e) { gmLimit = "❌ réglage absent"; }
+  out["réglage « Limite de déplacement »"] = scope;
+  out["MJ : limite activée (Maj+M)"] = gmLimit === true ? "🔒 oui" : "🔓 non";
+  out["vous êtes"] = game.user.isGM ? "MJ" : "joueur";
+
+  const applies = scope === "off" ? false : (game.user.isGM ? (scope === "all" || gmLimit === true) : true);
+  out["la limite s'applique à vous"] = applies ? "✔ OUI" : "❌ non";
+
+  const actor = token.actor;
+  out["vitesse du token"] = actor ? `${getVitesse(actor)} m` : "❌ pas d'acteur";
+
+  if (cbt && game.combat) {
+    try {
+      const budget = getBudget(game.combat, cbt.id);
+      out["réserve restante ce tour"] = `${movementRemaining(budget, getVitesse(actor))} m`;
+    } catch (e) { out["réserve restante ce tour"] = `❌ ${e.message}`; }
+    out["c'est son tour"] = game.combat.combatant?.id === cbt.id ? "✔ oui" : "non";
+  }
+
+  console.table(out);
+  return out;
 }

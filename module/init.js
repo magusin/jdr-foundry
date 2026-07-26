@@ -430,6 +430,12 @@ Hooks.once("init", async () => {
 
   game.rpg.combat = Combat;
 
+  // Diagnostic de la limite de déplacement : game.rpg.debugMovement()
+  try {
+    const _mt = await import("./rules/movement-tracker.js");
+    game.rpg.debugMovement = _mt.debugMovement;
+  } catch (e) { console.warn("[RPG] diagnostic déplacement indisponible :", e); }
+
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
 
@@ -1022,7 +1028,14 @@ Hooks.once("init", async () => {
       // ⚠️ On DOIT renvoyer le résultat : si onPreUpdateToken renvoie false
       // (déplacement au-delà de la réserve, pas son tour, K.O.…), Foundry annule
       // le déplacement. Sans ce return, la limite de Vitesse n'était jamais appliquée.
-      try { return onPreUpdateToken(tokenDoc, changes, options); } catch (e) { return; }
+      try {
+        return onPreUpdateToken(tokenDoc, changes, options);
+      } catch (e) {
+        // Ne pas avaler l'erreur en silence : sans trace, une limite qui ne
+        // s'applique plus est indétectable.
+        console.error("[RPG] limite de déplacement :", e);
+        return;
+      }
     });
 
     Hooks.on("updateToken", async (tokenDoc, changes, options) => {
