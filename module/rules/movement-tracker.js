@@ -118,6 +118,36 @@ function _clampToBudget(startPos, destX, destY, distBrute, mult, budget) {
   };
 }
 
+/**
+ * Règle de limite de déplacement applicable à un token, à un instant donné.
+ * Source unique partagée par le blocage pendant le glisser-déposer ET la
+ * vérification à l'enregistrement, pour qu'ils ne puissent pas diverger.
+ *
+ * @returns {{applies:boolean, remaining:number, combatant:object|null, actor:Actor|null}}
+ */
+export function getMovementLimit(tokenDoc) {
+  const none = { applies: false, remaining: Infinity, combatant: null, actor: tokenDoc?.actor ?? null };
+  if (!tokenDoc || !game.combat?.active) return none;
+
+  const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
+  if (!combatant) return none;
+
+  let enforce = "players";
+  try { enforce = String(game.settings.get("rpg", "movementLimitScope") ?? "players"); } catch { /* défaut */ }
+  if (enforce === "off") return none;
+
+  let gmLimit = false;
+  try { gmLimit = game.settings.get("rpg", "gmMovementLimit") === true; } catch { /* défaut */ }
+
+  const applies = game.user.isGM ? (enforce === "all" || gmLimit) : true;
+  if (!applies) return none;
+
+  const actor = tokenDoc.actor;
+  const budget = getBudget(game.combat, combatant.id);
+  const remaining = movementRemaining(budget, getVitesse(actor));
+  return { applies: true, remaining, combatant, actor };
+}
+
 export function onPreUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
@@ -128,6 +158,9 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
 
   // Nouvelle tentative : tout refus précédent est caduc
   _pendingRevert.delete(tokenDoc.id);
+  // La réserve va changer : le point d'arrêt mis en cache pour le glisser
+  // n'est plus valable.
+  import("./drag-limit.js").then(m => m.clearDragLimitCache(tokenDoc.id)).catch(() => {});
 
   if (!_prevPos.has(tokenDoc.id)) {
     _prevPos.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y });
@@ -581,6 +614,9 @@ export function debugMovement() {
 
   const applies = scope === "off" ? false : (game.user.isGM ? (scope === "all" || gmLimit === true) : true);
   out["la limite s'applique à vous"] = applies ? "✔ OUI" : "❌ non";
+  out["blocage pendant le glisser"] = globalThis.__rpgDragLimit
+    ? "✔ actif (le token bute sur sa réserve)"
+    : "❌ inactif — la limite s'appliquera seulement au lâcher";
 
   const actor = token.actor;
   out["vitesse du token"] = actor ? `${getVitesse(actor)} m` : "❌ pas d'acteur";

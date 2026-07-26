@@ -19,6 +19,7 @@ import { measureDistanceManhattan } from "./rules/distance.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
 import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
+import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -627,6 +628,9 @@ Hooks.once("init", async () => {
 
     // ✅ Indicateur d'allonge (zone de menace) au survol d'un token
     try { installRangeOverlay(); } catch (e) { console.warn("[RPG] affichage des portées:", e); }
+
+    // ✅ Blocage du déplacement au glisser : le token bute sur sa réserve
+    try { installDragLimit(); } catch (e) { console.warn("[RPG] blocage au glisser:", e); }
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;
