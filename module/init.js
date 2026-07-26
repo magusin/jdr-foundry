@@ -615,6 +615,10 @@ Hooks.once("init", async () => {
     const allowed = new Set([
       "system.ressources.pv.valeur",
       "system.ressources.mana.valeur",
+      // Fatigue : consommee automatiquement a chaque action. Son absence ici
+      // faisait rejeter l'update, donc aucune fatigue n'etait jamais appliquee
+      // aux joueurs.
+      "system.ressources.fatigue.valeur",
       "img"  // portrait : le propriétaire peut changer son illustration
     ]);
     return Object.keys(flat).every(k => allowed.has(k));
@@ -1229,7 +1233,14 @@ Hooks.once("init", async () => {
       "system.equipe",
       "system.actif",
       "system.aura.active",
-      "system.aura.enabled"
+      "system.aura.enabled",
+      // Recharge : c'est le SYSTÈME qui l'écrit quand le joueur lance son
+      // sort. Sans ces clés, l'update etait rejetee en silence et le sort
+      // restait indefiniment disponible (aucune recharge appliquee).
+      "system.cooldown.restant",
+      "system.cooldown.max",
+      "system.recharge.restant",
+      "system.recharge.max"
     ]);
 
     return Object.keys(flat).every(k => allowed.has(k));

@@ -412,6 +412,39 @@ static PARTS = foundry.utils.mergeObject(
     }
     ctx.isReadOnly = !ctx.canEdit;
 
+    // ── Vue joueur : résumé compact ────────────────────────────────────────
+    // En lecture seule, les champs à 0 ou vides s'affichaient comme des cases
+    // vides sans signification. On ne liste que ce qui est réellement renseigné.
+    ctx.playerInfo = [];
+    {
+      const add = (icon, label, value, suffix = "") => {
+        if (value === null || value === undefined || value === "" || value === 0) return;
+        ctx.playerInfo.push({ icon, label, value: `${value}${suffix}` });
+      };
+      const SPEED = { passif: "Passif", rapide: "Rapide", normal: "Normal" };
+      const TAGS = {
+        neutre: "⚪ Neutre", feu: "🔥 Feu", eau: "💧 Eau", eclair: "⚡ Éclair",
+        glace: "❄️ Glace", air: "💨 Air", terre: "🌍 Terre",
+        lumiere: "✨ Lumière", obscurite: "🌑 Obscurité"
+      };
+      add("⚡", "Vitesse", SPEED[String(ctx.system.speed)] ?? ctx.system.speed);
+      add("🎯", "Livraison", ctx.system.livraison === "physique" ? "Physique" : "Magique");
+      add("🔮", "Élément", TAGS[String(ctx.system.tag ?? "neutre")] ?? ctx.system.tag);
+      add("💧", "Coût mana", n(ctx.system.coutMana, 0));
+      add("😫", "Coût fatigue", n(ctx.system.fatigueCost, 0));
+      const rmin = n(ctx.system.range?.min, 0), rmax = n(ctx.system.range?.max, 0);
+      if (rmax > 0) ctx.playerInfo.push({ icon: "📏", label: "Portée",
+        value: rmin > 0 ? `${rmin} – ${rmax} m` : `${rmax} m` });
+      const tmin = n(ctx.system.targetCount?.min, 0), tmax = n(ctx.system.targetCount?.max, 0);
+      if (tmax > 0) ctx.playerInfo.push({ icon: "👥", label: "Cibles",
+        value: tmin === tmax ? `${tmax}` : `${tmin} – ${tmax}` });
+      add("🎲", "Difficulté", n(ctx.system.difficulte, 0), " au seuil");
+      const cdMax = n(ctx.system.cooldown?.max, 0);
+      const cdRest = n(ctx.system.cooldown?.restant, 0);
+      if (cdMax > 0) ctx.playerInfo.push({ icon: "⏳", label: "Recharge",
+        value: cdRest > 0 ? `${cdRest} / ${cdMax} tours` : `${cdMax} tours` });
+    }
+
     // defaults
     ctx.system.speed = ctx.system.speed ?? "normal";
     ctx.system.range = ctx.system.range ?? { min: 0, max: 0 };

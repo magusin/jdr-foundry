@@ -279,3 +279,20 @@
 .rpg-sheet .sheet-body > section.card {
   flex: 0 0 auto;
 }
+
+/* ── Fiche de sort, vue joueur : résumé lisible sans case vide ─────────── */
+.rpg-spell-sheet .spell-player-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 14px;
+}
+.rpg-spell-sheet .spi-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border-soft, rgba(255,255,255,0.08));
+}
+.rpg-spell-sheet .spi-label { font-size: 12px; opacity: 0.8; white-space: nowrap; }
+.rpg-spell-sheet .spi-value { font-size: 13px; white-space: nowrap; }

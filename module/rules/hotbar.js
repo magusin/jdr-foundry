@@ -38,6 +38,18 @@ export async function useItemFromHotbar(uuid) {
   const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;
 
   if (item.type === "spell") {
+    // Les mêmes verrous que depuis la fiche : un raccourci ne doit jamais
+    // permettre de contourner la recharge ou le coût en mana.
+    const cd = Number(item.system?.cooldown?.restant ?? item.system?.recharge?.restant ?? 0) || 0;
+    if (cd > 0) {
+      return ui.notifications?.warn?.(`${item.name} est en recharge : ${cd} tour(s) restant(s).`);
+    }
+    const manaCost = Number(item.system?.coutMana ?? 0) || 0;
+    const manaCur  = Number(actor.system?.ressources?.mana?.valeur ?? 0) || 0;
+    if (manaCost > 0 && manaCur < manaCost) {
+      return ui.notifications?.warn?.(`Mana insuffisant : ${manaCur}/${manaCost} requis.`);
+    }
+
     const { declareSpell } = await import("./spells.js");
     const res = await declareSpell(actor, item, { casterToken, targetToken });
     if (!res?.ok) ui.notifications?.warn?.(res?.reason ?? "Impossible de lancer ce sort.");
