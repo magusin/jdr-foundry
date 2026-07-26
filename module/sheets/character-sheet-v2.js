@@ -696,10 +696,30 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       if (!item) return;
       btn.disabled = true;
       try {
+        // En combat, changer d'équipement coûte une action (voir _canEquipNow)
+        const gate = await this._canEquipNow(item);
+        if (!gate.ok) {
+          ui.notifications?.warn?.(gate.reason);
+          return;
+        }
         await this._toggleEquipItem(item);
+        if (gate.consume) await gate.consume();
         this._debouncedPodsUpdate?.();
         await this.render({ force: true });
       } finally { btn.disabled = false; }
+    }, { capture: true });
+
+    // ── Ouvrir la fiche d'un objet possédé (joueurs ET MJ) ───────────────
+    // Doit être branché AVANT le retour joueur : sinon les joueurs ne
+    // pouvaient pas consulter leurs propres armes/armures/objets.
+    root.addEventListener("click", (ev) => {
+      const link = ev.target?.closest?.(".item-edit");
+      if (!link) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const li = link.closest("[data-item-id]") ?? link.closest(".item");
+      const item = this.document.items.get(li?.dataset?.itemId);
+      item?.sheet?.render(true);
     }, { capture: true });
 
     // Player: disable inputs and most actions
@@ -1027,6 +1047,61 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   /* -------------------------------------------- */
   /* Equip logic (same as your V1)                */
   /* -------------------------------------------- */
+
+  /**
+   * Peut-on (dés)équiper cet objet maintenant ?
+   *
+   * Hors combat : oui, librement — c'est du rangement de sac.
+   * En combat   : rengainer/dégainer prend du temps. Il faut être à son tour
+   *               et dépenser l'action « Échange d'arme » (1 par tour).
+   * Le MJ n'est jamais bloqué.
+   *
+   * @returns {Promise<{ok:boolean, reason?:string, consume?:Function}>}
+   */
+  async _canEquipNow(item) {
+    if (game.user.isGM) return { ok: true };
+    if (!this.document.isOwner) return { ok: false, reason: "Cet équipement n'est pas le tien." };
+
+    const combat = game.combat;
+    if (!combat?.active) return { ok: true };   // hors combat : libre
+
+    const token = this.document.getActiveTokens?.()?.[0] ?? null;
+    const cbt = combat.combatants.find(c =>
+      c.actorId === this.document.id || (token && c.tokenId === token.id));
+    if (!cbt) return { ok: true };               // pas dans ce combat : libre
+
+    if (combat.combatant?.id !== cbt.id) {
+      return { ok: false, reason: "Tu ne peux changer d'équipement que pendant ton tour." };
+    }
+
+    try {
+      const budgetAPI = await import("../rules/action-budget.js");
+      const { getBudget, saveBudget, canUseSlot, reserveSlot, confirmSlot, incrementFatigue } = budgetAPI;
+      const budget = getBudget(combat, cbt.id);
+      if (!canUseSlot(budget, "echangeArme")) {
+        return { ok: false, reason: "Plus d'action disponible ce tour pour changer d'équipement." };
+      }
+      // L'action est immédiate (aucune validation MJ) : on réserve puis on
+      // confirme dans la foulée.
+      return {
+        ok: true,
+        consume: async () => {
+          const b = getBudget(combat, cbt.id);
+          await saveBudget(combat, cbt.id, confirmSlot(reserveSlot(b, "echangeArme"), "echangeArme"));
+          await incrementFatigue(this.document, 1);
+          const nowEquipped = !!item.system?.equipe;
+          await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor: this.document }),
+            content: `🔄 <b>${this.document.name}</b> ${nowEquipped ? "dégaine" : "range"} `
+                   + `<b>${item.name}</b> <i>(1 action)</i>`
+          });
+        }
+      };
+    } catch (e) {
+      console.warn("[RPG] budget d'échange d'arme :", e);
+      return { ok: true };   // en cas de souci, on ne bloque pas le joueur
+    }
+  }
 
   async _toggleEquipItem(item) {
     const equipe = !!item.system.equipe;

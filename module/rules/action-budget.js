@@ -25,7 +25,8 @@ export const SLOT_DEFS = {
   attaque:      { label: "Attaque",      icon: "⚔️",  max: 1 },
   sortNormal:   { label: "Sort normal",  icon: "✨", max: 1 },
   sortRapide:   { label: "Sort rapide",  icon: "⚡",  max: 2 },
-  recuperation: { label: "Récupération", icon: "🧘", max: 1 }
+  recuperation: { label: "Récupération", icon: "🧘", max: 1 },
+  echangeArme:  { label: "Échange d'arme", icon: "🔄", max: 1 }
 };
 
 const TOTAL_SLOTS = 2;
@@ -39,7 +40,9 @@ function freshBudget() {
     attaque:      { max: 1, used: 0, pending: 0 },
     sortNormal:   { max: 1, used: 0, pending: 0 },
     sortRapide:   { max: 2, used: 0, pending: 0 },
-    recuperation: { max: 1, used: 0, pending: 0 }
+    recuperation: { max: 1, used: 0, pending: 0 },
+    // Rengainer/dégainer en plein combat coûte une action.
+    echangeArme:  { max: 1, used: 0, pending: 0 }
   };
 }
 
