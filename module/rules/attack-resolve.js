@@ -231,11 +231,13 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
       content = `<b style="color:#c0392b">Erreur</b> — arme ou attaquant introuvable, impossible de lancer les dégâts.`;
     } else {
       // ── Lance les dégâts MAINTENANT (après décision MJ) ──────────────
+      // weapon peut être une ARME ou une COMPÉTENCE de monstre (type spell) :
+      // rollDamage gère les deux.
       const dmgResult = await weapon.rollDamage({
         attackerActor: attacker,
         targetActor:   target ?? null,
         isCrit,
-        type:          String(f.livraison ?? "physique")
+        type:          String(f.livraison ?? weapon.system?.livraison ?? "physique")
       });
 
       let pvLine = "";

@@ -66,6 +66,12 @@ export class RPGItem extends Item {
    * @returns {Promise<{brut, critBonus, beforeMitigation, fixe, pct, final, statBonus, rollTotal}>}
    */
   async rollDamage({ attackerActor, targetActor = null, isCrit = false, type = "physique" } = {}) {
+    // Les monstres n'ont pas d'armes : ils frappent avec leurs compétences,
+    // qui sont des items de type « spell ». On les accepte donc ici, avec
+    // leur propre format de dégâts (lignes system.damages[]).
+    if (this.type === "spell") {
+      return this._rollSpellDamage({ attackerActor, targetActor, isCrit, type });
+    }
     if (this.type !== "weapon") throw new Error("rollDamage: item non-weapon");
 
     const w    = this.system ?? {};
@@ -158,6 +164,85 @@ export class RPGItem extends Item {
       final,
       statBonus,
       rollTotal:        roll.total
+    };
+  }
+
+  /**
+   * Dégâts d'une COMPÉTENCE de monstre (item de type « spell ») utilisée comme
+   * attaque — attaque d'opportunité, déclaration depuis la fiche monstre…
+   *
+   * Lit le format multi-lignes system.damages[] : chaque ligne a ses dés, sa
+   * part fixe, sa montée en stat, et ses valeurs de critique propres
+   * (critDice / critFlat). Repli sur l'ancien bloc unique system.damage.
+   * La mitigation est identique à celle d'une arme.
+   */
+  async _rollSpellDamage({ attackerActor, targetActor = null, isCrit = false, type = "magique" } = {}) {
+    const sys = this.system ?? {};
+    const effP = attackerActor?.system?.derived?.effective?.principales
+              ?? attackerActor?.system?.principales
+              ?? {};
+
+    const lines = Array.isArray(sys.damages) && sys.damages.length
+      ? sys.damages
+      : (sys.damage ? [{
+          dice: sys.damage.dice,
+          flat: sys.damage.flat,
+          stat: sys.damage.scaling?.stat,
+          per: sys.damage.scaling?.per,
+          perStep: sys.damage.scaling?.perStep,
+          livraison: sys.livraison
+        }] : []);
+
+    let rawBrut = 0;
+    let statBonus = 0;
+    let rollTotal = 0;
+    let livraison = String(sys.livraison ?? type ?? "magique");
+
+    for (const d of lines) {
+      const stat    = String(d?.stat ?? "").trim();
+      const per     = Math.max(1, Number(d?.per ?? 10) || 10);
+      const perStep = Number(d?.perStep ?? 0) || 0;
+      const bonus   = stat ? Math.floor(Math.max(0, Number(effP?.[stat]) || 0) / per) * perStep : 0;
+      statBonus += bonus;
+
+      // Sur critique : dés et part fixe propres à la ligne (dés vides =
+      // mêmes dés que le coup normal), cohérent avec la fiche de sort.
+      const critDice = String(d?.critDice ?? "").trim();
+      const dice = (isCrit && critDice) ? critDice : String(d?.dice ?? "").trim();
+      const flat = isCrit ? (Number(d?.critFlat ?? 0) || 0) : (Number(d?.flat ?? 0) || 0);
+
+      if (dice && dice !== "0") {
+        const r = await (new Roll(dice)).evaluate();
+        rollTotal += r.total;
+        rawBrut += r.total;
+      }
+      rawBrut += flat + bonus;
+      if (d?.livraison) livraison = String(d.livraison);
+    }
+
+    const beforeMitigation = Math.max(0, rawBrut);
+
+    let fixe = 0, pct = 0;
+    if (targetActor) {
+      const tSys = targetActor.system ?? {};
+      const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+      const red  = tSys.derived?.reductions ?? {};
+      const isMagic = livraison === "magique";
+      fixe = isMagic ? (Number(effD.resistanceFixe) || 0) : (Number(effD.armureFixe) || 0);
+      pct  = isMagic ? (Number(red.magiquePct) || 0)      : (Number(red.physiquePct) || 0);
+    }
+
+    const afterFixe = Math.max(0, beforeMitigation - fixe);
+    const final     = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+
+    return {
+      brut: rawBrut,
+      critBonus: 0,          // le critique est déjà intégré dans les lignes
+      beforeMitigation,
+      fixe, pct, final,
+      statBonus,
+      rollTotal,
+      livraison
     };
   }
 }
