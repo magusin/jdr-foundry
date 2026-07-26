@@ -62,6 +62,7 @@
 
 /* ═══════════════ THÈME SOMBRE (par défaut) — encre + violet/laiton ═══════ */
 .rpg-sheet,
+body.rpg-theme-sombre,
 .rpg-sheet.rpg-theme-sombre,
 .rpg-spell-menu, .rpg-spell-menu.rpg-theme-sombre,
 #rpg-weather-hud, #rpg-biome-hud {
@@ -89,6 +90,7 @@
 }
 
 /* ═══════════════ THÈME CLAIR — parchemin, texte encre ═══════════════════ */
+body.rpg-theme-clair,
 .rpg-sheet.rpg-theme-clair,
 .rpg-spell-menu.rpg-theme-clair {
   --color-text-primary:      #2b2418;
@@ -119,6 +121,7 @@
 }
 
 /* ═══════════════ THÈME CONTRASTE — noir pur, accents vifs ═══════════════ */
+body.rpg-theme-contraste,
 .rpg-sheet.rpg-theme-contraste,
 .rpg-spell-menu.rpg-theme-contraste {
   --color-text-primary:      #ffffff;
@@ -439,3 +442,50 @@ div.rpg-sheet {
 @media (prefers-reduced-motion: reduce) {
   .rpg-sheet *, .rpg-spell-menu * { transition: none !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Thème GLOBAL — dialogues et fenêtres de macros
+   Le thème est aussi posé sur <body> (rpg-theme-*), ce qui permet de
+   styler les boîtes de dialogue créées à la volée par les macros, qui
+   n'ont pas de classe à nous et n'héritaient donc d'aucune variable.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Fenêtres marquées comme nôtres (DialogV2 lancés par le système) */
+body.rpg-theme-sombre .rpg-window .window-content,
+body.rpg-theme-clair .rpg-window .window-content,
+body.rpg-theme-contraste .rpg-window .window-content {
+  background: var(--ink);
+  color: var(--ink-text);
+}
+
+body.rpg-theme-sombre .rpg-window,
+body.rpg-theme-clair .rpg-window,
+body.rpg-theme-contraste .rpg-window {
+  color: var(--ink-text);
+}
+
+.rpg-window input,
+.rpg-window select,
+.rpg-window textarea {
+  background: var(--field-bg);
+  color: var(--ink-text);
+  border: 1px solid var(--border);
+}
+.rpg-window input::placeholder,
+.rpg-window textarea::placeholder { color: var(--ink-text-faint); }
+
+.rpg-window button {
+  background: var(--surface-2);
+  color: var(--ink-text);
+  border: 1px solid var(--border);
+}
+.rpg-window button:hover { border-color: var(--brass, #d1a144); }
+
+.rpg-window a { color: var(--brass, #d1a144); }
+.rpg-window hr { border-color: var(--border-soft, var(--border)); }
+
+/* Les variables de thème doivent exister sur body pour que les règles
+   ci-dessus aient de quoi puiser. */
+body.rpg-theme-sombre    { color-scheme: dark; }
+body.rpg-theme-clair     { color-scheme: light; }
+body.rpg-theme-contraste { color-scheme: dark; }

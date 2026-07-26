@@ -1,6 +1,6 @@
 /* =========================================================
    RPG - Menu Sorts (macro-menu.css)
-   Thèmes: .rpg-theme-dark / .rpg-theme-light
+   Thèmes : pilotés par le réglage global rpg.uiTheme (sombre/clair/contraste)
    ========================================================= */
 
    .rpg-spell-menu {
@@ -194,328 +194,94 @@
   .rpg-spell-menu .bad    { color: #d14c4c; }
   
   /* =========================================================
-     THEME DARK (comme ta macro dégâts)
+     THÈMES — pilotés par le réglage global « Thème des fiches »
+     Les couleurs viennent des variables définies dans theme.css
+     (.rpg-spell-menu.rpg-theme-sombre / .rpg-theme-clair /
+      .rpg-theme-contraste), pour que le menu suive exactement les
+     fiches. Auparavant le menu posait .rpg-theme-light/-dark, que
+     theme.css ne connaît pas : aucune variable ne s'appliquait et le
+     texte devenait illisible sur fond clair.
      ========================================================= */
-  .rpg-spell-menu.rpg-theme-dark {
-    color: rgba(255,255,255,.92);
+
+  .rpg-spell-menu {
+    color: var(--ink-text);
     padding: 10px;
   }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-sub { opacity: .85; }
-  .rpg-spell-menu.rpg-theme-dark .rpg-mana { opacity: .95; }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-search {
-    border: 1px solid rgba(255,255,255,.14);
-    background: rgba(255,255,255,.06);
-    color: rgba(255,255,255,.92);
-  }
-  .rpg-spell-menu.rpg-theme-dark .rpg-search::placeholder { color: rgba(255,255,255,.55); }
-  
-  .rpg-spell-menu.rpg-theme-dark .tab {
-    border: 1px solid rgba(255,255,255,.18);
-    background: rgba(255,255,255,.06);
-    color: rgba(255,255,255,.90);
-  }
-  .rpg-spell-menu.rpg-theme-dark .tab.active {
-    outline: 2px solid rgba(80, 160, 255, .35);
-    background: rgba(80, 160, 255, .12);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-spell-row {
-    border: 1px solid rgba(255,255,255,.14);
-    background: rgba(255,255,255,.03);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-icon {
-    border: 1px solid rgba(255,255,255,.15);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .badge {
-    background: rgba(255,255,255,.05);
-    border-color: rgba(255,255,255,.18);
-    color: rgba(255,255,255,.92);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-stats { opacity: .92; }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-open,
-  .rpg-spell-menu.rpg-theme-dark .rpg-declare {
-    border: 1px solid rgba(255,255,255,.18);
-    background: rgba(255,255,255,.06);
-    color: rgba(255,255,255,.92);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .btn-ok {
-    background: rgba(40, 170, 90, .18);
-    border-color: rgba(40, 170, 90, .40);
-  }
-  
-  .rpg-spell-menu.rpg-theme-dark .rpg-empty,
-  .rpg-spell-menu.rpg-theme-dark .rpg-hint { opacity: .78; }
-  
-  /* =========================================================
-     THEME LIGHT (parchemin lisible)
-     ========================================================= */
-  .rpg-spell-menu.rpg-theme-light {
-    background: url(/ui/parchment.jpg) repeat;
-    padding: 8px;
-    color: var(--color-text-dark-primary);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-sub { opacity: 1; }
-  .rpg-spell-menu.rpg-theme-light .rpg-mana { opacity: 1; }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-search {
-    border: 1px solid rgba(0,0,0,.25);
-    background: rgba(255,255,255,.70);
-    color: var(--color-text-dark-primary);
-  }
-  .rpg-spell-menu.rpg-theme-light .rpg-search::placeholder { color: rgba(0,0,0,.55); }
-  
-  .rpg-spell-menu.rpg-theme-light .tab {
-    border: 1px solid rgba(0,0,0,.22);
-    background: rgba(255,255,255,.55);
-    color: var(--color-text-dark-primary);
-  }
-  .rpg-spell-menu.rpg-theme-light .tab.active {
-    outline: 2px solid rgba(80, 160, 255, .35);
-    background: rgba(80, 160, 255, .18);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-spell-row {
-    border: 1px solid rgba(0,0,0,.18);
-    background: rgba(255,255,255,.42);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-icon {
-    border: 1px solid rgba(0,0,0,.18);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .badge {
-    background: rgba(255,255,255,.65);
-    border-color: rgba(0,0,0,.20);
-    color: var(--color-text-dark-primary);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-stats { opacity: 1; }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-open,
-  .rpg-spell-menu.rpg-theme-light .rpg-declare {
-    border: 1px solid rgba(0,0,0,.22);
-    background: rgba(255, 255, 255, 0.65);
-    color: var(--color-text-dark-primary);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .btn-ok {
-    background: rgba(40, 170, 90, .22);
-    border-color: rgba(40, 170, 90, .45);
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .btn-off {
-    opacity: .55; /* un peu plus lisible en clair */
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-empty { opacity: .85; }
-  .rpg-spell-menu.rpg-theme-light .rpg-hint { opacity: .85; }
 
-  /* =========================================================
-   PATCH THEME LIGHT (anti-texte invisible + bordures parchemin)
-   À COLLER EN BAS DU FICHIER
-   ========================================================= */
+  .rpg-spell-menu .rpg-sub,
+  .rpg-spell-menu .rpg-mana { color: var(--ink-text-dim); }
 
-.rpg-spell-menu.rpg-theme-light{
-    background: url(/ui/parchment.jpg) repeat !important;
-    padding: 10px !important;
-    color: var(--color-text-dark-primary) !important;
+  .rpg-spell-menu .rpg-search {
+    border: 1px solid var(--border);
+    background: var(--field-bg);
+    color: var(--ink-text);
   }
-  
-  /* Force la couleur sur tout (Foundry peut garder du blanc/gris pâle) */
-  .rpg-spell-menu.rpg-theme-light,
-  .rpg-spell-menu.rpg-theme-light *{
-    color: var(--color-text-dark-primary) !important;
-    text-shadow: none !important;
-  }
-  
-  /* Variables "parchemin" */
-  .rpg-spell-menu.rpg-theme-light{
-    --rpg-parch-border: rgba(120, 90, 60, .45);
-    --rpg-parch-border-strong: rgba(120, 90, 60, .65);
-    --rpg-parch-panel: rgba(255,255,255,.58);
-    --rpg-parch-panel-strong: rgba(255,255,255,.72);
-  }
-  
-  /* Barre de recherche */
-  .rpg-spell-menu.rpg-theme-light .rpg-search{
-    background: var(--rpg-parch-panel-strong) !important;
-    border: 1px solid var(--rpg-parch-border-strong) !important;
-    color: var(--color-text-dark-primary) !important;
-  }
-  .rpg-spell-menu.rpg-theme-light .rpg-search::placeholder{
-    color: rgba(40, 30, 20, .55) !important;
-  }
-  
-  /* Tabs */
-  .rpg-spell-menu.rpg-theme-light .tab{
-    background: var(--rpg-parch-panel) !important;
-    border: 1px solid var(--rpg-parch-border) !important;
-    color: var(--color-text-dark-primary) !important;
-  }
-  .rpg-spell-menu.rpg-theme-light .tab.active{
-    background: rgba(120, 80, 40, .16) !important;
-    border-color: var(--rpg-parch-border-strong) !important;
-    outline: 2px solid rgba(120, 80, 40, .18) !important;
-  }
-  
-  /* Lignes sorts */
-  .rpg-spell-menu.rpg-theme-light .rpg-spell-row{
-    background: var(--rpg-parch-panel) !important;
-    border: 1px solid var(--rpg-parch-border) !important;
-  }
-  
-  /* Icon */
-  .rpg-spell-menu.rpg-theme-light .rpg-icon{
-    border: 1px solid var(--rpg-parch-border) !important;
-  }
-  
-  /* Badges (fond clair + bordure parchemin + texte foncé) */
-  .rpg-spell-menu.rpg-theme-light .badge{
-    background: rgba(255,255,255,.62) !important;
-    border: 1px solid var(--rpg-parch-border) !important;
-    color: rgba(35, 25, 15, .95) !important;
-  }
-  
-  /* Boutons */
-  .rpg-spell-menu.rpg-theme-light .rpg-open,
-  .rpg-spell-menu.rpg-theme-light .rpg-declare{
-    background: rgba(255,255,255,.68) !important;
-    border: 1px solid var(--rpg-parch-border-strong) !important;
-    color: var(--color-text-dark-primary) !important;
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .btn-ok{
-    background: rgba(70, 160, 90, .22) !important;
-    border-color: rgba(70, 160, 90, .45) !important;
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .btn-off{
-    opacity: .55 !important;
-  }
-  
-  /* Textes "secondaires" : on évite les opacités trop faibles */
-  .rpg-spell-menu.rpg-theme-light .rpg-sub,
-  .rpg-spell-menu.rpg-theme-light .rpg-hint,
-  .rpg-spell-menu.rpg-theme-light .rpg-empty{
-    opacity: 1 !important;
-    color: rgba(35, 25, 15, .92) !important;
-  }
-  
-  /* Couleurs CD */
-  .rpg-spell-menu.rpg-theme-light .cd-ok{ color: #0b8b4a !important; }
-  .rpg-spell-menu.rpg-theme-light .cd-bad{ color: #b12e2e !important; }
-  .rpg-spell-menu.rpg-theme-light .bad{ color: #b12e2e !important; }
+  .rpg-spell-menu .rpg-search::placeholder { color: var(--ink-text-faint); }
 
-  /* =========================================================
-   PATCH LIGHT #2 : rendre le contenu des lignes lisible
-   À COLLER EN BAS DU FICHIER (après le patch light précédent)
-   ========================================================= */
-
-.rpg-spell-menu.rpg-theme-light .rpg-spell-row{
-    background: rgba(255,255,255,.72) !important;
-    border: 1px solid rgba(120, 90, 60, .55) !important;
-  }
-  
-  /* Noms & stats : on annule les opacités / couleurs trop pâles */
-  .rpg-spell-menu.rpg-theme-light .rpg-name{
-    color: rgba(25, 18, 10, 1) !important;
-    opacity: 1 !important;
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-stats{
-    opacity: 1 !important;
-    color: rgba(35, 25, 15, .98) !important;
-  }
-  
-  .rpg-spell-menu.rpg-theme-light .rpg-stats span,
-  .rpg-spell-menu.rpg-theme-light .rpg-stats b{
-    color: rgba(35, 25, 15, .98) !important;
-  }
-  
-  /* Petits textes (mana / portée / cd) parfois héritent d’un gris clair */
-  .rpg-spell-menu.rpg-theme-light .rpg-mid,
-  .rpg-spell-menu.rpg-theme-light .rpg-topline{
-    opacity: 1 !important;
-  }
-  
-  /* Tabs : texte plus lisible */
-  .rpg-spell-menu.rpg-theme-light .tab{
-    color: rgba(25, 18, 10, .95) !important;
-    background: rgba(255,255,255,.78) !important;
-    border-color: rgba(120, 90, 60, .50) !important;
-  }
-  .rpg-spell-menu.rpg-theme-light .tab.active{
-    background: rgba(120, 80, 40, .22) !important;
-    border-color: rgba(120, 80, 40, .65) !important;
-  }
-  
-  /* Bouton Déclarer / Loupe : un peu plus contrastés */
-  .rpg-spell-menu.rpg-theme-light .rpg-open,
-  .rpg-spell-menu.rpg-theme-light .rpg-declare{
-    background: rgba(255,255,255,.82) !important;
-    border-color: rgba(120, 90, 60, .60) !important;
-    color: rgba(25, 18, 10, .98) !important;
+  .rpg-spell-menu .rpg-filter-extras select,
+  .rpg-spell-menu .rpg-filter-extras .rpg-f-reset {
+    border: 1px solid var(--border);
+    background: var(--field-bg);
+    color: var(--ink-text);
   }
 
-  /* --- FIX padding Foundry (window-content) uniquement pour Menu Sorts --- */
-.application:has(.rpg-spell-menu) .window-content{
-    padding: 0 !important;
+  .rpg-spell-menu .tab,
+  .rpg-spell-menu .section-tab {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-text);
+  }
+  .rpg-spell-menu .tab.active,
+  .rpg-spell-menu .section-tab.active {
+    outline: 2px solid var(--brass, #d1a144);
+    background: var(--surface-2);
+    color: var(--ink-text);
   }
 
-  /* --- Mana lisible en thème clair --- */
-.rpg-spell-menu.rpg-theme-light .rpg-mana,
-.rpg-spell-menu.rpg-theme-light .rpg-mana b,
-.rpg-spell-menu.rpg-theme-light .rpg-mana-val{
-  color: rgba(25, 18, 10, 1) !important;
-  opacity: 1 !important;
-}
-
-/* ✅ Bouton Déclarer "utilisable" en vert (LIGHT MODE) */
-.rpg-spell-menu.rpg-theme-light .rpg-declare.btn-ok:not(:disabled){
-    background: rgba(40, 170, 90, .22) !important;
-    border-color: rgba(40, 170, 90, .55) !important;
-    color: rgba(25, 18, 10, 1) !important; /* texte lisible sur parchemin */
-  }
-  
-  /* Hover un peu plus marqué */
-  .rpg-spell-menu.rpg-theme-light .rpg-declare.btn-ok:not(:disabled):hover{
-    background: rgba(40, 170, 90, .30) !important;
-    border-color: rgba(40, 170, 90, .75) !important;
-  }
-  
-  /* Disabled reste "gris" */
-  .rpg-spell-menu.rpg-theme-light .rpg-declare.btn-off,
-  .rpg-spell-menu.rpg-theme-light .rpg-declare:disabled{
-    background: rgba(255, 255, 255, .55) !important;
-    border-color: rgba(0, 0, 0, .18) !important;
-    color: rgba(0, 0, 0, .35) !important;
-    opacity: 1 !important; /* évite qu'il devienne trop pâle */
+  .rpg-spell-menu .rpg-row,
+  .rpg-spell-menu .rpg-card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-text);
   }
 
-  /* 1) Enlever le padding 1rem UNIQUEMENT pour ce dialog */
-.window-content:has(.rpg-spell-menu) {
-  padding: 0 !important;
-  overflow: hidden; /* évite les bords moches */
-}
+  .rpg-spell-menu .rpg-name  { color: var(--ink-text); }
+  .rpg-spell-menu .rpg-meta,
+  .rpg-spell-menu .rpg-hint,
+  .rpg-spell-menu .rpg-empty { color: var(--ink-text-dim); }
 
-/* 3) Footer uniquement pour ce dialog */
-.window-content form.dialog-form.standard-form:has(.rpg-spell-menu) > footer.form-footer {
-  display: none !important; /* si tu veux virer le bouton Fermer du bas */
-  /* OU si tu veux le garder, commente la ligne au-dessus et style-le: */
-  /*
-  padding: 10px 12px !important;
-  background: transparent !important;
-  border-top: 1px solid rgba(0,0,0,.12) !important;
-  */
-}
+  .rpg-spell-menu .btn,
+  .rpg-spell-menu button:not(.rpg-theme-toggle) {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--ink-text);
+  }
+  .rpg-spell-menu .btn:hover,
+  .rpg-spell-menu button:not(.rpg-theme-toggle):hover {
+    border-color: var(--brass, #d1a144);
+  }
+  .rpg-spell-menu .btn[disabled],
+  .rpg-spell-menu button[disabled] {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+
+  .rpg-spell-menu .rpg-theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-text);
+  }
+
+  .rpg-spell-menu .rpg-head,
+  .rpg-spell-menu .rpg-foot { border-color: var(--border-soft, var(--border)); }
+
+  /* Le dialogue hôte doit lui aussi prendre le fond du thème, sinon on garde
+     le parchemin clair de Foundry sous un contenu sombre (et inversement). */
+  .rpg-spell-menu-window .window-content,
+  .app:has(.rpg-spell-menu) .window-content {
+    background: var(--ink) !important;
+    color: var(--ink-text);
+  }
 
 /* ── Filtres avancés des sorts : élément / coût / nature ─────────────────── */
 .rpg-spell-menu .rpg-filter-extras {

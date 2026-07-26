@@ -122,10 +122,16 @@
     : "weapons";
   const state = { q: "", tab: "all", section: defaultSection, elem: "", cost: "", kind: "" };
 
-  const THEME_SCOPE = "rpg";
-  const THEME_FLAG  = "menuSpellsTheme";
-  let theme = (game.user.getFlag(THEME_SCOPE, THEME_FLAG) ?? "light");
-  if (theme !== "dark") theme = "light";
+  // Thème : on suit le réglage global « Thème des fiches RPG » (rpg.uiTheme)
+  // au lieu d'un thème propre au menu, pour que tout le système soit cohérent.
+  const THEMES = ["sombre", "clair", "contraste"];
+  const readTheme = () => {
+    try {
+      const t = String(game.settings.get("rpg", "uiTheme") ?? "sombre");
+      return THEMES.includes(t) ? t : "sombre";
+    } catch { return "sombre"; }
+  };
+  let theme = readTheme();
 
   // ── filtrage sorts ─────────────────────────────────────────────────────────
   // Un sort inflige-t-il des dégâts / soigne-t-il / pose-t-il un effet ?
@@ -414,11 +420,13 @@
   // ── HTML complet ───────────────────────────────────────────────────────────
   const buildContent = () => {
     const manaNow   = getManaNow(actor);
-    const themeIcon = theme === "light" ? "☀︎" : "🌙";
+    const THEME_ICONS = { sombre: "🌑", clair: "☀︎", contraste: "⚡" };
+    const THEME_LABELS = { sombre: "Sombre", clair: "Clair", contraste: "Contraste élevé" };
+    const themeIcon = THEME_ICONS[theme] ?? "🌑";
     const secWeapon = state.section === "weapons";
 
     return `
-      <div class="rpg-spell-menu ${theme === "light" ? "rpg-theme-light" : "rpg-theme-dark"}">
+      <div class="rpg-spell-menu rpg-theme-${theme}">
 
         <div class="rpg-head">
           <div class="rpg-sub">
@@ -426,7 +434,7 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             <button type="button" class="rpg-theme-toggle" data-action="toggleTheme"
-              title="${theme === "light" ? "Thème clair" : "Thème sombre"}"
+              title="Thème : ${THEME_LABELS[theme] ?? theme} — cliquer pour changer (réglage global)"
               style="width:40px;height:34px;border-radius:10px;cursor:pointer;">${themeIcon}</button>
             <div class="rpg-mana">💧 Mana: <b class="rpg-mana-val">${manaNow}</b></div>
           </div>
@@ -1255,10 +1263,14 @@
       }
     });
 
-    // ── Toggle thème ───────────────────────────────────────────────────────
+    // ── Cycle de thème ─────────────────────────────────────────────────────
+    // Modifie le réglage GLOBAL : fiches, menu et fenêtres restent cohérents.
     $root.on("click.rpgMenu", "[data-action='toggleTheme']", async () => {
-      theme = theme === "light" ? "dark" : "light";
-      await game.user.setFlag(THEME_SCOPE, THEME_FLAG, theme);
+      const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+      try { await game.settings.set("rpg", "uiTheme", next); } catch (e) {
+        console.warn("[RPG] changement de thème :", e);
+      }
+      theme = readTheme();
       rerenderAll();
       bindUI(dlg);
     });

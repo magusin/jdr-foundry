@@ -20,6 +20,7 @@ import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
 import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
 import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
+import { applyGlobalTheme, themeWindow } from "./sheets/sheet-helpers.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -285,6 +286,8 @@ Hooks.once("init", async () => {
     default: "sombre",
     requiresReload: false,
     onChange: () => {
+      // Thème global (<body>) : les dialogues de macro le suivent aussi
+      try { applyGlobalTheme(); } catch { /* ignore */ }
       // Réapplique le thème sur toutes les fenêtres d'app ouvertes
       for (const app of Object.values(ui.windows ?? {})) {
         try { app.render({ force: false }); } catch { /* ignore */ }
@@ -631,6 +634,37 @@ Hooks.once("init", async () => {
 
     // ✅ Blocage du déplacement au glisser : le token bute sur sa réserve
     try { installDragLimit(); } catch (e) { console.warn("[RPG] blocage au glisser:", e); }
+
+    // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
+    //    (y compris les dialogues de macro) héritent des variables de thème.
+    try { applyGlobalTheme(); } catch (e) { console.warn("[RPG] thème global:", e); }
+
+    // ✅ Habille les fenêtres du système au fil de leur ouverture : les macros
+    //    créent des Dialog/DialogV2 sans classe à nous, qui gardaient donc
+    //    l'habillage par défaut de Foundry quel que soit le thème choisi.
+    //    On ne marque QUE ce qui nous appartient (contenu reconnaissable),
+    //    pour ne pas repeindre les fenêtres du cœur ou d'autres modules.
+    // Marqueurs volontairement restreints : un sélecteur large comme
+    // [class*='rpg-'] repeindrait la barre latérale dès qu'un de nos messages
+    // apparaît dans le chat.
+    const RPG_MARKERS = ".rpg-sheet, .rpg-spell-menu, .rpg-state-dialog, .rpg-window";
+    const themeIfOurs = (app, el) => {
+      try {
+        const root = el instanceof HTMLElement ? el : (el?.[0] ?? app?.element ?? null);
+        if (!root?.querySelector) return;
+        // Jamais la barre latérale, le chat ni la barre de macros
+        if (root.id === "sidebar" || root.closest?.("#sidebar, #chat, #hotbar")) return;
+
+        const isOurs = root.classList?.contains("rpg-window")
+                    || root.matches?.(RPG_MARKERS)
+                    || !!root.querySelector(RPG_MARKERS);
+        if (isOurs) themeWindow(root);
+      } catch { /* habillage optionnel */ }
+    };
+    Hooks.on("renderApplication", themeIfOurs);
+    Hooks.on("renderApplicationV2", themeIfOurs);
+    Hooks.on("renderDialog", themeIfOurs);
+    Hooks.on("renderDialogV2", themeIfOurs);
 
     // Globals
     globalThis.RPG_AURAS = RPG_AURAS;

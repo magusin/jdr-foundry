@@ -66,10 +66,42 @@ export function bindImageEditors(root, document) {
  * Applique la classe de thème visuel choisie par le joueur (réglage client)
  * sur l'élément racine de la fiche. À appeler dans chaque _onRender().
  */
+const THEME_CLASSES = ["rpg-theme-sombre", "rpg-theme-clair", "rpg-theme-contraste"];
+
+/** Thème actuellement choisi par ce joueur. */
+export function currentUiTheme() {
+  const t = String(game.settings?.get?.("rpg", "uiTheme") ?? "sombre");
+  return THEME_CLASSES.includes(`rpg-theme-${t}`) ? t : "sombre";
+}
+
+/**
+ * Pose le thème sur <body>, ce qui rend les variables disponibles pour TOUTES
+ * les fenêtres — y compris les boîtes de dialogue créées à la volée par les
+ * macros, qui n'ont aucune classe à nous.
+ */
+export function applyGlobalTheme() {
+  const body = document?.body;
+  if (!body) return;
+  body.classList.remove(...THEME_CLASSES);
+  body.classList.add(`rpg-theme-${currentUiTheme()}`);
+}
+
+/**
+ * Marque une fenêtre comme étant la nôtre et lui applique le thème.
+ * Utilisé pour les dialogues de macro (Dialog/DialogV2) qui ne passent pas
+ * par applyUiTheme.
+ */
+export function themeWindow(root) {
+  if (!root?.classList) return;
+  root.classList.add("rpg-window");
+  root.classList.remove(...THEME_CLASSES);
+  root.classList.add(`rpg-theme-${currentUiTheme()}`);
+}
+
 export function applyUiTheme(root) {
   if (!root) return;
-  const theme = game.settings?.get?.("rpg", "uiTheme") ?? "sombre";
-  const themeClasses = ["rpg-theme-sombre", "rpg-theme-clair", "rpg-theme-contraste"];
+  const theme = currentUiTheme();
+  const themeClasses = THEME_CLASSES;
 
   // ⚠️ Il existe DEUX éléments porteurs de « .rpg-sheet » :
   //   1. la fenêtre externe (via DEFAULT_OPTIONS.classes) — c'est `root`
@@ -80,7 +112,7 @@ export function applyUiTheme(root) {
   // → seul le cadre change de couleur, jamais le contenu.
   const targets = new Set();
   if (root.classList) targets.add(root);
-  root.querySelectorAll?.(".rpg-sheet").forEach(el => targets.add(el));
+  root.querySelectorAll?.(".rpg-sheet, .rpg-spell-menu").forEach(el => targets.add(el));
 
   for (const el of targets) {
     el.classList.remove(...themeClasses);
