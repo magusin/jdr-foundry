@@ -758,7 +758,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
           ui.notifications?.warn?.(gate.reason);
           return;
         }
+        // On vérifie que l'écriture a réellement abouti : un refus de hook de
+        // permission est silencieux, et annoncer « dégaine » alors que rien
+        // n'a bougé est pire que ne rien dire.
+        const avant = !!item.system?.equipe;
         await this._toggleEquipItem(item);
+        if (!!item.system?.equipe === avant) {
+          ui.notifications?.error?.(
+            "Le changement d'équipement a été refusé — ouvre la console (F12) "
+          + "pour voir la clé en cause.");
+          return;
+        }
         if (gate.consume) await gate.consume();
         this._debouncedPodsUpdate?.();
         await this.render({ force: true });
@@ -789,7 +799,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
           await this.render({ force: true });   // remet la liste sur son état réel
           return;
         }
+        // Même contrôle que pour le bouton Équiper : on ne confirme que si
+        // l'emplacement a réellement changé.
+        const avant = this._findEquippedForSlot(slot)?.id ?? "";
         await this._onEquipSlotChange(slot, itemId);
+        if ((this._findEquippedForSlot(slot)?.id ?? "") === avant) {
+          ui.notifications?.error?.(
+            "Le changement d'emplacement a été refusé — ouvre la console (F12) "
+          + "pour voir la clé en cause.");
+          await this.render({ force: true });
+          return;
+        }
         if (gate.consume) await gate.consume();
         this._debouncedPodsUpdate?.();
         await this.render({ force: true });

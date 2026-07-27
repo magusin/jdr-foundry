@@ -1410,11 +1410,18 @@ Hooks.once("init", async () => {
     if (doc.parent?.documentName !== "Actor") return true;
 
     const flat = foundry.utils.flattenObject(changed ?? {});
-    // `_id` accompagne systématiquement les écritures groupées
-    // (updateEmbeddedDocuments) : le laisser dans la comparaison faisait
-    // échouer TOUTES ces écritures en silence — c'est ce qui empêchait un
-    // joueur d'équiper quoi que ce soit depuis sa fiche.
-    delete flat._id;
+
+    // Foundry joint sa propre comptabilité à toute écriture : `_id` sur les
+    // écritures groupées (updateEmbeddedDocuments, utilisées dès qu'équiper
+    // implique d'en déséquiper un autre), `_stats` sur les mises à jour de
+    // document, `sort` au réordonnancement. Les comparer à la liste blanche
+    // faisait échouer l'écriture entière, en silence : c'est ce qui empêchait
+    // un joueur d'équiper quoi que ce soit. Seules les clés de données
+    // comptent ici.
+    const isBookkeeping = (k) =>
+      k === "_id" || k === "sort" || k === "_key" ||
+      k.startsWith("_stats") || k.startsWith("flags.");
+
     const allowed = new Set([
       "system.equipe",
       // Emplacement : écrit quand le joueur équipe via les slots de sa fiche
@@ -1433,7 +1440,15 @@ Hooks.once("init", async () => {
       "system.recharge.max"
     ]);
 
-    return Object.keys(flat).every(k => allowed.has(k));
+    const refusees = Object.keys(flat).filter(k => !isBookkeeping(k) && !allowed.has(k));
+    if (refusees.length) {
+      // Un refus de hook est silencieux côté Foundry : sans cette trace, une
+      // clé oubliée se manifeste par « rien ne se passe », sans explication.
+      console.warn("[RPG] Écriture d'objet refusée pour un joueur — clés non autorisées :",
+                   refusees, "| objet :", doc?.name, "| reçu :", changed);
+      return false;
+    }
+    return true;
   });
 
   // Actions de base (Repos…) attribuées à chaque nouvel acteur
