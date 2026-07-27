@@ -25,6 +25,24 @@ const VERSION    = 2;
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
 
+/**
+ * Malus au seuil de touché quand on frappe des deux armes à la fois.
+ * Sans lui, frapper des deux serait toujours meilleur que d'une seule : le
+ * dé supplémentaire serait gratuit et le choix n'en serait pas un.
+ *
+ * À +1, frapper des deux reste légèrement avantageux (environ +15% de dégâts
+ * espérés face à une cible de seuil moyen) — c'est le prix de l'absence de
+ * bouclier. Réglable dans les options du monde pour ajuster à la table.
+ */
+export function dualWieldDifficulty() {
+  try {
+    const v = Number(game.settings.get("rpg", "dualWieldDifficulty"));
+    return Number.isFinite(v) ? Math.max(0, v) : 1;
+  } catch {
+    return 1;   // réglage pas encore enregistré
+  }
+}
+
 /** Clé stable posée sur l'objet, indépendante du nom affiché. */
 export const ACTION_KEY_FLAG = "defaultActionKey";
 
@@ -218,29 +236,54 @@ export function swapAllowed(actor) {
 async function pickAttackWeapon(actor) {
   const { buildUnarmedWeapon } = await import("./unarmed.js");
   const equipped = actor.items.filter(i => i.type === "weapon" && i.system?.equipe);
-  if (!equipped.length) return { weapon: buildUnarmedWeapon(actor), hand: null };
-  if (equipped.length === 1) return { weapon: equipped[0], hand: handLabel(equipped[0]) };
+  if (!equipped.length) return { weapon: buildUnarmedWeapon(actor), hand: null, offhand: null };
+  if (equipped.length === 1) {
+    return { weapon: equipped[0], hand: handLabel(equipped[0]), offhand: null };
+  }
 
-  // Deux armes équipées : chaque attaque en emploie UNE. Avec ses 2 actions,
-  // le personnage peut donc frapper une fois de chaque main s'il le veut.
+  // Deux armes équipées. L'attaque reste UNE action : le personnage frappe
+  // soit d'une seule arme, soit des deux. Dans ce dernier cas la seconde
+  // n'apporte que son dé — ni part fixe, ni bonus de stat — et le coup est
+  // plus dur à placer.
   const DialogV2 = foundry.applications.api.DialogV2;
   const describe = (w) => {
     const dice = String(w.system?.damage?.dice ?? "").trim();
     return `${w.name} — ${handLabel(w)}${dice ? ` (${dice})` : ""}`;
   };
+  const malus = dualWieldDifficulty();
+  const ask = (title, content, buttons) => DialogV2.wait({
+    window: { title }, content, buttons, rejectClose: false
+  });
+
   try {
-    const chosen = await DialogV2.wait({
-      window: { title: "Attaquer avec quelle arme ?" },
-      content: `<p style="margin:0 0 6px">${actor.name} tient une arme dans chaque main.</p>
-                <p style="opacity:.7;font-size:12px;margin:0">Une attaque = une arme.
-                Il te reste tes autres actions pour frapper de l'autre main.</p>`,
-      buttons: equipped.map(w => ({ action: w.id, label: describe(w) })),
-      rejectClose: false
-    });
+    const mode = await ask(
+      "Comment frappes-tu ?",
+      `<p style="margin:0 0 6px">${actor.name} tient une arme dans chaque main.</p>
+       <p style="opacity:.75;font-size:12px;margin:0">Frapper des deux ajoute le dé de
+       la seconde arme, mais rend le coup plus dur à placer
+       (<b>+${malus}</b> au seuil de touché).</p>`,
+      [{ action: "one", label: "⚔️ Une seule arme" },
+       { action: "two", label: "⚔️⚔️ Les deux armes" }]
+    );
+    if (!mode) return { weapon: equipped[0], hand: handLabel(equipped[0]), offhand: null };
+
+    const chosen = await ask(
+      mode === "two" ? "Quelle arme porte le coup principal ?" : "Attaquer avec quelle arme ?",
+      mode === "two"
+        ? `<p style="margin:0;opacity:.75;font-size:12px">Elle inflige ses dégâts complets.
+           L'autre n'ajoutera que son dé.</p>`
+        : "",
+      equipped.map(w => ({ action: w.id, label: describe(w) }))
+    );
+
     const weapon = actor.items.get(chosen) ?? equipped[0];
-    return { weapon, hand: handLabel(weapon) };
-  } catch {
-    return { weapon: equipped[0], hand: handLabel(equipped[0]) };
+    const offhand = mode === "two"
+      ? (equipped.find(w => w.id !== weapon.id) ?? null)
+      : null;
+    return { weapon, hand: handLabel(weapon), offhand };
+  } catch (e) {
+    console.warn("[RPG] choix de l'arme d'attaque :", e);
+    return { weapon: equipped[0], hand: handLabel(equipped[0]), offhand: null };
   }
 }
 
@@ -266,7 +309,7 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     if (!target?.actor) {
       return { handled: true, ok: false, reason: "Cible un ennemi (touche T) avant d'attaquer." };
     }
-    const { weapon, hand } = await pickAttackWeapon(actor);
+    const { weapon, hand, offhand } = await pickAttackWeapon(actor);
     if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
 
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
@@ -275,10 +318,13 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
       .replaceAll("<", "&lt;").replaceAll(">", "&gt;");
     const title = `Attaque : <b>${esc(weapon.name)}</b>`
                 + (hand ? ` <span style="opacity:.7">(${hand})</span>` : "")
+                + (offhand ? ` <b>+ ${esc(offhand.name)}</b>` : "")
                 + ` → <b>${esc(target.actor.name)}</b>`;
 
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor, { title });
+    await declareAttack(actor, weapon, target.actor, {
+      title, offhand, extraDifficulty: offhand ? dualWieldDifficulty() : 0
+    });
     return { handled: true, ok: true };
   }
 

@@ -334,6 +334,16 @@ Hooks.once("init", async () => {
     choices: FATIGUE_CHOICES, default: 0, requiresReload: false
   });
 
+  game.settings.register("rpg", "dualWieldDifficulty", {
+    name: "Attaque à deux armes — malus",
+    hint: "Ajouté au seuil de touché quand on frappe des deux armes en une action. "
+        + "À 0 le dé de la seconde arme est gratuit et frapper des deux est toujours "
+        + "le meilleur choix ; monte-le si le double armement domine à ta table.",
+    scope: "world", config: true, type: Number,
+    choices: { 0: "Aucun", 1: "+1 (défaut)", 2: "+2", 3: "+3" },
+    default: 1, requiresReload: false
+  });
+
   game.settings.register("rpg", "fatigueEchangeArme", {
     name: "Fatigue — échange d'arme",
     hint: "Fatigue gagnée en dégainant ou rengainant en combat. 0 par défaut : l'action consommée suffit comme coût.",

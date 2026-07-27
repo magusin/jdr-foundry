@@ -248,7 +248,8 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         attackerActor: attacker,
         targetActor:   target ?? null,
         isCrit,
-        type:          String(f.livraison ?? weapon.system?.livraison ?? "physique")
+        type:          String(f.livraison ?? weapon.system?.livraison ?? "physique"),
+        offhand:       f.offhandId ? resolveWeapon(attacker, f.offhandId) : null
       });
 
       let pvLine = "";
@@ -264,7 +265,10 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
       const col   = isCrit ? "gold" : "#27ae60";
 
       const bonusLine = `🎲 Jet brut : <b>${dmgResult.rollTotal}</b> + bonus stat <b>${dmgResult.statBonus}</b>` +
-        (dmgResult.critBonus ? ` + bonus crit <b>${dmgResult.critBonus}</b>` : "");
+        (dmgResult.critBonus ? ` + bonus crit <b>${dmgResult.critBonus}</b>` : "") +
+        (dmgResult.offhandTotal
+          ? `<br>🗡️ ${dmgResult.offhandName} (${dmgResult.offhandDie}) : <b>${dmgResult.offhandTotal}</b> — dé seul`
+          : "");
 
       const mitigLine = (dmgResult.fixe || dmgResult.pct)
         ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`

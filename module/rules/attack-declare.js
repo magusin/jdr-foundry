@@ -28,8 +28,17 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
   if (!attacker || !item || !targetActor) return null;
 
   const Combat = game.rpg?.combat;
-  const tn = Combat?.computeTN?.(attacker, targetActor, item)
+  const tnBase = Combat?.computeTN?.(attacker, targetActor, item)
     ?? { tnFinal: 11, tnBase: 11, diff: 0, livraison: item.system?.livraison ?? "physique" };
+
+  // Frapper des deux armes en une seule action durcit le seuil de touché :
+  // c'est ce qui fait du choix « une arme / deux armes » un vrai choix.
+  const extra = Math.max(0, Number(opts.extraDifficulty) || 0);
+  const tn = extra
+    ? { ...tnBase, tnFinal: tnBase.tnFinal + extra, diff: (Number(tnBase.diff) || 0) + extra }
+    : tnBase;
+
+  const offhand = opts.offhand ?? null;
 
   // Jet de touché, visible de tous
   const roll = await (new Roll("1d20")).evaluate();
@@ -60,6 +69,9 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
         Seuil de touché : <b>${tn.tnFinal}+</b> <span style="opacity:.75">(base ${tn.tnBase}+${diffTxt})</span><br>
         🎲 d20 = <b>${d20}</b>${gmOnly(` — ${verdict}`)}
         ${dmgPrev?.text ? `<br>💥 Dégâts si touché : <b>${dmgPrev.text}</b>` : ""}
+        ${offhand ? `<br>🗡️ Seconde arme : <b>${htmlEsc(offhand.name)}</b> — `
+                  + `dé seul (<b>${htmlEsc(offhand.system?.damage?.dice ?? "—")}</b>), `
+                  + `sans part fixe ni bonus de stat` : ""}
         <div style="font-size:11px;opacity:.7;margin-top:2px">En attente de la validation du MJ.</div>
       </div>
       <div class="rpg-attack-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
@@ -84,6 +96,7 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
         attackDeclaration: {
           actorId: attacker.id,
           weaponId: item.id,
+          offhandId: offhand?.id ?? null,
           targetId: targetActor.id,
           d20,
           tnFinal: tn.tnFinal,

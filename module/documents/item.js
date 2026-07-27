@@ -65,7 +65,14 @@ export class RPGItem extends Item {
    * @param {"physique"|"magique"} [opts.type="physique"]
    * @returns {Promise<{brut, critBonus, beforeMitigation, fixe, pct, final, statBonus, rollTotal}>}
    */
-  async rollDamage({ attackerActor, targetActor = null, isCrit = false, type = "physique" } = {}) {
+  /**
+   * @param {Item|null} [offhand] - seconde arme d'une attaque à deux armes.
+   *   Elle n'ajoute QUE son dé : ni part fixe, ni bonus de stat. Sur coup
+   *   critique elle passe à son propre dé de crit s'il est renseigné, mais
+   *   n'obtient toujours aucun bonus additif.
+   */
+  async rollDamage({ attackerActor, targetActor = null, isCrit = false, type = "physique",
+                     offhand = null } = {}) {
     // Les monstres n'ont pas d'armes : ils frappent avec leurs compétences,
     // qui sont des items de type « spell ». On les accepte donc ici, avec
     // leur propre format de dégâts (lignes system.damages[]).
@@ -131,7 +138,25 @@ export class RPGItem extends Item {
       }
     }
 
-    const beforeMitigation = rawBrut + critBonus;
+    // ── 3 bis) Seconde arme : son dé, rien d'autre ────────────────
+    let offhandTotal = 0;
+    let offhandDie   = null;
+    let offhandName  = null;
+    if (offhand) {
+      const oSys  = offhand.system ?? {};
+      const oCrit = String(oSys.crit?.damage?.dice ?? "").trim();
+      offhandDie  = (isCrit && oCrit) ? oCrit
+                  : (String(oSys.damage?.dice ?? "").trim() || null);
+      offhandName = offhand.name ?? "Seconde arme";
+      if (offhandDie) {
+        const oRoll  = await (new Roll(offhandDie)).evaluate();
+        offhandTotal = oRoll.total;
+      }
+    }
+
+    // La mitigation s'applique au coup entier, pas arme par arme : c'est une
+    // seule attaque, l'armure ne l'absorbe qu'une fois.
+    const beforeMitigation = rawBrut + critBonus + offhandTotal;
 
     // ── 4) Mitigation cible ───────────────────────────────────────
     let fixe = 0;
@@ -163,7 +188,10 @@ export class RPGItem extends Item {
       pct,
       final,
       statBonus,
-      rollTotal:        roll.total
+      rollTotal:        roll.total,
+      offhandTotal,
+      offhandDie,
+      offhandName
     };
   }
 
