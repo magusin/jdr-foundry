@@ -10,6 +10,34 @@ const FLAG_LOG    = "actionLog";
  * Appelée à chaque action confirmée par le MJ (attaque, sort, déplacement) —
  * c'est la fatigue physique/mentale de l'effort, pas un coût "magique".
  */
+/**
+ * Coût en fatigue d'une action, réglable dans les options du monde.
+ *
+ * La fatigue est une pression de rythme, pas une punition : elle ne doit
+ * mordre que sur ce qui est réellement violent. Par défaut seule l'attaque
+ * en coûte ; se déplacer et changer d'arme sont gratuits. Les sorts ont
+ * leur propre coût, défini sort par sort (system.fatigueCost).
+ *
+ * @param {string} slot - clé de SLOT_DEFS ("attaque", "deplacement", …)
+ * @returns {number} points de fatigue, 0 si l'action est gratuite
+ */
+export function actionFatigueCost(slot) {
+  const KEYS = {
+    attaque:     ["fatigueAttaque", 1],
+    deplacement: ["fatigueDeplacement", 0],
+    echangeArme: ["fatigueEchangeArme", 0]
+  };
+  const entry = KEYS[slot];
+  if (!entry) return 0;
+  const [key, fallback] = entry;
+  try {
+    const v = Number(game.settings.get("rpg", key));
+    return Number.isFinite(v) ? Math.max(0, v) : fallback;
+  } catch {
+    return fallback;   // réglage pas encore enregistré (init précoce)
+  }
+}
+
 export async function incrementFatigue(actor, amount = 1) {
   if (!actor) return;
   const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;

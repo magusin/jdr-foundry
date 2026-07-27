@@ -313,6 +313,33 @@ Hooks.once("init", async () => {
     requiresReload: false
   });
 
+  // ── Coût en fatigue par action ────────────────────────────────────────
+  // La fatigue règle le rythme du combat, elle ne doit pas le bloquer.
+  // Par défaut seule l'attaque en coûte : bouger et changer d'arme sont
+  // gratuits. Les sorts gardent leur coût propre, défini sur chaque sort.
+  const FATIGUE_CHOICES = { 0: "Aucun", 1: "1 point", 2: "2 points", 3: "3 points" };
+
+  game.settings.register("rpg", "fatigueAttaque", {
+    name: "Fatigue — attaque",
+    hint: "Fatigue gagnée à chaque attaque physique résolue.",
+    scope: "world", config: true, type: Number,
+    choices: FATIGUE_CHOICES, default: 1, requiresReload: false
+  });
+
+  game.settings.register("rpg", "fatigueDeplacement", {
+    name: "Fatigue — déplacement",
+    hint: "Fatigue gagnée pour un déplacement dans le tour. 0 par défaut : se déplacer ne doit pas être puni.",
+    scope: "world", config: true, type: Number,
+    choices: FATIGUE_CHOICES, default: 0, requiresReload: false
+  });
+
+  game.settings.register("rpg", "fatigueEchangeArme", {
+    name: "Fatigue — échange d'arme",
+    hint: "Fatigue gagnée en dégainant ou rengainant en combat. 0 par défaut : l'action consommée suffit comme coût.",
+    scope: "world", config: true, type: Number,
+    choices: FATIGUE_CHOICES, default: 0, requiresReload: false
+  });
+
   // Interrupteur MJ : le MJ reste libre par défaut (poussées, téléportations,
   // repositionnements), et active la limite à la volée quand il veut jouer un
   // monstre « à la règle ». Basculé par le raccourci clavier ci-dessous.

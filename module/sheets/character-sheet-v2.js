@@ -1137,7 +1137,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     try {
       const budgetAPI = await import("../rules/action-budget.js");
-      const { getBudget, saveBudget, canUseSlot, reserveSlot, confirmSlot, incrementFatigue } = budgetAPI;
+      const { getBudget, saveBudget, canUseSlot, reserveSlot, confirmSlot,
+              incrementFatigue, actionFatigueCost } = budgetAPI;
       const budget = getBudget(combat, cbt.id);
       if (!canUseSlot(budget, "echangeArme")) {
         return { ok: false, reason: "Plus d'action disponible ce tour pour changer d'équipement." };
@@ -1149,7 +1150,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         consume: async () => {
           const b = getBudget(combat, cbt.id);
           await saveBudget(combat, cbt.id, confirmSlot(reserveSlot(b, "echangeArme"), "echangeArme"));
-          await incrementFatigue(this.document, 1);
+          // Dégainer coûte une action, pas de la fatigue (0 par défaut).
+          await incrementFatigue(this.document, actionFatigueCost("echangeArme"));
           const nowEquipped = !!item.system?.equipe;
           await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor: this.document }),

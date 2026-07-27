@@ -124,8 +124,8 @@ async function confirmBudgetSlot(actionId) {
 async function bumpFatigue(actor) {
   if (!actor) return;
   try {
-    const { incrementFatigue } = await import("./action-budget.js");
-    await incrementFatigue(actor, 1);
+    const { incrementFatigue, actionFatigueCost } = await import("./action-budget.js");
+    await incrementFatigue(actor, actionFatigueCost("attaque"));
   } catch (e) { /* ignore */ }
 }
 
