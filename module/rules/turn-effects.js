@@ -144,7 +144,8 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   if (totalFatigueDot !== 0) {
     const fatCur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
     const fatMax = Number(actor.system?.ressources?.fatigue?.max    ?? 10) || 10;
-    const newFat = Math.min(fatMax, Math.max(0, fatCur + totalFatigueDot));
+    // Pas de plafond haut : le max est le seuil d'épuisement (voir actor.js)
+    const newFat = Math.max(0, fatCur + totalFatigueDot);
     updates["system.ressources.fatigue.valeur"] = newFat;
 
     lines.push(totalFatigueDot > 0

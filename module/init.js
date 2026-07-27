@@ -320,8 +320,8 @@ Hooks.once("init", async () => {
   const FATIGUE_CHOICES = { 0: "Aucun", 1: "1 point", 2: "2 points", 3: "3 points" };
 
   game.settings.register("rpg", "fatigueAttaque", {
-    name: "Fatigue — attaque",
-    hint: "Fatigue gagnée à chaque attaque physique résolue.",
+    name: "Fatigue — attaque (par défaut)",
+    hint: "Utilisé pour les attaques à mains nues et les armes dont le champ « Coût fatigue » n'est pas renseigné. Sinon c'est la valeur de la fiche d'arme qui décide.",
     scope: "world", config: true, type: Number,
     choices: FATIGUE_CHOICES, default: 1, requiresReload: false
   });

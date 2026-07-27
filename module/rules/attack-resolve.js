@@ -120,12 +120,21 @@ async function confirmBudgetSlot(actionId) {
 
 /**
  * Augmente la fatigue de l'attaquant (action confirmée = effort physique).
+ *
+ * Le coût vient du champ « Coût fatigue » de l'arme employée : une masse
+ * lourde n'épuise pas comme une dague. Une arme qui n'a pas encore ce champ
+ * (créée avant son ajout) ou une attaque à mains nues retombe sur le réglage
+ * de monde « Fatigue — attaque ».
  */
-async function bumpFatigue(actor) {
+async function bumpFatigue(actor, weapon = null) {
   if (!actor) return;
   try {
     const { incrementFatigue, actionFatigueCost } = await import("./action-budget.js");
-    await incrementFatigue(actor, actionFatigueCost("attaque"));
+    const own = weapon?.system?.fatigueCost;
+    const amount = (own === undefined || own === null || own === "")
+      ? actionFatigueCost("attaque")
+      : Math.max(0, Number(own) || 0);
+    await incrementFatigue(actor, amount);
   } catch (e) { /* ignore */ }
 }
 
@@ -281,7 +290,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
 
   // Confirme le slot de budget (échec compris : l'action a été tentée)
   await confirmBudgetSlot(realActionId);
-  await bumpFatigue(attacker);
+  await bumpFatigue(attacker, weapon);
 
   await message.delete();
 

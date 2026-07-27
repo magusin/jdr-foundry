@@ -267,6 +267,7 @@
       "emplacement": "mainDroite",
       "twoHands": false,
       "difficulte": 0,
+      "fatigueCost": 1,
       "livraison": "physique",
       "portee": 1,
       "range": {

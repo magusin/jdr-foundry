@@ -242,6 +242,9 @@
             {{system.ressources.fatigue.valeur}}
             {{/if}}
             / {{system.ressources.fatigue.max}}
+            {{#if system.ressources.fatigue.depassement}}
+            <b style="color:#c0392b" title="La fatigue peut dépasser son maximum : le max est le seuil d'épuisement, pas une limite. Il faudra redescendre sous ce seuil pour lever le malus.">(+{{system.ressources.fatigue.depassement}} au-delà du seuil)</b>
+            {{/if}}
             {{#if system.derived.epuise}}<b style="color:#c0392b">— ÉPUISÉ (−10% stats)</b>{{/if}}
           </span>
         </div>

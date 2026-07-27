@@ -877,8 +877,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
             const delta = Number(btn.dataset.delta ?? 0) || 0;
             if (!delta) return;
             const cur = Number(this.document.system?.ressources?.fatigue?.valeur ?? 0) || 0;
-            const max = Number(this.document.system?.ressources?.fatigue?.max ?? 10) || 10;
-            const next = Math.max(0, Math.min(max, cur + delta));
+            // Pas de plafond : le max est le seuil d'épuisement (voir actor.js)
+            const next = Math.max(0, cur + delta);
             if (next !== cur) await this.document.update({ "system.ressources.fatigue.valeur": next });
           }
         } finally {

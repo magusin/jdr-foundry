@@ -63,6 +63,15 @@
           {{/if}}
         </div>
 
+        <div class="mm-line">
+          <span class="mm-label" title="Fatigue gagnée à chaque attaque résolue avec cette arme. Une masse lourde fatigue plus qu'une dague.">Coût fatigue</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.fatigueCost}}</b></div>
+          {{/if}}
+        </div>
+
         <p class="hint">
           Les dégâts réels sont : <b>bonus stat</b> + <b>dé</b> + <b>fixe</b> (+ effets).<br/>
           (Le calcul final est affiché au moment de l’attaque dans le chat.)

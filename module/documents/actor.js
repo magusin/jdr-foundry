@@ -415,8 +415,15 @@ export class RPGActor extends Actor {
     fatigueMax = Math.max(1, Math.floor(fatigueMax));
 
     sys.ressources.fatigue.max = fatigueMax;
-    sys.ressources.fatigue.valeur = clamp(Number(sys.ressources.fatigue.valeur) || 0, 0, fatigueMax);
-    sys.ressources.fatigue.pct = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
+    // La fatigue n'est PAS plafonnée à son max : le max est le seuil à partir
+    // duquel l'épuisement frappe, pas une limite de stockage. Continuer à
+    // s'épuiser au-delà est significatif (il faudra d'autant plus de repos
+    // pour repasser sous le seuil). Seul le plancher à 0 est imposé.
+    sys.ressources.fatigue.valeur = Math.max(0, Number(sys.ressources.fatigue.valeur) || 0);
+    // pct sert aux jauges : borné à 100 pour ne pas déformer l'affichage.
+    sys.ressources.fatigue.pctBrut = Math.round((sys.ressources.fatigue.valeur / fatigueMax) * 100);
+    sys.ressources.fatigue.pct = Math.min(100, sys.ressources.fatigue.pctBrut);
+    sys.ressources.fatigue.depassement = Math.max(0, sys.ressources.fatigue.valeur - fatigueMax);
 
     // ── Compat barres de token Foundry ──────────────────────────────────────
     // Foundry cherche un objet {value, max} pour une barre. Le système stocke

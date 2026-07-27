@@ -6,7 +6,7 @@ const FLAG_BUDGET = "actionBudget";
 const FLAG_LOG    = "actionLog";
 
 /**
- * Augmente la fatigue d'un acteur de `amount` (clampée au max courant).
+ * Augmente la fatigue d'un acteur de `amount`, sans plafond haut.
  * Appelée à chaque action confirmée par le MJ (attaque, sort, déplacement) —
  * c'est la fatigue physique/mentale de l'effort, pas un coût "magique".
  */
@@ -15,8 +15,11 @@ const FLAG_LOG    = "actionLog";
  *
  * La fatigue est une pression de rythme, pas une punition : elle ne doit
  * mordre que sur ce qui est réellement violent. Par défaut seule l'attaque
- * en coûte ; se déplacer et changer d'arme sont gratuits. Les sorts ont
- * leur propre coût, défini sort par sort (system.fatigueCost).
+ * en coûte ; se déplacer et changer d'arme sont gratuits.
+ *
+ * Armes et sorts portent leur propre coût sur leur fiche
+ * (system.fatigueCost) : « attaque » ne sert donc que de repli, pour les
+ * attaques à mains nues et les armes créées avant l'ajout du champ.
  *
  * @param {string} slot - clé de SLOT_DEFS ("attaque", "deplacement", …)
  * @returns {number} points de fatigue, 0 si l'action est gratuite
@@ -41,8 +44,9 @@ export function actionFatigueCost(slot) {
 export async function incrementFatigue(actor, amount = 1) {
   if (!actor) return;
   const cur = Number(actor.system?.ressources?.fatigue?.valeur ?? 0) || 0;
-  const max = Number(actor.system?.ressources?.fatigue?.max ?? 10) || 10;
-  const next = Math.min(max, cur + amount);
+  // Pas de plafond : le max est le seuil d'épuisement, pas une limite de
+  // stockage. Dépasser reste comptabilisé — il faudra d'autant plus de repos.
+  const next = Math.max(0, cur + amount);
   if (next === cur) return;
   await actor.update({ "system.ressources.fatigue.valeur": next });
 }
