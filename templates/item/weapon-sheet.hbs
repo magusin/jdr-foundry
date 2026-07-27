@@ -55,9 +55,9 @@
         </div>
 
         <div class="mm-line">
-          <span class="mm-label">Difficulté</span>
+          <span class="mm-label" title="Ajouté au seuil de touché, qui vient du rapport de stats entre l'attaquant et sa cible. 0 = arme ordinaire. Chaque point retire 5% de chance de toucher.">Difficulté</span>
           {{#if canEdit}}
-            <input class="mm-input" type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="4"/>
+            <input class="mm-input" type="number" name="system.difficulte" value="{{system.difficulte}}" min="0"/>
           {{else}}
             <div class="mm-value"><b>{{system.difficulte}}</b></div>
           {{/if}}

@@ -103,8 +103,8 @@
         </div>
 
         <div>
-          <label title="Malus ajouté au seuil de touché, de 0 (facile) à 4 (très dur). Ce n'est PAS le seuil lui-même : le seuil de base vient du rapport de stats entre l'attaquant et sa cible.">Difficulté (0–4)</label>
-          {{#if canEdit}}<input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" max="4" style="width:100%"/>
+          <label title="Sur un ENNEMI : malus ajouté au seuil de touché, qui vient du rapport de stats (0 = pas de malus). Sur un ALLIÉ ou sur soi : aucune comparaison de stats, cette valeur EST le seuil à atteindre (ex. 11 = 11+), et 0 signifie réussite automatique.">Difficulté</label>
+          {{#if canEdit}}<input type="number" name="system.difficulte" value="{{system.difficulte}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.difficulte}}</b></div>{{/if}}
         </div>
 

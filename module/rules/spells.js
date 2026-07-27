@@ -968,29 +968,41 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const targetTokenUuids = targetTokens.map(t => t?.document?.uuid).filter(Boolean);
   const targetNamesList = targetActors.map(a => a.name).join(", ");
 
-  // Calcule le TN pour la première cible (ou sans cible)
-  const firstTarget = targetActors[0] ?? null;
+  // Seuil de touché pour la première cible. Sans cible, le sort porte sur le
+  // lanceur : computeTN traite ce cas comme une cible amie, sans comparaison
+  // de stats — la difficulté saisie sur la fiche est alors le seuil lui-même.
+  const firstTarget = targetActors[0] ?? actor;
   let tnInfo = null;
-  if (firstTarget) {
-    try {
-      const tnData = computeTN(actor, firstTarget, item);
-      tnInfo = tnData;
-    } catch(e) { /* pas grave si ça échoue */ }
-  }
+  try {
+    tnInfo = computeTN(actor, firstTarget, item);
+  } catch (e) { /* pas grave si ça échoue */ }
 
-  const tnLine = tnInfo
-    ? `🎯 <b>Jet de touché</b> : il faut faire <b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20
+  const rollButton = (tn) => `
        <button type="button" class="rpg-roll-d20-btn"
-         data-actor-id="${actor.id}" data-tn="${tnInfo.tnFinal}" data-spell="${item.name}"
+         data-actor-id="${actor.id}" data-tn="${tn}" data-spell="${item.name}"
          style="margin-left:8px;padding:2px 10px;cursor:pointer;border-radius:6px;font-size:11px">
          🎲 Lancer le d20
-       </button>`
-      + (sys.difficulte ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte,0)} déjà incluse dans le TN)</div>` : ``)
-    : (!targetActors.length && !(Array.isArray(sys.damages) && sys.damages.length)
-        // Sort sans cible ni dégâts (Repos, buff sur soi…) : rien à toucher,
-        // le MJ valide simplement que l'action a lieu.
-        ? `🌀 <b>Action sur soi</b> — aucun jet de touché`
-        : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`);
+       </button>`;
+
+  let tnLine;
+  if (tnInfo?.autoSuccess) {
+    // Cible amie sans difficulté saisie : rien à rater, pas de jet.
+    tnLine = targetActors.length
+      ? `🌿 <b>Action bienveillante</b> — aucun jet, le sort prend effet`
+      : `🌀 <b>Action sur soi</b> — aucun jet de touché`;
+  } else if (tnInfo) {
+    tnLine = `🎯 <b>Jet de touché</b> : il faut faire `
+           + `<b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20`
+           + rollButton(tnInfo.tnFinal)
+           + (tnInfo.friendly
+               ? `<div style="font-size:11px;opacity:.7">(difficulté ${n(sys.difficulte, 0)} du sort — la cible ne s'y oppose pas)</div>`
+               : (sys.difficulte
+                   ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte, 0)} déjà incluse dans le TN)</div>`
+                   : ``));
+  } else {
+    tnLine = `🎯 <b>Jet de touché</b> : fais ton jet`
+           + (sys.difficulte ? ` (difficulté +${n(sys.difficulte, 0)})` : ``);
+  }
 
   const content = `
   <div class="rpg-spell-declare">

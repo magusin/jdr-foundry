@@ -22,12 +22,37 @@ export function tnFromRatio(r) {
 }
 
 /**
- * Difficulté 0..4 : plus c'est élevé, plus c'est DUR.
- * TN final = TN base + diff
+ * Difficulté : plus c'est élevé, plus c'est DUR. TN final = TN base + diff.
+ *
+ * La difficulté n'est plus bornée à 4 : sur une cible bien plus faible que
+ * l'attaquant le seuil de base descend à 6, et il faut pouvoir la relever
+ * au-delà de 4 pour qu'une manœuvre reste ardue. Seul le TN final reste
+ * borné [6,16] — ni certitude, ni impossibilité.
  */
 export function applyDifficulty(tnBase, diff) {
-  const d = clamp(Number(diff) || 0, 0, 4);
+  const d = Math.max(0, Number(diff) || 0);
   return clamp((Number(tnBase) || 11) + d, 6, 16);
+}
+
+/**
+ * La cible est-elle un allié (ou soi-même) ?
+ *
+ * Critère : la disposition du token. C'est ce que la table lit d'un coup
+ * d'œil, et ça vaut pour tous les sorts sans avoir à deviner l'intention
+ * depuis leur contenu. Disposition inconnue → traité en adversaire, le cas
+ * le plus courant et le moins avantageux.
+ */
+export function isFriendlyTarget(attacker, target) {
+  if (!attacker || !target) return true;              // pas de cible = sur soi
+  if (attacker.id === target.id) return true;
+  const dispositionOf = (a) =>
+    a?.getActiveTokens?.()?.[0]?.document?.disposition
+    ?? a?.prototypeToken?.disposition
+    ?? null;
+  const da = dispositionOf(attacker);
+  const dt = dispositionOf(target);
+  if (da === null || dt === null) return false;
+  return da === dt;
 }
 
 /**
@@ -181,11 +206,34 @@ export async function computeSpellDamage(actor, item, { crit = false } = {}) {
  * - physique : Dextérité attaquant vs Dextérité cible
  * - magique  : Acuité    attaquant vs Acuité    cible
  */
-export function computeTN(attacker, target, item) {
+export function computeTN(attacker, target, item, opts = {}) {
   const livraison = String(item?.system?.livraison ?? (item?.type === "spell" ? "magique" : "physique"));
-  const diff      = Number(item?.system?.difficulte ?? 0) || 0;
+  const diff      = Math.max(0, Number(item?.system?.difficulte ?? 0) || 0);
   const isPhys    = livraison === "physique";
 
+  // Bonus/malus direct à la chance de toucher (équipement, sorts/effets,
+  // épuisement...) — positif = plus facile à toucher, négatif = plus dur.
+  const toucherBonus = isPhys
+    ? Number(attacker?.system?.derived?.toucherPhysique ?? 0) || 0
+    : Number(attacker?.system?.derived?.toucherMagique ?? 0) || 0;
+
+  // ── Cible amie ou soi-même ────────────────────────────────────────────
+  // Aucune comparaison de stats : un allié n'esquive pas le soin qu'on lui
+  // porte, et son agilité n'a donc rien à y faire. La difficulté saisie sur
+  // la fiche EST le seuil. À 0, l'action réussit sans jet.
+  const friendly = opts.friendly ?? isFriendlyTarget(attacker, target);
+  if (friendly) {
+    const autoSuccess = diff <= 0;
+    return {
+      livraison, friendly: true, autoSuccess,
+      diff, diffRaw: diff, atk: null, def: null, r: null,
+      tnBase: diff,
+      tnFinal: autoSuccess ? 0 : clamp(diff - toucherBonus, 6, 16),
+      toucherBonus
+    };
+  }
+
+  // ── Cible adverse : seuil issu du rapport de stats ────────────────────
   const AP = attacker?.system?.derived?.effective?.principales ?? attacker?.system?.principales ?? {};
   const TP = target?.system?.derived?.effective?.principales   ?? target?.system?.principales   ?? {};
 
@@ -194,20 +242,13 @@ export function computeTN(attacker, target, item) {
 
   const r       = (100 + atk) / (100 + def);
   const tnBase  = tnFromRatio(r);
-  // La difficulté est bornée à 0–4 par applyDifficulty : on renvoie la valeur
-  // RÉELLEMENT appliquée pour que les messages de chat ne puissent pas
-  // annoncer « +11 » alors que le moteur n'en a appliqué que 4.
-  const diffApplied = clamp(diff, 0, 4);
   let   tnFinal = applyDifficulty(tnBase, diff);
-
-  // ✅ Bonus/malus direct à la chance de toucher (équipement, sorts/effets,
-  // épuisement...) — positif = plus facile à toucher, négatif = plus dur
-  const toucherBonus = isPhys
-    ? Number(attacker?.system?.derived?.toucherPhysique ?? 0) || 0
-    : Number(attacker?.system?.derived?.toucherMagique ?? 0) || 0;
   tnFinal = clamp(tnFinal - toucherBonus, 6, 16);
 
-  return { livraison, diff: diffApplied, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus };
+  return {
+    livraison, friendly: false, autoSuccess: false,
+    diff, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus
+  };
 }
 
 /**
