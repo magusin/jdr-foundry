@@ -799,6 +799,24 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       } finally { el.disabled = false; }
     }, { capture: true });
 
+    // ── Déclarer un sort / une action (joueurs ET MJ) ────────────────────
+    // Le gestionnaire générique est branché après le retour non-MJ : sans ce
+    // branchement, le bouton « Déclarer » ne faisait rien côté joueur.
+    bindOnce("declare").addEventListener("click", async (evDecl) => {
+      const btn = evDecl.target?.closest?.("[data-action='declareSpell'], [data-action='castSpell']");
+      if (!btn || btn.disabled) return;
+      if (!this.document.isOwner) return;
+      evDecl.preventDefault();
+      evDecl.stopPropagation();
+      const itemId = btn.dataset.itemId ?? btn.closest("[data-item-id]")?.dataset?.itemId;
+      const item = this.document.items.get(itemId);
+      if (!item) return;
+      btn.disabled = true;
+      try {
+        await this._declareItem(item);
+      } finally { btn.disabled = false; }
+    }, { capture: true });
+
     // ── Ouvrir la fiche d'un objet possédé (joueurs ET MJ) ───────────────
     // Doit être branché AVANT le retour joueur : sinon les joueurs ne
     // pouvaient pas consulter leurs propres armes/armures/objets.
@@ -818,20 +836,27 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // joueurs de fermer leur fiche avec la croix.
     if (!game.user.isGM) {
       const scope = sheetContent(root);
-      // Exceptions : les listes d'emplacements et la barre de filtres des
-      // sorts sont des commandes du joueur, pas des champs de la fiche.
-      const KEEP = "[data-action='equipSlotSelect'], .spell-filter, .spell-filter-q";
       const owned = this.document.isOwner;
+
+      // Commandes qui appartiennent au joueur, pas des champs de la fiche :
+      // elles restent actives s'il possède le personnage.
+      const OWNER_CTRL = "[data-action='equipSlotSelect'], [data-action='toggleEquip'],"
+                       + "[data-action='declareSpell'], [data-action='castSpell']";
+      // Pur confort d'affichage : actif pour tout le monde.
+      const VIEW_CTRL  = ".spell-filter, .spell-filter-q, .spell-filter-reset";
+
       scope.querySelectorAll("input, select, textarea").forEach(el => {
-        if (el.matches(KEEP)) { el.disabled = el.matches(".spell-filter, .spell-filter-q") ? false : !owned; return; }
+        if (el.matches(VIEW_CTRL))  { el.disabled = false;  return; }
+        if (el.matches(OWNER_CTRL)) { el.disabled = !owned; return; }
         el.disabled = true;
       });
-      sheetActionButtons(root, ":not([data-action='toggleEquip'])")
-        .forEach(el => { el.disabled = true; });
-      if (!owned) {
-        sheetActionButtons(root, "[data-action='toggleEquip']")
-          .forEach(el => { el.disabled = true; });
-      }
+      // Un seul passage : sheetActionButtons concatène son argument au
+      // sélecteur, une liste à virgules y perdrait son préfixe.
+      sheetActionButtons(root).forEach(el => {
+        if (el.matches(VIEW_CTRL))  { el.disabled = false; return; }
+        el.disabled = el.matches(OWNER_CTRL) ? !owned : true;
+      });
+      root.querySelectorAll(".spell-filter-reset").forEach(el => { el.disabled = false; });
       return;
     }
 
@@ -886,16 +911,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         return;
       }
 
-      if (action === "castSpell" || action === "declareSpell") {
-        const itemId = btn.dataset.itemId || btn.closest("[data-item-id]")?.dataset?.itemId;
-        if (!itemId) return;
-        const item = this.document.items.get(itemId);
-        if (!item) return;
-        const res = await declareSpell(this.document, item);
-        if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de lancer le sort.");
-        await this.render({ force: true });
-        return;
-      }
+      // castSpell / declareSpell sont gérés par bindOnce("declare"), branché
+      // plus haut pour rester accessible aux joueurs.
 
       if (action === "adjRes" || action === "fatigueChange") {
         // Verrou anti-crash : empêche les clics rapides simultanés
@@ -1154,49 +1171,55 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
    *
    * @returns {Promise<{ok:boolean, reason?:string, consume?:Function}>}
    */
+  /**
+   * Déclare un objet de l'onglet Sorts.
+   * Les actions de base (Attaquer, Changer d'arme) ont leur propre logique ;
+   * tout le reste passe par le workflow de sort habituel.
+   */
+  async _declareItem(item) {
+    try {
+      const { runDefaultAction } = await import("../rules/default-actions.js");
+      const special = await runDefaultAction(this.document, item);
+      if (special.handled) {
+        if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+        await this.render({ force: true });
+        return;
+      }
+    } catch (e) {
+      console.error("[RPG] action de base :", e);
+    }
+
+    const res = await declareSpell(this.document, item);
+    if (!res?.ok) ui.notifications?.warn?.(res?.reason ?? "Impossible de lancer le sort.");
+    await this.render({ force: true });
+  }
+
   async _canEquipNow(item) {
     if (game.user.isGM) return { ok: true };
     if (!this.document.isOwner) return { ok: false, reason: "Cet équipement n'est pas le tien." };
 
-    const combat = game.combat;
-    if (!combat?.active) return { ok: true };   // hors combat : libre
-
-    const token = this.document.getActiveTokens?.()?.[0] ?? null;
-    const cbt = combat.combatants.find(c =>
-      c.actorId === this.document.id || (token && c.tokenId === token.id));
-    if (!cbt) return { ok: true };               // pas dans ce combat : libre
-
-    if (combat.combatant?.id !== cbt.id) {
-      return { ok: false, reason: "Tu ne peux changer d'équipement que pendant ton tour." };
-    }
-
+    // Hors combat c'est libre. En combat, l'échange doit avoir été déclaré via
+    // l'action « Changer d'arme » ET validé par le MJ : c'est cette validation
+    // qui consomme l'action du tour. Le joueur n'écrit jamais sur le document
+    // Combat lui-même — Foundry le lui refuserait.
     try {
-      const budgetAPI = await import("../rules/action-budget.js");
-      const { getBudget, saveBudget, canUseSlot, reserveSlot, confirmSlot,
-              incrementFatigue, actionFatigueCost } = budgetAPI;
-      const budget = getBudget(combat, cbt.id);
-      if (!canUseSlot(budget, "echangeArme")) {
-        return { ok: false, reason: "Plus d'action disponible ce tour pour changer d'équipement." };
-      }
-      // L'action est immédiate (aucune validation MJ) : on réserve puis on
-      // confirme dans la foulée.
+      const { swapAllowed } = await import("../rules/default-actions.js");
+      const gate = swapAllowed(this.document);
+      if (!gate.ok) return gate;
       return {
         ok: true,
         consume: async () => {
-          const b = getBudget(combat, cbt.id);
-          await saveBudget(combat, cbt.id, confirmSlot(reserveSlot(b, "echangeArme"), "echangeArme"));
-          // Dégainer coûte une action, pas de la fatigue (0 par défaut).
-          await incrementFatigue(this.document, actionFatigueCost("echangeArme"));
-          const nowEquipped = !!item.system?.equipe;
+          const nowEquipped = !!item?.system?.equipe;
+          if (!item?.name) return;
           await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor: this.document }),
             content: `🔄 <b>${this.document.name}</b> ${nowEquipped ? "dégaine" : "range"} `
-                   + `<b>${item.name}</b> <i>(1 action)</i>`
+                   + `<b>${item.name}</b>.`
           });
         }
       };
     } catch (e) {
-      console.warn("[RPG] budget d'échange d'arme :", e);
+      console.warn("[RPG] autorisation d'échange d'arme :", e);
       return { ok: true };   // en cas de souci, on ne bloque pas le joueur
     }
   }
@@ -1261,6 +1284,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
 
   _buildEquipSlotsUI(items) {
+    const HAND_SLOT_KEYS = new Set(["mainDroite", "mainGauche"]);
     const SLOT_DEFS = [
       { key: "tete", label: "Tête", kind: "gear" },
       { key: "torse", label: "Torse", kind: "gear" },
@@ -1302,8 +1326,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       let options = [];
       if (s.kind === "hand") {
+        // Une main peut tenir une arme… ou un bouclier. Un bouclier est une
+        // armure (il donne de la protection, pas des dégâts) dont
+        // l'emplacement est une main : sans ce cas il n'apparaissait nulle
+        // part et restait impossible à équiper.
         options = allEquipItems
-          .filter(i => i.type === "weapon")
+          .filter(i => i.type === "weapon" || HAND_SLOT_KEYS.has(i.system?.emplacement))
           .map(i => ({ ...i, selected: equippedItem?._id === i._id }));
       } else {
         options = allEquipItems
@@ -1373,8 +1401,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       }
 
       if (twoHands) {
+        // Une arme à deux mains vide LES DEUX mains : armes comme boucliers.
+        // Le filtre sur le type d'objet laissait un bouclier en place, donc
+        // porté en même temps qu'une arme censée occuper les deux mains.
         for (const w of this.document.items) {
-          if (w.type !== "weapon") continue;
           if (!w.system?.equipe) continue;
           const s = w.system?.emplacement;
           if (HAND_SLOTS.has(s) && w.id !== item.id) equip(w, false);
@@ -1390,6 +1420,16 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       await this.document.updateEmbeddedDocuments("Item", updates);
       return;
+    }
+
+    // Objet non-arme (bouclier, gantelet…) : s'il prend une main, il chasse
+    // l'arme à deux mains qui l'occupait — on ne tient pas une épée bâtarde
+    // et un bouclier avec les mêmes deux mains.
+    if (HAND_SLOTS.has(slot)) {
+      for (const w of this.document.items) {
+        if (w.type !== "weapon" || !w.system?.equipe || !w.system?.twoHands) continue;
+        if (w.id !== item.id) equip(w, false);
+      }
     }
 
     if (current && current.id !== item.id) equip(current, false);

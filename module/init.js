@@ -23,7 +23,8 @@ import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
 import { applyGlobalTheme, themeWindow } from "./sheets/sheet-helpers.js";
 import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
 import { applyChatVisibility, gmOnly, hpSecret } from "./rules/chat-visibility.js";
-import { installDefaultActions, grantDefaultActions, backfillDefaultActions } from "./rules/default-actions.js";
+import { installDefaultActions, grantDefaultActions, backfillDefaultActions,
+         bindSwapChatButtons } from "./rules/default-actions.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -854,6 +855,7 @@ Hooks.once("init", async () => {
       try { bindAttackChatButtons(html, message); } catch (e) { }
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
+      try { bindSwapChatButtons(html, message); } catch (e) { }
       try { bindMoraleChatButtons(html, message); } catch (e) { }
       // ── Nouveau : bouton "Lancer le dé" (jet de compétence initié par MJ) ──
       {
@@ -1408,6 +1410,11 @@ Hooks.once("init", async () => {
     if (doc.parent?.documentName !== "Actor") return true;
 
     const flat = foundry.utils.flattenObject(changed ?? {});
+    // `_id` accompagne systématiquement les écritures groupées
+    // (updateEmbeddedDocuments) : le laisser dans la comparaison faisait
+    // échouer TOUTES ces écritures en silence — c'est ce qui empêchait un
+    // joueur d'équiper quoi que ce soit depuis sa fiche.
+    delete flat._id;
     const allowed = new Set([
       "system.equipe",
       // Emplacement : écrit quand le joueur équipe via les slots de sa fiche

@@ -38,6 +38,15 @@ export async function useItemFromHotbar(uuid) {
   const targetToken = Array.from(game.user.targets ?? [])[0] ?? null;
 
   if (item.type === "spell") {
+    // Actions de base (Attaquer, Changer d'arme) : logique dédiée, pas le
+    // workflow de sort.
+    const { runDefaultAction } = await import("./default-actions.js");
+    const special = await runDefaultAction(actor, item, { targetToken });
+    if (special.handled) {
+      if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+      return special;
+    }
+
     // Les mêmes verrous que depuis la fiche : un raccourci ne doit jamais
     // permettre de contourner la recharge ou le coût en mana.
     const cd = Number(item.system?.cooldown?.restant ?? item.system?.recharge?.restant ?? 0) || 0;

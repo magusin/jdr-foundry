@@ -18,7 +18,12 @@
 
 const FLAG_SCOPE = "rpg";
 const FLAG_KEY   = "defaultActions";
-const VERSION    = 1;
+// Incrémenté à chaque nouvelle action de base : le rattrapage au chargement
+// complète alors les acteurs déjà traités par une version antérieure.
+const VERSION    = 2;
+
+/** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
+export const SWAP_OPEN_FLAG = "swapOpenRound";
 
 /** Clé stable posée sur l'objet, indépendante du nom affiché. */
 export const ACTION_KEY_FLAG = "defaultActionKey";
@@ -63,8 +68,70 @@ function restActionData() {
   };
 }
 
+/**
+ * Attaquer — frappe avec l'arme équipée, ou à mains nues.
+ * L'objet ne porte aucune donnée de dégâts : tout vient de l'arme au moment
+ * de la déclaration (voir runDefaultAction).
+ */
+function attackActionData() {
+  return {
+    name: "Attaquer",
+    type: "spell",
+    img: "icons/skills/melee/blade-tip-orange.webp",
+    system: {
+      speed: "normal",
+      livraison: "physique",
+      tag: "neutre",
+      coutMana: 0,
+      fatigueCost: 0,          // le coût vient de l'arme employée
+      difficulte: 0,
+      range: { min: 0, max: 0 },
+      targetCount: { min: 1, max: 1 },
+      cooldown: { max: 0, restant: 0 },
+      damages: [], restores: [], effectsUI: [],
+      description: "<p>Attaque avec l'arme équipée — ou à mains nues si le "
+                 + "personnage n'en porte aucune. Cible un ennemi (touche T) "
+                 + "avant de déclarer.</p>"
+    },
+    flags: { [FLAG_SCOPE]: { [ACTION_KEY_FLAG]: "attaquer" } }
+  };
+}
+
+/**
+ * Changer d'arme — déclare l'intention ; le MJ valide, ce qui débloque
+ * l'échange pour le tour en cours.
+ */
+function swapActionData() {
+  return {
+    name: "Changer d'arme",
+    type: "spell",
+    img: "icons/skills/trades/smithing-anvil-silver-red.webp",
+    system: {
+      speed: "normal",
+      livraison: "physique",
+      tag: "neutre",
+      coutMana: 0,
+      fatigueCost: 0,
+      difficulte: 0,
+      range: { min: 0, max: 0 },
+      targetCount: { min: 0, max: 0 },
+      cooldown: { max: 0, restant: 0 },
+      damages: [], restores: [], effectsUI: [],
+      description: "<p>Dégainer, rengainer, prendre un bouclier. Hors combat "
+                 + "c'est libre et immédiat. En combat il faut déclarer cette "
+                 + "action : elle consomme une des 2 actions du tour, et le MJ "
+                 + "la valide avant que l'équipement puisse changer.</p>"
+    },
+    flags: { [FLAG_SCOPE]: { [ACTION_KEY_FLAG]: "changerArme" } }
+  };
+}
+
 /** Toutes les actions de base, indexées par clé. */
-const DEFAULT_ACTIONS = { repos: restActionData };
+const DEFAULT_ACTIONS = {
+  repos: restActionData,
+  attaquer: attackActionData,
+  changerArme: swapActionData
+};
 
 /** Types d'acteurs concernés. */
 const TARGET_TYPES = new Set(["character", "monster"]);
@@ -111,6 +178,178 @@ export async function backfillDefaultActions() {
   }
   if (done) console.log(`[RPG] Actions de base ajoutées à ${done} acteur(s).`);
   return done;
+}
+
+/** Clé d'action de base portée par un objet, ou null. */
+export function defaultActionKey(item) {
+  return item?.getFlag?.(FLAG_SCOPE, ACTION_KEY_FLAG) ?? null;
+}
+
+/** Le combattant correspondant à cet acteur dans le combat en cours. */
+function combatantFor(actor, combat = game.combat) {
+  if (!combat || !actor) return null;
+  const token = actor.getActiveTokens?.()?.[0] ?? null;
+  return combat.combatants.find(c =>
+    c.actorId === actor.id || (token && c.tokenId === token.id)) ?? null;
+}
+
+/**
+ * L'échange d'arme a-t-il déjà été payé et validé pour le tour en cours ?
+ * Hors combat, ou pour un acteur absent du combat, l'échange est libre.
+ */
+export function swapAllowed(actor) {
+  const combat = game.combat;
+  if (!combat?.active) return { ok: true };
+  const cbt = combatantFor(actor, combat);
+  if (!cbt) return { ok: true };
+  const open = Number(cbt.getFlag(FLAG_SCOPE, SWAP_OPEN_FLAG) ?? -1);
+  if (open === Number(combat.round)) return { ok: true };
+  return {
+    ok: false,
+    reason: "En combat, déclare d'abord l'action « Changer d'arme » "
+          + "(onglet Sorts) et attends la validation du MJ."
+  };
+}
+
+/**
+ * Choisit l'arme d'attaque. Avec deux armes équipées (une par main) on
+ * demande laquelle ; sans arme du tout on frappe à mains nues.
+ */
+async function pickAttackWeapon(actor) {
+  const { buildUnarmedWeapon } = await import("./unarmed.js");
+  const equipped = actor.items.filter(i => i.type === "weapon" && i.system?.equipe);
+  if (!equipped.length) return buildUnarmedWeapon(actor);
+  if (equipped.length === 1) return equipped[0];
+
+  const DialogV2 = foundry.applications.api.DialogV2;
+  const label = (w) => {
+    const slot = w.system?.emplacement === "mainGauche" ? "main gauche" : "main droite";
+    return `${w.name} (${slot})`;
+  };
+  try {
+    const chosen = await DialogV2.wait({
+      window: { title: "Attaquer avec quelle arme ?" },
+      content: `<p>${actor.name} tient plusieurs armes.</p>`,
+      buttons: equipped.map(w => ({ action: w.id, label: label(w) })),
+      rejectClose: false
+    });
+    return actor.items.get(chosen) ?? equipped[0];
+  } catch {
+    return equipped[0];
+  }
+}
+
+/**
+ * Exécute une action de base si l'objet en est une.
+ * @returns {Promise<{handled: boolean, ok?: boolean, reason?: string}>}
+ */
+export async function runDefaultAction(actor, item, { targetToken = null } = {}) {
+  const key = defaultActionKey(item);
+  if (key !== "attaquer" && key !== "changerArme") return { handled: false };
+
+  // ── Attaquer ───────────────────────────────────────────────────────────
+  if (key === "attaquer") {
+    const target = targetToken ?? Array.from(game.user.targets ?? [])[0] ?? null;
+    if (!target?.actor) {
+      return { handled: true, ok: false, reason: "Cible un ennemi (touche T) avant d'attaquer." };
+    }
+    const weapon = await pickAttackWeapon(actor);
+    if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
+
+    const { declareAttack } = await import("./attack-declare.js");
+    await declareAttack(actor, weapon, target.actor);
+    return { handled: true, ok: true };
+  }
+
+  // ── Changer d'arme ─────────────────────────────────────────────────────
+  const combat = game.combat;
+  if (!combat?.active) {
+    return { handled: true, ok: false,
+             reason: "Hors combat, équipe-toi librement depuis l'onglet Équipement." };
+  }
+  const cbt = combatantFor(actor, combat);
+  if (!cbt) {
+    return { handled: true, ok: false,
+             reason: "Tu n'es pas dans ce combat — équipe-toi librement." };
+  }
+  if (combat.combatant?.id !== cbt.id) {
+    return { handled: true, ok: false, reason: "Ce n'est pas ton tour." };
+  }
+  if (Number(cbt.getFlag(FLAG_SCOPE, SWAP_OPEN_FLAG) ?? -1) === Number(combat.round)) {
+    return { handled: true, ok: false, reason: "Tu as déjà changé d'arme ce tour." };
+  }
+
+  // Le joueur ne peut pas écrire sur le document Combat : il déclare, le MJ
+  // valide. C'est la validation qui consomme l'action et ouvre l'échange.
+  await ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ actor }),
+    content: `
+      <div style="font-size:13px">
+        🔄 <b>${actor.name}</b> veut <b>changer d'arme</b>.
+        <div style="opacity:.75;font-size:11px;margin-top:2px">
+          Coûte 1 action. En attente de la validation du MJ.
+        </div>
+        <div class="rpg-swap-gm" style="margin-top:8px;display:flex;gap:8px">
+          <button type="button" class="rpg-swap-btn" data-ok="1" data-combatant-id="${cbt.id}"
+            style="flex:1;padding:4px;cursor:pointer;background:#1d9e75;color:#fff;border:none;border-radius:5px;font-weight:600">
+            ✅ Autoriser
+          </button>
+          <button type="button" class="rpg-swap-btn" data-ok="0" data-combatant-id="${cbt.id}"
+            style="flex:1;padding:4px;cursor:pointer;background:#c0392b;color:#fff;border:none;border-radius:5px">
+            ❌ Refuser
+          </button>
+        </div>
+      </div>`,
+    flags: { rpg: { swapRequest: { combatantId: cbt.id, combatId: combat.id, actorId: actor.id } } }
+  });
+  return { handled: true, ok: true };
+}
+
+/**
+ * Boutons MJ du message « changer d'arme ».
+ * Branché depuis le hook renderChatMessageHTML.
+ */
+export function bindSwapChatButtons(html, message) {
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  const req = message?.getFlag?.("rpg", "swapRequest")
+           ?? message?.flags?.rpg?.swapRequest ?? null;
+  root?.querySelectorAll(".rpg-swap-btn:not([data-bound])").forEach(btn => {
+    btn.dataset.bound = "1";
+    if (!game.user.isGM) { btn.style.display = "none"; return; }
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      const all = btn.closest(".rpg-swap-gm")?.querySelectorAll("button");
+      all?.forEach(b => b.disabled = true);
+      try {
+        const combat = (req?.combatId ? game.combats.get(req.combatId) : null) ?? game.combat;
+        const cbt = combat?.combatants?.get(btn.dataset.combatantId);
+        if (!cbt) { ui.notifications?.warn?.("Combattant introuvable."); return; }
+
+        if (btn.dataset.ok === "1") {
+          const { getBudget, saveBudget, canUseSlot, reserveSlot, confirmSlot } =
+            await import("./action-budget.js");
+          const budget = getBudget(combat, cbt.id);
+          if (!canUseSlot(budget, "echangeArme")) {
+            ui.notifications?.warn?.("Plus d'action disponible ce tour.");
+            await ChatMessage.create({ content: `❌ <b>${cbt.actor?.name ?? cbt.name}</b> n'a plus d'action pour changer d'arme.` });
+            return;
+          }
+          await saveBudget(combat, cbt.id,
+            confirmSlot(reserveSlot(budget, "echangeArme"), "echangeArme"));
+          await cbt.setFlag(FLAG_SCOPE, SWAP_OPEN_FLAG, Number(combat.round));
+          await ChatMessage.create({
+            content: `✅ <b>${cbt.actor?.name ?? cbt.name}</b> peut changer d'équipement ce tour <i>(1 action)</i>.`
+          });
+        } else {
+          await ChatMessage.create({ content: `❌ Changement d'arme refusé par le MJ.` });
+        }
+        btn.closest(".message-content")?.querySelectorAll("button").forEach(b => b.style.display = "none");
+      } catch (e) {
+        console.error("[RPG] validation du changement d'arme :", e);
+        all?.forEach(b => b.disabled = false);
+      }
+    });
+  });
 }
 
 /** Branche l'attribution automatique à la création d'un acteur. */
