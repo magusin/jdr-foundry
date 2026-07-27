@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/status-effects.js
 
 import { mitigateDamage } from "./combat.js";
+import { hpSecret } from "./chat-visibility.js";
 
 /**
  * Structure stockée dans actor.system.etatsActifs:
@@ -431,7 +432,8 @@ export async function tickActorEffectsAtTurnStart(actor) {
   if (totalDot > 0) {
     await ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor }),
-      content: `<b>${actor.name}</b> subit <b>${totalDot}</b> dégâts (effets). PV: ${pv}/${pvMax}`
+      content: `<b>${actor.name}</b> subit <b>${totalDot}</b> dégâts (effets).`
+             + hpSecret(actor, ` PV: ${pv}/${pvMax}`)
     });
   }
 }

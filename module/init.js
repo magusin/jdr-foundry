@@ -22,6 +22,7 @@ import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRange
 import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
 import { applyGlobalTheme, themeWindow } from "./sheets/sheet-helpers.js";
 import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
+import { applyChatVisibility, gmOnly, hpSecret } from "./rules/chat-visibility.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -444,6 +445,9 @@ Hooks.once("init", async () => {
   // Barre d'actions — appelée par les macros créées au glisser-déposer
   game.rpg.useItemFromHotbar = useItemFromHotbar;
 
+  // Visibilité du chat — exposée pour les macros (qui ne peuvent pas importer)
+  game.rpg.chat = { gmOnly, hpSecret };
+
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
 
@@ -808,6 +812,9 @@ Hooks.once("init", async () => {
     } catch(e) { console.error("[RPG] Erreur macros :", e); }
     // ✅ Boutons MJ dans les messages chat (sorts + attaques)
     Hooks.on("renderChatMessageHTML", (message, html) => {
+      // Retire d'abord ce que le spectateur n'a pas le droit de lire
+      // (verdicts en attente de validation MJ, PV des ennemis).
+      try { applyChatVisibility(html); } catch (e) { }
       try { RPG_SPELLS.bindSpellChatButtons(html, message); } catch (e) { }
       try { bindAttackChatButtons(html, message); } catch (e) { }
       try { bindActionChatButtons(html, message); } catch (e) { }
@@ -913,8 +920,8 @@ Hooks.once("init", async () => {
                     <div style="font-size:13px">
                       💥 Dégâts sur <b>${tData.name ?? target?.name}</b><br>
                       ${resultLines.join("<br>")}
-                      <b>Total : <span style="color:#c0392b">${totalFinal}</span> dégâts</b><br>
-                      ${tData.name ?? target?.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV
+                      <b>Total : <span style="color:#c0392b">${totalFinal}</span> dégâts</b>
+                      ${hpSecret(target, `<br>${tData.name ?? target?.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`)}
                       <div class="rpg-dmg-confirm-gm" style="margin-top:8px;display:flex;gap:8px">
                         <button type="button" class="rpg-dmg-confirm-btn" data-confirm="1"
                           data-spell-confirm="${confirmData}"
@@ -955,7 +962,8 @@ Hooks.once("init", async () => {
                   : game.actors.get(d.targetId);
                 if (target) await target.update({ "system.ressources.pv.valeur": d.pvNew });
                 await ChatMessage.create({
-                  content: `✅ <b>${d.targetName}</b> : ${d.pvCur} PV → <b>${d.pvNew}</b> PV (−${d.totalFinal})`
+                  content: `✅ <b>${d.targetName}</b> subit <b>${d.totalFinal}</b> dégâts.`
+                         + hpSecret(target, ` ${d.pvCur} PV → <b>${d.pvNew}</b>/${d.pvMax} PV`)
                 });
               } else {
                 await ChatMessage.create({ content: `❌ Dégâts annulés par le MJ.` });
@@ -980,9 +988,13 @@ Hooks.once("init", async () => {
               const actor = game.actors.get(actorId);
               const roll = await (new Roll("1d20")).evaluate();
               const hit = roll.total >= tn;
+              // Le verdict reste réservé au MJ : c'est lui qui tranche avec les
+              // boutons de validation. Le joueur voit son jet, pas le résultat.
               await roll.toMessage({
                 speaker: ChatMessage.getSpeaker({ actor }),
-                flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${spellName} : <b>${roll.total}</b> vs TN <b>${tn}+</b> → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`
+                flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${spellName} : <b>${roll.total}</b> vs TN <b>${tn}+</b>`
+                      + gmOnly(` → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`)
+                      + `<span style="display:block;font-size:11px;opacity:.7">En attente de la validation du MJ.</span>`
               });
             } catch(e) {
               console.error("[RPG] Erreur lancer d20 sort :", e);

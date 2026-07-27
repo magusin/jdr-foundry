@@ -9,6 +9,8 @@
 // de savoir si on touche). Le MJ choisit librement, le d20/TN affichés ne
 // sont qu'une indication.
 
+import { hpSecret } from "./chat-visibility.js";
+
 const MISS_MESSAGES_MELEE = [
   "{target} esquive l'attaque au dernier moment !",
   "{target} pare le coup avec son arme !",
@@ -246,7 +248,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         const pvMax = n(target.system?.ressources?.pv?.max, 0);
         const pvNew = Math.max(0, pvCur - dmgResult.final);
         await target.update({ "system.ressources.pv.valeur": pvNew });
-        pvLine = `<br>${targetName} : ${pvCur} → <b>${pvNew}</b> / ${pvMax} PV`;
+        pvLine = hpSecret(target, `<br>${targetName} : ${pvCur} → <b>${pvNew}</b> / ${pvMax} PV`);
       }
 
       const label = isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ";

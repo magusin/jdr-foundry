@@ -1,5 +1,7 @@
 // systems/rpg/module/rules/turn-effects.js
 
+import { hpSecret } from "./chat-visibility.js";
+
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
@@ -133,9 +135,10 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
     const newPv  = Math.min(pvMax, Math.max(0, pvCur - totalDot));
     updates["system.ressources.pv.valeur"] = newPv;
 
-    lines.push(totalDot > 0
-      ? `subit <b>${totalDot}</b> dégâts (DOT). PV: ${newPv}/${pvMax}`
-      : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour). PV: ${newPv}/${pvMax}`);
+    lines.push((totalDot > 0
+      ? `subit <b>${totalDot}</b> dégâts (DOT)`
+      : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour)`)
+      + hpSecret(actor, `. PV: ${newPv}/${pvMax}`));
   }
 
   if (totalFatigueDot !== 0) {

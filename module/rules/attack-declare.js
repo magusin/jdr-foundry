@@ -10,6 +10,8 @@
 // de combat construisaient chacune leur propre message : certaines n'affichaient
 // qu'un aperçu sans jet ni validation.
 
+import { gmOnly } from "./chat-visibility.js";
+
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
@@ -56,8 +58,9 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
       <div>${title}</div>
       <div style="opacity:.85;margin-top:2px">
         Seuil de touché : <b>${tn.tnFinal}+</b> <span style="opacity:.75">(base ${tn.tnBase}+${diffTxt})</span><br>
-        🎲 d20 = <b>${d20}</b> — ${verdict}
+        🎲 d20 = <b>${d20}</b>${gmOnly(` — ${verdict}`)}
         ${dmgPrev?.text ? `<br>💥 Dégâts si touché : <b>${dmgPrev.text}</b>` : ""}
+        <div style="font-size:11px;opacity:.7;margin-top:2px">En attente de la validation du MJ.</div>
       </div>
       <div class="rpg-attack-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button type="button" class="rpg-attack-resolve" data-result="critfail"

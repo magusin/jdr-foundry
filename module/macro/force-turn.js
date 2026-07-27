@@ -62,8 +62,10 @@
     mana: Number(actor.system?.ressources?.mana?.valeur ?? 0)
   };
 
+  // Outil de MJ : le récapitulatif (dont les PV) reste chuchoté au MJ.
   await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
+    whisper: game.users.filter(u => u.isGM).map(u => u.id),
     content: `
       <div style="font-size:13px">
         🔧 <b>Tour forcé (MJ)</b> — ${actor.name}<br>
