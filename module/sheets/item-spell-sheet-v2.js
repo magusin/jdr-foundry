@@ -419,9 +419,12 @@ static PARTS = foundry.utils.mergeObject(
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
 
-    // La carte Récupération n'apparaît chez le joueur que si le sort rend
-    // réellement quelque chose — sinon c'est une carte vide de plus.
-    ctx.showRestores = ctx.canEdit || ctx.system.restores.length > 0;
+    // Grilles de saisie : MJ seul. Le joueur lit la même information dans le
+    // résumé du haut (playerInfo), sans pouvoir toucher aux valeurs.
+    ctx.showRestores = ctx.canEdit;
+    // Carte « Effets secondaires » : inutile de l'afficher vide au joueur.
+    ctx.showEffects  = ctx.canEdit || (Array.isArray(ctx.system.effectsUI) && ctx.system.effectsUI.length > 0);
+    ctx.showDescription = ctx.canEdit || !!String(ctx.system.description ?? "").trim();
 
     // Catalogue d'effets groupé par type pour les optgroups du dropdown
     const lib = game.rpg?.effectLibrary;
@@ -474,6 +477,30 @@ static PARTS = foundry.utils.mergeObject(
       const cdRest = n(ctx.system.cooldown?.restant, 0);
       if (cdMax > 0) ctx.playerInfo.push({ icon: "⏳", label: "Recharge",
         value: cdRest > 0 ? `${cdRest} / ${cdMax} tours` : `${cdMax} tours` });
+
+      // Ce que le sort inflige, en clair — le joueur n'a plus la grille.
+      const formulaOf = (b, flatKey, diceKey) => {
+        const parts = [];
+        const dice = String(b[diceKey] ?? "").trim() || String(b.dice ?? "").trim();
+        if (dice) parts.push(dice);
+        const flat = n(b[flatKey], 0);
+        if (flat) parts.push(`${flat}`);
+        if (b.stat && n(b.perStep, 0)) parts.push(`${STAT_LABELS[b.stat] ?? b.stat}/${n(b.per, 10)}`);
+        return parts.join(" + ");
+      };
+      for (const d of ctx.system.damages) {
+        const normal = formulaOf(d, "flat", "dice");
+        if (!normal) continue;
+        ctx.playerInfo.push({
+          icon: "💥",
+          label: `Dégâts ${d.livraison === "physique" ? "physiques" : "magiques"}`,
+          value: normal
+        });
+        const crit = formulaOf(d, "critFlat", "critDice");
+        if (crit && crit !== normal) {
+          ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit });
+        }
+      }
 
       // Ce que le sort rend, en clair (ex : « 1d10 + 5 + Endurance/10 »)
       const RES_ICON  = { pv: "❤️", mana: "🔷", fatigue: "😴" };
@@ -987,9 +1014,13 @@ static PARTS = foundry.utils.mergeObject(
       // titre sont eux aussi des button[data-action] — les masquer privait le
       // joueur de la croix de fermeture.
       const scope = sheetContent(root);
-      scope.querySelectorAll("select[readonly]").forEach(el => {
+      // Filet de sécurité : on neutralise TOUT champ de saisie du contenu, pas
+      // seulement les select[readonly]. Les grilles Dégâts et Récupération
+      // n'ont pas d'attribut readonly — elles restaient donc pleinement
+      // modifiables par le joueur alors que la fiche est réservée au MJ.
+      scope.querySelectorAll("input, select, textarea").forEach(el => {
         el.disabled = true;
-        el.style.cssText = "background:transparent;border-color:transparent;pointer-events:none";
+        el.style.cssText += ";background:transparent;border-color:transparent;pointer-events:none";
       });
       sheetActionButtons(root).forEach(el => { el.style.display = "none"; });
       return;

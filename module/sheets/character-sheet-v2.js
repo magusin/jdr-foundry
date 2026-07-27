@@ -765,6 +765,40 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       } finally { btn.disabled = false; }
     }, { capture: true });
 
+    // ── Slots d'équipement (joueurs ET MJ) ───────────────────────────────
+    // Branché avant le retour joueur : sinon les listes déroulantes des
+    // emplacements ne réagissaient pas du tout côté joueur.
+    bindOnce("equipSlot").addEventListener("change", async (evSlot) => {
+      const el = evSlot.target;
+      if (!el?.matches?.("select[data-action='equipSlotSelect']")) return;
+      if (!game.user.isGM && !this.document.isOwner) return;
+      evSlot.stopPropagation();
+
+      const slot = el.dataset.slot;
+      const itemId = el.value || "";
+      // Verrou de combat : on teste l'objet concerné (celui qu'on prend, ou
+      // celui qu'on repose quand le joueur remet le slot à « Vide »).
+      const subject = this.document.items.get(itemId)
+                   ?? this._findEquippedForSlot(slot)
+                   ?? null;
+      el.disabled = true;
+      try {
+        const gate = await this._canEquipNow(subject ?? { name: "cet équipement" });
+        if (!gate.ok) {
+          ui.notifications?.warn?.(gate.reason);
+          await this.render({ force: true });   // remet la liste sur son état réel
+          return;
+        }
+        await this._onEquipSlotChange(slot, itemId);
+        if (gate.consume) await gate.consume();
+        this._debouncedPodsUpdate?.();
+        await this.render({ force: true });
+      } catch (e) {
+        console.error("[RPG] changement d'emplacement :", e);
+        ui.notifications?.error?.("Impossible de changer cet emplacement — voir la console (F12).");
+      } finally { el.disabled = false; }
+    }, { capture: true });
+
     // ── Ouvrir la fiche d'un objet possédé (joueurs ET MJ) ───────────────
     // Doit être branché AVANT le retour joueur : sinon les joueurs ne
     // pouvaient pas consulter leurs propres armes/armures/objets.
@@ -784,10 +818,17 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // joueurs de fermer leur fiche avec la croix.
     if (!game.user.isGM) {
       const scope = sheetContent(root);
-      scope.querySelectorAll("input, select, textarea").forEach(el => el.disabled = true);
+      // Exceptions : les listes d'emplacements et la barre de filtres des
+      // sorts sont des commandes du joueur, pas des champs de la fiche.
+      const KEEP = "[data-action='equipSlotSelect'], .spell-filter, .spell-filter-q";
+      const owned = this.document.isOwner;
+      scope.querySelectorAll("input, select, textarea").forEach(el => {
+        if (el.matches(KEEP)) { el.disabled = el.matches(".spell-filter, .spell-filter-q") ? false : !owned; return; }
+        el.disabled = true;
+      });
       sheetActionButtons(root, ":not([data-action='toggleEquip'])")
         .forEach(el => { el.disabled = true; });
-      if (!this.document.isOwner) {
+      if (!owned) {
         sheetActionButtons(root, "[data-action='toggleEquip']")
           .forEach(el => { el.disabled = true; });
       }
@@ -986,14 +1027,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     bindOnce("change").addEventListener("change", async (ev) => {
       const el = ev.target;
 
-      if (el?.matches?.("select[data-action='equipSlotSelect']")) {
-        const slot = el.dataset.slot;
-        const itemId = el.value || "";
-        await this._onEquipSlotChange(slot, itemId);
-        this._debouncedPodsUpdate?.();
-        await this.render({ force: true });
-        return;
-      }
+      // Les emplacements sont gérés plus haut par bindOnce("equipSlot"),
+      // branché avant le retour joueur et commun au MJ et aux joueurs.
 
       if (el?.matches?.("input[data-field]")) {
         const li = el.closest(".item");

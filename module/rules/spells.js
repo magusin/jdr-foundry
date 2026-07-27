@@ -767,7 +767,9 @@ export function buildSpellEffectsPreview({ actor, item }) {
     });
   }
 
-  if (!list.length) list.push({ label: "Aucun effet", when: "—", target: "—", duration: "—", summary: "" });
+  // Liste vide = pas d'aperçu du tout. Les fiches masquent le bloc quand la
+  // liste est vide ; une ligne « Aucun effet » remplissait l'écran de cadres
+  // vides pour tous les sorts qui n'en ont pas.
   return list;
 }
 

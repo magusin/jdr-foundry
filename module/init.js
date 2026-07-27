@@ -1410,6 +1410,10 @@ Hooks.once("init", async () => {
     const flat = foundry.utils.flattenObject(changed ?? {});
     const allowed = new Set([
       "system.equipe",
+      // Emplacement : écrit quand le joueur équipe via les slots de sa fiche
+      // (une arme passe de main droite à main gauche). Sans cette clé la
+      // sélection d'emplacement échouait en silence côté joueur.
+      "system.emplacement",
       "system.actif",
       "system.aura.active",
       "system.aura.enabled",

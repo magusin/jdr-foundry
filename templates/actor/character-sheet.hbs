@@ -760,7 +760,29 @@
         </div>
         {{/if}}
 
+        {{!-- Slots : le joueur choisit lui-même ce qu'il porte, emplacement
+             par emplacement, comme le MJ. Sans ça il ne pouvait qu'équiper
+             depuis le sac, sans voir ce qui allait où.                    --}}
+        <h3 style="font-size:12px;opacity:.6;margin:0 0 6px">Emplacements</h3>
+        <div class="equip-slots-player"
+             style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:14px">
+          {{#each equipSlots as |s|}}
+          <div data-slot="{{s.key}}"
+               style="border:1px solid rgba(255,255,255,0.10);border-radius:8px;padding:6px 8px">
+            <div style="font-size:11px;opacity:.65;margin-bottom:3px">{{s.label}}</div>
+            <select style="width:100%;font-size:12px" data-action="equipSlotSelect" data-slot="{{s.key}}"
+                    {{#if s.locked}}disabled{{/if}}>
+              <option value="">— Vide —</option>
+              {{#each s.options as |opt|}}
+              <option value="{{opt._id}}" {{#if opt.selected}}selected{{/if}}>{{opt.name}}{{#if opt.system.twoHands}} (2m){{/if}}</option>
+              {{/each}}
+            </select>
+          </div>
+          {{/each}}
+        </div>
+
         {{#if items.equipe.length}}
+        <h3 style="font-size:12px;opacity:.6;margin:0 0 6px">Porté</h3>
         <div style="display:flex;flex-direction:column;gap:8px">
           {{#each items.equipe as |it|}}
           <div class="item" data-item-id="{{it._id}}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(29,158,117,0.08);border-radius:10px;border:1px solid rgba(29,158,117,0.2)">

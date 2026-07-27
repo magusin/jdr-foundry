@@ -152,7 +152,10 @@
     </section>
     {{/if}}
 
-    {{!-- ═══ DÉGÂTS (multiples lignes) ═══ --}}
+    {{!-- ═══ DÉGÂTS (multiples lignes) — MJ uniquement ═══
+         Le joueur retrouve la formule dans le résumé du haut : lui montrer
+         la grille de saisie revenait à le laisser modifier le sort.      --}}
+    {{#if canEdit}}
     <section class="card">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h2>Dégâts</h2>
@@ -199,6 +202,7 @@
       <div style="font-size:11px;opacity:.6;padding:4px">Aucune ligne — clique "+ Ligne" pour en ajouter.</div>
       {{/unless}}
     </section>
+    {{/if}}
 
     {{!-- ═══ RÉCUPÉRATION (soin PV / mana / fatigue) ═══
          Symétrique de « Dégâts » : un sort peut rendre au lieu de retirer.
@@ -260,6 +264,7 @@
     {{/if}}
 
     {{!-- ═══ EFFETS ═══ --}}
+    {{#if showEffects}}
     <section class="card">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h2>Effets secondaires</h2>
@@ -535,16 +540,21 @@
       </details>
       {{/each}}
     </section>
+    {{/if}}
 
     {{!-- ═══ DESCRIPTION ═══ --}}
+    {{#if showDescription}}
     <section class="card">
       <h2>Description</h2>
       {{#if canEdit}}
       <textarea name="system.description" rows="4" style="width:100%">{{system.description}}</textarea>
       {{else}}
-      <div style="white-space:pre-wrap">{{system.description}}</div>
+      {{!-- La description est stockée en HTML : l'échapper affichait les
+           balises telles quelles au joueur (« <p>Le personnage… »).      --}}
+      <div class="spell-description">{{{system.description}}}</div>
       {{/if}}
     </section>
+    {{/if}}
 
   </section>
 </form>
