@@ -218,25 +218,38 @@ export function swapAllowed(actor) {
 async function pickAttackWeapon(actor) {
   const { buildUnarmedWeapon } = await import("./unarmed.js");
   const equipped = actor.items.filter(i => i.type === "weapon" && i.system?.equipe);
-  if (!equipped.length) return buildUnarmedWeapon(actor);
-  if (equipped.length === 1) return equipped[0];
+  if (!equipped.length) return { weapon: buildUnarmedWeapon(actor), hand: null };
+  if (equipped.length === 1) return { weapon: equipped[0], hand: handLabel(equipped[0]) };
 
+  // Deux armes équipées : chaque attaque en emploie UNE. Avec ses 2 actions,
+  // le personnage peut donc frapper une fois de chaque main s'il le veut.
   const DialogV2 = foundry.applications.api.DialogV2;
-  const label = (w) => {
-    const slot = w.system?.emplacement === "mainGauche" ? "main gauche" : "main droite";
-    return `${w.name} (${slot})`;
+  const describe = (w) => {
+    const dice = String(w.system?.damage?.dice ?? "").trim();
+    return `${w.name} — ${handLabel(w)}${dice ? ` (${dice})` : ""}`;
   };
   try {
     const chosen = await DialogV2.wait({
       window: { title: "Attaquer avec quelle arme ?" },
-      content: `<p>${actor.name} tient plusieurs armes.</p>`,
-      buttons: equipped.map(w => ({ action: w.id, label: label(w) })),
+      content: `<p style="margin:0 0 6px">${actor.name} tient une arme dans chaque main.</p>
+                <p style="opacity:.7;font-size:12px;margin:0">Une attaque = une arme.
+                Il te reste tes autres actions pour frapper de l'autre main.</p>`,
+      buttons: equipped.map(w => ({ action: w.id, label: describe(w) })),
       rejectClose: false
     });
-    return actor.items.get(chosen) ?? equipped[0];
+    const weapon = actor.items.get(chosen) ?? equipped[0];
+    return { weapon, hand: handLabel(weapon) };
   } catch {
-    return equipped[0];
+    return { weapon: equipped[0], hand: handLabel(equipped[0]) };
   }
+}
+
+/** « main gauche » / « main droite » selon l'emplacement de l'arme. */
+function handLabel(weapon) {
+  const slot = weapon?.system?.emplacement;
+  if (slot === "mainGauche") return "main gauche";
+  if (slot === "mainDroite") return "main droite";
+  return null;
 }
 
 /**
@@ -253,11 +266,19 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     if (!target?.actor) {
       return { handled: true, ok: false, reason: "Cible un ennemi (touche T) avant d'attaquer." };
     }
-    const weapon = await pickAttackWeapon(actor);
+    const { weapon, hand } = await pickAttackWeapon(actor);
     if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
 
+    // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
+    // dire laquelle a servi.
+    const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const title = `Attaque : <b>${esc(weapon.name)}</b>`
+                + (hand ? ` <span style="opacity:.7">(${hand})</span>` : "")
+                + ` → <b>${esc(target.actor.name)}</b>`;
+
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor);
+    await declareAttack(actor, weapon, target.actor, { title });
     return { handled: true, ok: true };
   }
 

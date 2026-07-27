@@ -1231,11 +1231,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         consume: async () => {
           const nowEquipped = !!item?.system?.equipe;
           if (!item?.name) return;
-          await ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ actor: this.document }),
-            content: `🔄 <b>${this.document.name}</b> ${nowEquipped ? "dégaine" : "range"} `
-                   + `<b>${item.name}</b>.`
-          });
+          // Simple accusé de réception pour celui qui manipule son sac :
+          // ni les autres joueurs ni le MJ n'ont besoin de le lire.
+          ui.notifications?.info?.(
+            `${nowEquipped ? "Équipé" : "Rangé"} : ${item.name}.`);
         }
       };
     } catch (e) {
