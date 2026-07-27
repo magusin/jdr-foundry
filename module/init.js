@@ -1420,7 +1420,11 @@ Hooks.once("init", async () => {
     // comptent ici.
     const isBookkeeping = (k) =>
       k === "_id" || k === "sort" || k === "_key" ||
-      k.startsWith("_stats") || k.startsWith("flags.");
+      k.startsWith("_stats") || k.startsWith("flags.") ||
+      // Foundry rappelle le type du document dans les écritures groupées, pour
+      // que le bon modèle de données valide la mise à jour. On ne l'ignore que
+      // s'il est INCHANGÉ : transformer une armure en arme resterait refusé.
+      (k === "type" && flat[k] === doc?.type);
 
     const allowed = new Set([
       "system.equipe",
