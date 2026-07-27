@@ -984,7 +984,11 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
          🎲 Lancer le d20
        </button>`
       + (sys.difficulte ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte,0)} déjà incluse dans le TN)</div>` : ``)
-    : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`;
+    : (!targetActors.length && !(Array.isArray(sys.damages) && sys.damages.length)
+        // Sort sans cible ni dégâts (Repos, buff sur soi…) : rien à toucher,
+        // le MJ valide simplement que l'action a lieu.
+        ? `🌀 <b>Action sur soi</b> — aucun jet de touché`
+        : `🎯 <b>Jet de touché</b> : fais ton jet${sys.difficulte ? ` (difficulté +${n(sys.difficulte,0)})` : ``}`);
 
   const content = `
   <div class="rpg-spell-declare">
@@ -1084,6 +1088,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     if (tok) targetTokens.push(tok);
   }
   const targetActors = targetTokens.map(t => t.actor).filter(Boolean);
+
+  // Jeton du lanceur : nécessaire pour viser le bon acteur synthétique quand
+  // le lanceur est un token non lié (monstre posé sur la scène).
+  const casterToken = data.casterTokenUuid
+    ? (await fromUuidSafe(data.casterTokenUuid))?.object ?? null
+    : null;
 
   // Rétrocompat : variables singulières utilisées pour les effets "self/caster"
   const targetToken = targetTokens[0] ?? null;
@@ -1187,6 +1197,59 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     });
   }
 
+  // ── Lignes de récupération (PV / mana / fatigue rendus) ──────────────
+  // Symétrique de damages[] : même formule dés + plat + stat/per × perStep,
+  // mais on RE-DONNE au lieu de retirer. Le bénéficiaire est le lanceur
+  // (« Soi », cas du sort Repos) ou les cibles visées.
+  const RES_LABEL = { pv: "PV", mana: "Mana", fatigue: "Fatigue" };
+  const restoreEntries = [];   // [{ actorId, tokenUuid, name, blocks: [...] }]
+  {
+    const byBeneficiary = new Map();
+    const push = (benefActor, benefToken, block) => {
+      if (!benefActor) return;
+      const key = benefToken?.document?.uuid ?? benefActor.uuid;
+      if (!byBeneficiary.has(key)) {
+        byBeneficiary.set(key, {
+          actorId: benefActor.id,
+          tokenUuid: benefToken?.document?.uuid ?? null,
+          name: benefActor.name,
+          blocks: []
+        });
+      }
+      byBeneficiary.get(key).blocks.push(block);
+    };
+
+    for (const r of (Array.isArray(sys.restores) ? sys.restores : [])) {
+      if (!r) continue;
+      const resource = String(r.resource ?? "pv");
+      const statKey  = String(r.stat ?? "");
+      const per      = Math.max(1, n(r.per, 10) || 10);
+      const perStep  = n(r.perStep, 0);
+      const effP     = getEffP(actor);
+      const statBonus = statKey ? Math.floor(n(effP?.[statKey], 0) / per) * perStep : 0;
+
+      // Sur critique : critDice remplace les dés (si renseigné) et critFlat
+      // remplace le plat — même convention que les lignes de dégâts.
+      const critDice = String(r.critDice ?? "").trim();
+      const baseFlat = isCrit ? n(r.critFlat, 0) : n(r.flat, 0);
+      const flat     = baseFlat + statBonus;
+      const dice     = (isCrit && critDice) ? critDice : (String(r.dice ?? "").trim() || null);
+      if (!dice && flat === 0) continue;   // ligne vide : on l'ignore
+
+      const block = {
+        resource, dice, flat, statKey, statBonus,
+        label: `${RES_LABEL[resource] ?? resource}${isCrit ? " (crit)" : ""}`
+      };
+
+      if (String(r.cible ?? "self") === "target") {
+        targetActors.forEach((tActor, idx) => push(tActor, targetTokens[idx], block));
+      } else {
+        push(actor, casterToken, block);
+      }
+    }
+    restoreEntries.push(...byBeneficiary.values());
+  }
+
   // ── Effets/États — appliqués immédiatement après réussite ────────────
   const fxList = effectsForResult(item, res);
   const fxResultRows = [];
@@ -1279,6 +1342,33 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
   await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
 
+  // ── Bloc « récupération » — commun aux deux formes de message ────────
+  // Comme pour les dégâts, on ne applique rien tout de suite : le joueur
+  // lance ses dés, puis le MJ valide.
+  let restoreSection = "";
+  if (restoreEntries.length) {
+    const encodedHeal = encodeURIComponent(JSON.stringify({
+      actorId: actor.id,
+      entries: restoreEntries
+    }));
+    const formula = (b) => {
+      const parts = [];
+      if (b.dice) parts.push(`<b>${b.dice}</b>`);
+      if (b.flat !== 0) parts.push(`<b>${b.flat > 0 ? "+" : ""}${b.flat}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
+      return parts.join(" + ") || "<b>0</b>";
+    };
+    const lines = restoreEntries.flatMap(e =>
+      e.blocks.map(b => `<div style="opacity:.85">${e.name} — ${b.label} : ${formula(b)}</div>`));
+
+    restoreSection = `
+      <div style="margin:8px 0 4px;font-weight:600">💚 Récupération :</div>
+      ${lines.join("")}
+      <button type="button" class="rpg-heal-roll-btn" data-spell-heal="${encodedHeal}"
+        style="width:100%;margin-top:8px;padding:6px;cursor:pointer;border-radius:6px;font-weight:700;font-size:13px">
+        🎲 Lancer la récupération
+      </button>`;
+  }
+
   // ── Message de résolution : effets + formule dégâts + bouton joueur ──
   if (dmgBlocks.length > 0 && targetActors.length > 0) {
     // Formule lisible par ligne
@@ -1334,14 +1424,16 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
             style="width:100%;margin-top:8px;padding:6px;cursor:pointer;border-radius:6px;font-weight:700;font-size:13px">
             🎲 Lancer les dégâts
           </button>
+          ${restoreSection}
         </div>`
     });
   } else {
-    // Pas de dégâts — message de résolution simple
+    // Pas de dégâts — message de résolution simple (+ récupération éventuelle)
     const fxBody = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
     await ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor }),
-      content: `<b>✅ ${title}</b>${targetNames ? ` sur <b>${targetNames}</b>` : ""}${fxBody}`,
+      content: `<div style="font-size:13px"><b>✅ ${title}</b>`
+             + `${targetNames ? ` sur <b>${targetNames}</b>` : ""}${fxBody}${restoreSection}</div>`,
       flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
     });
   }

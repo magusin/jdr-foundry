@@ -23,6 +23,7 @@ import { installDragLimit, clearDragLimitCache } from "./rules/drag-limit.js";
 import { applyGlobalTheme, themeWindow } from "./sheets/sheet-helpers.js";
 import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
 import { applyChatVisibility, gmOnly, hpSecret } from "./rules/chat-visibility.js";
+import { installDefaultActions, grantDefaultActions, backfillDefaultActions } from "./rules/default-actions.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -448,6 +449,9 @@ Hooks.once("init", async () => {
   // Visibilité du chat — exposée pour les macros (qui ne peuvent pas importer)
   game.rpg.chat = { gmOnly, hpSecret };
 
+  // Actions de base (Repos…) — exposées pour un rattrapage manuel du MJ
+  game.rpg.defaultActions = { grantDefaultActions, backfillDefaultActions };
+
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
 
@@ -649,6 +653,10 @@ Hooks.once("init", async () => {
 
     // ✅ Barre d'actions : glisser un sort/arme depuis une fiche y crée sa macro
     try { installHotbarSupport(); } catch (e) { console.warn("[RPG] barre d'actions:", e); }
+
+    // ✅ Actions de base (Repos…) : rattrapage sur les acteurs déjà créés
+    try { await backfillDefaultActions(); }
+    catch (e) { console.warn("[RPG] actions de base:", e); }
 
     // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
     //    (y compris les dialogues de macro) héritent des variables de thème.
@@ -941,6 +949,138 @@ Hooks.once("init", async () => {
               console.error("[RPG] Erreur lancer dégâts :", e);
               btn.disabled = false;
               btn.textContent = "🎲 Lancer les dégâts";
+            }
+          });
+        });
+
+        // ─── Récupération : le joueur lance, le MJ applique ───────────
+        // Miroir du flux « dégâts » pour les sorts qui rendent des PV, du
+        // mana ou de la fatigue (ex. Repos). Aucune mitigation ici.
+        root?.querySelectorAll(".rpg-heal-roll-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = "Calcul...";
+            try {
+              const raw = JSON.parse(decodeURIComponent(btn.dataset.spellHeal ?? "{}"));
+              const caster = game.actors.get(raw.actorId);
+
+              for (const entry of (raw.entries ?? [])) {
+                const benef = entry.tokenUuid
+                  ? (await fromUuid(entry.tokenUuid))?.actor ?? game.actors.get(entry.actorId)
+                  : game.actors.get(entry.actorId);
+                if (!benef) continue;
+
+                const lines = [];
+                const totals = {};   // ressource → montant rendu
+
+                for (const b of (entry.blocks ?? [])) {
+                  let amount = Number(b.flat) || 0;
+                  if (b.dice) {
+                    const roll = await (new Roll(b.dice)).evaluate();
+                    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
+                      flavor: `🎲 ${b.label ?? "Récupération"} — ${b.dice}` });
+                    amount += roll.total;
+                  }
+                  amount = Math.max(0, amount);
+                  totals[b.resource] = (totals[b.resource] ?? 0) + amount;
+                  lines.push(`${b.label} : <b style="color:#1d9e75">+${amount}</b>`);
+                }
+
+                // La fatigue est un malus : « en rendre » revient à la faire
+                // baisser. PV et mana montent, plafonnés à leur maximum.
+                const RES_META = {
+                  pv:      { icon: "❤️", path: "system.ressources.pv.valeur",      label: "PV" },
+                  mana:    { icon: "🔷", path: "system.ressources.mana.valeur",    label: "Mana" },
+                  fatigue: { icon: "😴", path: "system.ressources.fatigue.valeur", label: "Fatigue" }
+                };
+                const applied = [];
+                for (const [resource, amount] of Object.entries(totals)) {
+                  const meta = RES_META[resource];
+                  if (!meta || amount <= 0) continue;
+                  const pool = benef.system?.ressources?.[resource] ?? {};
+                  const cur = Number(pool.valeur ?? 0) || 0;
+                  const max = Number(pool.max ?? 0) || 0;
+                  const next = resource === "fatigue"
+                    ? Math.max(0, cur - amount)
+                    : (max > 0 ? Math.min(max, cur + amount) : cur + amount);
+                  applied.push({ resource, path: meta.path, icon: meta.icon,
+                                 label: meta.label, amount, cur, next, max });
+                }
+                if (!applied.length) continue;
+
+                const confirmData = encodeURIComponent(JSON.stringify({
+                  actorId: entry.actorId, tokenUuid: entry.tokenUuid ?? null,
+                  name: entry.name, applied
+                }));
+
+                const detail = applied.map(a =>
+                  `${a.icon} <b>${a.label}</b> +${a.amount}`
+                  + hpSecret(benef, ` <span style="opacity:.75">(${a.cur} → <b>${a.next}</b>${a.max ? `/${a.max}` : ""})</span>`)
+                ).join("<br>");
+
+                await ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ actor: caster }),
+                  content: `
+                    <div style="font-size:13px">
+                      💚 Récupération de <b>${entry.name}</b><br>
+                      ${lines.join("<br>")}
+                      <div style="margin-top:4px">${detail}</div>
+                      <div class="rpg-heal-confirm-gm" style="margin-top:8px;display:flex;gap:8px">
+                        <button type="button" class="rpg-heal-confirm-btn" data-confirm="1"
+                          data-heal-confirm="${confirmData}"
+                          style="flex:1;padding:4px;cursor:pointer;background:#1d9e75;color:#fff;border:none;border-radius:5px;font-weight:600">
+                          ✅ Appliquer
+                        </button>
+                        <button type="button" class="rpg-heal-confirm-btn" data-confirm="0"
+                          data-heal-confirm="${confirmData}"
+                          style="flex:1;padding:4px;cursor:pointer;background:#c0392b;color:#fff;border:none;border-radius:5px">
+                          ❌ Annuler
+                        </button>
+                      </div>
+                    </div>`
+                });
+              }
+            } catch(e) {
+              console.error("[RPG] Erreur lancer récupération :", e);
+              btn.disabled = false;
+              btn.textContent = "🎲 Lancer la récupération";
+            }
+          });
+        });
+
+        root?.querySelectorAll(".rpg-heal-confirm-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          if (!game.user.isGM) { btn.style.display = "none"; return; }
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            if (btn.disabled) return;
+            const allBtns = btn.closest(".rpg-heal-confirm-gm")?.querySelectorAll("button");
+            allBtns?.forEach(b => b.disabled = true);
+            try {
+              const d = JSON.parse(decodeURIComponent(btn.dataset.healConfirm ?? "{}"));
+              if (btn.dataset.confirm === "1") {
+                const benef = d.tokenUuid
+                  ? (await fromUuid(d.tokenUuid))?.actor ?? game.actors.get(d.actorId)
+                  : game.actors.get(d.actorId);
+                if (benef) {
+                  const updates = {};
+                  for (const a of (d.applied ?? [])) updates[a.path] = a.next;
+                  await benef.update(updates);
+                }
+                const summary = (d.applied ?? []).map(a => `${a.icon} ${a.label} +${a.amount}`).join(", ");
+                await ChatMessage.create({
+                  content: `✅ <b>${d.name}</b> récupère : ${summary}.`
+                });
+              } else {
+                await ChatMessage.create({ content: `❌ Récupération annulée par le MJ.` });
+              }
+              btn.closest(".message-content")?.querySelectorAll("button").forEach(b => b.style.display = "none");
+            } catch(e) {
+              console.error("[RPG] Erreur confirmation récupération :", e);
+              allBtns?.forEach(b => b.disabled = false);
             }
           });
         });
@@ -1257,6 +1397,9 @@ Hooks.once("init", async () => {
 
     return Object.keys(flat).every(k => allowed.has(k));
   });
+
+  // Actions de base (Repos…) attribuées à chaque nouvel acteur
+  try { installDefaultActions(); } catch (e) { console.warn("[RPG] actions de base:", e); }
 
   // ---------------------------
   // Génération automatique : token monstre

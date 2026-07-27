@@ -200,6 +200,65 @@
       {{/unless}}
     </section>
 
+    {{!-- ═══ RÉCUPÉRATION (soin PV / mana / fatigue) ═══
+         Symétrique de « Dégâts » : un sort peut rendre au lieu de retirer.
+         Ex. Repos : Fatigue, 1d10 + 5 + Endurance/10, sur soi.            --}}
+    {{#if showRestores}}
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2>Récupération</h2>
+        {{#if canEdit}}
+        <button type="button" data-action="addRestoreLine" style="padding:2px 10px;cursor:pointer">+ Ligne</button>
+        {{/if}}
+      </div>
+
+      {{#if system.restores.length}}
+      <div style="display:grid;grid-template-columns:78px 70px 66px 42px 96px 40px 52px 60px 44px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
+        <span>Ressource</span><span>Bénéficiaire</span><span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés sur réussite critique">Crit dés</span><span title="Bonus plat sur réussite critique">Crit plat</span><span></span>
+      </div>
+      {{/if}}
+
+      {{#each system.restores as |res i|}}
+      <div class="restore-row" data-idx="{{i}}"
+        style="display:grid;grid-template-columns:78px 70px 66px 42px 96px 40px 52px 60px 44px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
+        <select              name="system.restores.{{i}}.resource" style="font-size:12px" title="Ce que le sort rend">
+          <option value="pv"      {{#if (eq res.resource "pv")}}selected{{/if}}>❤️ PV</option>
+          <option value="mana"    {{#if (eq res.resource "mana")}}selected{{/if}}>🔷 Mana</option>
+          <option value="fatigue" {{#if (eq res.resource "fatigue")}}selected{{/if}}>😴 Fatigue</option>
+        </select>
+        <select              name="system.restores.{{i}}.cible" style="font-size:12px" title="Qui en profite">
+          <option value="self"   {{#if (eq res.cible "self")}}selected{{/if}}>Soi</option>
+          <option value="target" {{#if (eq res.cible "target")}}selected{{/if}}>Cible(s)</option>
+        </select>
+        <input type="text"   name="system.restores.{{i}}.dice"     value="{{res.dice}}"     placeholder="1d10" style="font-size:12px" title="Dés (ex: 1d10)"/>
+        <input type="number" name="system.restores.{{i}}.flat"     value="{{res.flat}}"     placeholder="0"    style="font-size:12px" title="Bonus plat"/>
+        <select              name="system.restores.{{i}}.stat"                                                  style="font-size:12px">
+          <option value="endurance"    {{#if (eq res.stat "endurance")}}selected{{/if}}>Endurance</option>
+          <option value="intelligence" {{#if (eq res.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+          <option value="force"        {{#if (eq res.stat "force")}}selected{{/if}}>Force</option>
+          <option value="dexterite"    {{#if (eq res.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+          <option value="acuite"       {{#if (eq res.stat "acuite")}}selected{{/if}}>Acuité</option>
+          <option value=""             {{#unless res.stat}}selected{{/unless}}>— aucune</option>
+        </select>
+        <input type="number" name="system.restores.{{i}}.per"      value="{{res.per}}"      placeholder="10" style="font-size:12px" title="Stat / N (ex: 10 = +gain tous les 10 points)"/>
+        <input type="number" name="system.restores.{{i}}.perStep"  value="{{res.perStep}}"  placeholder="1"  style="font-size:12px" title="Gain par palier de stat"/>
+        <input type="text"   name="system.restores.{{i}}.critDice" value="{{res.critDice}}" placeholder=""   style="font-size:12px" title="Dés sur critique (vide = mêmes dés que normal)"/>
+        <input type="number" name="system.restores.{{i}}.critFlat" value="{{res.critFlat}}" placeholder="0"  style="font-size:12px" title="Bonus plat sur critique (remplace le plat normal)"/>
+        {{#if @root.canEdit}}
+        <button type="button" data-action="removeRestoreLine" data-idx="{{i}}"
+          style="cursor:pointer;color:#c0392b;border:none;background:none;font-size:14px;padding:0">✕</button>
+        {{else}}<span></span>{{/if}}
+      </div>
+      {{/each}}
+
+      {{#unless system.restores.length}}
+      <div style="font-size:11px;opacity:.6;padding:4px">
+        Aucune ligne — clique "+ Ligne" pour un sort qui rend des PV, du mana ou de la fatigue.
+      </div>
+      {{/unless}}
+    </section>
+    {{/if}}
+
     {{!-- ═══ EFFETS ═══ --}}
     <section class="card">
       <div style="display:flex;align-items:center;justify-content:space-between">

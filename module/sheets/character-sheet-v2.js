@@ -329,6 +329,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     ctx.equipSlots = this._buildEquipSlotsUI(itemsObj);
 
+    // Le joueur peut toujours s'équiper hors combat ; en combat le changement
+    // consomme l'action « Échange d'arme » (voir _canEquipNow). On le lui dit
+    // au lieu de le laisser découvrir le refus au clic.
+    ctx.equipLocked = !isGM && !!game.combat?.active
+      && !!game.combat.combatants.find(c => c.actorId === this.document.id);
+
     ctx.flags = {
       isGM,
       isOwner,

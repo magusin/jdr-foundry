@@ -294,6 +294,17 @@ function normalizeAndMergeEffects(document, expanded) {
   }
 
   // damages[] normalize (Object -> Array) + types numériques
+  const resRaw = expanded?.system?.restores;
+  if (resRaw && !Array.isArray(resRaw)) expanded.system.restores = Object.values(resRaw);
+  if (Array.isArray(expanded?.system?.restores)) {
+    for (const r of expanded.system.restores) {
+      r.flat = Number(r.flat ?? 0) || 0;
+      r.per = Number(r.per ?? 10) || 10;
+      r.perStep = Number(r.perStep ?? 0) || 0;
+      r.critFlat = Number(r.critFlat ?? 0) || 0;
+    }
+  }
+
   const dmgRaw = expanded?.system?.damages;
   if (dmgRaw && !Array.isArray(dmgRaw)) expanded.system.damages = Object.values(dmgRaw);
   if (Array.isArray(expanded?.system?.damages)) {
@@ -341,6 +352,8 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       removeEffect:  async function(event) { await this._actionRemoveEffect(event); },
       addDmgLine:    async function(event) { await this._actionAddDmgLine(event); },
       removeDmgLine: async function(event) { await this._actionRemoveDmgLine(event); },
+      addRestoreLine:    async function(event) { await this._actionAddRestoreLine(event); },
+      removeRestoreLine: async function(event) { await this._actionRemoveRestoreLine(event); },
       addMod:        async function(event) { await this._actionAddMod(event); },
       removeMod:     async function(event) { await this._actionRemoveMod(event); },
     }
@@ -387,10 +400,28 @@ static PARTS = foundry.utils.mergeObject(
       dmg.livraison = String(dmg.livraison ?? "magique");
     }
 
+    // Normalise restores[] (soin PV / mana / fatigue rendus par le sort)
+    if (!Array.isArray(ctx.system.restores)) ctx.system.restores = [];
+    for (const res of ctx.system.restores) {
+      res.resource = String(res.resource ?? "pv");
+      res.cible    = String(res.cible ?? "self");
+      res.dice     = String(res.dice ?? "");
+      res.flat     = Number(res.flat ?? 0) || 0;
+      res.stat     = String(res.stat ?? "");
+      res.per      = Number(res.per ?? 10) || 10;
+      res.perStep  = Number(res.perStep ?? 0) || 0;
+      res.critDice = String(res.critDice ?? "");
+      res.critFlat = Number(res.critFlat ?? 0) || 0;
+    }
+
     // permissions
     // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
+
+    // La carte Récupération n'apparaît chez le joueur que si le sort rend
+    // réellement quelque chose — sinon c'est une carte vide de plus.
+    ctx.showRestores = ctx.canEdit || ctx.system.restores.length > 0;
 
     // Catalogue d'effets groupé par type pour les optgroups du dropdown
     const lib = game.rpg?.effectLibrary;
@@ -443,6 +474,22 @@ static PARTS = foundry.utils.mergeObject(
       const cdRest = n(ctx.system.cooldown?.restant, 0);
       if (cdMax > 0) ctx.playerInfo.push({ icon: "⏳", label: "Recharge",
         value: cdRest > 0 ? `${cdRest} / ${cdMax} tours` : `${cdMax} tours` });
+
+      // Ce que le sort rend, en clair (ex : « 1d10 + 5 + Endurance/10 »)
+      const RES_ICON  = { pv: "❤️", mana: "🔷", fatigue: "😴" };
+      const RES_LABEL = { pv: "Rend des PV", mana: "Rend du mana", fatigue: "Rend de la fatigue" };
+      for (const r of ctx.system.restores) {
+        const parts = [];
+        if (r.dice) parts.push(r.dice);
+        if (r.flat) parts.push(`${r.flat}`);
+        if (r.stat && r.perStep) parts.push(`${STAT_LABELS[r.stat] ?? r.stat}/${r.per}`);
+        if (!parts.length) continue;
+        ctx.playerInfo.push({
+          icon: RES_ICON[r.resource] ?? "✨",
+          label: `${RES_LABEL[r.resource] ?? "Récupération"}${r.cible === "target" ? " (cible)" : ""}`,
+          value: parts.join(" + ")
+        });
+      }
     }
 
     // defaults
@@ -685,6 +732,13 @@ static PARTS = foundry.utils.mergeObject(
           return;
         }
 
+        // 2 bis) Lignes de récupération : même principe
+        if (name.startsWith("system.restores.")) {
+          ev.stopPropagation();
+          await this._saveRestores(root);
+          return;
+        }
+
         // 3) Champ simple (carte Général, description, nom…)
         ev.stopPropagation();
         let value;
@@ -749,6 +803,38 @@ static PARTS = foundry.utils.mergeObject(
       });
     });
     await this.document.update({ "system.damages": damages }, { render: false });
+  }
+
+  /**
+   * Lit les lignes de récupération dans le DOM.
+   * Sélecteurs en `$=` (fin de nom) et non `*=` : « .per » est un préfixe de
+   * « .perStep », un `*=` renverrait le mauvais champ.
+   */
+  _collectRestoresFromDOM(root) {
+    const rows = root?.querySelectorAll(".restore-row[data-idx]") ?? [];
+    const restores = [];
+    rows.forEach(row => {
+      const v = (field) => row.querySelector(`[name$='.${field}']`)?.value;
+      restores.push({
+        id:       row.querySelector("[name$='.id']")?.value || foundry.utils.randomID(),
+        resource: v("resource") || "pv",
+        cible:    v("cible")    || "self",
+        dice:     (v("dice")     ?? "").trim(),
+        flat:     Number(v("flat"))     || 0,
+        stat:     v("stat") ?? "",
+        per:      Number(v("per"))      || 10,
+        perStep:  Number(v("perStep"))  || 0,
+        critDice: (v("critDice") ?? "").trim(),
+        critFlat: Number(v("critFlat")) || 0
+      });
+    });
+    return restores;
+  }
+
+  /** Écrit toutes les lignes de récupération lues dans le DOM. */
+  async _saveRestores(root) {
+    await this.document.update(
+      { "system.restores": this._collectRestoresFromDOM(root) }, { render: false });
   }
 
   /**
@@ -836,6 +922,14 @@ static PARTS = foundry.utils.mergeObject(
       });
     }
 
+    // ── restores : même traitement que damages ─────────────────────────────
+    if (root?.querySelector(".restore-row[data-idx]")) {
+      raw["system.restores"] = this._collectRestoresFromDOM(root);
+      Object.keys(raw).forEach(k => {
+        if (k.startsWith("system.restores.")) delete raw[k];
+      });
+    }
+
     // ── effectsUI : collecte directement depuis le DOM ─────────────────────
     // Les champs d'effet utilisent data-fx-field (et non name=) : le merge
     // générique via formData perdait les valeurs saisies, qui revenaient à
@@ -855,6 +949,10 @@ static PARTS = foundry.utils.mergeObject(
     if (Array.isArray(raw["system.damages"])) {
       expanded.system = expanded.system ?? {};
       expanded.system.damages = raw["system.damages"];
+    }
+    if (Array.isArray(raw["system.restores"])) {
+      expanded.system = expanded.system ?? {};
+      expanded.system.restores = raw["system.restores"];
     }
 
     const prepared = normalizeAndMergeEffects(this.document, expanded);
@@ -1021,6 +1119,32 @@ static PARTS = foundry.utils.mergeObject(
     const damages = foundry.utils.deepClone(this.document.system.damages ?? []);
     damages.splice(idx, 1);
     await this._updateAndKeepView({ "system.damages": damages });
+  }
+
+  async _actionAddRestoreLine(event) {
+    const restores = foundry.utils.deepClone(this.document.system.restores ?? []);
+    restores.push({
+      id: foundry.utils.randomID(),
+      resource: "pv",
+      cible: "self",
+      dice: "1d6",
+      flat: 0,
+      stat: "endurance",
+      per: 10,
+      perStep: 1,
+      critDice: "",
+      critFlat: 0
+    });
+    await this._updateAndKeepView({ "system.restores": restores });
+  }
+
+  async _actionRemoveRestoreLine(event) {
+    const btn = event?.target?.closest?.("[data-action='removeRestoreLine']");
+    const idx = Number(btn?.dataset?.idx ?? -1);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    const restores = foundry.utils.deepClone(this.document.system.restores ?? []);
+    restores.splice(idx, 1);
+    await this._updateAndKeepView({ "system.restores": restores });
   }
 
   async _actionAddMod(event) {
