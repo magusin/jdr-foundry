@@ -250,18 +250,25 @@ async function pickAttackWeapon(actor) {
     const dice = String(w.system?.damage?.dice ?? "").trim();
     return `${w.name} — ${handLabel(w)}${dice ? ` (${dice})` : ""}`;
   };
-  const malus = dualWieldDifficulty();
   const ask = (title, content, buttons) => DialogV2.wait({
     window: { title }, content, buttons, rejectClose: false
   });
+
+  // Difficulté annoncée : la plus haute des deux armes + le malus. Bornée à 4
+  // comme partout ailleurs, pour ne pas promettre un seuil que le moteur
+  // n'appliquera pas.
+  const diffOf = (w) => Number(w?.system?.difficulte ?? 0) || 0;
+  const diffSolo = Math.max(...equipped.map(diffOf));
+  const diffDuo  = Math.min(4, diffSolo + dualWieldDifficulty());
 
   try {
     const mode = await ask(
       "Comment frappes-tu ?",
       `<p style="margin:0 0 6px">${actor.name} tient une arme dans chaque main.</p>
        <p style="opacity:.75;font-size:12px;margin:0">Frapper des deux ajoute le dé de
-       la seconde arme, mais rend le coup plus dur à placer
-       (<b>+${malus}</b> au seuil de touché).</p>`,
+       la seconde arme, mais retient la difficulté de la plus délicate à manier,
+       majorée de ${dualWieldDifficulty()} — soit une difficulté de
+       <b>${diffDuo}</b>.</p>`,
       [{ action: "one", label: "⚔️ Une seule arme" },
        { action: "two", label: "⚔️⚔️ Les deux armes" }]
     );
@@ -321,10 +328,16 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
                 + (offhand ? ` <b>+ ${esc(offhand.name)}</b>` : "")
                 + ` → <b>${esc(target.actor.name)}</b>`;
 
+    // Frapper des deux : on retient la difficulté la plus haute des deux armes
+    // — manier la plus délicate conditionne tout le coup — et on y ajoute le
+    // malus de double armement.
+    const diffOf = (w) => Number(w?.system?.difficulte ?? 0) || 0;
+    const difficulte = offhand
+      ? Math.max(diffOf(weapon), diffOf(offhand)) + dualWieldDifficulty()
+      : undefined;
+
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor, {
-      title, offhand, extraDifficulty: offhand ? dualWieldDifficulty() : 0
-    });
+    await declareAttack(actor, weapon, target.actor, { title, offhand, difficulte });
     return { handled: true, ok: true };
   }
 

@@ -28,17 +28,18 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
   if (!attacker || !item || !targetActor) return null;
 
   const Combat = game.rpg?.combat;
-  const tnBase = Combat?.computeTN?.(attacker, targetActor, item)
-    ?? { tnFinal: 11, tnBase: 11, diff: 0, livraison: item.system?.livraison ?? "physique" };
-
-  // Frapper des deux armes en une seule action durcit le seuil de touché :
-  // c'est ce qui fait du choix « une arme / deux armes » un vrai choix.
-  const extra = Math.max(0, Number(opts.extraDifficulty) || 0);
-  const tn = extra
-    ? { ...tnBase, tnFinal: tnBase.tnFinal + extra, diff: (Number(tnBase.diff) || 0) + extra }
-    : tnBase;
-
   const offhand = opts.offhand ?? null;
+
+  // Difficulté forcée (attaque à deux armes : la plus haute des deux + 1).
+  // On la fait passer PAR computeTN au lieu de l'ajouter au seuil obtenu :
+  // la difficulté a son propre barème borné 0–4, l'ajouter après coup en
+  // sortirait et annoncerait un seuil que le moteur n'applique pas.
+  const tnItem = (opts.difficulte === undefined || opts.difficulte === null)
+    ? item
+    : { type: item.type, system: { ...item.system, difficulte: opts.difficulte } };
+
+  const tn = Combat?.computeTN?.(attacker, targetActor, tnItem)
+    ?? { tnFinal: 11, tnBase: 11, diff: 0, livraison: item.system?.livraison ?? "physique" };
 
   // Jet de touché, visible de tous
   const roll = await (new Roll("1d20")).evaluate();
