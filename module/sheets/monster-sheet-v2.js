@@ -101,6 +101,23 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const _tableUuid = String(actor.system?.butin?.tableUuid ?? "").trim();
     ctx.hasLoot = game.user.isGM && (_entries.length > 0 || !!_tableUuid);
 
+    // ── Ce que le joueur a le droit de lire sur ce monstre ────────────────
+    // Illustration et description toujours ; les PV seulement si le MJ l'a
+    // décidé sur cette fiche (un sort de lecture d'aura, un savoir de
+    // monstre… c'est à lui de juger).
+    {
+      const mode = String(sys.pvReveal ?? "none");
+      const cur = Number(sys.ressources?.pv?.valeur ?? 0) || 0;
+      const max = Number(sys.ressources?.pv?.max ?? 0) || 0;
+      const pct = max > 0 ? Math.round((cur / max) * 100) : 0;
+      ctx.pvReveal = {
+        mode,
+        show: mode === "pct" || mode === "exact",
+        pct: Math.max(0, Math.min(100, pct)),
+        text: mode === "exact" ? `${cur} / ${max}` : `${Math.max(0, Math.min(100, pct))} %`
+      };
+    }
+
     ctx.system.gen = ctx.system.gen ?? { levelsCsv: "", bands: {}, generated: false };
     ctx.system.gen.bands = ctx.system.gen.bands ?? {};
     ctx.system.gen.levelsCsv = String(ctx.system.gen.levelsCsv ?? "");

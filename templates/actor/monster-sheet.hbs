@@ -42,9 +42,22 @@
     <div class="tab" data-tab="main" style="display:block;">
 
       {{#unless canSeeStats}}
+      {{#if pvReveal.show}}
+      <section class="card">
+        <h2>État</h2>
+        <div class="mm-line"><span>❤️ Points de vie</span><b>{{pvReveal.text}}</b></div>
+        <div class="enc-bar" style="margin-top:6px">
+          <div class="enc-fill" style="width:{{pvReveal.pct}}%;"></div>
+        </div>
+      </section>
+      {{/if}}
       <section class="card">
         <h2>Description</h2>
-        <div class="rp-text">{{system.description}}</div>
+        {{#if system.description}}
+        <div class="rp-text">{{{system.description}}}</div>
+        {{else}}
+        <div style="opacity:.5;font-size:12px">Aucune description connue.</div>
+        {{/if}}
       </section>
       {{/unless}}
 
@@ -61,6 +74,14 @@
             <div class="mm-line">
               <span>XP donnée</span>
               <input type="number" name="system.recompenses.xp" value="{{system.recompenses.xp}}" min="0" />
+            </div>
+            <div class="mm-line">
+              <span title="Ce que les joueurs lisent en ouvrant la fiche de ce monstre. L'illustration et la description leur sont toujours visibles.">👁️ PV montrés aux joueurs</span>
+              <select name="system.pvReveal">
+                <option value="none" {{#if (eq system.pvReveal "none")}}selected{{/if}}>Masqués</option>
+                <option value="pct"  {{#if (eq system.pvReveal "pct")}}selected{{/if}}>Pourcentage seul</option>
+                <option value="exact" {{#if (eq system.pvReveal "exact")}}selected{{/if}}>Valeurs exactes</option>
+              </select>
             </div>
             <div class="mm-line">
               <span>⚔️ Allonge / menace (mêlée, m)</span>

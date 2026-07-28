@@ -312,6 +312,7 @@ function normalizeAndMergeEffects(document, expanded) {
       d.flat = Number(d.flat ?? 0) || 0;
       d.per = Number(d.per ?? 10) || 10;
       d.perStep = Number(d.perStep ?? 0) || 0;
+      d.siphon = Math.max(0, Math.min(100, Number(d.siphon ?? 0) || 0));
     }
   }
 
@@ -398,6 +399,7 @@ static PARTS = foundry.utils.mergeObject(
       dmg.critDice = String(dmg.critDice ?? "");
       dmg.critFlat = Number(dmg.critFlat ?? 0) || 0;
       dmg.livraison = String(dmg.livraison ?? "magique");
+      dmg.siphon = Math.max(0, Math.min(100, Number(dmg.siphon ?? 0) || 0));
     }
 
     // Normalise restores[] (soin PV / mana / fatigue rendus par le sort)
@@ -499,6 +501,10 @@ static PARTS = foundry.utils.mergeObject(
         const crit = formulaOf(d, "critFlat", "critDice");
         if (crit && crit !== normal) {
           ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit });
+        }
+        if (n(d.siphon, 0) > 0) {
+          ctx.playerInfo.push({ icon: "🩸", label: "Vol de vie",
+            value: `${n(d.siphon, 0)} % des dégâts infligés` });
         }
       }
 
@@ -826,6 +832,7 @@ static PARTS = foundry.utils.mergeObject(
         perStep:   Number(get("input[name*='.perStep']")?.value) || 0,
         critDice:  get("input[name*='.critDice']")?.value?.trim() || "",
         critFlat:  Number(get("input[name*='.critFlat']")?.value) || 0,
+        siphon:    Number(get("input[name$='.siphon']")?.value) || 0,
         livraison: get("select[name*='.livraison']")?.value || "magique"
       });
     });
@@ -939,6 +946,7 @@ static PARTS = foundry.utils.mergeObject(
           perStep:  Number(get("input[name*='.perStep']")?.value) || 0,
           critDice: get("input[name*='.critDice']")?.value?.trim() || "",
           critFlat: Number(get("input[name*='.critFlat']")?.value) || 0,
+          siphon:   Number(get("input[name$='.siphon']")?.value) || 0,
           livraison:get("select[name*='.livraison']")?.value || "magique",
         });
       });
@@ -1138,6 +1146,7 @@ static PARTS = foundry.utils.mergeObject(
       perStep: 1,
       critDice: "",
       critFlat: 0,
+      siphon: 0,
       livraison: "magique"
     });
     await this._updateAndKeepView({ "system.damages": damages });

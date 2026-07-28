@@ -170,6 +170,7 @@
       }
     },
     "monster": {
+      "pvReveal": "none",
       "templates": [
         "base"
       ],

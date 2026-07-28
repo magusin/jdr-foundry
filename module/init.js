@@ -25,6 +25,7 @@ import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
 import { applyChatVisibility, gmOnly, hpSecret } from "./rules/chat-visibility.js";
 import { installDefaultActions, grantDefaultActions, backfillDefaultActions,
          bindSwapChatButtons } from "./rules/default-actions.js";
+import { installCodex } from "./rules/codex.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -933,6 +934,7 @@ Hooks.once("init", async () => {
                   ? (await fromUuid(tData.tokenUuid))?.actor ?? game.actors.get(tData.id)
                   : game.actors.get(tData.id);
                 let totalFinal = 0;
+                let siphonTotal = 0;
                 const resultLines = [];
 
                 for (const b of (tData.blocks ?? [])) {
@@ -948,6 +950,11 @@ Hooks.once("init", async () => {
                   const afterFixe = Math.max(0, raw - fixe);
                   const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
                   totalFinal += finalDmg;
+                  // Vol de vie : calculé sur les dégâts réellement encaissés,
+                  // pas sur le jet brut — voler la vie d'un coup absorbé par
+                  // l'armure n'aurait pas de sens.
+                  const sPct = Math.max(0, Math.min(100, Number(b.siphon) || 0));
+                  if (sPct > 0) siphonTotal += Math.floor(finalDmg * sPct / 100);
                   resultLines.push(`${b.label}: brut <b>${raw}</b> → <b style="color:#c0392b">${finalDmg}</b>`);
                 }
 
@@ -956,9 +963,30 @@ Hooks.once("init", async () => {
                 const pvNew = Math.max(0, pvCur - totalFinal);
 
                 // Encode les données pour la confirmation MJ
+                // Vol de vie : on prépare le soin du lanceur pour qu'il soit
+                // appliqué dans la MÊME validation que les dégâts.
+                let siphon = null;
+                if (siphonTotal > 0) {
+                  const casterDoc = raw.casterUuid
+                    ? (await fromUuid(raw.casterUuid).catch(() => null)) : null;
+                  const casterActor = casterDoc?.actor ?? casterDoc ?? caster;
+                  if (casterActor) {
+                    const cCur = Number(casterActor.system?.ressources?.pv?.valeur ?? 0) || 0;
+                    const cMax = Number(casterActor.system?.ressources?.pv?.max ?? 0) || 0;
+                    siphon = {
+                      uuid: raw.casterUuid ?? null,
+                      actorId: casterActor.id,
+                      name: raw.casterName ?? casterActor.name,
+                      amount: siphonTotal,
+                      pvCur: cCur, pvMax: cMax,
+                      pvNew: cMax > 0 ? Math.min(cMax, cCur + siphonTotal) : cCur + siphonTotal
+                    };
+                  }
+                }
+
                 const confirmData = encodeURIComponent(JSON.stringify({
                   actorId, targetId: tData.id, tokenUuid: tData.tokenUuid ?? null, pvNew, totalFinal,
-                  pvCur, pvMax, targetName: tData.name ?? target?.name ?? "?"
+                  pvCur, pvMax, targetName: tData.name ?? target?.name ?? "?", siphon
                 }));
 
                 await ChatMessage.create({
@@ -969,6 +997,7 @@ Hooks.once("init", async () => {
                       ${resultLines.join("<br>")}
                       <b>Total : <span style="color:#c0392b">${totalFinal}</span> dégâts</b>
                       ${hpSecret(target, `<br>${tData.name ?? target?.name} : ${pvCur} → <b>${pvNew}</b>/${pvMax} PV`)}
+                      ${siphon ? `<br>🩸 Vol de vie : <b style="color:#1d9e75">+${siphon.amount}</b> PV pour ${siphon.name}` : ""}
                       <div class="rpg-dmg-confirm-gm" style="margin-top:8px;display:flex;gap:8px">
                         <button type="button" class="rpg-dmg-confirm-btn" data-confirm="1"
                           data-spell-confirm="${confirmData}"
@@ -1140,9 +1169,24 @@ Hooks.once("init", async () => {
                   ? (await fromUuid(d.tokenUuid))?.actor ?? game.actors.get(d.targetId)
                   : game.actors.get(d.targetId);
                 if (target) await target.update({ "system.ressources.pv.valeur": d.pvNew });
+
+                // Vol de vie : soigne le lanceur dans la même validation.
+                let siphonLine = "";
+                if (d.siphon?.amount > 0) {
+                  const cDoc = d.siphon.uuid
+                    ? (await fromUuid(d.siphon.uuid).catch(() => null)) : null;
+                  const cActor = cDoc?.actor ?? cDoc ?? game.actors.get(d.siphon.actorId);
+                  if (cActor) {
+                    await cActor.update({ "system.ressources.pv.valeur": d.siphon.pvNew });
+                    siphonLine = `<br>🩸 <b>${d.siphon.name}</b> draine <b>${d.siphon.amount}</b> PV.`
+                               + hpSecret(cActor, ` (${d.siphon.pvCur} → <b>${d.siphon.pvNew}</b>/${d.siphon.pvMax})`);
+                  }
+                }
+
                 await ChatMessage.create({
                   content: `✅ <b>${d.targetName}</b> subit <b>${d.totalFinal}</b> dégâts.`
                          + hpSecret(target, ` ${d.pvCur} PV → <b>${d.pvNew}</b>/${d.pvMax} PV`)
+                         + siphonLine
                 });
               } else {
                 await ChatMessage.create({ content: `❌ Dégâts annulés par le MJ.` });
@@ -1467,6 +1511,9 @@ Hooks.once("init", async () => {
 
   // Actions de base (Repos…) attribuées à chaque nouvel acteur
   try { installDefaultActions(); } catch (e) { console.warn("[RPG] actions de base:", e); }
+
+  // Codex : les joueurs ne voient dans les compendiums que ce qu'ils ont eu
+  try { installCodex(); } catch (e) { console.warn("[RPG] codex:", e); }
 
   // ---------------------------
   // Génération automatique : token monstre

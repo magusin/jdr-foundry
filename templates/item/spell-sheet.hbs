@@ -165,14 +165,14 @@
       </div>
 
       {{#if system.damages.length}}
-      <div style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 82px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
-        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés de dégâts sur réussite critique">Crit dés</span><span title="Bonus plat de dégâts sur réussite critique (peut différer du plat normal)">Crit plat</span><span>Livraison</span><span></span>
+      <div style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 52px 82px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
+        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés de dégâts sur réussite critique">Crit dés</span><span title="Bonus plat de dégâts sur réussite critique (peut différer du plat normal)">Crit plat</span><span title="Part des dégâts réellement infligés rendue en PV au lanceur">Vol de vie</span><span>Livraison</span><span></span>
       </div>
       {{/if}}
 
       {{#each system.damages as |dmg i|}}
       <div class="dmg-row" data-idx="{{i}}"
-        style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 82px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
+        style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 52px 82px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
         <input type="text"   name="system.damages.{{i}}.dice"     value="{{dmg.dice}}"     placeholder="1d6" style="font-size:12px" title="Dés normaux (ex: 1d6)"/>
         <input type="number" name="system.damages.{{i}}.flat"     value="{{dmg.flat}}"     placeholder="0"   style="font-size:12px" title="Bonus plat normal"/>
         <select              name="system.damages.{{i}}.stat"                                                 style="font-size:12px">
@@ -187,6 +187,7 @@
         <input type="number" name="system.damages.{{i}}.perStep"  value="{{dmg.perStep}}"  placeholder="1"   style="font-size:12px" title="Gain par palier de stat"/>
         <input type="text"   name="system.damages.{{i}}.critDice" value="{{dmg.critDice}}" placeholder="1d6" style="font-size:12px" title="Dés sur critique (vide = mêmes dés que normal)"/>
         <input type="number" name="system.damages.{{i}}.critFlat" value="{{dmg.critFlat}}" placeholder="0"   style="font-size:12px" title="Bonus plat sur critique (remplace le plat normal). Ex: normal 1d6+0, crit 1d6+2"/>
+        <input type="number" name="system.damages.{{i}}.siphon"   value="{{dmg.siphon}}"   placeholder="0"   min="0" max="100" style="font-size:12px" title="Vol de vie : % des dégâts infligés rendus en PV au lanceur (0 = aucun)"/>
         <select              name="system.damages.{{i}}.livraison"                                            style="font-size:12px">
           <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Magique</option>
           <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Physique</option>

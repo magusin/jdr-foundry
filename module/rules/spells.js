@@ -1207,7 +1207,10 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     dmgBlocks.push({
       dice, flat, livraison: livr,
       label: `Dégâts${isCrit ? " (crit)" : ""} ${livr}`.trim(),
-      statKey, statBonus
+      statKey, statBonus,
+      // Vol de vie : part des dégâts RÉELLEMENT infligés (après armure)
+      // rendue en PV au lanceur.
+      siphon: Math.max(0, Math.min(100, n(d.siphon, 0)))
     });
   }
 
@@ -1419,6 +1422,8 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
     const encodedData = encodeURIComponent(JSON.stringify({
       actorId: actor.id,
+      casterUuid: casterToken?.document?.uuid ?? actor.uuid,
+      casterName: actor.name,
       targets: targetData
     }));
 

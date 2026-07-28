@@ -20,7 +20,7 @@ const FLAG_SCOPE = "rpg";
 const FLAG_KEY   = "defaultActions";
 // Incrémenté à chaque nouvelle action de base : le rattrapage au chargement
 // complète alors les acteurs déjà traités par une version antérieure.
-const VERSION    = 2;
+const VERSION    = 3;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -170,6 +170,8 @@ export async function grantDefaultActions(actor) {
   }
 
   if (missing.length) await actor.createEmbeddedDocuments("Item", missing);
+  try { await openMonsterToPlayers(actor); }
+  catch (e) { console.warn(`[RPG] ouverture de la fiche de ${actor.name} :`, e); }
   await actor.setFlag(FLAG_SCOPE, FLAG_KEY, VERSION);
   return missing.map(m => m.name);
 }
@@ -196,6 +198,26 @@ export async function backfillDefaultActions() {
   }
   if (done) console.log(`[RPG] Actions de base ajoutées à ${done} acteur(s).`);
   return done;
+}
+
+/**
+ * Ouvre la fiche d'un monstre à la consultation des joueurs.
+ *
+ * Sans au moins le niveau « Limité », Foundry refuse purement et simplement
+ * d'ouvrir la fiche : le joueur ne verrait même pas l'illustration. La fiche
+ * elle-même ne montre que l'illustration et la description tant que le MJ
+ * n'a pas décidé d'en révéler plus (system.pvReveal).
+ *
+ * On ne touche qu'aux monstres restés sur « Aucun » : un réglage posé
+ * volontairement par le MJ n'est jamais écrasé.
+ */
+export async function openMonsterToPlayers(actor) {
+  if (!actor || actor.type !== "monster") return false;
+  const LEVELS = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+  const current = Number(actor.ownership?.default ?? LEVELS.NONE);
+  if (current !== LEVELS.NONE) return false;
+  await actor.update({ "ownership.default": LEVELS.LIMITED });
+  return true;
 }
 
 /** Clé d'action de base portée par un objet, ou null. */
