@@ -276,19 +276,19 @@ async function pickAttackWeapon(actor) {
     window: { title }, content, buttons, rejectClose: false
   });
 
-  // Difficulté annoncée : la plus haute des deux armes + le malus. Bornée à 4
-  // comme partout ailleurs, pour ne pas promettre un seuil que le moteur
-  // n'appliquera pas.
+  // Difficulté annoncée : celle de CHAQUE arme, additionnées, plus le malus
+  // de double armement — même calcul que runDefaultAction plus bas. La
+  // difficulté n'est plus plafonnée (voir combat.js) : ne pas la re-borner
+  // ici sous peine de promettre un seuil que le moteur n'appliquera pas.
   const diffOf = (w) => Number(w?.system?.difficulte ?? 0) || 0;
-  const diffSolo = Math.max(...equipped.map(diffOf));
-  const diffDuo  = Math.min(4, diffSolo + dualWieldDifficulty());
+  const diffDuo = equipped.reduce((sum, w) => sum + diffOf(w), 0) + dualWieldDifficulty();
 
   try {
     const mode = await ask(
       "Comment frappes-tu ?",
       `<p style="margin:0 0 6px">${actor.name} tient une arme dans chaque main.</p>
        <p style="opacity:.75;font-size:12px;margin:0">Frapper des deux ajoute le dé de
-       la seconde arme, mais retient la difficulté de la plus délicate à manier,
+       la seconde arme, mais additionne la difficulté des deux armes,
        majorée de ${dualWieldDifficulty()} — soit une difficulté de
        <b>${diffDuo}</b>.</p>`,
       [{ action: "one", label: "⚔️ Une seule arme" },
@@ -350,12 +350,12 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
                 + (offhand ? ` <b>+ ${esc(offhand.name)}</b>` : "")
                 + ` → <b>${esc(target.actor.name)}</b>`;
 
-    // Frapper des deux : on retient la difficulté la plus haute des deux armes
-    // — manier la plus délicate conditionne tout le coup — et on y ajoute le
-    // malus de double armement.
+    // Frapper des deux : les difficultés des DEUX armes s'additionnent — gérer
+    // deux lames à la fois est plus dur que gérer la plus délicate des deux
+    // seule — plus le malus de double armement.
     const diffOf = (w) => Number(w?.system?.difficulte ?? 0) || 0;
     const difficulte = offhand
-      ? Math.max(diffOf(weapon), diffOf(offhand)) + dualWieldDifficulty()
+      ? diffOf(weapon) + diffOf(offhand) + dualWieldDifficulty()
       : undefined;
 
     const { declareAttack } = await import("./attack-declare.js");
