@@ -1,5 +1,7 @@
 // systems/rpg/module/rules/auras.js
 
+import { RPG_AURA_RENDER } from "./aura-render.js";
+
 const REFRESH_DEBOUNCE_MS = 50;
 let _t = null;
 
@@ -340,6 +342,10 @@ export const RPG_AURAS = {
 
         await setActorStates(a, [...keep, ...add]);
       }
+
+      // Rendu visuel (anneaux colorés par élément) toujours en phase avec
+      // le calcul qui vient de s'exécuter.
+      try { RPG_AURA_RENDER.refresh(); } catch (e) { console.warn("[RPG] aura-render:", e); }
     } finally {
       _running = false;
       if (_queued) {
