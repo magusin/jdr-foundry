@@ -24,7 +24,7 @@ const ICON_BY_TAG = {
   magique:  "icons/svg/aura.svg",
   physique: "icons/svg/blood.svg",
   lumiere:  "icons/svg/sun.svg",
-  tenebres: "icons/svg/moon.svg"
+  obscurite: "icons/svg/moon.svg"
 };
 const DEFAULT_ICON = "icons/svg/hazard.svg";
 

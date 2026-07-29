@@ -16,7 +16,7 @@ export const STATE_TYPES = {
   eclair:     "Éclair",
   terre:      "Terre",
   lumiere:    "Lumière",
-  tenebres:   "Ténèbres"
+  obscurite:  "Obscurité"
 };
 
 export const STAT_KEYS = {

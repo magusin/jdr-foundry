@@ -11,7 +11,7 @@
     ["", "— Personnalisée —"],
     ["feu", "🔥 Feu"], ["air", "🌬️ Air"], ["eau", "💧 Eau"], ["glace", "❄️ Glace"],
     ["eclair", "⚡ Éclair"], ["terre", "🌿 Terre"], ["magique", "✨ Magique"],
-    ["physique", "⚔️ Physique"], ["lumiere", "✨ Lumière"], ["tenebres", "🌑 Ténèbres"]
+    ["physique", "⚔️ Physique"], ["lumiere", "✨ Lumière"], ["obscurite", "🌑 Obscurité"]
   ];
 
   // ---- Auras automatiques (sorts) : le rendu tourne déjà en continu ----
@@ -54,7 +54,7 @@
     <div style="display:flex;gap:10px;align-items:flex-end;">
       <div style="flex:1;">
         <label>Clé d'aura (création / mise à jour)</label>
-        <input type="text" name="key" placeholder="ex: zone-tenebres" value="${defaultKey}" />
+        <input type="text" name="key" placeholder="ex: zone-obscurite" value="${defaultKey}" />
       </div>
       <div style="min-width:220px;">
         <label>Charger une aura existante</label>

@@ -17,7 +17,7 @@ export const AURA_COLOR_BY_TAG = {
   magique:  0xb76bff,
   physique: 0xd1524a,
   lumiere:  0xfff2a8,
-  tenebres: 0x6b3fa0
+  obscurite: 0x6b3fa0
 };
 
 export const DEFAULT_AURA_COLOR = 0x45d4ff;

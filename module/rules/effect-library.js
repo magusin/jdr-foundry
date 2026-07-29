@@ -14,7 +14,7 @@ export const EFFECT_TAGS = {
   magique: "✨ Magique",
   physique:"⚔️ Physique",
   lumiere: "✨ Lumière",
-  tenebres:"🌑 Ténèbres"
+  obscurite:"🌑 Obscurité"
 };
 
 export const EFFECT_LIBRARY = {
