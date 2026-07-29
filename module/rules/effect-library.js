@@ -57,7 +57,7 @@ export const EFFECT_LIBRARY = {
   // ── MAGIQUE ──────────────────────────────────────────────────────────
   dissipation:    { key: "dissipation",    label: "Dissipation",     tag: "magique" },
   silence:        { key: "silence",        label: "Silence",         tag: "magique" },
-  benediction:    { key: "benediction",    label: "Bénédiction",     tag: "magique" },
+  renforcement:   { key: "renforcement",   label: "Renforcement",    tag: "magique" },
   drain:          { key: "drain",          label: "Drain",           tag: "magique" },
 
   // ── PHYSIQUE ─────────────────────────────────────────────────────────
