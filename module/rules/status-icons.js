@@ -40,9 +40,15 @@ function iconForEffect(key, tag) {
 
 const statusId = (key) => `rpg-${key}`;
 
-// Retrouver la clé du catalogue depuis le libellé d'un état appliqué.
-const LABEL_TO_KEY = {};
-for (const [key, def] of Object.entries(EFFECT_LIBRARY)) LABEL_TO_KEY[def.label] = key;
+// Retrouver la clé du catalogue depuis le libellé + l'élément d'un état
+// appliqué. Le couple (libellé, tag) fait foi plutôt que le libellé seul :
+// deux effets peuvent partager le même nom affiché (ex. "Bénédiction" en
+// Eau et en Magique) tout en restant des entrées distinctes du catalogue.
+const labelTagKey = (label, tag) => `${label}::${tag ?? ""}`;
+const LABEL_TAG_TO_KEY = {};
+for (const [key, def] of Object.entries(EFFECT_LIBRARY)) {
+  LABEL_TAG_TO_KEY[labelTagKey(def.label, def.tag)] = key;
+}
 
 /**
  * Ajoute les états du catalogue au menu clic-droit du token (non destructif :
@@ -68,7 +74,8 @@ function wantedStatusIds(actor) {
   const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
   const ids = new Set();
   for (const s of states) {
-    const key = LABEL_TO_KEY[s?.label] ?? (EFFECT_LIBRARY[s?.type] ? s.type : null);
+    const key = LABEL_TAG_TO_KEY[labelTagKey(s?.label, s?.tag)]
+      ?? (EFFECT_LIBRARY[s?.type] ? s.type : null);
     if (key) ids.add(statusId(key));
   }
   return ids;
