@@ -1,0 +1,15 @@
+{
+    "permissions": {
+      "deny": [
+        "Read(assets/**)",
+        "Read(packs/**)",
+        "Read(**/*.png)",
+        "Read(**/*.jpg)",
+        "Read(**/*.webp)",
+        "Read(.git/**)",
+        "Read(node_modules/**)",
+        "Read(.env)",
+        "Read(.env.*)"
+      ]
+    }
+  }
