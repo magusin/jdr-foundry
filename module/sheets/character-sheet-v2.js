@@ -1,6 +1,8 @@
 // systems/rpg/module/sheets/character-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
+import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
+import { STATE_TYPES } from "../rules/state-builder.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -1628,6 +1630,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       id: foundry.utils.randomID(),
       label: "Poison",
       type: "poison",
+      tag: "",
       isAura: false,
       duration: 3,
       remaining: 3,
@@ -1646,7 +1649,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       "force", "dexterite", "intelligence", "acuite", "endurance",
       "pvMax", "manaMax", "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
-      "vitesse"
+      "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
+      "fatigueMax", "podsMax"
     ];
   }
 
@@ -1668,8 +1672,30 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       scoreResistance: "Score Résistance",
       armureFixe: "Armure fixe",
       resistanceFixe: "Résistance fixe",
-      vitesse: "Vitesse"
+      vitesse: "Vitesse",
+      initiativeMod: "Initiative",
+      toucherPhysique: "Toucher physique",
+      toucherMagique: "Toucher magique",
+      fatigueMax: "Fatigue max",
+      podsMax: "Pods max"
     };
+
+    // Catalogue d'effets nommés (Ardeur, Brûlure…), groupé par élément —
+    // ne fait que pré-remplir le nom + l'élément ; tout reste éditable.
+    const byTag = {};
+    for (const e of listEffects()) {
+      if (!byTag[e.tag]) byTag[e.tag] = [];
+      byTag[e.tag].push(e);
+    }
+    const effectCatalogOptions = `<option value="">— Personnalisé —</option>` +
+      Object.entries(byTag).map(([tag, list]) =>
+        `<optgroup label="${EFFECT_TAGS[tag] ?? tag}">` +
+        list.map(e => `<option value="${e.key}">${e.label}</option>`).join("") +
+        `</optgroup>`
+      ).join("");
+
+    const tagOptions = Object.entries(STATE_TYPES)
+      .map(([k, v]) => `<option value="${k}" ${(st.tag ?? "") === k ? "selected" : ""}>${v}</option>`).join("");
 
     const row = (k, label) => {
       const cur = st.mods?.[k] ?? {};
@@ -1696,6 +1722,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       <form class="rpg-state-edit">
 
         <div class="line">
+          <div class="lbl">Nom de l'effet (catalogue)</div>
+          <select name="catalogEffect">${effectCatalogOptions}</select>
+        </div>
+
+        <div class="line">
           <div class="lbl">Nom (label)</div>
           <input type="text" name="label" value="${st.label}"/>
         </div>
@@ -1707,6 +1738,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`
     ).join("")}
           </select>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Type / Élément (résistances, couleur d'aura)</div>
+          <select name="tag">${tagOptions}</select>
         </div>
 
         <div class="line">
@@ -1732,12 +1768,12 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
         <div class="two">
           <div>
-            <label>Portée min (cases) (aura)</label>
-            <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0"/>
+            <label>Portée min (m) (aura)</label>
+            <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0" step="0.1"/>
           </div>
           <div>
-            <label>Portée max (cases) (aura)</label>
-            <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0"/>
+            <label>Portée max (m) (aura)</label>
+            <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0" step="0.1"/>
           </div>
         </div>
 
@@ -1780,6 +1816,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const out = this._normalizeState(st);
       out.label = getStr("label", out.label);
       out.type = getStr("type", out.type);
+      out.tag = getStr("tag", out.tag ?? "") || null;
       out.isAura = getChk("isAura");
 
       out.duration = Math.max(1, getNum("duration", out.duration));
@@ -1843,7 +1880,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         close: () => resolve(null)
       });
 
-      dlg.render(true);
+      dlg.render(true).then(() => {
+        // Choisir un effet du catalogue ne fait que pré-remplir nom + élément :
+        // le MJ garde la main sur toutes les valeurs (durée, mods, aura…).
+        const root = dlg.element;
+        const catalogSel = root?.querySelector('select[name="catalogEffect"]');
+        const labelInput = root?.querySelector('input[name="label"]');
+        const tagSel = root?.querySelector('select[name="tag"]');
+        catalogSel?.addEventListener("change", () => {
+          const def = getEffectDef(catalogSel.value);
+          if (!def) return;
+          if (labelInput) labelInput.value = def.label;
+          if (tagSel) tagSel.value = def.tag;
+        });
+      });
     });
   }
 

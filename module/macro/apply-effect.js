@@ -44,7 +44,7 @@
   const BY_TAG = {};
   const TAG_LABEL = { feu:"🔥 Feu", air:"🌬️ Air", eau:"💧 Eau", glace:"❄️ Glace",
                       eclair:"⚡ Éclair", terre:"🌿 Terre", magique:"✨ Magique",
-                      physique:"⚔️ Physique" };
+                      physique:"⚔️ Physique", lumiere:"✨ Lumière", obscurite:"🌑 Obscurité" };
   for (const e of effects) {
     const g = e.tag ?? "autre";
     if (!BY_TAG[g]) BY_TAG[g] = [];
@@ -129,10 +129,18 @@
           Aura (rayonne autour de la cible)
         </label>
       </div>
-      <div id="ae-aura-fields" style="display:none;gap:8px">
+      <div id="ae-aura-fields" style="display:none;flex-direction:column;gap:8px">
         <div style="display:flex;gap:8px">
-          <label style="flex:1;font-size:11px">Portée min<input id="ae-aura-min" type="number" min="0" value="0" style="width:100%"/></label>
-          <label style="flex:1;font-size:11px">Portée max<input id="ae-aura-max" type="number" min="0" value="3" style="width:100%"/></label>
+          <label style="flex:1;font-size:11px">Portée min (m)<input id="ae-aura-min" type="number" min="0" step="0.1" value="0" style="width:100%"/></label>
+          <label style="flex:1;font-size:11px">Portée max (m)<input id="ae-aura-max" type="number" min="0" step="0.1" value="3" style="width:100%"/></label>
+        </div>
+        <div>
+          <label style="font-size:11px;display:block;margin-bottom:2px">Cible de l'aura</label>
+          <select id="ae-aura-target" style="width:100%">
+            <option value="allies">🟢 Alliés</option>
+            <option value="enemies">🔴 Ennemis</option>
+            <option value="both">⚪ Tout le monde</option>
+          </select>
         </div>
       </div>
     </div>`;
@@ -154,6 +162,7 @@
           const isAura       = root.querySelector("#ae-aura").checked;
           const auraMin      = Number(root.querySelector("#ae-aura-min")?.value) || 0;
           const auraMax      = Number(root.querySelector("#ae-aura-max")?.value) || 0;
+          const auraTarget   = root.querySelector("#ae-aura-target")?.value || "allies";
 
           const mods = {};
           root.querySelectorAll(".ae-mod-row").forEach(row => {
@@ -163,7 +172,7 @@
             if (stat && (flat || pct)) mods[stat] = { flat, pct };
           });
 
-          const aura = isAura ? { min: auraMin, max: auraMax, key: effectKey } : null;
+          const aura = isAura ? { min: auraMin, max: auraMax, key: effectKey, target: auraTarget } : null;
 
           const state = lib.buildStateFromLibrary(effectKey, {
             duration, removeDifficulty: diffKey, dot, fatiguePerTick,

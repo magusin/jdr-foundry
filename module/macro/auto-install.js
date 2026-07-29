@@ -17,7 +17,7 @@ const MACRO_LIST = [
   { name: "Forcer Effets de Tour (MJ)",         file: "force-turn.js",        version: "1.0.2", img: "icons/svg/regen.svg" },
   { name: "Distribuer une Recette (MJ)",        file: "recipe-distribute.js", version: "1.0.2", img: "systems/rpg/assets/icons/anvil.svg" },
   { name: "Distribuer un Objet (MJ)",           file: "item-distribute.js",   version: "1.2.2", img: "icons/svg/item-bag.svg" },
-  { name: "Appliquer un Effet (MJ)",            file: "apply-effect.js",      version: "2.1.2", img: "icons/svg/lightning.svg" },
+  { name: "Appliquer un Effet (MJ)",            file: "apply-effect.js",      version: "2.2.0", img: "icons/svg/lightning.svg" },
   { name: "Survie : Repos / Blessures (MJ)",    file: "survival-tools.js",    version: "1.1.2", img: "icons/svg/blood.svg" },
   { name: "Météo (MJ)",                         file: "weather-control.js",   version: "1.0.2", img: "icons/svg/wave.svg" },
   { name: "Marché (MJ)",                        file: "market.js",            version: "2.1.2", img: "systems/rpg/assets/icons/coins.svg" },
