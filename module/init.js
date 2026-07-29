@@ -34,6 +34,7 @@ import { RPGItem } from "./documents/item.js";
 import * as Status from "./rules/status-effects.js";
 import { RPG_AURAS } from "./rules/auras.js";
 import { GM_AURA } from "./rules/gm-aura.js";
+import { RPG_AURA_RENDER } from "./rules/aura-render.js";
 import * as Combat from "./rules/combat.js";
 import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
@@ -452,6 +453,17 @@ Hooks.once("init", async () => {
   game.rpg.status = Status;
   game.rpg.auras = RPG_AURAS;
   game.rpg.gmAura = GM_AURA;
+  game.rpg.auraRender = RPG_AURA_RENDER;
+  // API couleurs d'aura par élément (feu, air, lumière, ténèbres…) — pour
+  // que la macro aura (qui ne peut pas faire d'import ES) affiche la même
+  // palette que le rendu automatique.
+  {
+    const _auraColorsModule = await import("./rules/aura-colors.js");
+    game.rpg.auraColors = {
+      AURA_COLOR_BY_TAG: _auraColorsModule.AURA_COLOR_BY_TAG,
+      auraColorHex:      _auraColorsModule.auraColorHex
+    };
+  }
   game[MODULE_ID] = game[MODULE_ID] || {};
   game.rpg.measureDistance = measureDistanceManhattan;
   // API terrain (types de terrain, coût de mouvement)
@@ -690,6 +702,9 @@ Hooks.once("init", async () => {
     // ✅ Blocage du déplacement au glisser : le token bute sur sa réserve
     try { installDragLimit(); } catch (e) { console.warn("[RPG] blocage au glisser:", e); }
 
+    // ✅ Rendu visuel des auras (anneaux colorés en mètres, auto + manuel)
+    try { RPG_AURA_RENDER.init(); } catch (e) { console.warn("[RPG] rendu des auras:", e); }
+
     // ✅ Barre d'actions : glisser un sort/arme depuis une fiche y crée sa macro
     try { installHotbarSupport(); } catch (e) { console.warn("[RPG] barre d'actions:", e); }
 
@@ -820,7 +835,7 @@ Hooks.once("init", async () => {
         ["Distribuer un Objet (MJ)",           "item-distribute.js",    "icons/svg/item-bag.svg",        "gm"],
         ["Distribuer une Recette (MJ)",        "recipe-distribute.js",  "systems/rpg/assets/icons/anvil.svg","gm"],
         ["Gérer l'Or (MJ)",                    "gold.js",               "systems/rpg/assets/icons/coins.svg","gm"],
-        ["Auras Grille",                       "aura.js",               "icons/svg/aura.svg",            "gm"],
+        ["Auras (mètres)",                     "aura.js",               "icons/svg/aura.svg",            "gm"],
         ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
         ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],

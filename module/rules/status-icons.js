@@ -22,7 +22,9 @@ const ICON_BY_TAG = {
   eclair:   "icons/svg/lightning.svg",
   terre:    "icons/svg/stoned.svg",
   magique:  "icons/svg/aura.svg",
-  physique: "icons/svg/blood.svg"
+  physique: "icons/svg/blood.svg",
+  lumiere:  "icons/svg/sun.svg",
+  tenebres: "icons/svg/moon.svg"
 };
 const DEFAULT_ICON = "icons/svg/hazard.svg";
 

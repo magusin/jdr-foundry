@@ -12,7 +12,9 @@ export const EFFECT_TAGS = {
   eclair:  "⚡ Éclair",
   terre:   "🌿 Terre",
   magique: "✨ Magique",
-  physique:"⚔️ Physique"
+  physique:"⚔️ Physique",
+  lumiere: "✨ Lumière",
+  tenebres:"🌑 Ténèbres"
 };
 
 export const EFFECT_LIBRARY = {

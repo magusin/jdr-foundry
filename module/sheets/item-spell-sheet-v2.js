@@ -433,7 +433,7 @@ static PARTS = foundry.utils.mergeObject(
     if (lib) {
       const TAG_LABEL = { feu:"🔥 Feu", air:"🌬️ Air", eau:"💧 Eau", glace:"❄️ Glace",
                           eclair:"⚡ Éclair", terre:"🌿 Terre", magique:"✨ Magique",
-                          physique:"⚔️ Physique" };
+                          physique:"⚔️ Physique", lumiere:"✨ Lumière", tenebres:"🌑 Ténèbres" };
       const byTag = {};
       for (const e of lib.listEffects()) {
         const g = e.tag ?? "autre";

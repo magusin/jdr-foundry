@@ -14,7 +14,9 @@ export const STATE_TYPES = {
   eau:        "Eau",
   glace:      "Glace",
   eclair:     "Éclair",
-  terre:      "Terre"
+  terre:      "Terre",
+  lumiere:    "Lumière",
+  tenebres:   "Ténèbres"
 };
 
 export const STAT_KEYS = {
@@ -40,8 +42,8 @@ export const STAT_KEYS = {
  * @param {number} opts.fatiguePerTick - fatigue/tour (négatif = repos), 0 = aucun
  * @param {Array<{stat:string, flat:number, pct:number}>} opts.mods - bonus/malus
  * @param {boolean} opts.isAura - si vrai, devient une source d'aura
- * @param {number} opts.auraMin - portée min (cases), si aura
- * @param {number} opts.auraMax - portée max (cases), si aura
+ * @param {number} opts.auraMin - portée min (mètres), si aura
+ * @param {number} opts.auraMax - portée max (mètres), si aura
  */
 export function buildCustomState({
   label, tag = "", duration = 1, permanent = false,
