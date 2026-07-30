@@ -9,7 +9,78 @@ import { checkLevelUp } from "./level-up.js";
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 /**
- * Calcule le partage d'XP entre les PJ ayant participé au combat.
+ * Demande au MJ, dans un Dialog, s'il veut distribuer l'XP de ce combat et à
+ * qui. Rien n'est jamais attribué automatiquement — le MJ garde la main sur
+ * le "si" et le "à qui" avant toute écriture en base.
+ *
+ * @returns {Promise<{proceed:boolean, selectedIds:string[]}>}
+ */
+function promptEndOfCombatChoice({ pjs, totalXP, monsterNames }) {
+  return new Promise((resolve) => {
+    const rows = pjs.map((pj) => `
+      <label style="display:flex;align-items:center;gap:6px;padding:2px 0">
+        <input type="checkbox" data-pj-id="${pj.id}" checked />
+        ${pj.name}
+      </label>`).join("");
+
+    const content = `
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--color-text-secondary)">
+          ⚔️ Combat contre <b>${monsterNames}</b> terminé — <b>${totalXP} XP</b> à répartir.
+          Sélectionne les PJ qui reçoivent leur part, ou ignore pour ne rien attribuer.
+        </div>
+        <div>${rows}</div>
+      </div>`;
+
+    const DialogClass = foundry?.applications?.api?.DialogV2 ?? globalThis.Dialog;
+    const isV2 = DialogClass === foundry?.applications?.api?.DialogV2;
+
+    const readSelection = (root) =>
+      Array.from(root.querySelectorAll("input[data-pj-id]"))
+        .filter((el) => el.checked)
+        .map((el) => el.dataset.pjId);
+
+    if (isV2) {
+      const dlg = new DialogClass({
+        window: { title: "Fin de combat — Attribution d'XP" },
+        content,
+        buttons: [
+          {
+            action: "grant",
+            label: "✅ Attribuer",
+            default: true,
+            callback: (_event, _button, dialog) => {
+              const root = dialog.element ?? dialog?.form ?? dialog;
+              resolve({ proceed: true, selectedIds: readSelection(root) });
+            }
+          },
+          { action: "skip", label: "Ignorer", callback: () => resolve({ proceed: false, selectedIds: [] }) }
+        ],
+        close: () => resolve({ proceed: false, selectedIds: [] })
+      });
+      dlg.render(true);
+      return;
+    }
+
+    new Dialog({
+      title: "Fin de combat — Attribution d'XP",
+      content,
+      buttons: {
+        grant: {
+          label: "✅ Attribuer",
+          callback: (html) => resolve({ proceed: true, selectedIds: readSelection(html?.[0] ?? html) })
+        },
+        skip: { label: "Ignorer", callback: () => resolve({ proceed: false, selectedIds: [] }) }
+      },
+      default: "grant",
+      close: () => resolve({ proceed: false, selectedIds: [] })
+    }, { width: 380 }).render(true);
+  });
+}
+
+/**
+ * Calcule le partage d'XP entre les PJ sélectionnés par le MJ, l'applique,
+ * et propose le butin (looté seulement au clic — jamais automatique).
  * XP total = somme des system.recompenses.xp de tous les monstres combattants.
  * On divise équitablement et on arrondit au supérieur pour le premier.
  *
@@ -35,7 +106,7 @@ export async function resolveEndOfCombat(combat) {
   // Déduplique les PJ (si un PJ avait plusieurs tokens)
   const pjMap = new Map();
   for (const a of pjCombatants) pjMap.set(a.id, a);
-  const pjs = [...pjMap.values()];
+  const allPjs = [...pjMap.values()];
 
   // ── 2. XP total ────────────────────────────────────────────────────────
   let totalXP = 0;
@@ -43,12 +114,23 @@ export async function resolveEndOfCombat(combat) {
     totalXP += n(monster.system?.recompenses?.xp, 0);
   }
 
-  // ── 3. Part par PJ ─────────────────────────────────────────────────────
+  const monsterNamesForPrompt = monsterCombatants.map((m) => m.name).join(", ");
+
+  // ── 3. Le MJ choisit s'il distribue l'XP, et à qui ──────────────────────
+  const { proceed, selectedIds } = await promptEndOfCombatChoice({
+    pjs: allPjs, totalXP, monsterNames: monsterNamesForPrompt
+  });
+  if (!proceed) return; // le MJ a choisi de ne rien attribuer
+
+  const pjs = allPjs.filter((p) => selectedIds.includes(p.id));
+  if (!pjs.length) return; // personne sélectionné → rien à faire
+
+  // ── 4. Part par PJ ─────────────────────────────────────────────────────
   const share      = totalXP / pjs.length;
   const shareFloor = Math.floor(share);
   const shareRem   = Math.round(totalXP - shareFloor * pjs.length); // arrondi resto
 
-  // ── 4. Applique XP + construit message ─────────────────────────────────
+  // ── 5. Applique XP + construit message ─────────────────────────────────
   const updates = [];
   const lines   = [];
 
@@ -67,14 +149,14 @@ export async function resolveEndOfCombat(combat) {
     await checkLevelUp(actor);
   }
 
-  // ── 5. Boutons de loot — un par monstre + un global ──────────────────
+  // ── 6. Boutons de loot — un par monstre + un global ──────────────────
   const lootableMonsters = monsterCombatants.filter(m => {
     const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
     const tableUuid = String(m.system?.butin?.tableUuid ?? "").trim();
     return entries.length > 0 || tableUuid;
   });
 
-  // ── 6. Message récap ───────────────────────────────────────────────────
+  // ── 7. Message récap ───────────────────────────────────────────────────
   const monsterNames = monsterCombatants.map((m) => m.name).join(", ");
 
   let content =
