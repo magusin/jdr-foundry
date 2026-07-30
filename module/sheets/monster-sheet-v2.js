@@ -452,14 +452,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       btn.addEventListener("click", async (ev) => {
         ev.preventDefault();
         if (!game.user.isGM) return;
-        const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
 
         // Ouvre un mini-dialogue pour saisir l'UUID
         const uuid = await new Promise(resolve => {
           new Dialog({
             title: "Ajouter un item au butin",
             content: `<div style="padding:4px">
-              <label style="font-size:12px">UUID de l'item (clic droit → Copy UUID)</label>
+              <label style="font-size:12px">UUID de l'item (clic droit → Copy UUID), ou glisse-dépose
+                directement un item sur cet onglet.</label>
               <input id="loot-uuid" type="text" style="width:100%;margin-top:4px"
                 placeholder="Compendium.rpg.items-reference.Item.xxxx" />
             </div>`,
@@ -475,18 +475,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         });
 
         if (!uuid) return;
-
-        // Résout l'item pour récupérer nom + image
-        let name = "Item inconnu", img = "icons/svg/item-bag.svg";
-        try {
-          const doc = await fromUuid(uuid);
-          if (doc) { name = doc.name; img = doc.img ?? img; }
-          else { ui.notifications?.warn?.("UUID introuvable — ajouté quand même."); }
-        } catch(e) { ui.notifications?.warn?.("UUID invalide."); }
-
-        entries.push({ uuid, name, img, pct: 100, qty: 1, tries: 1 });
-        await this.document.update({ "system.butin.entries": entries });
-        this.render({ force: true });
+        await this.addLootEntryByUuid(uuid);
       });
     });
 
@@ -602,6 +591,38 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         }).render(true);
       });
     });
+  }
+
+  /* -------------------------------------------- */
+  /* BUTIN — ajout d'une entrée (dialogue UUID ou glisser-déposer)  */
+  /* -------------------------------------------- */
+
+  /** Ajoute une entrée de butin à partir d'un Item déjà résolu (glisser-déposer). */
+  async addLootEntryFromItem(item) {
+    if (!game.user.isGM || !item) return;
+    const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+    entries.push({
+      uuid: item.uuid ?? "", name: item.name, img: item.img ?? "icons/svg/item-bag.svg",
+      pct: 100, qty: 1, tries: 1
+    });
+    await this.document.update({ "system.butin.entries": entries });
+    this.render({ force: true });
+  }
+
+  /** Ajoute une entrée de butin à partir d'un UUID saisi à la main. */
+  async addLootEntryByUuid(uuid) {
+    if (!game.user.isGM || !uuid) return;
+    let name = "Item inconnu", img = "icons/svg/item-bag.svg";
+    try {
+      const doc = await fromUuid(uuid);
+      if (doc) { name = doc.name; img = doc.img ?? img; }
+      else { ui.notifications?.warn?.("UUID introuvable — ajouté quand même."); }
+    } catch (e) { ui.notifications?.warn?.("UUID invalide."); }
+
+    const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+    entries.push({ uuid, name, img, pct: 100, qty: 1, tries: 1 });
+    await this.document.update({ "system.butin.entries": entries });
+    this.render({ force: true });
   }
 
   /* -------------------------------------------- */

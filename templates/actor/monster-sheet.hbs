@@ -373,7 +373,9 @@
           <button type="button" data-action="addLootEntry" style="cursor:pointer;padding:2px 10px">+ Item</button>
         </div>
         <div style="font-size:11px;opacity:.6;margin-bottom:8px">
-          Chaque item a une probabilité (%) d'être lâché. Qté min/max = quantité tirée aléatoirement.
+          Glisse-dépose un item ici (ou "+ Item" pour coller un UUID). Chaque ligne est tirée
+          indépendamment des autres, "Essais" fois, à "Chance %" par essai — pas un choix unique
+          parmi la liste. Ex. Peau 1 fois à 90%, Dent 5 fois à 80%, Griffe 10 fois à 50%.
         </div>
 
         {{#each system.butin.entries as |entry idx|}}

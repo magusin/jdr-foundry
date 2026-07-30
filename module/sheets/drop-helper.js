@@ -81,6 +81,15 @@ async function onDropItem(sheetInstance, event) {
     return;
   }
 
+  // Onglet Butin d'une fiche monstre ouvert : le drop alimente la table de
+  // butin (probabilité/quantité/essais) au lieu d'ajouter l'objet à
+  // l'inventaire du monstre — sinon impossible de constituer une table sans
+  // taper les UUID à la main.
+  if (sheetInstance._activeTab === "butin" && typeof sheetInstance.addLootEntryFromItem === "function") {
+    await sheetInstance.addLootEntryFromItem(item);
+    return;
+  }
+
   // Item déjà présent sur CET acteur : pas de doublon (réordonnancement non géré ici)
   if (item.parent?.id === actor.id) return;
 
