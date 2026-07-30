@@ -1452,7 +1452,7 @@ Hooks.once("init", async () => {
       });
 
       await ChatMessage.create({
-        content: `<b>Régénération</b> → +${regenPv} PV, +${regenMana} Mana`,
+        content: hpSecret(actor, `<b>Régénération</b> → +${regenPv} PV, +${regenMana} Mana`),
         speaker: ChatMessage.getSpeaker({ actor })
       });
     }

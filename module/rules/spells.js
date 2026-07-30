@@ -3,6 +3,7 @@ import { manhattanDistanceTokens } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
+import { hpSecret } from "./chat-visibility.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -1133,7 +1134,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       const pvMax = n(actor.system?.ressources?.pv?.max, 0);
       const pvNew = Math.max(0, pvCur - choice.selfDamage);
       await actor.update({ "system.ressources.pv.valeur": pvNew });
-      selfDmgLine = `<br>${actor.name} subit <b>${choice.selfDamage}</b> dégâts (${pvCur} → <b>${pvNew}</b>/${pvMax} PV)`;
+      selfDmgLine = hpSecret(actor, `<br>${actor.name} subit <b>${choice.selfDamage}</b> dégâts (${pvCur} → <b>${pvNew}</b>/${pvMax} PV)`);
     }
 
     await ChatMessage.create({
