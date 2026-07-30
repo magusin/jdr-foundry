@@ -64,6 +64,93 @@
   border-radius: 8px;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Fiche de quête — aération et hiérarchie des étapes
+   ══════════════════════════════════════════════════════════════════════ */
+.rpg-quest-sheet .sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rpg-quest-sheet .header-fields { flex: 1; }
+.rpg-quest-sheet .quest-send-btn { cursor: pointer; padding: 4px 10px; white-space: nowrap; }
+
+.rpg-quest-sheet .sheet-body { padding: 14px !important; }
+.rpg-quest-sheet h3 { margin: 0 0 8px 0; }
+.rpg-quest-sheet .quest-section-title { margin-top: 18px; }
+
+.rpg-quest-sheet .quest-progress-value { font-size: 13px; font-weight: 600; }
+
+.rpg-quest-sheet .quest-etapes { margin-bottom: 10px; }
+
+.rpg-quest-sheet .etape-card {
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.rpg-quest-sheet .etape-card-done { opacity: .6; }
+.rpg-quest-sheet .etape-card-current { background: rgba(29, 158, 117, 0.08); }
+
+.rpg-quest-sheet .etape-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.rpg-quest-sheet .etape-heading { font-size: 11px; font-weight: 700; opacity: .7; }
+.rpg-quest-sheet .etape-heading-tag { color: var(--color-text-secondary); }
+.rpg-quest-sheet .etape-heading-tag-current { color: #1d9e75; }
+.rpg-quest-sheet .etape-remove-btn { margin-left: auto; }
+
+.rpg-quest-sheet .etape-title-input {
+  width: 100%;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.rpg-quest-sheet .etape-block { margin-bottom: 10px; }
+.rpg-quest-sheet .etape-block:last-child { margin-bottom: 0; }
+.rpg-quest-sheet .etape-block-label {
+  display: block;
+  font-size: 11px;
+  opacity: .75;
+  margin-bottom: 4px;
+}
+.rpg-quest-sheet .etape-block-label-mj { opacity: .7; }
+.rpg-quest-sheet .etape-description,
+.rpg-quest-sheet .etape-notes-mj {
+  width: 100%;
+  font-size: 12px;
+}
+
+.rpg-quest-sheet .etape-objectifs { margin-bottom: 4px; }
+.rpg-quest-sheet .etape-objectif-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.rpg-quest-sheet .etape-objectif-row input[type="text"] { flex: 1; }
+.rpg-quest-sheet .etape-add-objectif-btn { font-size: 11px; }
+
+.rpg-quest-sheet .quest-etapes-nav {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px 0;
+}
+
+.rpg-quest-sheet .reward-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.rpg-quest-sheet .reward-uuid { flex: 2; }
+.rpg-quest-sheet .reward-name { flex: 1; }
+.rpg-quest-sheet .reward-qty { width: 50px; }
+.rpg-quest-sheet .quest-add-reward-btn { margin-top: 4px; }
+
 /* Listes déroulantes (<option>/<optgroup>) : voir styles/theme.css, qui
    centralise ce style pour .rpg-sheet/.rpg-window/.rpg-spell-menu dans les
    3 thèmes via --ink-2/--ink-text. */

@@ -69,6 +69,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.etapes = Array.isArray(ctx.system.etapes) ? ctx.system.etapes : [];
     ctx.system.etapes = ctx.system.etapes.map((e, i) => ({
       label: e?.label ?? "",
+      description: e?.description ?? "",
       notesMJ: e?.notesMJ ?? "",
       objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
       etapeNum: i + 1
@@ -100,7 +101,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       ctx.system.etapes = ctx.system.etapes
         .filter((e, i) => i <= cur)
         .map((e, i) => i === cur
-          ? { label: e.label, objectifs: e.objectifs, etapeNum: e.etapeNum }
+          ? { label: e.label, description: e.description, objectifs: e.objectifs, etapeNum: e.etapeNum }
           : { label: e.label, etapeNum: e.etapeNum, termine: true });
       ctx.system.classeRequise = "";
     }
@@ -116,6 +117,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       for (const e of expanded.system.etapes) {
         if (!e) continue;
         e.label = String(e.label ?? "").trim();
+        e.description = String(e.description ?? "");
         e.notesMJ = String(e.notesMJ ?? "");
         const objRaw = e.objectifs;
         if (objRaw && !Array.isArray(objRaw)) e.objectifs = Object.values(objRaw);
@@ -145,7 +147,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _actionAddEtape(event) {
     event?.preventDefault?.();
     const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
-    list.push({ label: "", notesMJ: "", objectifs: [] });
+    list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
     await this.document.update({ "system.etapes": list }, { render: true });
   }
 
