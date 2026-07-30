@@ -104,6 +104,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
           ? { label: e.label, description: e.description, objectifs: e.objectifs, etapeNum: e.etapeNum }
           : { label: e.label, etapeNum: e.etapeNum, termine: true });
       ctx.system.classeRequise = "";
+      ctx.system.recompense = { xp: 0, items: [] };
     }
     return ctx;
   }

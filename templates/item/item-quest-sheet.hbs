@@ -118,7 +118,8 @@
     </div>
     {{/if}}
 
-    <h3 class="quest-section-title">Récompense (à la fin de la quête)</h3>
+    {{#if isGM}}
+    <h3 class="quest-section-title">Récompense (à la fin de la quête — jamais visible du joueur)</h3>
     <div class="form-group">
       <label>XP</label>
       <input type="number" name="system.recompense.xp" value="{{system.recompense.xp}}" min="0" {{#unless canEdit}}disabled{{/unless}} />
@@ -140,6 +141,7 @@
     </div>
     {{#if canEdit}}
     <button type="button" class="quest-add-reward-btn" data-action="addRewardItem">+ Ajouter un objet en récompense</button>
+    {{/if}}
     {{/if}}
 
     <h3 class="quest-section-title">Description</h3>
