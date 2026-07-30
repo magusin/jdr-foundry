@@ -18,7 +18,7 @@ function hpState(pct) {
   if (pct >= 100) return "En forme";
   if (pct >= 75) return "Légèrement blessé";
   if (pct >= 50) return "Blessé";
-  if (pct >= 25) return "Gravement blessé";
+  if (pct >= 15) return "Gravement blessé";
   if (pct > 0) return "À l'agonie";
   return "KO";
 }
@@ -520,9 +520,9 @@ export class RPGActor extends Actor {
     // ✅ KO : à 0 PV, ne peut plus agir à son tour — sauf exception cochée par le MJ
     sys.derived.ko = (pvCur <= 0) && !sys.ignoreKO;
 
-    // ✅ Seuil critique (25% PV, comme "À l'agonie") : déclenche un jet de moral
-    // avant de pouvoir agir normalement à son tour
-    sys.derived.critique = (pctHp > 0) && (pctHp <= 25);
+    // ✅ À l'agonie (≤15% PV) : déclenche un jet de Volonté obligatoire,
+    // une seule fois par combat, avant de pouvoir agir normalement à son tour
+    sys.derived.agonie = (pctHp > 0) && (pctHp <= 15);
 
     // -----------------------
     // 6) InitiativeMod

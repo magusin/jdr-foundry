@@ -60,7 +60,7 @@ import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
-import { hasRolledMoraleThisTurn, bindMoraleChatButtons, declareMoraleCheck } from "./rules/morale-resolve.js";
+import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
 import * as Skills from "./rules/skills.js";
 import { declareSkillCheck, bindSkillCheckChatButtons, DIFFICULTY_TIERS } from "./rules/skill-check.js";
 import * as StateBuilder from "./rules/state-builder.js";
@@ -797,8 +797,8 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.combatState : K.O., fuite, fin de combat
     game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };
 
-    // ✅ game.rpg.morale : jet de moral au seuil critique
-    game.rpg.morale = { hasRolledMoraleThisTurn, declareMoraleCheck };
+    // ✅ game.rpg.agonie : jet de Volonté obligatoire à l'agonie (≤15% PV)
+    game.rpg.agonie = { hasRolledAgonieCheck, declareAgonieCheck };
 
     // ✅ game.rpg.skills : XP/niveau de compétences (source unique)
     game.rpg.skills = Skills;
@@ -882,7 +882,7 @@ Hooks.once("init", async () => {
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindSwapChatButtons(html, message); } catch (e) { }
-      try { bindMoraleChatButtons(html, message); } catch (e) { }
+      try { bindAgonieChatButtons(html, message); } catch (e) { }
       // ── Nouveau : bouton "Lancer le dé" (jet de compétence initié par MJ) ──
       {
         const _root = html instanceof HTMLElement ? html : html?.[0];
