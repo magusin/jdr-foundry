@@ -375,12 +375,14 @@
         <div style="font-size:11px;opacity:.6;margin-bottom:8px">
           Glisse-dépose un item ici (ou "+ Item" pour coller un UUID). Chaque ligne est tirée
           indépendamment des autres, "Essais" fois, à "Chance %" par essai — pas un choix unique
-          parmi la liste. Ex. Peau 1 fois à 90%, Dent 5 fois à 80%, Griffe 10 fois à 50%.
+          parmi la liste. Ex. Peau 1 fois à 90%, Dent 5 fois à 80%, Griffe 10 fois à 50%. La
+          quantité obtenue par succès est tirée entre Min et Max. Nom, image et poids restent
+          ceux de la fiche de l'objet — clique son nom pour l'ouvrir.
         </div>
 
         {{#each system.butin.entries as |entry idx|}}
         <div class="loot-entry" data-idx="{{idx}}"
-          style="display:grid;grid-template-columns:32px 1fr 60px 55px 55px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:6px;background:var(--surface);border-radius:6px">
+          style="display:grid;grid-template-columns:32px 1fr 55px 90px 55px 32px;gap:4px;align-items:center;margin-bottom:6px;padding:6px;background:var(--surface);border-radius:6px">
           <img src="{{entry.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover"/>
           <div>
             {{#if entry.uuid}}
@@ -395,11 +397,15 @@
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
             <small style="font-size:9px;opacity:.6">Chance %</small>
-            <input type="number" name="system.butin.entries.{{idx}}.pct" value="{{entry.pct}}" min="1" max="100" style="width:54px;font-size:12px;text-align:center"/>
+            <input type="number" name="system.butin.entries.{{idx}}.pct" value="{{entry.pct}}" min="1" max="100" style="width:50px;font-size:12px;text-align:center"/>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-            <small style="font-size:9px;opacity:.6">Qté/drop</small>
-            <input type="number" name="system.butin.entries.{{idx}}.qty" value="{{entry.qty}}" min="1" style="width:48px;font-size:12px;text-align:center"/>
+            <small style="font-size:9px;opacity:.6">Qté (min–max)</small>
+            <div style="display:flex;align-items:center;gap:2px">
+              <input type="number" name="system.butin.entries.{{idx}}.qtyMin" value="{{entry.qtyMin}}" min="1" style="width:38px;font-size:12px;text-align:center"/>
+              <span style="font-size:10px;opacity:.6">–</span>
+              <input type="number" name="system.butin.entries.{{idx}}.qtyMax" value="{{entry.qtyMax}}" min="1" style="width:38px;font-size:12px;text-align:center"/>
+            </div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
             <small style="font-size:9px;opacity:.6">Essais</small>

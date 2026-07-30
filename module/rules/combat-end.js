@@ -172,9 +172,14 @@ export async function resolveEndOfCombat(combat) {
 
     for (const m of lootableMonsters) {
       const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
-      const preview = entries.slice(0, 3).map(e =>
-        `${e.name}${e.tries > 1 ? ` (×${e.tries} essais)` : ""} — ${e.pct}%`
-      ).join(", ") + (entries.length > 3 ? `… +${entries.length - 3}` : "");
+      const previewParts = await Promise.all(entries.slice(0, 3).map(async (e) => {
+        let name = "Item inconnu";
+        if (e.uuid) {
+          try { name = (await fromUuid(e.uuid))?.name ?? name; } catch { /* uuid invalide */ }
+        }
+        return `${name}${e.tries > 1 ? ` (×${e.tries} essais)` : ""} — ${e.pct}%`;
+      }));
+      const preview = previewParts.join(", ") + (entries.length > 3 ? `… +${entries.length - 3}` : "");
       content += `
         <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
           <span style="flex:1;font-size:12px"><b>${m.name}</b>${preview ? `<br><small style="opacity:.6">${preview}</small>` : ""}</span>
@@ -210,8 +215,10 @@ export async function resolveEndOfCombat(combat) {
  */
 /**
  * Résout le loot d'un ou plusieurs monstres.
- * Nouvelle logique : chaque entry a pct (% de chance par essai) + qty (quantité obtenue) + tries (nombre d'essais).
- * Exemple : Dent, 90%, qty=1, tries=5 → 5 jets de 90% → 0 à 5 dents
+ * Chaque entry a pct (% de chance par essai) + qtyMin/qtyMax (quantité tirée
+ * par succès) + tries (nombre d'essais) + uuid (nom/image/poids viennent de
+ * la fiche de l'objet lui-même, jamais d'un instantané figé sur l'entrée).
+ * Exemple : Dent, 90%, qty 1-1, tries=5 → 5 jets de 90% → 0 à 5 dents.
  */
 export async function lootMonsters(monsterIds) {
   if (!game.user.isGM) return;
@@ -232,16 +239,23 @@ export async function lootMonsters(monsterIds) {
     try {
       const drops = [];
 
-      // ── Nouveau système : entries[] avec qty + tries ───────────────
+      // ── Nouveau système : entries[] avec qtyMin/qtyMax + tries ──────
       for (const entry of entries) {
-        const pct   = Math.min(100, Math.max(0, n(entry.pct, 100)));
-        const qty   = Math.max(1, n(entry.qty,  1));
-        const tries = Math.max(1, n(entry.tries, 1));
-        const itemName = entry.name || "Item inconnu";
+        const pct    = Math.min(100, Math.max(0, n(entry.pct, 100)));
+        const qtyMin = Math.max(1, n(entry.qtyMin, n(entry.qty, 1)));
+        const qtyMax = Math.max(qtyMin, n(entry.qtyMax, n(entry.qty, qtyMin)));
+        const tries  = Math.max(1, n(entry.tries, 1));
+
+        let itemName = "Item inconnu";
+        if (entry.uuid) {
+          try { itemName = (await fromUuid(entry.uuid))?.name ?? itemName; } catch { /* uuid invalide */ }
+        }
 
         let total = 0;
         for (let t = 0; t < tries; t++) {
-          if (Math.random() * 100 < pct) total += qty;
+          if (Math.random() * 100 < pct) {
+            total += qtyMin === qtyMax ? qtyMin : qtyMin + Math.floor(Math.random() * (qtyMax - qtyMin + 1));
+          }
         }
 
         if (total > 0) drops.push(`${itemName} ×${total}`);
