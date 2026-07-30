@@ -593,6 +593,33 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   /**
+   * Filtre par nom, entièrement côté DOM, pour les onglets qui n'ont qu'une
+   * recherche simple (Inventaire, Équipement, Consommables, Quêtes — Sorts a
+   * son propre filtre plus riche, cf. _bindSpellFilters). Un seul input par
+   * onglet, ciblé via [data-filter-tab], filtre les lignes [data-item-id] de
+   * ce même onglet en comparant leur nom (.item-edit, commun à tous les
+   * onglets) à la recherche.
+   */
+  _bindSimpleNameFilters(root) {
+    root.querySelectorAll(".name-filter-q").forEach((input) => {
+      if (input.dataset.rpgBound) return;
+      input.dataset.rpgBound = "1";
+
+      const tab = input.dataset.filterTab;
+      if (!tab) return;
+
+      input.addEventListener("input", () => {
+        const q = input.value.trim().toLowerCase();
+        const rows = root.querySelectorAll(`[data-tab="${tab}"] .item[data-item-id]`);
+        rows.forEach((row) => {
+          const name = (row.querySelector(".item-edit")?.textContent ?? "").toLowerCase();
+          row.hidden = !!q && !name.includes(q);
+        });
+      });
+    });
+  }
+
+  /**
    * Survoler une ligne de sort, d'arme ou d'équipement dessine sa portée sur
    * le canevas, autour du token de ce personnage. Beaucoup plus lisible que
    * d'aller relire les chiffres dans la fiche de l'objet.
@@ -681,6 +708,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     };
 
     this._bindSpellFilters(root);
+    this._bindSimpleNameFilters(root);
     this._bindRangePreview(root);
     this._bindItemDragOut(root);
 
@@ -1141,6 +1169,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       if (t === "consumable") out.consommables.push(it);
       else if (t === "spell") out.sorts.push(it);
       else if (t === "skill") out.competences.push(it);
+      else if (t === "quest") continue; // gérée par le bloc Quêtes dédié (ctx.quests), pas ici
       else if (estEquip && equipe) out.equipe.push(it);
       else if (estEquip && !equipe) out.nonEquipe.push(it);
       else out.inventaire.push(it);
@@ -1521,7 +1550,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         }
       },
 
-      skill: { name: "Nouvelle compétence", type: "skill", system: { qte: 1, poids: 0, rang: 0, statLiee: "dexterite", difficulte: 0 } }
+      skill: { name: "Nouvelle compétence", type: "skill", system: { qte: 1, poids: 0, rang: 0, statLiee: "dexterite", difficulte: 0 } },
+
+      recipe: { name: "Nouvelle recette", type: "recipe", system: { ingredients: [], result: { uuid: "", name: "" }, difficulte: 0 } },
+      quest: { name: "Nouvelle quête", type: "quest", system: { statut: "active", etapeActuelle: 0, etapes: [] } }
     };
 
     const data = defaults[type] ?? { name: "Nouvel item", type, system: { qte: 1, poids: 0 } };

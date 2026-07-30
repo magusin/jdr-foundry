@@ -2,6 +2,7 @@
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
+import { bindSendToActorsButton } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -1036,6 +1037,7 @@ static PARTS = foundry.utils.mergeObject(
 
     // Enregistrement au fil de la saisie, SANS re-render
     this._bindLiveSave(root);
+    bindSendToActorsButton(root, this.document);
 
     // Affichage progressif : on ne montre les champs d'un bloc facultatif
     // que s'il est réellement utilisé (Nature ≠ Aucun, Aura cochée).

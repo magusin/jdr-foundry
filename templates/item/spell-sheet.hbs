@@ -10,6 +10,11 @@
       {{/if}}
       {{#if isGM}}<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(180,120,0,0.2);color:#c8960a">MJ</span>{{/if}}
     </div>
+    {{#if isGM}}
+    <div style="display:flex;align-items:flex-start;justify-content:flex-end">
+      <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    </div>
+    {{/if}}
   </header>
 
   <section class="sheet-body" style="display:flex;flex-direction:column;gap:10px;padding:10px">

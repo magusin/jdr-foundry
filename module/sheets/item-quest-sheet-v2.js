@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
 import { applyUiTheme, bindImageEditors } from "./sheet-helpers.js";
+import { bindSendToActorsButton } from "./send-item-dialog.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -56,6 +57,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await super._onRender(context, options);
     applyUiTheme(this.element);
     bindImageEditors(this.element, this.document);
+    bindSendToActorsButton(this.element, this.document);
   }
 
   async _prepareContext(options) {

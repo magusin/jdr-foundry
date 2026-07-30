@@ -1,9 +1,12 @@
 <form class="rpg-sheet rpg-quest-sheet">
-  <header class="sheet-header">
+  <header class="sheet-header" style="display:flex;align-items:center;gap:10px">
     <img class="profile-img rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image" />
-    <div class="header-fields">
+    <div class="header-fields" style="flex:1">
       <input name="name" type="text" value="{{item.name}}" placeholder="Nom de la quête" {{#unless canEdit}}disabled{{/unless}} />
     </div>
+    {{#if isGM}}
+    <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    {{/if}}
   </header>
 
   <section class="sheet-body">
