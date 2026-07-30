@@ -140,7 +140,7 @@
       {{#if playerInfo.length}}
       <div class="spell-player-info">
         {{#each playerInfo as |row|}}
-        <div class="spi-row">
+        <div class="spi-row{{#if row.wide}} spi-row--wide{{/if}}">
           <span class="spi-label">{{row.icon}} {{row.label}}</span>
           <b class="spi-value">{{row.value}}</b>
         </div>

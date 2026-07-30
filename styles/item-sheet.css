@@ -263,11 +263,23 @@
 }
 .rpg-spell-sheet .spi-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 2px 10px;
   padding: 3px 0;
   border-bottom: 1px dashed var(--border-soft, rgba(255,255,255,0.08));
 }
 .rpg-spell-sheet .spi-label { font-size: 12px; color: var(--ink-text-dim, #b6ad9a); white-space: nowrap; }
-.rpg-spell-sheet .spi-value { font-size: 13px; white-space: nowrap; }
+.rpg-spell-sheet .spi-value { font-size: 13px; white-space: normal; text-align: right; min-width: 0; }
+
+/* Lignes à formule longue (dégâts, critique, vol de vie, récupération) :
+   toujours sur toute la largeur de la grille et la valeur passe à la ligne
+   sous le libellé plutôt que de déborder sur la colonne voisine. */
+.rpg-spell-sheet .spi-row--wide {
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.rpg-spell-sheet .spi-row--wide .spi-value { text-align: left; }

@@ -496,15 +496,15 @@ static PARTS = foundry.utils.mergeObject(
         ctx.playerInfo.push({
           icon: "💥",
           label: `Dégâts ${d.livraison === "physique" ? "physiques" : "magiques"}`,
-          value: normal
+          value: normal, wide: true
         });
         const crit = formulaOf(d, "critFlat", "critDice");
         if (crit && crit !== normal) {
-          ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit });
+          ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit, wide: true });
         }
         if (n(d.siphon, 0) > 0) {
           ctx.playerInfo.push({ icon: "🩸", label: "Vol de vie",
-            value: `${n(d.siphon, 0)} % des dégâts infligés` });
+            value: `${n(d.siphon, 0)} % des dégâts infligés`, wide: true });
         }
       }
 
@@ -520,7 +520,7 @@ static PARTS = foundry.utils.mergeObject(
         ctx.playerInfo.push({
           icon: RES_ICON[r.resource] ?? "✨",
           label: `${RES_LABEL[r.resource] ?? "Récupération"}${r.cible === "target" ? " (cible)" : ""}`,
-          value: parts.join(" + ")
+          value: parts.join(" + "), wide: true
         });
       }
     }
