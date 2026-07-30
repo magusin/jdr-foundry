@@ -42,7 +42,15 @@ function canSeeHp(uuid) {
   try {
     const doc = fromUuidSync(uuid);
     const actor = doc?.actor ?? doc;   // TokenDocument → Actor synthétique
-    return !!actor?.isOwner;
+    if (actor?.isOwner) return true;
+    // Monstre : le MJ peut choisir de révéler les PV exacts sur la fiche
+    // (system.pvReveal). "pct" ne donne droit qu'à un pourcentage arrondi
+    // affiché sur la fiche — le chat, lui, n'affiche que des valeurs
+    // exactes, donc seul le mode "exact" débloque ces messages.
+    if (actor?.type === "monster" && String(actor?.system?.pvReveal ?? "none") === "exact") {
+      return true;
+    }
+    return false;
   } catch {
     return false;   // uuid non résolvable côté joueur → on masque
   }

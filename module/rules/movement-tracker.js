@@ -31,6 +31,15 @@ const _prevPos = new Map();
 const _pendingRevert = new Map();
 const REVERT_TTL_MS = 3000;
 
+// Anti-spam : un seul geste de glisser V13 déclenche plusieurs cycles
+// preUpdateToken (position mise à jour en direct pendant le drag), donc le
+// même « mur de budget » peut être touché plusieurs fois d'affilée. On ne
+// remontre le toast qu'une fois par courte fenêtre, sans jamais sauter le
+// bridage lui-même (qui doit s'appliquer à CHAQUE appel).
+// tokenId → timestamp du dernier toast
+const _lastNotifyAt = new Map();
+const NOTIFY_COOLDOWN_MS = 1200;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getVitesse(actor) {
@@ -97,9 +106,22 @@ function fmt(m) { return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`; }
  * restaurer si Foundry applique quand même la mise à jour, puis renvoie false.
  */
 function _refuseMove(tokenDoc, message) {
-  if (message) ui.notifications?.warn?.(message);
+  if (message) _notifyOnce(tokenDoc.id, () => ui.notifications?.warn?.(message));
   _pendingRevert.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y, at: Date.now() });
   return false;
+}
+
+/**
+ * Affiche un toast au plus une fois par courte fenêtre par token — un seul
+ * geste de glisser V13 peut déclencher le même bridage plusieurs fois
+ * d'affilée (position mise à jour en direct pendant le drag).
+ */
+function _notifyOnce(tokenId, fn) {
+  const now = Date.now();
+  const last = _lastNotifyAt.get(tokenId) ?? 0;
+  if (now - last < NOTIFY_COOLDOWN_MS) return;
+  _lastNotifyAt.set(tokenId, now);
+  fn();
 }
 
 /**
@@ -156,8 +178,14 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
 
-  // Nouvelle tentative : tout refus précédent est caduc
-  _pendingRevert.delete(tokenDoc.id);
+  // NB : on ne purge PAS _pendingRevert ici. En V13, un seul geste de glisser
+  // déclenche PLUSIEURS cycles preUpdateToken/updateToken (mise à jour live de
+  // la position pendant le drag, pas seulement au lâcher). Si on efface la
+  // cible en attente à chaque appel, on annule la correction programmée par
+  // l'appel précédent avant qu'elle ait pu s'appliquer — le token retombe
+  // alors sur la dernière position non corrigée (souvent son point de départ).
+  // La cible n'est réécrite que quand on calcule un nouveau point d'arrêt
+  // (ci-dessous) ou effacée une fois honorée, dans onUpdateToken.
   // La réserve va changer : le point d'arrêt mis en cache pour le glisser
   // n'est plus valable.
   import("./drag-limit.js").then(m => m.clearDragLimitCache(tokenDoc.id)).catch(() => {});
@@ -231,9 +259,9 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
       _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
 
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
-      ui.notifications?.info?.(
+      _notifyOnce(tokenDoc.id, () => ui.notifications?.info?.(
         `Déplacement arrêté à ${fmt(remaining)}${typeLabel} — c'est tout ce qu'il te reste ce tour.`
-      );
+      ));
       return;   // le déplacement raccourci est accepté
     }
   }
@@ -261,12 +289,27 @@ export async function onUpdateToken(tokenDoc, changes, options) {
     const offBy = Math.hypot(landedX - target.x, landedY - target.y);
 
     if (fresh && offBy > 1) {
-      // Le token n'est pas là où il devait s'arrêter → on corrige.
+      // Le token n'est pas là où il devait s'arrêter → on corrige. On coupe
+      // d'abord toute animation de déplacement V13 encore en cours (le ruban
+      // de déplacement natif peut continuer d'animer vers la destination
+      // d'origine après notre correction sinon, donnant l'impression que le
+      // token « revient » à sa position de départ une fois l'animation finie).
+      try { tokenDoc.stopMovement?.(); } catch { /* API absente : ignorer */ }
       try {
         await tokenDoc.update({ x: target.x, y: target.y },
                               { rpgNoTrack: true, animate: false });
       } catch (e) {
         console.warn("[RPG] correction du déplacement bridé :", e);
+      }
+      // Vérifie que la correction a bien pris (une mise à jour live
+      // concurrente du drag V13 a pu s'intercaler) ; sinon, un second essai.
+      if (tokenDoc.x !== target.x || tokenDoc.y !== target.y) {
+        try {
+          await tokenDoc.update({ x: target.x, y: target.y },
+                                { rpgNoTrack: true, animate: false });
+        } catch (e) {
+          console.warn("[RPG] 2e correction du déplacement bridé :", e);
+        }
       }
 
       const start = _prevPos.get(tokenDoc.id);

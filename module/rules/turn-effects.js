@@ -138,7 +138,7 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
     lines.push((totalDot > 0
       ? `subit <b>${totalDot}</b> dégâts (DOT)`
       : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour)`)
-      + hpSecret(actor, `. PV: ${newPv}/${pvMax}`));
+      + `. PV: ${newPv}/${pvMax}`);
   }
 
   if (totalFatigueDot !== 0) {
@@ -157,7 +157,7 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
     await actor.update(updates);
     await ChatMessage.create({
       speaker:  ChatMessage.getSpeaker({ actor }),
-      content:  `<b>${actor.name}</b> ${lines.join(" — ")}`
+      content:  hpSecret(actor, `<b>${actor.name}</b> ${lines.join(" — ")}`)
     });
   } else if (changed) {
     await actor.update(updates);

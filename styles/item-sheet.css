@@ -64,34 +64,9 @@
   border-radius: 8px;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Listes déroulantes — lisibilité
-   Le menu natif d'un <select> est rendu par l'OS : sans couleurs
-   explicites sur <option>/<optgroup>, on obtenait du gris clair sur blanc.
-   ══════════════════════════════════════════════════════════════════════ */
-.rpg-sheet select option,
-.rpg-sheet select optgroup {
-  background-color: var(--rpg-select-bg, #1e1e26);
-  color: var(--rpg-select-fg, #ece9e4);
-}
-.rpg-sheet select optgroup {
-  font-weight: 700;
-  font-style: normal;
-  color: var(--brass, #d1a144);
-}
-.rpg-sheet select option:checked,
-.rpg-sheet select option:hover {
-  background-color: var(--brass, #d1a144);
-  color: #17171d;
-}
-/* Thème clair : on repasse sur du texte sombre sur fond clair */
-.rpg-sheet.theme-clair select option,
-.rpg-sheet.theme-clair select optgroup,
-.rpg-sheet.theme-contraste select option,
-.rpg-sheet.theme-contraste select optgroup {
-  background-color: #ffffff;
-  color: #1b1b1b;
-}
+/* Listes déroulantes (<option>/<optgroup>) : voir styles/theme.css, qui
+   centralise ce style pour .rpg-sheet/.rpg-window/.rpg-spell-menu dans les
+   3 thèmes via --ink-2/--ink-text. */
 
 /* ══════════════════════════════════════════════════════════════════════
    Fiche de sort — bloc « Effets secondaires »
@@ -167,7 +142,7 @@
 .rpg-spell-sheet .fx-body label {
   display: block;
   font-size: 11px;
-  opacity: 0.8;
+  color: var(--ink-text-dim, #b6ad9a);
   margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -210,7 +185,7 @@
 .rpg-spell-sheet .fx-hint {
   display: block;
   font-size: 10px;
-  opacity: 0.6;
+  color: var(--ink-text-faint, #847c6d);
   margin-top: 6px;
   white-space: normal;
 }
@@ -226,7 +201,7 @@
 .rpg-spell-sheet .fx-mod-head {
   font-size: 10px;
   font-weight: 700;
-  opacity: 0.55;
+  color: var(--ink-text-dim, #b6ad9a);
   margin-bottom: 2px;
 }
 .rpg-spell-sheet .fx-mod-head > span { padding-left: 2px; }
@@ -294,5 +269,5 @@
   padding: 3px 0;
   border-bottom: 1px dashed var(--border-soft, rgba(255,255,255,0.08));
 }
-.rpg-spell-sheet .spi-label { font-size: 12px; opacity: 0.8; white-space: nowrap; }
+.rpg-spell-sheet .spi-label { font-size: 12px; color: var(--ink-text-dim, #b6ad9a); white-space: nowrap; }
 .rpg-spell-sheet .spi-value { font-size: 13px; white-space: nowrap; }
