@@ -67,6 +67,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.etapes = Array.isArray(ctx.system.etapes) ? ctx.system.etapes : [];
     ctx.system.etapes = ctx.system.etapes.map((e, i) => ({
       label: e?.label ?? "",
+      notesMJ: e?.notesMJ ?? "",
       objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
       etapeNum: i + 1
     }));
@@ -87,6 +88,20 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
+
+    // ── Vue joueur : n'expose ni les étapes à venir, ni les notes MJ ────────
+    // (PNJ, lieux, récompenses de mise en scène...), ni la note de casting
+    // interne. Le joueur ne doit voir que l'étape en cours en détail, et les
+    // étapes passées en titre seul — jamais ce qui n'est pas encore arrivé.
+    if (!ctx.isGM) {
+      const cur = ctx.system.etapeActuelle;
+      ctx.system.etapes = ctx.system.etapes
+        .filter((e, i) => i <= cur)
+        .map((e, i) => i === cur
+          ? { label: e.label, objectifs: e.objectifs, etapeNum: e.etapeNum }
+          : { label: e.label, etapeNum: e.etapeNum, termine: true });
+      ctx.system.classeRequise = "";
+    }
     return ctx;
   }
 
@@ -99,6 +114,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       for (const e of expanded.system.etapes) {
         if (!e) continue;
         e.label = String(e.label ?? "").trim();
+        e.notesMJ = String(e.notesMJ ?? "");
         const objRaw = e.objectifs;
         if (objRaw && !Array.isArray(objRaw)) e.objectifs = Object.values(objRaw);
         if (Array.isArray(e.objectifs)) {
@@ -127,7 +143,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _actionAddEtape(event) {
     event?.preventDefault?.();
     const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
-    list.push({ label: "", objectifs: [] });
+    list.push({ label: "", notesMJ: "", objectifs: [] });
     await this.document.update({ "system.etapes": list }, { render: true });
   }
 
