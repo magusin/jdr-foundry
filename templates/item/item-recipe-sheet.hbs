@@ -1,5 +1,5 @@
 <form class="rpg-sheet rpg-recipe-sheet">
-  <header class="sheet-header">
+  <header class="sheet-header" style="display:flex;align-items:center;gap:10px">
     <img class="rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image"
       style="width:48px;height:48px;cursor:{{#if canEdit}}pointer{{else}}default{{/if}};border-radius:8px;border:1px solid var(--color-border-light-2)"/>
     <div class="header-fields" style="flex:1">
@@ -9,6 +9,9 @@
       <h2 style="margin:0">{{item.name}}</h2>
       {{/if}}
     </div>
+    {{#if isGM}}
+    <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    {{/if}}
   </header>
 
   <section class="sheet-body" style="padding:10px;display:flex;flex-direction:column;gap:12px">

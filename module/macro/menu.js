@@ -21,7 +21,7 @@
   const getCombatAPI   = () => game.rpg?.combat ?? null;
   const getBudgetAPI   = () => game.rpg?.budget ?? null;
   const getConfirmAPI  = () => game.rpg?.actionConfirm ?? null;
-  const getMoraleAPI   = () => game.rpg?.morale ?? null;
+  const getAgonieAPI   = () => game.rpg?.agonie ?? null;
 
   // Helpers budget
   const getCombat       = () => game.combat ?? null;
@@ -35,15 +35,15 @@
     return current.actorId === a?.id;
   };
   const isKO            = (a) => !!a?.system?.derived?.ko;
-  const isCritique      = (a) => !!a?.system?.derived?.critique;
-  const needsMoraleFirst = (a) => {
-    if (isKO(a) || !isCritique(a) || !isMyTurn(a)) return false;
+  const isAgonie        = (a) => !!a?.system?.derived?.agonie;
+  const needsAgonieCheckFirst = (a) => {
+    if (isKO(a) || !isAgonie(a) || !isMyTurn(a)) return false;
     const combat = getCombat();
     if (!combat || !combat.started) return false;
-    const moraleAPI = getMoraleAPI();
-    return !(moraleAPI?.hasRolledMoraleThisTurn(combat));
+    const agonieAPI = getAgonieAPI();
+    return !(agonieAPI?.hasRolledAgonieCheck(combat, a?.id));
   };
-  const canAct = (a) => !isKO(a) && !needsMoraleFirst(a);
+  const canAct = (a) => !isKO(a) && !needsAgonieCheckFirst(a);
   const getBudget       = (a) => {
     const api = getBudgetAPI();
     const cbt = getCombatant(a);
@@ -270,7 +270,7 @@
       const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange;
       if (!myTurn) reasons.unshift("Pas ton tour");
       if (isKO(actor)) reasons.unshift("K.O. (0 PV)");
-      else if (needsMoraleFirst(actor)) reasons.unshift("Jet de moral requis avant d'agir");
+      else if (needsAgonieCheckFirst(actor)) reasons.unshift("Jet de Volonté requis avant d'agir");
       const atkTitle  = reasons.join(" • ");
 
       return `
@@ -372,7 +372,7 @@
       const reasons = [];
       if (!myTurn) reasons.push("Pas ton tour");
       if (isKO(actor)) reasons.push("K.O. (0 PV)");
-      else if (needsMoraleFirst(actor)) reasons.push("Jet de moral requis avant d'agir");
+      else if (needsAgonieCheckFirst(actor)) reasons.push("Jet de Volonté requis avant d'agir");
       if (!ready) reasons.push(`En recharge (${cd.restant} tour(s))`);
       if (!okMana) reasons.push(`Mana insuffisant (${manaNow}/${manaCost})`);
       if (!hasSlot) reasons.push("Slot épuisé pour ce tour");
@@ -457,20 +457,20 @@
                     💀 K.O. (0 PV) — ne peut plus agir ce tour
                   </div>` : ""}
 
-        <!-- Bannière jet de moral nécessaire -->
+        <!-- Bannière jet de Volonté nécessaire -->
         ${(() => {
           const combat = getCombat();
-          if (isKO(actor) || !isCritique(actor) || !isMyTurn(actor)) return "";
+          if (isKO(actor) || !isAgonie(actor) || !isMyTurn(actor)) return "";
           if (!combat || !combat.started) return "";
-          const moraleAPI = getMoraleAPI();
-          if (!moraleAPI || moraleAPI.hasRolledMoraleThisTurn(combat)) return "";
+          const agonieAPI = getAgonieAPI();
+          if (!agonieAPI || agonieAPI.hasRolledAgonieCheck(combat, actor.id)) return "";
           return `<div style="background:#7a4a00;color:#fff;padding:8px 10px;border-radius:8px;
                        font-size:12px;font-weight:600;margin-bottom:8px;text-align:center">
-                    😰 Danger critique (≤25% PV) — un jet de moral est requis avant d'agir
+                    🩸 À l'agonie (≤15% PV) — un jet de Volonté est requis avant d'agir
                     <div style="margin-top:6px">
-                      <button type="button" data-action="declareMorale"
+                      <button type="button" data-action="declareAgonie"
                         style="padding:4px 12px;cursor:pointer;border-radius:6px;border:none;background:#fff;color:#7a4a00;font-weight:700">
-                        🎲 Lancer le jet de moral
+                        🎲 Lancer le jet de Volonté
                       </button>
                     </div>
                   </div>`;
@@ -1032,21 +1032,21 @@
       }
     });
 
-    // ── Lancer le jet de moral (seuil critique) ───────────────────────────
-    $root.on("click.rpgMenu", "[data-action='declareMorale']", async (ev) => {
+    // ── Lancer le jet de Volonté (à l'agonie) ──────────────────────────────
+    $root.on("click.rpgMenu", "[data-action='declareAgonie']", async (ev) => {
       ev.preventDefault();
       const btn = ev.currentTarget;
       if (btn.disabled) return;
       btn.disabled = true;
 
       try {
-        const moraleAPI = getMoraleAPI();
-        if (!moraleAPI) { notify("error", "API moral introuvable."); return; }
-        await moraleAPI.declareMoraleCheck(actor);
+        const agonieAPI = getAgonieAPI();
+        if (!agonieAPI) { notify("error", "API agonie introuvable."); return; }
+        await agonieAPI.declareAgonieCheck(actor);
         rerenderAll();
-        notify("info", "Jet de moral déclaré — en attente du MJ.");
+        notify("info", "Jet de Volonté déclaré — en attente du MJ.");
       } catch (e) {
-        console.error("[RPG][Menu] Erreur jet de moral :", e);
+        console.error("[RPG][Menu] Erreur jet de Volonté :", e);
         notify("error", `Erreur : ${e?.message ?? e}`);
       } finally {
         btn.disabled = false;

@@ -643,9 +643,12 @@
           {{#if flags.isGM}}
           <div class="tool-actions">
             <button type="button" class="btn" data-action="createItem" data-type="loot">+ Objet</button>
+            <button type="button" class="btn" data-action="createItem" data-type="recipe">+ Recette</button>
           </div>
           {{/if}}
         </div>
+
+        <input type="search" class="name-filter-q" data-filter-tab="inventory" placeholder="🔎 Rechercher un objet…" style="width:100%;margin-bottom:8px" />
 
         <ol class="items-list">
           <li class="items-header">
@@ -698,6 +701,8 @@
           </div>
           {{/if}}
         </div>
+
+        <input type="search" class="name-filter-q" data-filter-tab="equipment" placeholder="🔎 Rechercher une arme/armure…" style="width:100%;margin-bottom:8px" />
 
         {{#if flags.isGM}}
         {{!-- VUE MJ : slots + liste --}}
@@ -843,6 +848,8 @@
           </div>
           {{/if}}
         </div>
+
+        <input type="search" class="name-filter-q" data-filter-tab="consumables" placeholder="🔎 Rechercher un consommable…" style="width:100%;margin-bottom:8px" />
 
         <ol class="items-list simple">
           {{#each items.consommables as |it|}}
@@ -1032,7 +1039,15 @@
       <section class="card">
         <div class="toolbar">
           <h2>Quêtes</h2>
+
+          {{#if flags.isGM}}
+          <div class="tool-actions">
+            <button type="button" class="btn" data-action="createItem" data-type="quest">+ Quête</button>
+          </div>
+          {{/if}}
         </div>
+
+        <input type="search" class="name-filter-q" data-filter-tab="quests" placeholder="🔎 Rechercher une quête…" style="width:100%;margin-bottom:8px" />
 
         <ol class="items-list simple">
           {{#each quests as |q|}}

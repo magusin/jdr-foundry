@@ -260,32 +260,39 @@ export async function showMovementLimit(token) {
   }
 
   // ── Réserve de déplacement restante ─────────────────────────────────────
-  let remaining = 0;
-  try {
-    const { getBudget, movementRemaining } = await import("./action-budget.js");
-    const vitesse = Number(token.actor.system?.deplacement?.vitesse ?? 6) || 6;
-    remaining = movementRemaining(getBudget(combat, cbt.id), vitesse);
-  } catch (e) {
-    console.warn("[RPG] réserve de déplacement :", e);
-  }
-  if (remaining > 0) {
-    const r = metersToPixels(remaining);
-    g.lineStyle(2, 0x4ec48a, 0.85);
-    g.beginFill(0x4ec48a, 0.05);
-    g.drawCircle(cx, cy, r);
-    g.endFill();
-    drewSomething = true;
-
+  // Réservé au MJ (qui voit tout) et au(x) joueur(s) propriétaire(s) du
+  // token actif : un joueur ne doit pas voir combien de déplacement il
+  // reste à un autre joueur ou à un monstre — seulement le sien. L'allonge
+  // de mêlée ci-dessus, elle, reste visible de tous : c'est un avertissement
+  // de menace (attaque d'opportunité), pas une info privée du combattant actif.
+  if (game.user.isGM || token.actor.isOwner) {
+    let remaining = 0;
     try {
-      const style = new PIXI.TextStyle({
-        fontFamily: "Signika, sans-serif", fontSize: 15, fontWeight: "700",
-        fill: "#9ff0c4", stroke: "#000000", strokeThickness: 4
-      });
-      const t = new PIXI.Text(`🏃 ${fmtM(remaining)} restants`, style);
-      t.anchor.set(0.5, 0);
-      t.position.set(cx, cy + r + 4);
-      g.addChild(t);
-    } catch { /* étiquette optionnelle */ }
+      const { getBudget, movementRemaining } = await import("./action-budget.js");
+      const vitesse = Number(token.actor.system?.deplacement?.vitesse ?? 6) || 6;
+      remaining = movementRemaining(getBudget(combat, cbt.id), vitesse);
+    } catch (e) {
+      console.warn("[RPG] réserve de déplacement :", e);
+    }
+    if (remaining > 0) {
+      const r = metersToPixels(remaining);
+      g.lineStyle(2, 0x4ec48a, 0.85);
+      g.beginFill(0x4ec48a, 0.05);
+      g.drawCircle(cx, cy, r);
+      g.endFill();
+      drewSomething = true;
+
+      try {
+        const style = new PIXI.TextStyle({
+          fontFamily: "Signika, sans-serif", fontSize: 15, fontWeight: "700",
+          fill: "#9ff0c4", stroke: "#000000", strokeThickness: 4
+        });
+        const t = new PIXI.Text(`🏃 ${fmtM(remaining)} restants`, style);
+        t.anchor.set(0.5, 0);
+        t.position.set(cx, cy + r + 4);
+        g.addChild(t);
+      } catch { /* étiquette optionnelle */ }
+    }
   }
 
   if (!drewSomething) { try { g.destroy({ children: true }); } catch { /* ignore */ } return; }

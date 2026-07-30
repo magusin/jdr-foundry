@@ -1,9 +1,9 @@
 {{!-- systems/rpg/templates/item/item-weapon-sheet.hbs --}}
 <div class="rpg-sheet weapon-sheet" autocomplete="off">
 
-  <header class="sheet-header weapon-header">
+  <header class="sheet-header weapon-header" style="display:flex;align-items:center;gap:12px">
     <img class="profile rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image" height="64" width="64"/>
-    <div class="title-block">
+    <div class="title-block" style="flex:1">
       {{#if isReadOnly}}
         <div class="name-readonly"><b>{{item.name}}</b></div>
       {{else}}
@@ -11,6 +11,9 @@
       {{/if}}
       <small>{{item.type}}</small>
     </div>
+    {{#if isGM}}
+    <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap;align-self:flex-start" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    {{/if}}
   </header>
 
   <div class="sheet-body">

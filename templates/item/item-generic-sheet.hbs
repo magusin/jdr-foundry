@@ -11,6 +11,9 @@
       {{/if}}
       <small>{{item.type}}</small>
     </div>
+    {{#if isGM}}
+    <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap;align-self:flex-start" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    {{/if}}
   </header>
 
   <div class="sheet-body">

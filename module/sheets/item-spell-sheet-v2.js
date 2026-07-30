@@ -2,6 +2,7 @@
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
+import { bindSendToActorsButton } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -496,15 +497,15 @@ static PARTS = foundry.utils.mergeObject(
         ctx.playerInfo.push({
           icon: "💥",
           label: `Dégâts ${d.livraison === "physique" ? "physiques" : "magiques"}`,
-          value: normal
+          value: normal, wide: true
         });
         const crit = formulaOf(d, "critFlat", "critDice");
         if (crit && crit !== normal) {
-          ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit });
+          ctx.playerInfo.push({ icon: "✦", label: "Dégâts (critique)", value: crit, wide: true });
         }
         if (n(d.siphon, 0) > 0) {
           ctx.playerInfo.push({ icon: "🩸", label: "Vol de vie",
-            value: `${n(d.siphon, 0)} % des dégâts infligés` });
+            value: `${n(d.siphon, 0)} % des dégâts infligés`, wide: true });
         }
       }
 
@@ -520,7 +521,7 @@ static PARTS = foundry.utils.mergeObject(
         ctx.playerInfo.push({
           icon: RES_ICON[r.resource] ?? "✨",
           label: `${RES_LABEL[r.resource] ?? "Récupération"}${r.cible === "target" ? " (cible)" : ""}`,
-          value: parts.join(" + ")
+          value: parts.join(" + "), wide: true
         });
       }
     }
@@ -1036,6 +1037,7 @@ static PARTS = foundry.utils.mergeObject(
 
     // Enregistrement au fil de la saisie, SANS re-render
     this._bindLiveSave(root);
+    bindSendToActorsButton(root, this.document);
 
     // Affichage progressif : on ne montre les champs d'un bloc facultatif
     // que s'il est réellement utilisé (Nature ≠ Aucun, Aura cochée).

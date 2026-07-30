@@ -9,7 +9,78 @@ import { checkLevelUp } from "./level-up.js";
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 /**
- * Calcule le partage d'XP entre les PJ ayant participé au combat.
+ * Demande au MJ, dans un Dialog, s'il veut distribuer l'XP de ce combat et à
+ * qui. Rien n'est jamais attribué automatiquement — le MJ garde la main sur
+ * le "si" et le "à qui" avant toute écriture en base.
+ *
+ * @returns {Promise<{proceed:boolean, selectedIds:string[]}>}
+ */
+function promptEndOfCombatChoice({ pjs, totalXP, monsterNames }) {
+  return new Promise((resolve) => {
+    const rows = pjs.map((pj) => `
+      <label style="display:flex;align-items:center;gap:6px;padding:2px 0">
+        <input type="checkbox" data-pj-id="${pj.id}" checked />
+        ${pj.name}
+      </label>`).join("");
+
+    const content = `
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--color-text-secondary)">
+          ⚔️ Combat contre <b>${monsterNames}</b> terminé — <b>${totalXP} XP</b> à répartir.
+          Sélectionne les PJ qui reçoivent leur part, ou ignore pour ne rien attribuer.
+        </div>
+        <div>${rows}</div>
+      </div>`;
+
+    const DialogClass = foundry?.applications?.api?.DialogV2 ?? globalThis.Dialog;
+    const isV2 = DialogClass === foundry?.applications?.api?.DialogV2;
+
+    const readSelection = (root) =>
+      Array.from(root.querySelectorAll("input[data-pj-id]"))
+        .filter((el) => el.checked)
+        .map((el) => el.dataset.pjId);
+
+    if (isV2) {
+      const dlg = new DialogClass({
+        window: { title: "Fin de combat — Attribution d'XP" },
+        content,
+        buttons: [
+          {
+            action: "grant",
+            label: "✅ Attribuer",
+            default: true,
+            callback: (_event, _button, dialog) => {
+              const root = dialog.element ?? dialog?.form ?? dialog;
+              resolve({ proceed: true, selectedIds: readSelection(root) });
+            }
+          },
+          { action: "skip", label: "Ignorer", callback: () => resolve({ proceed: false, selectedIds: [] }) }
+        ],
+        close: () => resolve({ proceed: false, selectedIds: [] })
+      });
+      dlg.render(true);
+      return;
+    }
+
+    new Dialog({
+      title: "Fin de combat — Attribution d'XP",
+      content,
+      buttons: {
+        grant: {
+          label: "✅ Attribuer",
+          callback: (html) => resolve({ proceed: true, selectedIds: readSelection(html?.[0] ?? html) })
+        },
+        skip: { label: "Ignorer", callback: () => resolve({ proceed: false, selectedIds: [] }) }
+      },
+      default: "grant",
+      close: () => resolve({ proceed: false, selectedIds: [] })
+    }, { width: 380 }).render(true);
+  });
+}
+
+/**
+ * Calcule le partage d'XP entre les PJ sélectionnés par le MJ, l'applique,
+ * et propose le butin (looté seulement au clic — jamais automatique).
  * XP total = somme des system.recompenses.xp de tous les monstres combattants.
  * On divise équitablement et on arrondit au supérieur pour le premier.
  *
@@ -35,7 +106,7 @@ export async function resolveEndOfCombat(combat) {
   // Déduplique les PJ (si un PJ avait plusieurs tokens)
   const pjMap = new Map();
   for (const a of pjCombatants) pjMap.set(a.id, a);
-  const pjs = [...pjMap.values()];
+  const allPjs = [...pjMap.values()];
 
   // ── 2. XP total ────────────────────────────────────────────────────────
   let totalXP = 0;
@@ -43,12 +114,23 @@ export async function resolveEndOfCombat(combat) {
     totalXP += n(monster.system?.recompenses?.xp, 0);
   }
 
-  // ── 3. Part par PJ ─────────────────────────────────────────────────────
+  const monsterNamesForPrompt = monsterCombatants.map((m) => m.name).join(", ");
+
+  // ── 3. Le MJ choisit s'il distribue l'XP, et à qui ──────────────────────
+  const { proceed, selectedIds } = await promptEndOfCombatChoice({
+    pjs: allPjs, totalXP, monsterNames: monsterNamesForPrompt
+  });
+  if (!proceed) return; // le MJ a choisi de ne rien attribuer
+
+  const pjs = allPjs.filter((p) => selectedIds.includes(p.id));
+  if (!pjs.length) return; // personne sélectionné → rien à faire
+
+  // ── 4. Part par PJ ─────────────────────────────────────────────────────
   const share      = totalXP / pjs.length;
   const shareFloor = Math.floor(share);
   const shareRem   = Math.round(totalXP - shareFloor * pjs.length); // arrondi resto
 
-  // ── 4. Applique XP + construit message ─────────────────────────────────
+  // ── 5. Applique XP + construit message ─────────────────────────────────
   const updates = [];
   const lines   = [];
 
@@ -67,14 +149,14 @@ export async function resolveEndOfCombat(combat) {
     await checkLevelUp(actor);
   }
 
-  // ── 5. Boutons de loot — un par monstre + un global ──────────────────
+  // ── 6. Boutons de loot — un par monstre + un global ──────────────────
   const lootableMonsters = monsterCombatants.filter(m => {
     const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
     const tableUuid = String(m.system?.butin?.tableUuid ?? "").trim();
     return entries.length > 0 || tableUuid;
   });
 
-  // ── 6. Message récap ───────────────────────────────────────────────────
+  // ── 7. Message récap ───────────────────────────────────────────────────
   const monsterNames = monsterCombatants.map((m) => m.name).join(", ");
 
   let content =
@@ -90,9 +172,14 @@ export async function resolveEndOfCombat(combat) {
 
     for (const m of lootableMonsters) {
       const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
-      const preview = entries.slice(0, 3).map(e =>
-        `${e.name}${e.tries > 1 ? ` (×${e.tries} essais)` : ""} — ${e.pct}%`
-      ).join(", ") + (entries.length > 3 ? `… +${entries.length - 3}` : "");
+      const previewParts = await Promise.all(entries.slice(0, 3).map(async (e) => {
+        let name = "Item inconnu";
+        if (e.uuid) {
+          try { name = (await fromUuid(e.uuid))?.name ?? name; } catch { /* uuid invalide */ }
+        }
+        return `${name}${e.tries > 1 ? ` (×${e.tries} essais)` : ""} — ${e.pct}%`;
+      }));
+      const preview = previewParts.join(", ") + (entries.length > 3 ? `… +${entries.length - 3}` : "");
       content += `
         <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
           <span style="flex:1;font-size:12px"><b>${m.name}</b>${preview ? `<br><small style="opacity:.6">${preview}</small>` : ""}</span>
@@ -128,8 +215,10 @@ export async function resolveEndOfCombat(combat) {
  */
 /**
  * Résout le loot d'un ou plusieurs monstres.
- * Nouvelle logique : chaque entry a pct (% de chance par essai) + qty (quantité obtenue) + tries (nombre d'essais).
- * Exemple : Dent, 90%, qty=1, tries=5 → 5 jets de 90% → 0 à 5 dents
+ * Chaque entry a pct (% de chance par essai) + qtyMin/qtyMax (quantité tirée
+ * par succès) + tries (nombre d'essais) + uuid (nom/image/poids viennent de
+ * la fiche de l'objet lui-même, jamais d'un instantané figé sur l'entrée).
+ * Exemple : Dent, 90%, qty 1-1, tries=5 → 5 jets de 90% → 0 à 5 dents.
  */
 export async function lootMonsters(monsterIds) {
   if (!game.user.isGM) return;
@@ -150,16 +239,23 @@ export async function lootMonsters(monsterIds) {
     try {
       const drops = [];
 
-      // ── Nouveau système : entries[] avec qty + tries ───────────────
+      // ── Nouveau système : entries[] avec qtyMin/qtyMax + tries ──────
       for (const entry of entries) {
-        const pct   = Math.min(100, Math.max(0, n(entry.pct, 100)));
-        const qty   = Math.max(1, n(entry.qty,  1));
-        const tries = Math.max(1, n(entry.tries, 1));
-        const itemName = entry.name || "Item inconnu";
+        const pct    = Math.min(100, Math.max(0, n(entry.pct, 100)));
+        const qtyMin = Math.max(1, n(entry.qtyMin, n(entry.qty, 1)));
+        const qtyMax = Math.max(qtyMin, n(entry.qtyMax, n(entry.qty, qtyMin)));
+        const tries  = Math.max(1, n(entry.tries, 1));
+
+        let itemName = "Item inconnu";
+        if (entry.uuid) {
+          try { itemName = (await fromUuid(entry.uuid))?.name ?? itemName; } catch { /* uuid invalide */ }
+        }
 
         let total = 0;
         for (let t = 0; t < tries; t++) {
-          if (Math.random() * 100 < pct) total += qty;
+          if (Math.random() * 100 < pct) {
+            total += qtyMin === qtyMax ? qtyMin : qtyMin + Math.floor(Math.random() * (qtyMax - qtyMin + 1));
+          }
         }
 
         if (total > 0) drops.push(`${itemName} ×${total}`);
