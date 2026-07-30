@@ -190,10 +190,15 @@ export function showSpellRangeOverlay(actor, spell) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Limite de déplacement — le « mur » visible
-   Quand un token est sélectionné pendant son tour de combat, on trace le
-   cercle de ce qu'il peut encore parcourir. Calque distinct de l'aperçu de
-   portée : il reste affiché tant que le token est sélectionné.
+   Tour actif — le « mur » visible + l'allonge de mêlée
+   Pendant le tour d'un combattant, on trace autour de LUI (pas du token que
+   CHACUN contrôle — le MJ, en particulier, ne contrôle presque jamais le
+   token du joueur dont c'est le tour) sa réserve de déplacement restante et
+   son allonge de mêlée, avec les cibles à portée surlignées. Affiché pour
+   tout le monde, sans sélection ni survol requis, pour que joueurs et MJ
+   puissent tous deux planifier un déplacement qui évite les attaques
+   d'opportunité. Calque distinct de l'aperçu de portée (survol/épinglage) :
+   il suit le combattant actif, pas la sélection locale.
    ══════════════════════════════════════════════════════════════════════════ */
 
 let _moveGfx = null;
@@ -203,7 +208,21 @@ function _clearMoveLimit() {
   _moveGfx = null;
 }
 
-/** Trace la réserve de déplacement restante autour du token contrôlé. */
+/** Token canvas du combattant dont c'est le tour, ou null. */
+function activeCombatantToken() {
+  const combat = game.combat;
+  if (!combat?.active || !combat.started) return null;
+  const combatant = combat.combatant;
+  return combatant?.token?.object
+      ?? (combatant?.tokenId ? canvas?.tokens?.get(combatant.tokenId) : null);
+}
+
+/**
+ * Trace, autour du token donné, sa réserve de déplacement restante ET son
+ * allonge de mêlée — mais seulement si CE token est bien le combattant actif
+ * (sinon la réserve de déplacement n'a pas de sens : on ne peut se déplacer
+ * que pendant son propre tour).
+ */
 export async function showMovementLimit(token) {
   _clearMoveLimit();
   if (!token?.actor || !canvas?.ready) return;
@@ -215,6 +234,32 @@ export async function showMovementLimit(token) {
   if (!cbt) return;
   if (combat.combatant?.id !== cbt.id) return;   // seulement pendant son tour
 
+  const cx = token.center.x, cy = token.center.y;
+  const g = new PIXI.Graphics();
+  let drewSomething = false;
+
+  // ── Allonge de mêlée du combattant actif, ennemis à portée surlignés ────
+  const reach = getMeleeReach(token.actor);
+  if (reach > 0) {
+    drawRing(g, cx, cy, { min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    drewSomething = true;
+    try {
+      const rPx = metersToPixels(reach);
+      for (const other of canvas.tokens?.placeables ?? []) {
+        if (other === token || !other.actor) continue;
+        if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+        const dx = other.center.x - cx, dy = other.center.y - cy;
+        if (Math.hypot(dx, dy) <= rPx + 1) {
+          const marker = new PIXI.Graphics();
+          marker.lineStyle(3, 0xffd700, 0.95);
+          marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
+          g.addChild(marker);
+        }
+      }
+    } catch { /* surlignage optionnel */ }
+  }
+
+  // ── Réserve de déplacement restante ─────────────────────────────────────
   let remaining = 0;
   try {
     const { getBudget, movementRemaining } = await import("./action-budget.js");
@@ -222,38 +267,36 @@ export async function showMovementLimit(token) {
     remaining = movementRemaining(getBudget(combat, cbt.id), vitesse);
   } catch (e) {
     console.warn("[RPG] réserve de déplacement :", e);
-    return;
   }
-  if (!(remaining > 0)) return;
+  if (remaining > 0) {
+    const r = metersToPixels(remaining);
+    g.lineStyle(2, 0x4ec48a, 0.85);
+    g.beginFill(0x4ec48a, 0.05);
+    g.drawCircle(cx, cy, r);
+    g.endFill();
+    drewSomething = true;
 
-  const r = metersToPixels(remaining);
-  const cx = token.center.x, cy = token.center.y;
-  const g = new PIXI.Graphics();
+    try {
+      const style = new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 15, fontWeight: "700",
+        fill: "#9ff0c4", stroke: "#000000", strokeThickness: 4
+      });
+      const t = new PIXI.Text(`🏃 ${fmtM(remaining)} restants`, style);
+      t.anchor.set(0.5, 0);
+      t.position.set(cx, cy + r + 4);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+  }
 
-  // Zone atteignable : trait plein, remplissage très léger
-  g.lineStyle(2, 0x4ec48a, 0.85);
-  g.beginFill(0x4ec48a, 0.05);
-  g.drawCircle(cx, cy, r);
-  g.endFill();
-
-  try {
-    const style = new PIXI.TextStyle({
-      fontFamily: "Signika, sans-serif", fontSize: 15, fontWeight: "700",
-      fill: "#9ff0c4", stroke: "#000000", strokeThickness: 4
-    });
-    const t = new PIXI.Text(`🏃 ${fmtM(remaining)} restants`, style);
-    t.anchor.set(0.5, 0);
-    t.position.set(cx, cy + r + 4);
-    g.addChild(t);
-  } catch { /* étiquette optionnelle */ }
+  if (!drewSomething) { try { g.destroy({ children: true }); } catch { /* ignore */ } return; }
 
   (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
   _moveGfx = g;
 }
 
-/** Rafraîchit la limite pour le token actuellement contrôlé. */
+/** Rafraîchit l'affichage pour le combattant dont c'est le tour. */
 export function refreshMovementLimit() {
-  const token = canvas?.tokens?.controlled?.[0] ?? null;
+  const token = activeCombatantToken();
   if (token) showMovementLimit(token);
   else _clearMoveLimit();
 }
@@ -310,18 +353,15 @@ export function installRangeOverlay() {
     } catch (e) { console.warn("[RPG] affichage des portées :", e); }
   });
 
-  // ── Limite de déplacement : le « mur » de la réserve restante ────────────
-  // Affichée dès qu'on sélectionne un token pendant son tour, et mise à jour
-  // après chaque déplacement pour que le cercle suive ce qu'il reste.
-  Hooks.on("controlToken", (token, controlled) => {
-    try {
-      if (controlled) showMovementLimit(token);
-      else _clearMoveLimit();
-    } catch (e) { console.warn("[RPG] limite de déplacement :", e); }
-  });
+  // ── Tour actif : mur de déplacement + allonge de mêlée ───────────────────
+  // Suit le COMBATTANT ACTIF, pas la sélection locale — sinon le MJ (qui ne
+  // contrôle presque jamais le token du joueur dont c'est le tour) ne voit
+  // jamais rien. Affiché pour tout le monde dès que le tour change, et remis
+  // à jour après chaque déplacement pour que le cercle suive ce qu'il reste.
   Hooks.on("updateToken", () => setTimeout(() => refreshMovementLimit(), 80));
   Hooks.on("updateCombat", () => setTimeout(() => refreshMovementLimit(), 80));
   Hooks.on("deleteCombat", () => _clearMoveLimit());
+  Hooks.on("canvasReady", () => setTimeout(() => refreshMovementLimit(), 150));
 
   // Suit le token épinglé quand il bouge / change d'équipement
   Hooks.on("updateToken", (doc) => {
