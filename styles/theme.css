@@ -484,6 +484,35 @@ body.rpg-theme-contraste .rpg-window {
 .rpg-window a { color: var(--brass, #d1a144); }
 .rpg-window hr { border-color: var(--border-soft, var(--border)); }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Listes déroulantes — lisibilité
+   Le menu natif d'un <select> est rendu par l'OS : sans couleurs
+   explicites sur <option>/<optgroup>, on obtenait du gris clair sur blanc
+   (ou l'inverse). On réutilise --ink-2/--ink-text, déjà calées par thème
+   ci-dessus, pour que ça reste lisible dans les 3 thèmes ET dans toute
+   fenêtre marquée .rpg-sheet / .rpg-window / .rpg-spell-menu — y compris
+   les dialogues de macros (« Ajouter un état », etc.) qui n'ont que
+   .rpg-window et pas .rpg-sheet. */
+.rpg-sheet select option, .rpg-sheet select optgroup,
+.rpg-window select option, .rpg-window select optgroup,
+.rpg-spell-menu select option, .rpg-spell-menu select optgroup {
+  background-color: var(--ink-2, #1e1e26);
+  color: var(--ink-text, #ece9e4);
+}
+.rpg-sheet select optgroup,
+.rpg-window select optgroup,
+.rpg-spell-menu select optgroup {
+  font-weight: 700;
+  font-style: normal;
+  color: var(--brass, #d1a144);
+}
+.rpg-sheet select option:checked, .rpg-sheet select option:hover,
+.rpg-window select option:checked, .rpg-window select option:hover,
+.rpg-spell-menu select option:checked, .rpg-spell-menu select option:hover {
+  background-color: var(--brass, #d1a144);
+  color: #17171d;
+}
+
 /* Les variables de thème doivent exister sur body pour que les règles
    ci-dessus aient de quoi puiser. */
 body.rpg-theme-sombre    { color-scheme: dark; }

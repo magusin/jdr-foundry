@@ -143,7 +143,7 @@ export function ensureStateDialogCSS() {
 .rpg-state-dialog hr {
   border: 0 !important;
   height: 1px !important;
-  background: rgba(255,255,255,.12) !important;
+  background: var(--border-soft, rgba(255,255,255,.12)) !important;
   margin: 16px 0 !important;
 }
 
