@@ -623,9 +623,19 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const path = this._statePath();
     const list = this._stateList();
     const id = state.id || foundry.utils.randomID();
-    const idx = list.findIndex(e => e.id === id);
-    const normalized = this._normalizeState({ ...state, id });
-    if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
+    let idx = list.findIndex(e => e.id === id);
+
+    // Pas de correspondance par id (nouvel ajout, cf. stateAdd) : un effet
+    // IDENTIQUE déjà présent sur la cible (même nom) doit être REMPLACÉ —
+    // durée/valeurs rafraîchies — plutôt qu'empilé en double.
+    if (idx < 0) {
+      const label = String(state.label ?? "").trim().toLowerCase();
+      if (label) idx = list.findIndex(e => String(e.label ?? "").trim().toLowerCase() === label);
+    }
+
+    const finalId = idx >= 0 ? list[idx].id : id;
+    const normalized = this._normalizeState({ ...state, id: finalId });
+    if (idx >= 0) list[idx] = normalized;
     else list.push(normalized);
     await this.document.update({ [path]: list });
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.document);

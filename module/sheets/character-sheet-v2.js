@@ -1567,11 +1567,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const list = this._stateList();
 
     const id = state.id || foundry.utils.randomID();
-    const idx = list.findIndex(e => e.id === id);
+    let idx = list.findIndex(e => e.id === id);
 
-    const normalized = this._normalizeState({ ...state, id });
+    // Pas de correspondance par id (nouvel ajout, cf. _stateAdd) : un effet
+    // IDENTIQUE déjà présent sur la cible (même nom) doit être REMPLACÉ —
+    // durée/valeurs rafraîchies — plutôt qu'empilé en double.
+    if (idx < 0) {
+      const label = String(state.label ?? "").trim().toLowerCase();
+      if (label) idx = list.findIndex(e => String(e.label ?? "").trim().toLowerCase() === label);
+    }
 
-    if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
+    const finalId = idx >= 0 ? list[idx].id : id;
+    const normalized = this._normalizeState({ ...state, id: finalId });
+
+    if (idx >= 0) list[idx] = normalized;
     else list.push(normalized);
 
     await this.document.update({ [path]: list });
