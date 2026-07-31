@@ -14,6 +14,7 @@
 
 import { calculateMovementCost } from "./region-behaviors.js";
 import { getMovementLimit } from "./movement-tracker.js";
+import { updateDragThreatIndicator, clearDragThreatIndicator } from "./range-overlay.js";
 
 // Cache par token : évite de refaire la dichotomie à chaque pixel parcouru.
 // tokenId → { key, x, y }
@@ -121,6 +122,9 @@ export function installDragLimit() {
         // on est appelé à chaque mouvement de souris).
         if (clone.position?.set) clone.position.set(clone.document.x, clone.document.y);
         else { clone.x = clone.document.x; clone.y = clone.document.y; }
+        // Signale en direct l'entrée dans l'allonge d'un ennemi — sinon rien
+        // ne le montre avant le dépôt du token.
+        try { updateDragThreatIndicator(clone); } catch (e) { /* indicateur optionnel */ }
       }
     } catch (e) {
       console.warn("[RPG] blocage du déplacement au glisser :", e);
@@ -128,8 +132,18 @@ export function installDragLimit() {
     return result;
   };
 
+  // Efface l'indicateur de danger à la fin du glisser (dépôt ou annulation)
+  for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
+    if (typeof proto[hookName] !== "function") continue;
+    const originalEnd = proto[hookName];
+    proto[hookName] = function (event) {
+      try { clearDragThreatIndicator(); } catch { /* ignore */ }
+      return originalEnd.call(this, event);
+    };
+  }
+
   // Purge le cache en fin de glisser
-  Hooks.on("canvasTearDown", () => _cache.clear());
+  Hooks.on("canvasTearDown", () => { _cache.clear(); clearDragThreatIndicator(); });
   console.log("[RPG] Blocage du déplacement au glisser : actif.");
 }
 

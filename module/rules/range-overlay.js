@@ -34,6 +34,22 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
+/**
+ * Demi-largeur d'un token, en mètres — distance de son centre à son propre
+ * bord. Une allonge/portée se mesure depuis le CORPS d'une créature, pas
+ * depuis un point en son centre : sans cet ajout, le cercle d'un monstre de
+ * grande taille (2×2 cases ou plus) tombe en grande partie SOUS son propre
+ * socle, et un joueur ne peut pas dire à l'œil quand son propre token entre
+ * réellement dans la zone de menace.
+ */
+function tokenFootprintMeters(token) {
+  if (!token) return 0;
+  const gs = canvas?.scene?.grid?.size ?? 100;
+  const gd = canvas?.scene?.grid?.distance ?? 1;
+  const halfPx = Math.max(token.w ?? gs, token.h ?? gs) / 2;
+  return halfPx / (gs || 1) * gd;
+}
+
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 
 /**
@@ -94,8 +110,18 @@ function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null,
 export function drawRanges(token, layers, highlightEnemies = false) {
   _clear();
   if (!token || !canvas?.ready) return;
-  const usable = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
-  if (!usable.length) return;
+  const raw = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
+  if (!raw.length) return;
+
+  // Une allonge/portée part du BORD du token, pas de son centre — sinon le
+  // cercle d'une créature de grande taille tombe en partie sous son propre
+  // socle et ne montre pas où un token adverse entre réellement en danger.
+  const foot = tokenFootprintMeters(token);
+  const usable = raw.map(l => ({
+    ...l,
+    max: (Number(l.max) || 0) + foot,
+    min: (Number(l.min) || 0) > 0 ? (Number(l.min) || 0) + foot : 0
+  }));
 
   const cx = token.center.x, cy = token.center.y;
   const g = new PIXI.Graphics();
@@ -110,8 +136,10 @@ export function drawRanges(token, layers, highlightEnemies = false) {
       for (const other of canvas.tokens?.placeables ?? []) {
         if (other === token || !other.actor) continue;
         if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+        // Bord à bord : le socle de l'ennemi compte aussi, pas seulement son centre.
+        const otherFoot = metersToPixels(tokenFootprintMeters(other));
         const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + 1) {
+        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
           const marker = new PIXI.Graphics();
           marker.lineStyle(3, 0xffd700, 0.95);
           marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
@@ -239,17 +267,23 @@ export async function showMovementLimit(token) {
   let drewSomething = false;
 
   // ── Allonge de mêlée du combattant actif, ennemis à portée surlignés ────
+  // Le cercle part du bord du socle (pas de son centre) : sinon un monstre
+  // de grande taille menace en réalité bien plus loin que ce que le cercle
+  // ne laisse paraître, et un joueur ne peut pas dire à l'œil quand son
+  // propre token entre dans la zone.
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
-    drawRing(g, cx, cy, { min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    const foot = tokenFootprintMeters(token);
+    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
     drewSomething = true;
     try {
-      const rPx = metersToPixels(reach);
+      const rPx = metersToPixels(reach + foot);
       for (const other of canvas.tokens?.placeables ?? []) {
         if (other === token || !other.actor) continue;
         if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+        const otherFoot = metersToPixels(tokenFootprintMeters(other));
         const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + 1) {
+        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
           const marker = new PIXI.Graphics();
           marker.lineStyle(3, 0xffd700, 0.95);
           marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
@@ -346,6 +380,87 @@ export function refreshPinned() {
   const t = canvas?.tokens?.get?.(_pinnedTokenId);
   if (t) showTokenRanges(t);
   else { _pinnedTokenId = null; _clear(); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Indicateur de danger pendant le glisser
+   Pendant qu'un joueur fait glisser son token, il ne voit sinon aucun signal
+   au moment précis où il entre dans l'allonge d'un ennemi — seul un survol
+   (immobile) déclenchait l'affichage des portées. Calque séparé de celui du
+   survol/épinglage : on ne veut pas effacer une portée épinglée pendant le
+   drag, ni la faire réapparaître décalée après.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+let _dragGfx = null;
+
+function _clearDragThreat() {
+  try { _dragGfx?.destroy({ children: true }); } catch { /* ignore */ }
+  _dragGfx = null;
+}
+
+/**
+ * Redessine, à la position courante d'un token en train d'être glissé, les
+ * zones de menace des ennemis proches — et le fait apparaître en rouge vif,
+ * avec une étiquette, dès que son propre corps (bord compris) entre dans
+ * l'allonge d'un ennemi (bord compris lui aussi).
+ * @param {Token} draggedToken - l'aperçu suivi par la souris (position live)
+ * @returns {boolean} vrai si le token est actuellement engagé par au moins un ennemi
+ */
+export function updateDragThreatIndicator(draggedToken) {
+  _clearDragThreat();
+  if (!draggedToken?.actor || !canvas?.ready) return false;
+
+  const cx = draggedToken.center.x, cy = draggedToken.center.y;
+  const myFoot = tokenFootprintMeters(draggedToken);
+  const g = new PIXI.Graphics();
+  let inDanger = false;
+
+  for (const other of canvas.tokens?.placeables ?? []) {
+    if (other === draggedToken || !other.actor) continue;
+    if (other.id === draggedToken.id) continue;
+    if (!areOpposedDisp(draggedToken.document?.disposition, other.document?.disposition)) continue;
+    const reach = getMeleeReach(other.actor);
+    if (!(reach > 0)) continue;
+
+    const otherFoot = tokenFootprintMeters(other);
+    const bodyToBody = reach + otherFoot;             // cercle : bord du corps de l'ennemi
+    const engagedAt  = bodyToBody + myFoot;            // + mon propre socle : bord à bord
+    const dist = Math.hypot(cx - other.center.x, cy - other.center.y);
+    const engaged = dist <= metersToPixels(engagedAt) + 1;
+    if (engaged) inDanger = true;
+
+    drawRing(g, other.center.x, other.center.y, {
+      min: 0, max: bodyToBody,
+      color: engaged ? 0xff2b2b : COLORS.melee,
+      alpha: engaged ? 1 : 0.55,
+      label: `⚔ ${fmtM(reach)}${engaged ? " — DANGER" : ""}`
+    });
+  }
+
+  if (inDanger) {
+    const r = Math.max(draggedToken.w, draggedToken.h) * 0.55;
+    g.lineStyle(4, 0xff2b2b, 1);
+    g.drawCircle(cx, cy, r);
+    try {
+      const style = new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 16, fontWeight: "700",
+        fill: "#ff5c52", stroke: "#000000", strokeThickness: 4
+      });
+      const t = new PIXI.Text("⚠️ Allonge ennemie !", style);
+      t.anchor.set(0.5, 1);
+      t.position.set(cx, cy - r - 6);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+  }
+
+  (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
+  _dragGfx = g;
+  return inDanger;
+}
+
+/** Efface l'indicateur de danger de glisser (fin de drag, dépôt ou annulation). */
+export function clearDragThreatIndicator() {
+  _clearDragThreat();
 }
 
 /** Enregistre les hooks (idempotent). */

@@ -40,7 +40,6 @@ import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
 import { resolveEndOfCombat, lootMonsters } from "./rules/combat-end.js";
-import { autoInstallMacros } from "./macro/auto-install.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
@@ -48,7 +47,8 @@ import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/r
 import {
   registerZoneEffectBehavior, registerZoneEffectSheet,
   getZoneEffectsAt, triggerZoneEffectsForToken,
-  declareZonePerceptionCheck, revealZoneToActor
+  declareZonePerceptionCheck, revealZoneToActor,
+  declareZoneDisarmCheck, disarmZone
 } from "./rules/zone-effects.js";
 import { MOVEMENT_TYPES, getActiveMovementTypes, isImmuneToTerrain, getEffectiveSpeedMult, getMovementTypeLabel } from "./rules/movement-types.js";
 import { showSpellRange, showSpellRangeFromItem, clearSpellRange } from "./rules/spell-range.js";
@@ -256,6 +256,54 @@ async function rpgSyncCoreDiagonals() {
     }
   } catch (e) {
     console.warn("[RPG] Synchronisation de la règle de diagonale impossible :", e);
+  }
+}
+
+// ✅ La barre d'actions (module/rules/hotbar.js) crée une macro de type
+// « script » pour chaque sort/arme glissé — Foundry exige la permission
+// MACRO_SCRIPT pour créer *et* exécuter ce type de macro. Si le rôle
+// Joueur ne l'a pas (mondes migrés depuis une ancienne version de Foundry,
+// ou juste jamais coché dans Configuration → Permissions), les sorts
+// glissés dans la barre ne font simplement rien pour ce rôle — sans
+// erreur visible côté joueur. On l'accorde donc automatiquement au
+// démarrage plutôt que de compter sur le MJ pour le repérer.
+async function ensureMacroScriptPermission() {
+  if (!game?.user?.isGM) return;
+  try {
+    const perms = foundry.utils.deepClone(game.permissions ?? game.settings.get("core", "permissions") ?? {});
+    const roles = new Set(perms.MACRO_SCRIPT ?? []);
+    if (roles.has(CONST.USER_ROLES.PLAYER)) return;
+    roles.add(CONST.USER_ROLES.PLAYER);
+    perms.MACRO_SCRIPT = Array.from(roles);
+    await game.settings.set("core", "permissions", perms);
+    ui.notifications?.info?.(
+      "Permission « Modifier/exécuter les macros de script » activée pour le rôle Joueur "
+    + "(nécessaire pour utiliser les sorts glissés dans la barre d'actions)."
+    );
+  } catch (e) {
+    console.warn("[RPG] Permission macros de script (rôle Joueur) :", e);
+  }
+}
+
+// ✅ Réglage cœur Foundry « Token Drag Vision » (core.tokenDragPreview) :
+// activé par défaut, il prévisualise en temps réel la vision/lumière du
+// token PENDANT qu'on le fait glisser — donc avant même de lâcher le clic.
+// Un joueur peut ainsi « scooter » derrière un mur ou dans une zone non
+// explorée puis annuler le glisser (Échap) sans jamais avoir réellement
+// bougé : il voit ce qu'il ne devrait pas, sans que le MJ s'en aperçoive.
+// On le désactive au démarrage : la vision ne se met à jour qu'à l'arrivée
+// (au dépôt du token), jamais pendant l'aperçu du glisser.
+async function ensureNoTokenDragVisionPreview() {
+  if (!game?.user?.isGM) return;
+  try {
+    if (game.settings.get("core", "tokenDragPreview") === false) return;
+    await game.settings.set("core", "tokenDragPreview", false);
+    ui.notifications?.info?.(
+      "Réglage « Token Drag Vision » désactivé : la vision d'un token ne se "
+    + "met à jour qu'une fois déposé, plus pendant l'aperçu du glisser."
+    );
+  } catch (e) {
+    console.warn("[RPG] Réglage vision pendant le glisser (tokenDragPreview) :", e);
   }
 }
 
@@ -497,7 +545,11 @@ Hooks.once("init", async () => {
 
   // Pièges / zones à effet — exposé pour les macros (placer/interroger une
   // zone, déclencher un jet de Perception pour la détecter).
-  game.rpg.zones = { getZoneEffectsAt, triggerZoneEffectsForToken, declareZonePerceptionCheck, revealZoneToActor };
+  game.rpg.zones = {
+    getZoneEffectsAt, triggerZoneEffectsForToken,
+    declareZonePerceptionCheck, revealZoneToActor,
+    declareZoneDisarmCheck, disarmZone
+  };
 
   // Diagnostic de la limite de déplacement : game.rpg.debugMovement()
   try {
@@ -719,6 +771,14 @@ Hooks.once("init", async () => {
     // ✅ Barre d'actions : glisser un sort/arme depuis une fiche y crée sa macro
     try { installHotbarSupport(); } catch (e) { console.warn("[RPG] barre d'actions:", e); }
 
+    // ✅ Permission requise pour que les sorts glissés dans la barre d'actions
+    //    fonctionnent pour le rôle Joueur (voir ensureMacroScriptPermission)
+    try { await ensureMacroScriptPermission(); } catch (e) { console.warn("[RPG] permission macros:", e); }
+
+    // ✅ Empêche la prévisualisation de vision pendant le glisser d'un token
+    //    (voir ensureNoTokenDragVisionPreview)
+    try { await ensureNoTokenDragVisionPreview(); } catch (e) { console.warn("[RPG] réglage vision glisser:", e); }
+
     // ✅ Actions de base (Repos…) : rattrapage sur les acteurs déjà créés
     try { await backfillDefaultActions(); }
     catch (e) { console.warn("[RPG] actions de base:", e); }
@@ -850,6 +910,8 @@ Hooks.once("init", async () => {
         ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
         ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
+        ["Détecter un piège",                  "trap-detect.js",        "icons/svg/trap.svg",            "gm"],
+        ["Désamorcer un piège",                "trap-disarm.js",        "icons/svg/trap.svg",            "gm"],
       ];
       const getFolder = async (name) => {
         let f = game.folders.find(x => x.type === "Macro" && x.name === name);
@@ -986,6 +1048,59 @@ Hooks.once("init", async () => {
               await revealZoneToActor(region, behavior, actor);
             } else {
               await ChatMessage.create({ content: `✅ <b>${actor.name}</b> — Réussite (Perception), mais la zone visée n'existe plus.` });
+            }
+          });
+        });
+      }
+      // ── Désamorçage de piège : jet de Crochetage (declareZoneDisarmCheck) ──
+      {
+        const _root = html instanceof HTMLElement ? html : html?.[0];
+        _root?.querySelectorAll(".rpg-zonedisarm-roll-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault(); btn.disabled = true;
+            try {
+              const { actorId, tn, regionId, behaviorId, sceneId } = btn.dataset;
+              const actor = game.actors.get(actorId);
+              if (!actor) throw new Error("Acteur introuvable");
+              const roll = await (new Roll("1d20")).evaluate();
+              await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }),
+                flavor: `🛠️ ${actor.name} — Crochetage (désamorçage)` });
+              const success = roll.total >= Number(tn || 11);
+              await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+                content: `<div style="font-size:13px"><b>${actor.name}</b> — Crochetage (désamorçage)<br>
+                  Jet : <b>${roll.total}</b> vs TN <b>${tn}+</b>
+                  ${success ? `<span style="color:#1d9e75;font-weight:700"> — ✅ Passe</span>` : `<span style="color:#c0392b;font-weight:700"> — ❌ Sous le TN</span>`}
+                  <div style="display:flex;gap:8px;margin-top:8px">
+                    <button type="button" class="rpg-zonedisarm-resolve" data-result="fail" data-actor-id="${actorId}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px">❌ Échec</button>
+                    <button type="button" class="rpg-zonedisarm-resolve" data-result="success" data-actor-id="${actorId}" data-region-id="${regionId}" data-behavior-id="${behaviorId}" data-scene-id="${sceneId}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px;${success?"background:rgba(29,158,117,0.2)":""}">✅ Réussite</button>
+                  </div></div>`,
+                whisper: game.users.filter(u=>u.isGM).map(u=>u.id) });
+              btn.textContent = "Lancé !";
+            } catch(e){ console.error("[RPG] zonedisarm roll:",e); btn.disabled=false; }
+          });
+        });
+        _root?.querySelectorAll(".rpg-zonedisarm-resolve:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          if (!game.user.isGM) { btn.style.display="none"; return; }
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            const allBtns = btn.closest("div")?.querySelectorAll("button");
+            allBtns?.forEach(b => b.disabled=true);
+            const { actorId, result, regionId, behaviorId, sceneId } = btn.dataset;
+            const actor = game.actors.get(actorId);
+            const success = result === "success";
+            if (!success || !actor) {
+              await ChatMessage.create({ content: `${success?"✅":"❌"} <b>${actor?.name??"?"}</b> — ${success?"Réussite":"Échec"} (Crochetage)` });
+              return;
+            }
+            const scene = game.scenes.get(sceneId) ?? canvas?.scene;
+            const region = scene?.regions?.get(regionId);
+            const behavior = region?.behaviors?.get(behaviorId);
+            if (region && behavior) {
+              await disarmZone(region, behavior, actor);
+            } else {
+              await ChatMessage.create({ content: `✅ <b>${actor.name}</b> — Réussite (Crochetage), mais la zone visée n'existe plus.` });
             }
           });
         });
