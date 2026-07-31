@@ -14,12 +14,29 @@
 const FLAG_SCOPE = "rpg";
 const FLAG_ITEM  = "hotbarItemUuid";
 
+// Un clic sur l'icône de la barre d'actions ne désactive rien visuellement
+// (contrairement au bouton « Déclarer » de la fiche, qui se désactive le
+// temps du traitement) : un joueur impatient qui reclique pendant que la
+// première déclaration est encore en cours crée deux jets/messages pour une
+// seule intention. On verrouille donc par UUID d'objet le temps du traitement.
+const IN_FLIGHT = new Set();
+
 /**
  * Déclenche un objet depuis la barre d'actions.
  * Sort → workflow de sort ; arme → déclaration d'attaque.
  * @param {string} uuid - UUID de l'objet
  */
 export async function useItemFromHotbar(uuid) {
+  if (IN_FLIGHT.has(uuid)) return;
+  IN_FLIGHT.add(uuid);
+  try {
+    return await useItemFromHotbarImpl(uuid);
+  } finally {
+    IN_FLIGHT.delete(uuid);
+  }
+}
+
+async function useItemFromHotbarImpl(uuid) {
   const item = await fromUuid(uuid).catch(() => null);
   if (!item) {
     return ui.notifications?.warn?.("Objet introuvable — il a peut-être été supprimé.");
