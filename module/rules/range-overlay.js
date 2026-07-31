@@ -34,6 +34,22 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
+/**
+ * Demi-largeur d'un token, en mètres — distance de son centre à son propre
+ * bord. Une allonge/portée se mesure depuis le CORPS d'une créature, pas
+ * depuis un point en son centre : sans cet ajout, le cercle d'un monstre de
+ * grande taille (2×2 cases ou plus) tombe en grande partie SOUS son propre
+ * socle, et un joueur ne peut pas dire à l'œil quand son propre token entre
+ * réellement dans la zone de menace.
+ */
+function tokenFootprintMeters(token) {
+  if (!token) return 0;
+  const gs = canvas?.scene?.grid?.size ?? 100;
+  const gd = canvas?.scene?.grid?.distance ?? 1;
+  const halfPx = Math.max(token.w ?? gs, token.h ?? gs) / 2;
+  return halfPx / (gs || 1) * gd;
+}
+
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 
 /**
@@ -94,8 +110,18 @@ function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null,
 export function drawRanges(token, layers, highlightEnemies = false) {
   _clear();
   if (!token || !canvas?.ready) return;
-  const usable = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
-  if (!usable.length) return;
+  const raw = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
+  if (!raw.length) return;
+
+  // Une allonge/portée part du BORD du token, pas de son centre — sinon le
+  // cercle d'une créature de grande taille tombe en partie sous son propre
+  // socle et ne montre pas où un token adverse entre réellement en danger.
+  const foot = tokenFootprintMeters(token);
+  const usable = raw.map(l => ({
+    ...l,
+    max: (Number(l.max) || 0) + foot,
+    min: (Number(l.min) || 0) > 0 ? (Number(l.min) || 0) + foot : 0
+  }));
 
   const cx = token.center.x, cy = token.center.y;
   const g = new PIXI.Graphics();
@@ -110,8 +136,10 @@ export function drawRanges(token, layers, highlightEnemies = false) {
       for (const other of canvas.tokens?.placeables ?? []) {
         if (other === token || !other.actor) continue;
         if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+        // Bord à bord : le socle de l'ennemi compte aussi, pas seulement son centre.
+        const otherFoot = metersToPixels(tokenFootprintMeters(other));
         const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + 1) {
+        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
           const marker = new PIXI.Graphics();
           marker.lineStyle(3, 0xffd700, 0.95);
           marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
@@ -239,17 +267,23 @@ export async function showMovementLimit(token) {
   let drewSomething = false;
 
   // ── Allonge de mêlée du combattant actif, ennemis à portée surlignés ────
+  // Le cercle part du bord du socle (pas de son centre) : sinon un monstre
+  // de grande taille menace en réalité bien plus loin que ce que le cercle
+  // ne laisse paraître, et un joueur ne peut pas dire à l'œil quand son
+  // propre token entre dans la zone.
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
-    drawRing(g, cx, cy, { min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    const foot = tokenFootprintMeters(token);
+    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
     drewSomething = true;
     try {
-      const rPx = metersToPixels(reach);
+      const rPx = metersToPixels(reach + foot);
       for (const other of canvas.tokens?.placeables ?? []) {
         if (other === token || !other.actor) continue;
         if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+        const otherFoot = metersToPixels(tokenFootprintMeters(other));
         const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + 1) {
+        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
           const marker = new PIXI.Graphics();
           marker.lineStyle(3, 0xffd700, 0.95);
           marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
