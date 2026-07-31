@@ -259,6 +259,32 @@ async function rpgSyncCoreDiagonals() {
   }
 }
 
+// ✅ La barre d'actions (module/rules/hotbar.js) crée une macro de type
+// « script » pour chaque sort/arme glissé — Foundry exige la permission
+// MACRO_SCRIPT pour créer *et* exécuter ce type de macro. Si le rôle
+// Joueur ne l'a pas (mondes migrés depuis une ancienne version de Foundry,
+// ou juste jamais coché dans Configuration → Permissions), les sorts
+// glissés dans la barre ne font simplement rien pour ce rôle — sans
+// erreur visible côté joueur. On l'accorde donc automatiquement au
+// démarrage plutôt que de compter sur le MJ pour le repérer.
+async function ensureMacroScriptPermission() {
+  if (!game?.user?.isGM) return;
+  try {
+    const perms = foundry.utils.deepClone(game.permissions ?? game.settings.get("core", "permissions") ?? {});
+    const roles = new Set(perms.MACRO_SCRIPT ?? []);
+    if (roles.has(CONST.USER_ROLES.PLAYER)) return;
+    roles.add(CONST.USER_ROLES.PLAYER);
+    perms.MACRO_SCRIPT = Array.from(roles);
+    await game.settings.set("core", "permissions", perms);
+    ui.notifications?.info?.(
+      "Permission « Modifier/exécuter les macros de script » activée pour le rôle Joueur "
+    + "(nécessaire pour utiliser les sorts glissés dans la barre d'actions)."
+    );
+  } catch (e) {
+    console.warn("[RPG] Permission macros de script (rôle Joueur) :", e);
+  }
+}
+
 // ---------------------------
 // INIT
 // ---------------------------
@@ -718,6 +744,10 @@ Hooks.once("init", async () => {
 
     // ✅ Barre d'actions : glisser un sort/arme depuis une fiche y crée sa macro
     try { installHotbarSupport(); } catch (e) { console.warn("[RPG] barre d'actions:", e); }
+
+    // ✅ Permission requise pour que les sorts glissés dans la barre d'actions
+    //    fonctionnent pour le rôle Joueur (voir ensureMacroScriptPermission)
+    try { await ensureMacroScriptPermission(); } catch (e) { console.warn("[RPG] permission macros:", e); }
 
     // ✅ Actions de base (Repos…) : rattrapage sur les acteurs déjà créés
     try { await backfillDefaultActions(); }
