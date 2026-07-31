@@ -285,6 +285,28 @@ async function ensureMacroScriptPermission() {
   }
 }
 
+// ✅ Réglage cœur Foundry « Token Drag Vision » (core.tokenDragPreview) :
+// activé par défaut, il prévisualise en temps réel la vision/lumière du
+// token PENDANT qu'on le fait glisser — donc avant même de lâcher le clic.
+// Un joueur peut ainsi « scooter » derrière un mur ou dans une zone non
+// explorée puis annuler le glisser (Échap) sans jamais avoir réellement
+// bougé : il voit ce qu'il ne devrait pas, sans que le MJ s'en aperçoive.
+// On le désactive au démarrage : la vision ne se met à jour qu'à l'arrivée
+// (au dépôt du token), jamais pendant l'aperçu du glisser.
+async function ensureNoTokenDragVisionPreview() {
+  if (!game?.user?.isGM) return;
+  try {
+    if (game.settings.get("core", "tokenDragPreview") === false) return;
+    await game.settings.set("core", "tokenDragPreview", false);
+    ui.notifications?.info?.(
+      "Réglage « Token Drag Vision » désactivé : la vision d'un token ne se "
+    + "met à jour qu'une fois déposé, plus pendant l'aperçu du glisser."
+    );
+  } catch (e) {
+    console.warn("[RPG] Réglage vision pendant le glisser (tokenDragPreview) :", e);
+  }
+}
+
 // ---------------------------
 // INIT
 // ---------------------------
@@ -748,6 +770,10 @@ Hooks.once("init", async () => {
     // ✅ Permission requise pour que les sorts glissés dans la barre d'actions
     //    fonctionnent pour le rôle Joueur (voir ensureMacroScriptPermission)
     try { await ensureMacroScriptPermission(); } catch (e) { console.warn("[RPG] permission macros:", e); }
+
+    // ✅ Empêche la prévisualisation de vision pendant le glisser d'un token
+    //    (voir ensureNoTokenDragVisionPreview)
+    try { await ensureNoTokenDragVisionPreview(); } catch (e) { console.warn("[RPG] réglage vision glisser:", e); }
 
     // ✅ Actions de base (Repos…) : rattrapage sur les acteurs déjà créés
     try { await backfillDefaultActions(); }
