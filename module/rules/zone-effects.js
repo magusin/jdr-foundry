@@ -180,6 +180,60 @@ export async function declareZonePerceptionCheck(actor, region, behavior) {
   });
 }
 
+/**
+ * Déclare un jet de Crochetage pour désamorcer un piège déjà repéré. Sur
+ * réussite (validation MJ du jet), le comportement est désactivé : la zone
+ * ne se déclenchera plus jamais, pour personne — c'est une désactivation
+ * définitive de CE piège, pas un simple contournement pour l'acteur qui a
+ * réussi. Un échec ne fait rien de plus qu'échouer : on ne fait pas sauter
+ * le piège au nez du joueur qui tente de le désamorcer (le MJ choisit
+ * librement une conséquence narrative si la scène s'y prête).
+ */
+export async function declareZoneDisarmCheck(actor, region, behavior) {
+  const sys = behavior.system ?? {};
+  const dc = Math.max(1, n(sys.disarmDC, 14));
+  const skill = actor.system?.skills?.crochetage;
+  const skillLevel = n(skill?.level, 0);
+  const tn = Math.max(1, dc - skillLevel);
+  const speaker = ChatMessage.getSpeaker({ actor });
+
+  const content = `
+    <div style="font-size:13px">
+      🛠️ <b>${actor.name}</b> — Crochetage (désamorçage)
+      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLevel ? ` (DD ${dc} − niv.${skillLevel})` : ""}</div>
+      <button type="button" class="rpg-zonedisarm-roll-btn"
+        data-actor-id="${actor.id}" data-tn="${tn}"
+        data-region-id="${region.id}" data-behavior-id="${behavior.id}" data-scene-id="${region.parent?.id ?? region.scene?.id ?? canvas?.scene?.id ?? ""}"
+        style="width:100%;margin-top:8px;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">
+        🎲 Lancer le dé
+      </button>
+    </div>`;
+
+  await ChatMessage.create({ speaker, content });
+  await ChatMessage.create({
+    speaker,
+    content: `<div style="font-size:11px;color:#c8960a;padding:5px;border:1px solid rgba(200,150,0,0.3);border-radius:6px">
+      ⚙️ MJ — ${actor.name} → Crochetage (désamorçage) vs <b>${sys.label || "Zone"}</b><br>
+      DD : ${dc} | Niveau compétence : ${skillLevel} | <b>TN réel : ${tn}+</b>
+    </div>`,
+    whisper: game.users.filter(u => u.isGM).map(u => u.id)
+  });
+}
+
+/** Désactive définitivement un piège et prévient sa table (MJ + propriétaires). */
+export async function disarmZone(region, behavior, actor) {
+  const sys = behavior.system ?? {};
+  if (sys.enabled !== false) await behavior.update({ system: { enabled: false } });
+  const whisperIds = [
+    ...game.users.filter(u => u.isGM).map(u => u.id),
+    ...game.users.filter(u => actor.testUserPermission?.(u, "OWNER")).map(u => u.id)
+  ];
+  await ChatMessage.create({
+    content: `🛠️ <b>${actor.name}</b> désamorce <b>${sys.label || region?.name || "un piège"}</b> — il ne se déclenchera plus.`,
+    whisper: [...new Set(whisperIds)]
+  });
+}
+
 /** Marque la zone révélée pour cet acteur et prévient sa table (MJ + propriétaires). */
 export async function revealZoneToActor(region, behavior, actor) {
   const sys = behavior.system ?? {};
@@ -217,6 +271,7 @@ export function registerZoneEffectBehavior() {
         hidden:            new fields.BooleanField({ initial: true }),
         onceOnly:          new fields.BooleanField({ initial: true }),
         detectDC:          new fields.NumberField({ initial: 12, min: 1, max: 25 }),
+        disarmDC:          new fields.NumberField({ initial: 14, min: 1, max: 25 }),
         speedMult:         new fields.NumberField({ initial: 1, min: 0.1, max: 1 }),
         damageFormula:     new fields.StringField({ initial: "" }),
         damageLivraison:   new fields.StringField({ initial: "physique", choices: ["physique", "magique"] }),
