@@ -382,6 +382,87 @@ export function refreshPinned() {
   else { _pinnedTokenId = null; _clear(); }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Indicateur de danger pendant le glisser
+   Pendant qu'un joueur fait glisser son token, il ne voit sinon aucun signal
+   au moment précis où il entre dans l'allonge d'un ennemi — seul un survol
+   (immobile) déclenchait l'affichage des portées. Calque séparé de celui du
+   survol/épinglage : on ne veut pas effacer une portée épinglée pendant le
+   drag, ni la faire réapparaître décalée après.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+let _dragGfx = null;
+
+function _clearDragThreat() {
+  try { _dragGfx?.destroy({ children: true }); } catch { /* ignore */ }
+  _dragGfx = null;
+}
+
+/**
+ * Redessine, à la position courante d'un token en train d'être glissé, les
+ * zones de menace des ennemis proches — et le fait apparaître en rouge vif,
+ * avec une étiquette, dès que son propre corps (bord compris) entre dans
+ * l'allonge d'un ennemi (bord compris lui aussi).
+ * @param {Token} draggedToken - l'aperçu suivi par la souris (position live)
+ * @returns {boolean} vrai si le token est actuellement engagé par au moins un ennemi
+ */
+export function updateDragThreatIndicator(draggedToken) {
+  _clearDragThreat();
+  if (!draggedToken?.actor || !canvas?.ready) return false;
+
+  const cx = draggedToken.center.x, cy = draggedToken.center.y;
+  const myFoot = tokenFootprintMeters(draggedToken);
+  const g = new PIXI.Graphics();
+  let inDanger = false;
+
+  for (const other of canvas.tokens?.placeables ?? []) {
+    if (other === draggedToken || !other.actor) continue;
+    if (other.id === draggedToken.id) continue;
+    if (!areOpposedDisp(draggedToken.document?.disposition, other.document?.disposition)) continue;
+    const reach = getMeleeReach(other.actor);
+    if (!(reach > 0)) continue;
+
+    const otherFoot = tokenFootprintMeters(other);
+    const bodyToBody = reach + otherFoot;             // cercle : bord du corps de l'ennemi
+    const engagedAt  = bodyToBody + myFoot;            // + mon propre socle : bord à bord
+    const dist = Math.hypot(cx - other.center.x, cy - other.center.y);
+    const engaged = dist <= metersToPixels(engagedAt) + 1;
+    if (engaged) inDanger = true;
+
+    drawRing(g, other.center.x, other.center.y, {
+      min: 0, max: bodyToBody,
+      color: engaged ? 0xff2b2b : COLORS.melee,
+      alpha: engaged ? 1 : 0.55,
+      label: `⚔ ${fmtM(reach)}${engaged ? " — DANGER" : ""}`
+    });
+  }
+
+  if (inDanger) {
+    const r = Math.max(draggedToken.w, draggedToken.h) * 0.55;
+    g.lineStyle(4, 0xff2b2b, 1);
+    g.drawCircle(cx, cy, r);
+    try {
+      const style = new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 16, fontWeight: "700",
+        fill: "#ff5c52", stroke: "#000000", strokeThickness: 4
+      });
+      const t = new PIXI.Text("⚠️ Allonge ennemie !", style);
+      t.anchor.set(0.5, 1);
+      t.position.set(cx, cy - r - 6);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+  }
+
+  (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
+  _dragGfx = g;
+  return inDanger;
+}
+
+/** Efface l'indicateur de danger de glisser (fin de drag, dépôt ou annulation). */
+export function clearDragThreatIndicator() {
+  _clearDragThreat();
+}
+
 /** Enregistre les hooks (idempotent). */
 export function installRangeOverlay() {
   if (globalThis.__rpgRangeOverlay) return;
