@@ -85,7 +85,8 @@
       "eauPeuProfonde": {},
       "eauProfonde": {},
       "boue": {},
-      "courant": {}
+      "courant": {},
+      "zoneEffet": {}
     }
   },
   "grid": {
