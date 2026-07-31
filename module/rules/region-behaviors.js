@@ -14,6 +14,8 @@
 //   - color       : couleur de la région dans l'UI
 //   - description : explication pour le MJ
 
+import { getZoneEffectsAt } from "./zone-effects.js";
+
 export const TERRAIN_TYPES = {
   terrainDifficile: {
     label:       "Terrain difficile",
@@ -92,6 +94,22 @@ export function getTerrainAt(x, y) {
       }
     }
   }
+
+  // ── Zones à effet (pièges / sorts de zone) : contribuent aussi au coût de
+  // déplacement (ralentissement, jusqu'à quasi-impassable) — voir zone-effects.js.
+  for (const { region, behavior } of getZoneEffectsAt(x, y)) {
+    const speedMult = Number(behavior.system?.speedMult ?? 1) || 1;
+    terrains.push({
+      region, behavior,
+      terrain: {
+        label: behavior.system?.label || "Zone",
+        speedMult,
+        color: "#992222"
+      },
+      typeKey: `zoneEffet:${behavior.id}`
+    });
+  }
+
   return terrains;
 }
 

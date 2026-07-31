@@ -30,6 +30,7 @@ const MACRO_LIST = [
   { name: "Retirer un État (jet)",              file: "remove-state-macro.js",version: "1.0.2", img: "icons/svg/cancel.svg" },
   { name: "Déverrouiller les Compendiums (MJ)", file: "unlock-compendiums.js",version: "1.0.2", img: "icons/svg/book.svg" },
   { name: "Lancer un Sort",                     file: "cast-spell.js",        version: "1.0.2", img: "icons/svg/lightning.svg" },
+  { name: "Détecter un piège",                  file: "trap-detect.js",       version: "1.0.0", img: "icons/svg/trap.svg" },
 ];
 
 function isNewer(a, b) {

@@ -1,0 +1,264 @@
+// module/rules/zone-effects.js
+//
+// Zones de terrain avec effet : pièges cachés déclenchés au passage, murs de
+// ronces/glace posés par un sort de zone, nuage toxique qui empoisonne qui
+// s'y attarde... Un seul comportement de région générique (rpg.zoneEffet),
+// configurable par le MJ, réutilisé pour tous ces cas :
+//   - dégâts directs à l'entrée (formule de dés + type de livraison)
+//   - état actif appliqué à l'entrée (label, durée, DOT, malus de vitesse)
+//   - ralentissement (jusqu'à quasi-impassable) — pas de vrai refus de
+//     passage, cohérent avec le reste du système de terrain (region-
+//     behaviors.js documente "impassable" mais ne l'applique nulle part)
+//   - masquée aux joueurs (piège) ou visible (mur de glace d'un sort)
+//   - détectable par un jet de Perception (declareZonePerceptionCheck)
+//
+// Déclenchement : automatique, mais seulement à la VALIDATION MJ du
+// déplacement (action-confirm.js, branche "move" confirmée) — jamais avant,
+// pour rester dans le flux déclare → MJ valide → résout du reste du système.
+
+import { computeFinalDamage, applyFinalDamage } from "./combat.js";
+import { applyEffect } from "./status-effects.js";
+import { hpSecret } from "./chat-visibility.js";
+
+const BEHAVIOR_KEY = "rpg.zoneEffet";
+
+function n(v, d = 0) { const x = Number(v); return Number.isFinite(x) ? x : d; }
+
+function slugKey(s) {
+  return String(s ?? "")
+    .trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "zone";
+}
+
+function _pointInRegion(region, x, y) {
+  try {
+    if (region.document?.testPoint) return region.document.testPoint({ x, y });
+    if (region.polygon?.contains) return region.polygon.contains(x, y);
+    if (region.polygons?.some(p => p.contains?.(x, y))) return true;
+    const b = region.bounds;
+    if (b && !(x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)) return false;
+    return true;
+  } catch { return false; }
+}
+
+/** Régions actives à (x,y) portant un comportement rpg.zoneEffet. */
+export function getZoneEffectsAt(x, y) {
+  if (!canvas?.regions?.placeables) return [];
+  const out = [];
+  for (const region of canvas.regions.placeables) {
+    if (!_pointInRegion(region, x, y)) continue;
+    for (const behavior of (region.document?.behaviors ?? [])) {
+      if (String(behavior.type ?? "") !== BEHAVIOR_KEY) continue;
+      if (behavior.system?.enabled === false) continue;
+      out.push({ region, behavior });
+    }
+  }
+  return out;
+}
+
+/** Multiplicateur de vitesse le plus pénalisant parmi les zones à ce point (1 = aucun). */
+export function getZoneSpeedMultAt(x, y) {
+  let mult = 1;
+  for (const { behavior } of getZoneEffectsAt(x, y)) {
+    const m = n(behavior.system?.speedMult, 1);
+    if (m < mult) mult = m;
+  }
+  return mult;
+}
+
+/**
+ * Déclenche les zones présentes à la position d'arrivée d'un token, après
+ * validation MJ du déplacement. Applique dégâts + effet, marque la zone
+ * comme révélée (elle vient de se manifester) et poste un message.
+ */
+export async function triggerZoneEffectsForToken({ actor, tokenId, x, y }) {
+  if (!game.user.isGM || !actor) return;
+  const zones = getZoneEffectsAt(x, y);
+  if (!zones.length) return;
+
+  for (const { region, behavior } of zones) {
+    const sys = behavior.system ?? {};
+    const triggered = Array.isArray(sys.triggeredTokens) ? sys.triggeredTokens : [];
+    if (sys.onceOnly && tokenId && triggered.includes(tokenId)) continue;
+
+    const label = String(sys.label ?? "").trim() || "Zone";
+    const lines = [];
+
+    // ── Dégâts directs ──────────────────────────────────────────────────
+    const formula = String(sys.damageFormula ?? "").trim();
+    if (formula) {
+      try {
+        const roll = await (new Roll(formula)).evaluate();
+        const livraison = String(sys.damageLivraison ?? "physique");
+        const { final } = computeFinalDamage({ targetActor: actor, livraison, rawDamage: roll.total });
+        await applyFinalDamage({ targetActor: actor, finalDamage: final });
+        const pv = Number(actor.system?.ressources?.pv?.valeur ?? 0);
+        const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0);
+        lines.push(`💥 <b>${final}</b> dégâts (${livraison}, brut ${roll.total})` + hpSecret(actor, ` — PV: ${pv}/${pvMax}`));
+      } catch (e) {
+        console.warn("[RPG][Zone] formule de dégâts invalide:", formula, e);
+      }
+    }
+
+    // ── État appliqué ────────────────────────────────────────────────────
+    const effectLabel = String(sys.effectLabel ?? "").trim();
+    if (effectLabel) {
+      const dotPerTick = n(sys.effectDotPerTick, 0);
+      const vitesseFlat = n(sys.effectVitesseFlat, 0);
+      await applyEffect({
+        sourceActor: null,
+        targetActor: actor,
+        item: { id: `zone:${region.id}:${behavior.id}` },
+        effectDef: {
+          key: slugKey(effectLabel),
+          label: effectLabel,
+          duration: Math.max(1, n(sys.effectDuration, 1)),
+          cleanseDC: 0,
+          dot: dotPerTick > 0 ? { perTick: dotPerTick } : null,
+          modsFlat: vitesseFlat ? { move: { vitesse: vitesseFlat } } : null
+        }
+      });
+      lines.push(`✨ État appliqué : <b>${effectLabel}</b>`);
+    }
+
+    if (!lines.length) continue; // zone purement passive (ralentissement seul) : rien à annoncer
+
+    // Marque déclenché / révélé
+    const updates = {};
+    if (sys.onceOnly) updates.triggeredTokens = [...triggered, tokenId].filter(Boolean);
+    const revealed = Array.isArray(sys.revealedActorIds) ? sys.revealedActorIds : [];
+    if (!revealed.includes(actor.id)) updates.revealedActorIds = [...revealed, actor.id];
+    if (Object.keys(updates).length) {
+      await behavior.update({ system: updates }).catch(e => console.warn("[RPG][Zone] maj comportement:", e));
+    }
+
+    await ChatMessage.create({
+      speaker: { alias: label },
+      content: `<div style="font-size:13px;padding:4px 0">
+        <div style="font-weight:700;margin-bottom:3px">${sys.hidden ? "⚠️ Piège déclenché" : "🌀 Zone"} — ${label}</div>
+        <div>${actor.name} : ${lines.join("<br>")}</div>
+      </div>`
+    });
+  }
+}
+
+/**
+ * Déclare un jet de Perception pour détecter une zone cachée (piège). Sur
+ * réussite (validation MJ du jet), la zone est marquée révélée pour cet
+ * acteur et un message décrit ce qui a été repéré — au MJ de choisir
+ * ensuite comment le montrer sur la carte si besoin.
+ */
+export async function declareZonePerceptionCheck(actor, region, behavior) {
+  const sys = behavior.system ?? {};
+  const dc = Math.max(1, n(sys.detectDC, 12));
+  const skill = actor.system?.skills?.perception;
+  const skillLevel = n(skill?.level, 0);
+  const tn = Math.max(1, dc - skillLevel);
+  const speaker = ChatMessage.getSpeaker({ actor });
+
+  const content = `
+    <div style="font-size:13px">
+      🔍 <b>${actor.name}</b> — Perception
+      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLevel ? ` (DD ${dc} − niv.${skillLevel})` : ""}</div>
+      <button type="button" class="rpg-zonecheck-roll-btn"
+        data-actor-id="${actor.id}" data-tn="${tn}"
+        data-region-id="${region.id}" data-behavior-id="${behavior.id}" data-scene-id="${region.parent?.id ?? region.scene?.id ?? canvas?.scene?.id ?? ""}"
+        style="width:100%;margin-top:8px;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">
+        🎲 Lancer le dé
+      </button>
+    </div>`;
+
+  await ChatMessage.create({ speaker, content });
+  await ChatMessage.create({
+    speaker,
+    content: `<div style="font-size:11px;color:#c8960a;padding:5px;border:1px solid rgba(200,150,0,0.3);border-radius:6px">
+      ⚙️ MJ — ${actor.name} → Perception vs <b>${sys.label || "Zone"}</b><br>
+      DD : ${dc} | Niveau compétence : ${skillLevel} | <b>TN réel : ${tn}+</b>
+    </div>`,
+    whisper: game.users.filter(u => u.isGM).map(u => u.id)
+  });
+}
+
+/** Marque la zone révélée pour cet acteur et prévient sa table (MJ + propriétaires). */
+export async function revealZoneToActor(region, behavior, actor) {
+  const sys = behavior.system ?? {};
+  const revealed = Array.isArray(sys.revealedActorIds) ? sys.revealedActorIds : [];
+  if (!revealed.includes(actor.id)) {
+    await behavior.update({ system: { revealedActorIds: [...revealed, actor.id] } });
+  }
+  const whisperIds = [
+    ...game.users.filter(u => u.isGM).map(u => u.id),
+    ...game.users.filter(u => actor.testUserPermission?.(u, "OWNER")).map(u => u.id)
+  ];
+  await ChatMessage.create({
+    content: `🔍 <b>${actor.name}</b> repère quelque chose de suspect : <b>${sys.label || region?.name || "une zone cachée"}</b>.`,
+    whisper: [...new Set(whisperIds)]
+  });
+}
+
+/**
+ * Enregistre le comportement de région dans Foundry V13.
+ * Appelé depuis init.js dans le hook "init".
+ */
+export function registerZoneEffectBehavior() {
+  if (!CONFIG.RegionBehavior?.dataModels) {
+    console.warn("[RPG] CONFIG.RegionBehavior non disponible — Foundry V13+ requis.");
+    return;
+  }
+  if (CONFIG.RegionBehavior.dataModels[BEHAVIOR_KEY]) return;
+
+  class ZoneEffectBehavior extends foundry.abstract.TypeDataModel {
+    static defineSchema() {
+      const fields = foundry.data.fields;
+      return {
+        enabled:           new fields.BooleanField({ initial: true }),
+        label:             new fields.StringField({ initial: "" }),
+        hidden:            new fields.BooleanField({ initial: true }),
+        onceOnly:          new fields.BooleanField({ initial: true }),
+        detectDC:          new fields.NumberField({ initial: 12, min: 1, max: 25 }),
+        speedMult:         new fields.NumberField({ initial: 1, min: 0.1, max: 1 }),
+        damageFormula:     new fields.StringField({ initial: "" }),
+        damageLivraison:   new fields.StringField({ initial: "physique", choices: ["physique", "magique"] }),
+        effectLabel:       new fields.StringField({ initial: "" }),
+        effectDuration:    new fields.NumberField({ initial: 1, min: 1, max: 20 }),
+        effectDotPerTick:  new fields.NumberField({ initial: 0, min: 0 }),
+        effectVitesseFlat: new fields.NumberField({ initial: 0 }),
+        triggeredTokens:   new fields.ArrayField(new fields.StringField(), { initial: [] }),
+        revealedActorIds:  new fields.ArrayField(new fields.StringField(), { initial: [] })
+      };
+    }
+  }
+  Object.defineProperty(ZoneEffectBehavior, "name", { value: "ZoneEffectBehavior" });
+
+  CONFIG.RegionBehavior.dataModels[BEHAVIOR_KEY] = ZoneEffectBehavior;
+  if (CONFIG.RegionBehavior.typeLabels) CONFIG.RegionBehavior.typeLabels[BEHAVIOR_KEY] = "Piège / Zone à effet (RPG)";
+  if (CONFIG.RegionBehavior.typeIcons) CONFIG.RegionBehavior.typeIcons[BEHAVIOR_KEY] = "fas fa-burst";
+
+  console.log(`[RPG] Comportement région enregistré : ${BEHAVIOR_KEY}`);
+}
+
+export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionBehaviorConfig {
+  static DEFAULT_OPTIONS = foundry.utils.mergeObject(
+    super.DEFAULT_OPTIONS ?? {},
+    { window: { title: "Piège / Zone à effet" }, position: { width: 460 } },
+    { inplace: false }
+  );
+
+  static PARTS = {
+    form: { template: "systems/rpg/templates/region/zone-behavior.hbs" }
+  };
+
+  async _prepareContext(options) {
+    const ctx = await super._prepareContext(options);
+    ctx.system = this.document.system ?? {};
+    return ctx;
+  }
+}
+
+export function registerZoneEffectSheet() {
+  if (!foundry.applications.sheets?.RegionBehaviorConfig) return;
+  try {
+    foundry.applications.sheets.RegionBehaviorConfig.registerConfig(BEHAVIOR_KEY, ZoneEffectBehaviorSheet);
+  } catch (e) { console.warn("[RPG] enregistrement sheet zone:", e); }
+}
