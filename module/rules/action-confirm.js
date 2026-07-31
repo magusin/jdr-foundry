@@ -7,6 +7,7 @@ import {
   updateLogEntry, findLogEntry, undoAction, incrementFatigue, actionFatigueCost
 } from "./action-budget.js";
 import { undoMovement } from "./movement-tracker.js";
+import { triggerZoneEffectsForToken } from "./zone-effects.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -204,6 +205,19 @@ async function handlePendingAction(message, result, actionId) {
       const moverActor = combat.combatants.get(combatantId)?.actor;
       // Déplacement : gratuit par défaut, réglable dans les options du monde
       if (moverActor) await incrementFatigue(moverActor, actionFatigueCost("deplacement"));
+
+      // Pièges / zones à effet : ne se déclenchent qu'une fois le déplacement
+      // validé par le MJ, jamais à la simple déclaration du joueur.
+      if (moverActor && entry.snapshot?.newX != null && entry.snapshot?.newY != null) {
+        try {
+          await triggerZoneEffectsForToken({
+            actor: moverActor,
+            tokenId: entry.snapshot?.tokenId,
+            x: entry.snapshot.newX,
+            y: entry.snapshot.newY
+          });
+        } catch (e) { console.error("[RPG][Zone] déclenchement:", e); }
+      }
 
       await message.update({
         content: `<div style="font-size:13px;color:var(--color-text-secondary)">

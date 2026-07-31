@@ -1,11 +1,11 @@
 <form class="rpg-sheet rpg-quest-sheet">
-  <header class="sheet-header" style="display:flex;align-items:center;gap:10px">
+  <header class="sheet-header">
     <img class="profile-img rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image" />
-    <div class="header-fields" style="flex:1">
+    <div class="header-fields">
       <input name="name" type="text" value="{{item.name}}" placeholder="Nom de la quête" {{#unless canEdit}}disabled{{/unless}} />
     </div>
     {{#if isGM}}
-    <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+    <button type="button" class="quest-send-btn" data-action="sendToActors" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
     {{/if}}
   </header>
 
@@ -35,9 +35,9 @@
     </div>
     {{/if}}
 
-    <div class="form-group">
+    <div class="form-group quest-progress">
       <label>Étape actuelle (le joueur ne voit que celle-ci + les étapes terminées en titre seul)</label>
-      <div style="font-size:13px;font-weight:600">
+      <div class="quest-progress-value">
         Étape {{calc.etapeActuelleNum}} / {{calc.totalEtapes}}
       </div>
     </div>
@@ -47,51 +47,61 @@
       {{#each system.etapes as |etape ei|}}
       {{#if etape.termine}}
       {{!-- Vue joueur, étape déjà passée : titre seul, rien d'autre --}}
-      <div class="etape-card" style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:8px;margin-bottom:8px;opacity:.6">
-        <span style="font-size:11px;font-weight:700">Étape {{etape.etapeNum}} — {{etape.label}}
-          <span style="color:var(--color-text-secondary)">— terminée</span></span>
+      <div class="etape-card etape-card-done">
+        <span class="etape-heading">Étape {{etape.etapeNum}} — {{etape.label}}
+          <span class="etape-heading-tag">— terminée</span></span>
       </div>
       {{else}}
-      <div class="etape-card" data-etape-idx="{{ei}}"
-           style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:8px;margin-bottom:8px;
-                  {{#if (eq ei ../system.etapeActuelle)}}background:rgba(29,158,117,0.08);{{/if}}">
+      <div class="etape-card {{#if (eq ei ../system.etapeActuelle)}}etape-card-current{{/if}}" data-etape-idx="{{ei}}">
 
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:11px;font-weight:700;opacity:.7">
+        <div class="etape-card-header">
+          <span class="etape-heading">
             Étape {{etape.etapeNum}}
-            {{#if (eq ei ../system.etapeActuelle)}}<span style="color:#1d9e75">— EN COURS</span>{{/if}}
-            {{#if (lt ei ../system.etapeActuelle)}}<span style="color:var(--color-text-secondary)">— terminée</span>{{/if}}
-            {{#if (gt ei ../system.etapeActuelle)}}<span style="color:var(--color-text-secondary)">— à venir (caché du joueur)</span>{{/if}}
+            {{#if (eq ei ../system.etapeActuelle)}}<span class="etape-heading-tag etape-heading-tag-current">— EN COURS</span>{{/if}}
+            {{#if (lt ei ../system.etapeActuelle)}}<span class="etape-heading-tag">— terminée</span>{{/if}}
+            {{#if (gt ei ../system.etapeActuelle)}}<span class="etape-heading-tag">— à venir (caché du joueur)</span>{{/if}}
           </span>
           {{#if canEdit}}
-          <button type="button" data-action="removeEtape" data-etape-idx="{{ei}}" style="margin-left:auto" title="Retirer l'étape">✕</button>
+          <button type="button" class="etape-remove-btn" data-action="removeEtape" data-etape-idx="{{ei}}" title="Retirer l'étape">✕</button>
           {{/if}}
         </div>
 
-        <input type="text" name="system.etapes.{{ei}}.label" value="{{etape.label}}"
-          placeholder="Titre de l'étape (ex: Trouver l'auberge)" style="width:100%;margin-bottom:6px"
+        <input type="text" class="etape-title-input" name="system.etapes.{{ei}}.label" value="{{etape.label}}"
+          placeholder="Titre de l'étape (ex: Trouver l'auberge)"
           {{#unless ../canEdit}}disabled{{/unless}} />
 
-        <div class="etape-objectifs">
-          {{#each etape.objectifs as |obj oi|}}
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
-            <input type="checkbox" name="system.etapes.{{ei}}.objectifs.{{oi}}.fait" {{#if obj.fait}}checked{{/if}}
-              {{#unless ../../canEdit}}disabled{{/unless}} />
-            <input type="text" name="system.etapes.{{ei}}.objectifs.{{oi}}.text" value="{{obj.text}}"
-              placeholder="Description de l'objectif" style="flex:1" {{#unless ../../canEdit}}disabled{{/unless}} />
-            {{#if ../../canEdit}}
-            <button type="button" data-action="removeObjectif" data-etape-idx="{{ei}}" data-obj-idx="{{oi}}" title="Retirer">✕</button>
-            {{/if}}
-          </div>
-          {{/each}}
+        <div class="etape-block">
+          <label class="etape-block-label">Récit de l'étape (visible du joueur pendant qu'elle est en cours)</label>
+          <textarea class="etape-description" name="system.etapes.{{ei}}.description" rows="3"
+            placeholder="Ex: Tu arrives à l'auberge du Cerf. Le tenancier semble nerveux et évite ton regard..."
+            {{#unless ../canEdit}}disabled{{/unless}}>{{etape.description}}</textarea>
         </div>
-        {{#if canEdit}}
-        <button type="button" data-action="addObjectif" data-etape-idx="{{ei}}" style="margin-top:2px;font-size:11px">+ Objectif</button>
 
-        <div class="form-group" style="margin-top:8px">
-          <label style="font-size:11px;opacity:.7">📝 Notes MJ pour cette étape (PNJ, lieux, récompense de mise en
+        <div class="etape-block">
+          <label class="etape-block-label">Objectifs à cocher (visibles du joueur)</label>
+          <div class="etape-objectifs">
+            {{#each etape.objectifs as |obj oi|}}
+            <div class="etape-objectif-row">
+              <input type="checkbox" name="system.etapes.{{ei}}.objectifs.{{oi}}.fait" {{#if obj.fait}}checked{{/if}}
+                {{#unless ../../canEdit}}disabled{{/unless}} />
+              <input type="text" name="system.etapes.{{ei}}.objectifs.{{oi}}.text" value="{{obj.text}}"
+                placeholder="Description de l'objectif" {{#unless ../../canEdit}}disabled{{/unless}} />
+              {{#if ../../canEdit}}
+              <button type="button" class="etape-remove-btn" data-action="removeObjectif" data-etape-idx="{{ei}}" data-obj-idx="{{oi}}" title="Retirer">✕</button>
+              {{/if}}
+            </div>
+            {{/each}}
+          </div>
+          {{#if canEdit}}
+          <button type="button" class="etape-add-objectif-btn" data-action="addObjectif" data-etape-idx="{{ei}}">+ Objectif</button>
+          {{/if}}
+        </div>
+
+        {{#if canEdit}}
+        <div class="etape-block">
+          <label class="etape-block-label etape-block-label-mj">📝 Notes MJ pour cette étape (PNJ, lieux, récompense de mise en
             scène... — jamais visible du joueur)</label>
-          <textarea name="system.etapes.{{ei}}.notesMJ" rows="3" style="width:100%;font-size:12px"
+          <textarea class="etape-notes-mj" name="system.etapes.{{ei}}.notesMJ" rows="3"
             placeholder="Ex: PNJ Maître Aldric à l'auberge du Cerf ; lieu : quartier des artisans...">{{etape.notesMJ}}</textarea>
         </div>
         {{/if}}
@@ -101,14 +111,15 @@
     </div>
 
     {{#if canEdit}}
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div class="quest-etapes-nav">
       <button type="button" data-action="addEtape">+ Ajouter une étape</button>
       <button type="button" data-action="prevEtape">◀ Étape précédente</button>
       <button type="button" data-action="nextEtape">Étape suivante ▶</button>
     </div>
     {{/if}}
 
-    <h3 style="margin-top:14px">Récompense (à la fin de la quête)</h3>
+    {{#if isGM}}
+    <h3 class="quest-section-title">Récompense (à la fin de la quête — jamais visible du joueur)</h3>
     <div class="form-group">
       <label>XP</label>
       <input type="number" name="system.recompense.xp" value="{{system.recompense.xp}}" min="0" {{#unless canEdit}}disabled{{/unless}} />
@@ -116,23 +127,24 @@
 
     <div class="quest-reward-items">
       {{#each system.recompense.items as |ri idx|}}
-      <div class="reward-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+      <div class="reward-row" data-idx="{{idx}}">
         <input type="text" name="system.recompense.items.{{idx}}.uuid" value="{{ri.uuid}}"
-          placeholder="UUID de l'objet (clic droit -> Copy UUID)" style="flex:2" {{#unless canEdit}}disabled{{/unless}} />
+          placeholder="UUID de l'objet (clic droit -> Copy UUID)" class="reward-uuid" {{#unless canEdit}}disabled{{/unless}} />
         <input type="text" name="system.recompense.items.{{idx}}.name" value="{{ri.name}}"
-          placeholder="Nom affiché" style="flex:1" {{#unless canEdit}}disabled{{/unless}} />
-        <input type="number" name="system.recompense.items.{{idx}}.qty" value="{{ri.qty}}" min="1" style="width:50px" {{#unless canEdit}}disabled{{/unless}} />
+          placeholder="Nom affiché" class="reward-name" {{#unless canEdit}}disabled{{/unless}} />
+        <input type="number" name="system.recompense.items.{{idx}}.qty" value="{{ri.qty}}" min="1" class="reward-qty" {{#unless canEdit}}disabled{{/unless}} />
         {{#if canEdit}}
-        <button type="button" data-action="removeRewardItem" data-idx="{{idx}}" title="Retirer">✕</button>
+        <button type="button" class="etape-remove-btn" data-action="removeRewardItem" data-idx="{{idx}}" title="Retirer">✕</button>
         {{/if}}
       </div>
       {{/each}}
     </div>
     {{#if canEdit}}
-    <button type="button" data-action="addRewardItem" style="margin-top:4px">+ Ajouter un objet en récompense</button>
+    <button type="button" class="quest-add-reward-btn" data-action="addRewardItem">+ Ajouter un objet en récompense</button>
+    {{/if}}
     {{/if}}
 
-    <h3 style="margin-top:14px">Description</h3>
+    <h3 class="quest-section-title">Description</h3>
     <textarea name="system.description" rows="5" {{#unless canEdit}}disabled{{/unless}}>{{system.description}}</textarea>
 
   </section>

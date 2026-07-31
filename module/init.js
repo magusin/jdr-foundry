@@ -45,6 +45,11 @@ import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
 import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/region-behaviors.js";
+import {
+  registerZoneEffectBehavior, registerZoneEffectSheet,
+  getZoneEffectsAt, triggerZoneEffectsForToken,
+  declareZonePerceptionCheck, revealZoneToActor
+} from "./rules/zone-effects.js";
 import { MOVEMENT_TYPES, getActiveMovementTypes, isImmuneToTerrain, getEffectiveSpeedMult, getMovementTypeLabel } from "./rules/movement-types.js";
 import { showSpellRange, showSpellRangeFromItem, clearSpellRange } from "./rules/spell-range.js";
 import { installGlobalErrorHandler } from "./utils/error-handler.js";
@@ -265,6 +270,7 @@ Hooks.once("init", async () => {
 
   // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
   registerRegionBehaviors();
+  registerZoneEffectBehavior();
 
   // Expose l'API terrain pour les macros
   Hooks.once("ready", () => {
@@ -274,6 +280,7 @@ Hooks.once("init", async () => {
   // Sheets de configuration des terrains (après le hook setup)
   Hooks.once("setup", () => {
     registerRegionBehaviorSheets();
+    registerZoneEffectSheet();
   });
 
   // ✅ Setting météo courante (monde) — influence la magie élémentaire
@@ -487,6 +494,10 @@ Hooks.once("init", async () => {
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 
   game.rpg.combat = Combat;
+
+  // Pièges / zones à effet — exposé pour les macros (placer/interroger une
+  // zone, déclencher un jet de Perception pour la détecter).
+  game.rpg.zones = { getZoneEffectsAt, triggerZoneEffectsForToken, declareZonePerceptionCheck, revealZoneToActor };
 
   // Diagnostic de la limite de déplacement : game.rpg.debugMovement()
   try {
@@ -923,6 +934,59 @@ Hooks.once("init", async () => {
             const actor = game.actors.get(actorId);
             if (actor && skillKey) { const {addXpToSkill}=await import("./rules/skills.js"); await addXpToSkill(actor,skillKey,success?10:3); }
             await ChatMessage.create({ content: `${success?"✅":"❌"} <b>${actor?.name??"?"}</b> — ${success?"Réussite":"Échec"}` });
+          });
+        });
+      }
+      // ── Détection de piège/zone cachée : jet de Perception (declareZonePerceptionCheck) ──
+      {
+        const _root = html instanceof HTMLElement ? html : html?.[0];
+        _root?.querySelectorAll(".rpg-zonecheck-roll-btn:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault(); btn.disabled = true;
+            try {
+              const { actorId, tn, regionId, behaviorId, sceneId } = btn.dataset;
+              const actor = game.actors.get(actorId);
+              if (!actor) throw new Error("Acteur introuvable");
+              const roll = await (new Roll("1d20")).evaluate();
+              await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }),
+                flavor: `🔍 ${actor.name} — Perception` });
+              const success = roll.total >= Number(tn || 11);
+              await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+                content: `<div style="font-size:13px"><b>${actor.name}</b> — Perception<br>
+                  Jet : <b>${roll.total}</b> vs TN <b>${tn}+</b>
+                  ${success ? `<span style="color:#1d9e75;font-weight:700"> — ✅ Passe</span>` : `<span style="color:#c0392b;font-weight:700"> — ❌ Sous le TN</span>`}
+                  <div style="display:flex;gap:8px;margin-top:8px">
+                    <button type="button" class="rpg-zonecheck-resolve" data-result="fail" data-actor-id="${actorId}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px">❌ Échec</button>
+                    <button type="button" class="rpg-zonecheck-resolve" data-result="success" data-actor-id="${actorId}" data-region-id="${regionId}" data-behavior-id="${behaviorId}" data-scene-id="${sceneId}" style="flex:1;padding:4px;cursor:pointer;border-radius:5px;${success?"background:rgba(29,158,117,0.2)":""}">✅ Réussite</button>
+                  </div></div>`,
+                whisper: game.users.filter(u=>u.isGM).map(u=>u.id) });
+              btn.textContent = "Lancé !";
+            } catch(e){ console.error("[RPG] zonecheck roll:",e); btn.disabled=false; }
+          });
+        });
+        _root?.querySelectorAll(".rpg-zonecheck-resolve:not([data-bound])").forEach(btn => {
+          btn.dataset.bound = "1";
+          if (!game.user.isGM) { btn.style.display="none"; return; }
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            const allBtns = btn.closest("div")?.querySelectorAll("button");
+            allBtns?.forEach(b => b.disabled=true);
+            const { actorId, result, regionId, behaviorId, sceneId } = btn.dataset;
+            const actor = game.actors.get(actorId);
+            const success = result === "success";
+            if (!success || !actor) {
+              await ChatMessage.create({ content: `${success?"✅":"❌"} <b>${actor?.name??"?"}</b> — ${success?"Réussite":"Échec"} (Perception)` });
+              return;
+            }
+            const scene = game.scenes.get(sceneId) ?? canvas?.scene;
+            const region = scene?.regions?.get(regionId);
+            const behavior = region?.behaviors?.get(behaviorId);
+            if (region && behavior) {
+              await revealZoneToActor(region, behavior, actor);
+            } else {
+              await ChatMessage.create({ content: `✅ <b>${actor.name}</b> — Réussite (Perception), mais la zone visée n'existe plus.` });
+            }
           });
         });
       }
