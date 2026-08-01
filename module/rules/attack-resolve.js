@@ -7,7 +7,10 @@
 // ne sont lancés qu'ICI, après que le MJ a tranché Échec/Touché/Critique —
 // cohérent avec le flow des sorts (on ne sait pas combien on fait avant
 // de savoir si on touche). Le MJ choisit librement, le d20/TN affichés ne
-// sont qu'une indication.
+// sont qu'une indication. Sur touché/critique, le jet de dégâts est lancé
+// (et posté en chat) tout de suite, mais son application aux PV de la cible
+// attend un clic MJ supplémentaire sur « Appliquer les dégâts » — voir
+// applyAttackDamage.
 
 import { hpSecret } from "./chat-visibility.js";
 import { confirmAttackDeclaration, rollAttackDie } from "./attack-declare.js";
@@ -205,44 +208,75 @@ export function bindAttackChatButtons(htmlEl, message) {
   }
 
   // ── Phase "rolled" : boutons Échec critique/Échec/Touché/Critique (MJ) ──
-  if (phase !== "rolled") return;
+  if (phase === "rolled") {
+    // Joueurs : on retire la zone GM
+    if (!game.user.isGM) {
+      root.querySelector(".rpg-attack-gm")?.remove();
+      return;
+    }
 
-  // Joueurs : on retire la zone GM
-  if (!game.user.isGM) {
-    root.querySelector(".rpg-attack-gm")?.remove();
+    // Anti double-bind si Foundry re-render
+    if (root.dataset.rpgAttackBound === "1") return;
+    root.dataset.rpgAttackBound = "1";
+
+    if (flags.resolved) {
+      root.querySelectorAll(".rpg-attack-resolve").forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
+      return;
+    }
+
+    const buttons = root.querySelectorAll(".rpg-attack-resolve");
+    for (const btn of buttons) {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!game.user.isGM) return;
+
+        const result = btn.dataset.result; // "fail" | "hit" | "crit" | "critfail"
+        if (!result) return;
+
+        for (const b of buttons) b.disabled = true;
+        try {
+          const res = await resolveAttack(message, result, { actionId: flags.actionId ?? null });
+          if (!res) {
+            // Annulé (ex: MJ a fermé le dialog Échec Critique sans valider) -> on réactive
+            for (const b of buttons) b.disabled = false;
+          }
+        } catch (e) {
+          console.error("[RPG][AttackResolve]", e);
+          ui.notifications?.error?.(`Erreur résolution attaque : ${e?.message ?? e}`);
+          for (const b of buttons) b.disabled = false;
+        }
+      });
+    }
     return;
   }
 
-  // Anti double-bind si Foundry re-render
-  if (root.dataset.rpgAttackBound === "1") return;
-  root.dataset.rpgAttackBound = "1";
+  // ── Message "attackDamagePending" : bouton MJ « Appliquer les dégâts » ──
+  if (flags.type === "attackDamagePending") {
+    if (!game.user.isGM) {
+      root.querySelector(".rpg-attack-apply")?.remove();
+      return;
+    }
+    if (root.dataset.rpgAttackApplyBound === "1") return;
+    root.dataset.rpgAttackApplyBound = "1";
 
-  if (flags.resolved) {
-    root.querySelectorAll(".rpg-attack-resolve").forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
-    return;
-  }
+    if (flags.applied) {
+      root.querySelectorAll(".rpg-attack-apply-btn").forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
+      return;
+    }
 
-  const buttons = root.querySelectorAll(".rpg-attack-resolve");
-  for (const btn of buttons) {
-    btn.addEventListener("click", async (ev) => {
+    const applyBtn = root.querySelector(".rpg-attack-apply-btn");
+    applyBtn?.addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (!game.user.isGM) return;
-
-      const result = btn.dataset.result; // "fail" | "hit" | "crit" | "critfail"
-      if (!result) return;
-
-      for (const b of buttons) b.disabled = true;
+      applyBtn.disabled = true;
       try {
-        const res = await resolveAttack(message, result, { actionId: flags.actionId ?? null });
-        if (!res) {
-          // Annulé (ex: MJ a fermé le dialog Échec Critique sans valider) -> on réactive
-          for (const b of buttons) b.disabled = false;
-        }
+        await applyAttackDamage(message);
       } catch (e) {
-        console.error("[RPG][AttackResolve]", e);
-        ui.notifications?.error?.(`Erreur résolution attaque : ${e?.message ?? e}`);
-        for (const b of buttons) b.disabled = false;
+        console.error("[RPG][AttackApplyDamage]", e);
+        ui.notifications?.error?.(`Erreur application des dégâts : ${e?.message ?? e}`);
+        applyBtn.disabled = false;
       }
     });
   }
@@ -251,7 +285,8 @@ export function bindAttackChatButtons(htmlEl, message) {
 /**
  * Résout l'attaque : sur échec, message aléatoire (paré/esquivé/raté), pas de dégâts.
  * Sur touché/critique : lance les dégâts MAINTENANT (pas avant), applique mitigation,
- * retire les PV, affiche le détail complet (jet, bonus, mitigation, final).
+ * affiche le détail complet (jet, bonus, mitigation, final) — mais laisse les PV
+ * intacts jusqu'à ce que le MJ clique sur « Appliquer les dégâts » (voir applyAttackDamage).
  * Confirme le slot de budget dans tous les cas (échec compris).
  */
 export async function resolveAttack(message, result, { actionId = null } = {}) {
@@ -300,7 +335,10 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
     } else {
       // ── Lance les dégâts MAINTENANT (après décision MJ) ──────────────
       // weapon peut être une ARME ou une COMPÉTENCE de monstre (type spell) :
-      // rollDamage gère les deux.
+      // rollDamage gère les deux. L'application des PV reste, elle, en
+      // attente d'une validation MJ distincte (bouton « Appliquer les
+      // dégâts ») — le MJ voit d'abord le résultat du jet avant de le
+      // faire encaisser à la cible.
       const dmgResult = await weapon.rollDamage({
         attackerActor: attacker,
         targetActor:   target ?? null,
@@ -308,15 +346,6 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         type:          String(f.livraison ?? weapon.system?.livraison ?? "physique"),
         offhand:       f.offhandId ? resolveWeapon(attacker, f.offhandId) : null
       });
-
-      let pvLine = "";
-      if (target) {
-        const pvCur = n(target.system?.ressources?.pv?.valeur, 0);
-        const pvMax = n(target.system?.ressources?.pv?.max, 0);
-        const pvNew = Math.max(0, pvCur - dmgResult.final);
-        await target.update({ "system.ressources.pv.valeur": pvNew });
-        pvLine = hpSecret(target, `<br>${targetName} : ${pvCur} → <b>${pvNew}</b> / ${pvMax} PV`);
-      }
 
       const label = isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ";
       const col   = isCrit ? "gold" : "#27ae60";
@@ -331,21 +360,42 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`
         : `🛡️ Aucune mitigation`;
 
-      // Effets de l'arme (déclencheur touche normale / critique uniquement)
-      let fxLines = [];
-      try {
-        fxLines = await applyWeaponEffects({ weapon, attacker, target, isCrit });
-      } catch (e) {
-        console.warn("[RPG] effets d'arme :", e);
-      }
-
-      content =
+      const baseContent =
         `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
         `${bonusLine}<br>` +
         `${mitigLine}<br>` +
-        `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>` +
-        pvLine +
-        (fxLines.length ? `<br>${fxLines.join("<br>")}` : "");
+        `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>`;
+
+      // Confirme le slot de budget (l'action a été tentée) et la fatigue
+      // dès maintenant : indépendant de l'application des dégâts.
+      await confirmBudgetSlot(realActionId);
+      await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
+
+      await message.delete();
+
+      const pendingMsg = await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor: attacker }),
+        content: baseContent +
+          `<div style="font-size:11px;opacity:.7;margin-top:2px">En attente de la validation du MJ pour appliquer les dégâts.</div>` +
+          `<div class="rpg-attack-apply" style="margin-top:8px">` +
+          `<button type="button" class="rpg-attack-apply-btn" style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600;background:#c0392b;color:#fff;border:none">💥 Appliquer les dégâts</button>` +
+          `</div>`,
+        flags: {
+          rpg: {
+            type: "attackDamagePending",
+            baseContent,
+            attackerId: attacker.id,
+            targetId: target?.id ?? null,
+            weaponId: weapon.id,
+            offhandId: f.offhandId ?? null,
+            isCrit,
+            final: dmgResult.final,
+            actionId: realActionId
+          }
+        }
+      });
+
+      return { content: baseContent, messageId: pendingMsg.id };
     }
   }
 
@@ -363,4 +413,52 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   });
 
   return { content, messageId: resolMsg.id };
+}
+
+/**
+ * Applique réellement les dégâts (retire les PV, déclenche les effets d'arme)
+ * une fois que le MJ a cliqué sur « Appliquer les dégâts » du message
+ * "attackDamagePending" créé par resolveAttack. Sépare le jet (visible dès
+ * Touché/Critique) de son application, pour laisser le MJ vérifier le
+ * résultat avant de le faire encaisser à la cible.
+ */
+export async function applyAttackDamage(message) {
+  if (!game.user.isGM) return;
+
+  const flags = message?.flags?.rpg ?? {};
+  if (flags.type !== "attackDamagePending" || flags.applied) return;
+
+  const attacker = game.actors.get(flags.attackerId);
+  const target   = flags.targetId ? game.actors.get(flags.targetId) : null;
+  const { resolveWeapon } = await import("./unarmed.js");
+  const weapon = resolveWeapon(attacker, flags.weaponId);
+
+  let pvLine = "";
+  if (target) {
+    const pvCur = n(target.system?.ressources?.pv?.valeur, 0);
+    const pvMax = n(target.system?.ressources?.pv?.max, 0);
+    const pvNew = Math.max(0, pvCur - n(flags.final, 0));
+    await target.update({ "system.ressources.pv.valeur": pvNew });
+    pvLine = hpSecret(target, `<br>${target.name} : ${pvCur} → <b>${pvNew}</b> / ${pvMax} PV`);
+  }
+
+  // Effets de l'arme (déclencheur touche normale / critique uniquement)
+  let fxLines = [];
+  try {
+    fxLines = await applyWeaponEffects({ weapon, attacker, target, isCrit: !!flags.isCrit });
+  } catch (e) {
+    console.warn("[RPG] effets d'arme :", e);
+  }
+
+  const finalContent = flags.baseContent +
+    pvLine +
+    (fxLines.length ? `<br>${fxLines.join("<br>")}` : "") +
+    (flags.actionId ? `<div style="margin-top:6px;text-align:right"><button type="button" data-action-undo data-action-id="${flags.actionId}" style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">↩️ Annuler</button></div>` : "");
+
+  await message.update({
+    content: finalContent,
+    "flags.rpg.applied": true
+  });
+
+  return { content: finalContent, messageId: message.id };
 }
