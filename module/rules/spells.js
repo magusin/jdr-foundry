@@ -3,7 +3,7 @@ import { manhattanDistanceTokens } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
-import { hpSecret } from "./chat-visibility.js";
+import { hpSecret, gmOnly } from "./chat-visibility.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -12,6 +12,83 @@ import { hpSecret } from "./chat-visibility.js";
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
+}
+
+const htmlEsc = (s) =>
+  String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+async function fromUuidSafeTop(uuid) {
+  try {
+    if (!uuid) return null;
+    return await fromUuid(uuid);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Contenu du message public (visible de tous), phase par phase :
+ * - "pending"      : en attente de validation MJ, pas de jet possible
+ * - "awaitingRoll" : validé, bouton "Lancer le d20" pour le joueur
+ * - "ready"         : jet fait (ou pas nécessaire), en attente du verdict MJ
+ * - "rejected"      : refusé par le MJ
+ */
+function spellPublicContent(d, phase) {
+  let footer;
+  if (phase === "pending") {
+    footer = `<div style="opacity:.8"><i>En attente de validation MJ.</i></div>`;
+  } else if (phase === "awaitingRoll") {
+    footer = `
+      <div style="opacity:.8;margin-bottom:6px"><i>Validé par le MJ — lance ton jet de touché.</i></div>
+      <button type="button" class="rpg-roll-d20-btn"
+        data-actor-id="${d.actorId}" data-tn="${d.tnFinal}" data-spell="${htmlEsc(d.itemName)}"
+        style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600">
+        🎲 Lancer le d20
+      </button>`;
+  } else if (phase === "ready") {
+    footer = `<div style="opacity:.8"><i>Validé par le MJ — en attente du verdict.</i></div>`;
+  } else {
+    footer = `<div style="opacity:.75"><b>❌ Sort refusé par le MJ.</b></div>`;
+  }
+  return `<div class="rpg-spell-declare">${d.bodyHtml ?? ""}${footer}</div>`;
+}
+
+/** Contenu du message MJ (whisper), phase par phase — voir spellPublicContent. */
+function spellGmContent(d, phase) {
+  const header = `<div style="font-size:11px;color:#c8960a;font-weight:600;margin-bottom:6px">`
+               + `⚙️ ${phase === "ready" ? "Validation MJ — " : ""}${htmlEsc(d.actorName)} → ${htmlEsc(d.itemName)}</div>`;
+
+  if (phase === "pending") {
+    return `<div class="rpg-spell-declare rpg-spell-gm">${header}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="rpg-spell-confirm" data-ok="1"
+          style="flex:1;padding:4px;cursor:pointer;background:#1d9e75;color:#fff;border:none;border-radius:5px;font-weight:600">✅ Valider</button>
+        <button type="button" class="rpg-spell-confirm" data-ok="0"
+          style="flex:1;padding:4px;cursor:pointer;background:#c0392b;color:#fff;border:none;border-radius:5px">❌ Annuler</button>
+      </div></div>`;
+  }
+
+  if (phase === "awaitingRoll") {
+    return `<div class="rpg-spell-declare rpg-spell-gm">${header}
+      <div style="opacity:.8;font-size:12px"><i>Validé — en attente du jet du joueur.</i></div></div>`;
+  }
+
+  if (phase === "ready") {
+    const failButtons = d.noFailOption ? "" : `
+        <button type="button" class="rpg-spell-resolve" data-result="critfail" style="color:#8b1a12;font-weight:700">Échec Critique</button>
+        <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>`;
+    const successLabel = d.noFailOption ? "Touché" : "Réussite";
+    const critLabel = d.noFailOption ? "Critique" : "Réussite Crit";
+    return `<div class="rpg-spell-declare rpg-spell-gm">${header}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${failButtons}
+        <button type="button" class="rpg-spell-resolve" data-result="success">${successLabel}</button>
+        <button type="button" class="rpg-spell-resolve" data-result="crit">${critLabel}</button>
+      </div></div>`;
+  }
+
+  // "rejected"
+  return `<div class="rpg-spell-declare rpg-spell-gm">${header}
+    <div style="font-size:12px;opacity:.75">❌ Refusé.</div></div>`;
 }
 
 /** Retourne la liste des userIds GM pour les whispers MJ-only */
@@ -978,23 +1055,19 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     tnInfo = computeTN(actor, firstTarget, item);
   } catch (e) { /* pas grave si ça échoue */ }
 
-  const rollButton = (tn) => `
-       <button type="button" class="rpg-roll-d20-btn"
-         data-actor-id="${actor.id}" data-tn="${tn}" data-spell="${item.name}"
-         style="margin-left:8px;padding:2px 10px;cursor:pointer;border-radius:6px;font-size:11px">
-         🎲 Lancer le d20
-       </button>`;
-
+  // Un jet de touché est nécessaire sauf pour une cible amie/soi sans
+  // opposition (autoSuccess) : dans ce cas le MJ tranche directement après
+  // avoir validé la déclaration, sans étape de jet intermédiaire.
+  let needsRoll = true;
   let tnLine;
   if (tnInfo?.autoSuccess) {
-    // Cible amie sans difficulté saisie : rien à rater, pas de jet.
+    needsRoll = false;
     tnLine = targetActors.length
       ? `🌿 <b>Action bienveillante</b> — aucun jet, le sort prend effet`
       : `🌀 <b>Action sur soi</b> — aucun jet de touché`;
   } else if (tnInfo) {
     tnLine = `🎯 <b>Jet de touché</b> : il faut faire `
            + `<b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20`
-           + rollButton(tnInfo.tnFinal)
            + (tnInfo.friendly
                ? `<div style="font-size:11px;opacity:.7">(difficulté ${n(sys.difficulte, 0)} du sort — la cible ne s'y oppose pas)</div>`
                : (sys.difficulte
@@ -1005,8 +1078,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
            + (sys.difficulte ? ` (difficulté +${n(sys.difficulte, 0)})` : ``);
   }
 
-  const content = `
-  <div class="rpg-spell-declare">
+  const bodyHtml = `
     <div>
       <b>${actor.name}</b> déclare <b>${item.name}</b>
       ${targetNamesList ? ` sur <b>${targetNamesList}</b>` : ""}
@@ -1028,44 +1100,123 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     ${summarizeFxList(fxHitOnly) ? `<div style="margin-top:6px;"><b>Effets (touché normal uniquement)</b>${summarizeFxList(fxHitOnly)}</div>` : ``}
     ${summarizeFxList(fxCrit) ? `<div style="margin-top:6px;"><b>Effets (crit uniquement)</b>${summarizeFxList(fxCrit)}</div>`     : ``}
 
-    <hr style="margin:8px 0;opacity:.2"/>
+    <hr style="margin:8px 0;opacity:.2"/>`;
 
-    <div style="opacity:.8"><i>En attente de validation MJ.</i></div>
-  </div>`;
+  // Repos (action de base) ne peut jamais échouer : souffler ne se rate pas.
+  // Le MJ ne tranche donc qu'entre Touché (récupération normale) et Critique
+  // (récupération renforcée), sans option Échec / Échec Critique.
+  const noFailOption = item.getFlag?.("rpg", "defaultActionKey") === "repos";
 
-  const gmContent2 = `
-  <div class="rpg-spell-declare rpg-gm-panel">
-    <div style="font-size:11px;color:#c8960a;font-weight:600;margin-bottom:6px">⚙️ Validation MJ — ${actor.name} → ${item.name}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button type="button" class="rpg-spell-resolve" data-result="critfail" style="color:#8b1a12;font-weight:700">Échec Critique</button>
-      <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>
-      <button type="button" class="rpg-spell-resolve" data-result="success">Réussite</button>
-      <button type="button" class="rpg-spell-resolve" data-result="crit">Réussite Crit</button>
-    </div>
-  </div>`;
+  const d = {
+    bodyHtml,
+    actorName: actor.name,
+    itemName: item.name,
+    actorId: actor.id,
+    needsRoll,
+    noFailOption,
+    tnFinal: tnInfo?.tnFinal ?? 11,
+    manaCost, cdMax,
+    actorUuid, itemUuid, casterTokenUuid, targetTokenUuids,
+    actionId: actionId ?? null,
+    d20: null
+  };
 
   const msg = await ChatMessage.create({
     speaker,
-    content,
-    flags: {
-      rpg: {
-        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuids, actionId: actionId ?? null }
-      }
-    }
+    content: spellPublicContent(d, "pending"),
+    flags: { rpg: { spellDeclare: { ...d, phase: "pending" } } }
   });
 
-  await ChatMessage.create({
+  const gmMsg = await ChatMessage.create({
     speaker,
-    content: gmContent2,
+    content: spellGmContent(d, "pending"),
     whisper: gmUserIds(),
-    flags: {
-      rpg: {
-        spellDeclare: { actorUuid, itemUuid, casterTokenUuid, targetTokenUuids, actionId: actionId ?? null }
-      }
-    }
+    flags: { rpg: { spellDeclare: { ...d, phase: "pending", linkedPublicId: msg.id } } }
   });
+
+  await msg.update({ "flags.rpg.spellDeclare.linkedGmId": gmMsg.id });
 
   return { ok: true, messageId: msg.id };
+}
+
+/**
+ * Le MJ valide ou annule la déclaration (avant tout jet de touché).
+ * Sur annulation, rembourse mana/cooldown et libère le slot de budget réservé.
+ */
+export async function confirmSpellDeclaration(message, approve) {
+  if (!game.user.isGM) return;
+
+  const flags = message?.flags?.rpg ?? {};
+  const d = flags.spellDeclare ?? {};
+  const publicMsg = d.linkedPublicId ? game.messages.get(d.linkedPublicId) : null;
+
+  if (!approve) {
+    const actor = d.actorUuid ? await fromUuidSafeTop(d.actorUuid) : null;
+    const item  = d.itemUuid  ? await fromUuidSafeTop(d.itemUuid)  : null;
+
+    if (actor && n(d.manaCost, 0) > 0) {
+      const cur = n(actor.system?.ressources?.mana?.valeur, 0);
+      await actor.update({ "system.ressources.mana.valeur": cur + n(d.manaCost, 0) });
+    }
+    if (item && n(d.cdMax, 0) > 0) {
+      await item.update({ "system.cooldown.restant": 0, "system.recharge.restant": 0 });
+    }
+    if (d.actionId && game.combat) {
+      try {
+        const { findLogEntry, getBudget, saveBudget, releaseSlot, updateLogEntry } = await import("./action-budget.js");
+        const found = findLogEntry(game.combat, d.actionId);
+        if (found) {
+          const budget = getBudget(game.combat, found.combatantId);
+          await saveBudget(game.combat, found.combatantId, releaseSlot(budget, found.entry.slot ?? "sortNormal", false));
+          await updateLogEntry(game.combat, d.actionId, { status: "rejected" });
+        }
+      } catch (e) { /* ignore si pas de budget actif */ }
+    }
+
+    await message.update({ content: spellGmContent(d, "rejected"), "flags.rpg.spellDeclare.phase": "rejected" });
+    if (publicMsg) await publicMsg.update({ content: spellPublicContent(d, "rejected"), "flags.rpg.spellDeclare.phase": "rejected" });
+    return;
+  }
+
+  const nextPhase = d.needsRoll ? "awaitingRoll" : "ready";
+  await message.update({ content: spellGmContent(d, nextPhase), "flags.rpg.spellDeclare.phase": nextPhase });
+  if (publicMsg) await publicMsg.update({ content: spellPublicContent(d, nextPhase), "flags.rpg.spellDeclare.phase": nextPhase });
+}
+
+/**
+ * Le joueur lance son jet de touché, une fois la déclaration validée par le MJ.
+ * Révèle ensuite les boutons de verdict sur le message MJ lié.
+ */
+export async function rollSpellDie(message) {
+  const flags = message?.flags?.rpg ?? {};
+  const d = flags.spellDeclare ?? {};
+  if (d.phase !== "awaitingRoll" || !d.needsRoll) return;
+
+  const actor = game.actors.get(d.actorId);
+  const tn = Number(d.tnFinal) || 11;
+  const roll = await (new Roll("1d20")).evaluate();
+  const hit = roll.total >= tn;
+
+  await roll.toMessage({
+    speaker: ChatMessage.getSpeaker({ actor }),
+    flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${htmlEsc(d.itemName ?? "Sort")} : <b>${roll.total}</b> vs TN <b>${tn}+</b>`
+          + gmOnly(` → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`)
+          + `<span style="display:block;font-size:11px;opacity:.7">En attente de la validation du MJ.</span>`
+  });
+
+  const newD = { ...d, d20: roll.total };
+  await message.update({
+    content: spellPublicContent(newD, "ready"),
+    "flags.rpg.spellDeclare": { ...newD, phase: "ready" }
+  });
+
+  const gmMsg = d.linkedGmId ? game.messages.get(d.linkedGmId) : null;
+  if (gmMsg) {
+    await gmMsg.update({
+      content: spellGmContent(newD, "ready"),
+      "flags.rpg.spellDeclare": { ...newD, phase: "ready" }
+    });
+  }
 }
 
 /**
@@ -1116,6 +1267,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   const targetNames = targetActors.map(a => a.name).join(", ") || null;
 
+  // Le message public (déclaration) est distinct de ce message MJ — il faut
+  // le nettoyer aussi, sinon son "en attente du verdict" reste affiché
+  // indéfiniment une fois le sort résolu.
+  const publicMsg = data.linkedPublicId ? game.messages.get(data.linkedPublicId) : null;
+  const deletePublicMsg = () => publicMsg?.delete().catch(() => {});
+
   // ── Échec Critique ───────────────────────────────────────────────────
   // Le MJ choisit toujours lui-même la conséquence (jamais de hasard ici)
   if (res === "critfail") {
@@ -1127,6 +1284,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     await confirmBudgetSlot(actionId);
     await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
+    await deletePublicMsg();
 
     let selfDmgLine = "";
     if (choice.selfDamage > 0) {
@@ -1155,6 +1313,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     await confirmBudgetSlot(actionId);
     await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
+    await deletePublicMsg();
     const failMsg = pickSpellFailMessage(actor.name, targetNames);
     await ChatMessage.create({
       content: `<b style="color:#c0392b">✗ ÉCHEC</b> — ${failMsg}`,
@@ -1356,6 +1515,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   }
 
   await message.delete();
+  await deletePublicMsg();
   const actionId = data.actionId ?? null;
   await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
   await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
@@ -1467,6 +1627,47 @@ export function bindSpellChatButtons(htmlEl, message) {
 
   if (!data) return;
 
+  const phase = data.phase ?? "pending";
+
+  // ── Phase "pending" : le MJ valide ou annule la déclaration ────────────
+  if (phase === "pending") {
+    if (!game.user.isGM) {
+      htmlEl.querySelector(".rpg-spell-gm")?.remove();
+      return;
+    }
+    if (htmlEl.dataset.rpgSpellConfirmBound === "1") return;
+    htmlEl.dataset.rpgSpellConfirmBound = "1";
+
+    const confirmBtns = htmlEl.querySelectorAll(".rpg-spell-confirm");
+    confirmBtns.forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!game.user.isGM) return;
+        confirmBtns.forEach(b => b.disabled = true);
+        try {
+          await confirmSpellDeclaration(message, btn.dataset.ok === "1");
+        } catch (e) {
+          console.error("[RPG] confirmation sort:", e);
+          ui.notifications.error("Erreur validation sort (voir console).");
+          confirmBtns.forEach(b => b.disabled = false);
+        }
+      });
+    });
+    return;
+  }
+
+  // ── Phase "awaitingRoll" : le joueur lance son d20 (bouton branché dans
+  // init.js) ; rien à lier ici, seule la zone MJ (vide) est masquée. ──────
+  if (phase === "awaitingRoll") {
+    if (!game.user.isGM) htmlEl.querySelector(".rpg-spell-gm")?.remove();
+    return;
+  }
+
+  // ── Phase "rejected" : plus rien à lier ─────────────────────────────────
+  if (phase === "rejected") return;
+
+  // ── Phase "ready" : verdict MJ (Échec critique/Échec/Réussite/Réussite Crit) ──
   // Joueurs : on retire la zone GM
   if (!game.user.isGM) {
     htmlEl.querySelector(".rpg-spell-gm")?.remove();
