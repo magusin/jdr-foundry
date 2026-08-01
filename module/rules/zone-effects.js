@@ -2,7 +2,7 @@
 //
 // Zones de terrain avec effet : pièges cachés déclenchés au passage, murs de
 // ronces/glace posés par un sort de zone, nuage toxique qui empoisonne qui
-// s'y attarde... Un seul comportement de région générique (rpg.zoneEffet),
+// s'y attarde... Un seul comportement de région générique (zoneEffet),
 // configurable par le MJ, réutilisé pour tous ces cas :
 //   - dégâts directs à l'entrée (formule de dés + type de livraison)
 //   - état actif appliqué à l'entrée (label, durée, DOT, malus de vitesse)
@@ -21,7 +21,14 @@ import { applyEffect } from "./status-effects.js";
 import { hpSecret } from "./chat-visibility.js";
 import { isImmuneToTerrain } from "./movement-types.js";
 
-const BEHAVIOR_KEY = "rpg.zoneEffet";
+// Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg", ...,
+// { types: ["character"] }) — jamais "rpg.character"), un sous-type de
+// document déclaré par le SYSTÈME lui-même dans system.json n'est pas
+// préfixé par l'id du système ; seul un MODULE préfixerait ("moduleid.type").
+// Un "rpg." ici ferait que CONFIG.RegionBehavior.dataModels ne contient
+// jamais la clé que Foundry assigne réellement au document créé depuis le
+// menu « Ajouter un comportement » (qui lit system.json tel quel).
+export const BEHAVIOR_KEY = "zoneEffet";
 
 function n(v, d = 0) { const x = Number(v); return Number.isFinite(x) ? x : d; }
 
@@ -43,7 +50,7 @@ function _pointInRegion(region, x, y) {
   } catch { return false; }
 }
 
-/** Régions actives à (x,y) portant un comportement rpg.zoneEffet. */
+/** Régions actives à (x,y) portant un comportement zoneEffet. */
 export function getZoneEffectsAt(x, y) {
   if (!canvas?.regions?.placeables) return [];
   const out = [];
@@ -334,8 +341,23 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
 }
 
 export function registerZoneEffectSheet() {
-  if (!foundry.applications.sheets?.RegionBehaviorConfig) return;
+  // "RegionBehaviorConfig.registerConfig" n'existe pas dans l'API Foundry —
+  // ça n'a jamais rien enregistré (erreur avalée par le try/catch), donc
+  // Foundry retombait toujours sur son RegionBehaviorConfig générique par
+  // défaut. Le mécanisme standard pour attacher une fiche à un sous-type de
+  // document est DocumentSheetConfig.registerSheet — même fonction que
+  // Actors.registerSheet/Items.registerSheet utilisés ailleurs dans init.js.
+  const DocumentSheetConfig = foundry.applications?.apps?.DocumentSheetConfig;
+  const RegionBehaviorDoc   = getDocumentClass?.("RegionBehavior") ?? globalThis.RegionBehavior;
+  if (!DocumentSheetConfig || !RegionBehaviorDoc) return;
+
   try {
-    foundry.applications.sheets.RegionBehaviorConfig.registerConfig(BEHAVIOR_KEY, ZoneEffectBehaviorSheet);
-  } catch (e) { console.warn("[RPG] enregistrement sheet zone:", e); }
+    DocumentSheetConfig.registerSheet(RegionBehaviorDoc, "rpg", ZoneEffectBehaviorSheet, {
+      types: [BEHAVIOR_KEY],
+      makeDefault: true,
+      label: "Piège / Zone à effet (RPG)"
+    });
+  } catch (e) {
+    console.warn("[RPG] enregistrement sheet zone:", e);
+  }
 }

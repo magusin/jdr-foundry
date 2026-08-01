@@ -27,7 +27,7 @@
     return;
   }
 
-  const behavior = region.document.behaviors.find(b => String(b.type) === "rpg.zoneEffet");
+  const behavior = region.document.behaviors.find(b => String(b.type) === "zoneEffet");
   if (!behavior) {
     ui.notifications.warn("Cette région n'a pas de comportement « Piège / Zone à effet (RPG) ».");
     return;
