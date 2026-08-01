@@ -99,6 +99,11 @@ export function getTerrainAt(x, y) {
   // déplacement (ralentissement, jusqu'à quasi-impassable) — voir zone-effects.js.
   for (const { region, behavior } of getZoneEffectsAt(x, y)) {
     const speedMult = Number(behavior.system?.speedMult ?? 1) || 1;
+    // Clé partagée "zoneEffetSol" pour toutes les zones « au sol uniquement »
+    // (réglage par défaut) : ça leur donne l'immunité volant/éthéré déjà
+    // définie dans movement-types.js, sans dupliquer la logique ici. Une zone
+    // décochée "au sol uniquement" garde une clé unique — jamais immunisée.
+    const groundOnly = behavior.system?.groundOnly !== false;
     terrains.push({
       region, behavior,
       terrain: {
@@ -106,7 +111,7 @@ export function getTerrainAt(x, y) {
         speedMult,
         color: "#992222"
       },
-      typeKey: `zoneEffet:${behavior.id}`
+      typeKey: groundOnly ? "zoneEffetSol" : `zoneEffet:${behavior.id}`
     });
   }
 

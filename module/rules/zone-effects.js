@@ -19,6 +19,7 @@
 import { computeFinalDamage, applyFinalDamage } from "./combat.js";
 import { applyEffect } from "./status-effects.js";
 import { hpSecret } from "./chat-visibility.js";
+import { isImmuneToTerrain } from "./movement-types.js";
 
 const BEHAVIOR_KEY = "rpg.zoneEffet";
 
@@ -81,6 +82,11 @@ export async function triggerZoneEffectsForToken({ actor, tokenId, x, y }) {
     const sys = behavior.system ?? {};
     const triggered = Array.isArray(sys.triggeredTokens) ? sys.triggeredTokens : [];
     if (sys.onceOnly && tokenId && triggered.includes(tokenId)) continue;
+
+    // Piège « au sol uniquement » (par défaut) : un acteur volant ou éthéré
+    // passe au-dessus sans jamais le déclencher. Décoché sur la fiche pour
+    // un nuage toxique ou une zone de sort censée toucher tout le monde.
+    if (sys.groundOnly !== false && isImmuneToTerrain(actor, "zoneEffetSol")) continue;
 
     const label = String(sys.label ?? "").trim() || "Zone";
     const lines = [];
@@ -270,6 +276,9 @@ export function registerZoneEffectBehavior() {
         label:             new fields.StringField({ initial: "" }),
         hidden:            new fields.BooleanField({ initial: true }),
         onceOnly:          new fields.BooleanField({ initial: true }),
+        // Ignoré par un acteur volant/éthéré (vol, lévitation...) — décocher
+        // pour un nuage toxique ou un mur de zone censé toucher tout le monde.
+        groundOnly:        new fields.BooleanField({ initial: true }),
         detectDC:          new fields.NumberField({ initial: 12, min: 1, max: 25 }),
         disarmDC:          new fields.NumberField({ initial: 14, min: 1, max: 25 }),
         speedMult:         new fields.NumberField({ initial: 1, min: 0.1, max: 1 }),

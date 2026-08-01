@@ -18,7 +18,9 @@ export const MOVEMENT_TYPES = {
     label: "Volant",
     icon: "fas fa-dove",
     description: "Vole au-dessus du terrain — ignore toutes les restrictions au sol.",
-    immunities: ["terrainDifficile", "vegetationDense", "boue", "eauPeuProfonde", "eauProfonde", "courant"],
+    // "zoneEffetSol" = pièges/zones marqués « au sol uniquement » (zone-effects.js) :
+    // un piège à pression ou une fosse ne se déclenche pas sous quelqu'un qui vole.
+    immunities: ["terrainDifficile", "vegetationDense", "boue", "eauPeuProfonde", "eauProfonde", "courant", "zoneEffetSol"],
     reduced: [],
     note: "Ne peut pas traverser les plafonds (murs de terrain hauts)."
   },
@@ -57,7 +59,7 @@ export const MOVEMENT_TYPES = {
     label: "Éthéré",
     icon: "fas fa-ghost",
     description: "Traverses murs et terrain — ignore TOUT (murs, eau, obstacles).",
-    immunities: ["terrainDifficile", "vegetationDense", "boue", "eauPeuProfonde", "eauProfonde", "courant"],
+    immunities: ["terrainDifficile", "vegetationDense", "boue", "eauPeuProfonde", "eauProfonde", "courant", "zoneEffetSol"],
     reduced: [],
     note: "Fantômes, entités spectrales."
   }
