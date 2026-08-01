@@ -592,7 +592,7 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
         <button type="button" class="rpg-attack-resolve" data-result="crit" style="flex:1;padding:4px;cursor:pointer;font-weight:700;color:gold">Critique!</button>
       </div>
     </div>`,
-    flags: { rpg: { type: "attackDeclaration", actionId: foundry.utils.randomID(),
+    flags: { rpg: { type: "attackDeclaration", phase: "rolled", actionId: foundry.utils.randomID(),
       attackDeclaration: { actorId: ea.id, weaponId: item.id, targetId: ma.id,
         d20: roll.total, tnFinal: tnData.tnFinal, livraison: tnData.livraison } } }
   });
