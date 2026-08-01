@@ -485,6 +485,15 @@ export function installRangeOverlay() {
   Hooks.on("deleteCombat", () => _clearMoveLimit());
   Hooks.on("canvasReady", () => setTimeout(() => refreshMovementLimit(), 150));
 
+  // Suppression du token du combattant actif (ou du combattant lui-même,
+  // retiré du tracker sans supprimer le token) : rien ne redessinait/effaçait
+  // le cercle de déplacement dans ce cas — activeCombatantToken() ne renvoie
+  // plus rien après coup, mais encore fallait-il appeler refreshMovementLimit()
+  // pour que ça se traduise par un _clearMoveLimit(). Le cercle restait donc
+  // affiché indéfiniment sur la carte après suppression du token.
+  Hooks.on("deleteToken", () => setTimeout(() => refreshMovementLimit(), 80));
+  Hooks.on("deleteCombatant", () => setTimeout(() => refreshMovementLimit(), 80));
+
   // Suit le token épinglé quand il bouge / change d'équipement
   Hooks.on("updateToken", (doc) => {
     if (_pinnedTokenId === doc.id) setTimeout(() => refreshPinned(), 60);
