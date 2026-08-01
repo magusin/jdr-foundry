@@ -996,6 +996,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         return;
       }
 
+      if (action === "adjSpellCooldown") {
+        const itemId = btn.dataset.itemId || btn.closest(".item")?.dataset?.itemId;
+        const delta  = Number(btn.dataset.delta) || 0;
+        const item   = this.document.items.get(itemId);
+        if (!item || !delta) return;
+        const max = Number(item.system?.cooldown?.max ?? item.system?.recharge?.max ?? 0) || 0;
+        const cur = Number(item.system?.cooldown?.restant ?? item.system?.recharge?.restant ?? 0) || 0;
+        const next = Math.max(0, Math.min(max, cur + delta));
+        if (next !== cur) {
+          await item.update({ "system.cooldown.restant": next, "system.recharge.restant": next });
+        }
+        return;
+      }
+
       if (action === "useItem") {
         const itemId =
           btn.dataset.itemId ||
