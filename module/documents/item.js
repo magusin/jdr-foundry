@@ -88,6 +88,10 @@ export class RPGItem extends Item {
     // ── 1) Dé ─────────────────────────────────────────────────────
     const die = String(dmg.dice ?? dmg.die ?? "1d6").trim();
     const roll = await (new Roll(die)).evaluate();
+    await roll.toMessage({
+      speaker: ChatMessage.getSpeaker({ actor: attackerActor }),
+      flavor: `💥 <b>${attackerActor?.name ?? "?"}</b> — dégâts (${this.name})`
+    });
 
     const flat = Number(dmg.flat) || 0;
 
@@ -130,6 +134,10 @@ export class RPGItem extends Item {
         const critRoll = critDie
           ? await (new Roll(critDie)).evaluate()
           : await (new Roll(die)).evaluate();
+        await critRoll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor: attackerActor }),
+          flavor: `✦ <b>${attackerActor?.name ?? "?"}</b> — dé bonus critique (${this.name})`
+        });
 
         critBonus = (faces - roll.total) + critRoll.total + critFlat + critStatBonus;
       } else {
@@ -150,6 +158,10 @@ export class RPGItem extends Item {
       offhandName = offhand.name ?? "Seconde arme";
       if (offhandDie) {
         const oRoll  = await (new Roll(offhandDie)).evaluate();
+        await oRoll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor: attackerActor }),
+          flavor: `🗡️ <b>${attackerActor?.name ?? "?"}</b> — dégâts (${offhandName})`
+        });
         offhandTotal = oRoll.total;
       }
     }
@@ -241,6 +253,10 @@ export class RPGItem extends Item {
 
       if (dice && dice !== "0") {
         const r = await (new Roll(dice)).evaluate();
+        await r.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor: attackerActor }),
+          flavor: `💥 <b>${attackerActor?.name ?? "?"}</b> — dégâts (${this.name})`
+        });
         rollTotal += r.total;
         rawBrut += r.total;
       }

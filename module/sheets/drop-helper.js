@@ -112,3 +112,71 @@ async function onDropItem(sheetInstance, event) {
     ui.notifications?.error?.(`Impossible d'ajouter l'objet : ${e?.message ?? e}`);
   }
 }
+
+/**
+ * Branche le drop d'un Item Foundry (compendium, inventaire d'un acteur,
+ * barre d'items du monde...) sur la sheet d'un document QUELCONQUE (pas
+ * forcément un acteur) sans créer de copie embarquée : le document résolu
+ * est juste transmis à `onItemDropped`, à charge pour l'appelant de n'en
+ * garder que l'UUID (ex: une référence de récompense sur une quête, comme
+ * `addLootEntryFromItem` le fait déjà pour le butin d'un monstre, mais sans
+ * l'ancrer à un acteur précis). GM only, cohérent avec isEditable.
+ *
+ * @param {DocumentSheetV2} sheetInstance
+ * @param {HTMLElement} rootElement
+ * @param {(item: Item) => Promise<void>|void} onItemDropped
+ */
+export function setupItemRefDrop(sheetInstance, rootElement, onItemDropped) {
+  if (!rootElement) return null;
+
+  const DragDropImpl = foundry.applications.ux.DragDrop?.implementation ?? foundry.applications.ux.DragDrop;
+  if (!DragDropImpl) {
+    console.warn("[RPG] DragDrop API introuvable — drop de référence désactivé.");
+    return null;
+  }
+
+  if (sheetInstance._rpgRefDragDrop) {
+    sheetInstance._rpgRefDragDrop.bind(rootElement);
+    return sheetInstance._rpgRefDragDrop;
+  }
+
+  const dd = new DragDropImpl({
+    dropSelector: null,
+    permissions: { drop: () => game.user.isGM },
+    callbacks: {
+      drop: async (event) => {
+        event.preventDefault();
+        if (!game.user.isGM) return;
+
+        let data;
+        try {
+          data = foundry.applications.ux.TextEditor?.implementation?.getDragEventData?.(event)
+              ?? TextEditor.getDragEventData(event);
+        } catch (e) {
+          console.warn("[RPG] Drop référence : impossible de lire les données.", e);
+          return;
+        }
+        if (!data || data.type !== "Item") return;
+
+        let item;
+        try {
+          item = await Item.implementation.fromDropData(data);
+        } catch (e) {
+          console.error("[RPG] Drop référence : fromDropData a échoué.", e);
+          ui.notifications?.error?.("Impossible de récupérer l'objet déposé.");
+          return;
+        }
+        if (!item) {
+          ui.notifications?.warn?.("Objet introuvable (UUID invalide ou compendium inaccessible).");
+          return;
+        }
+
+        await onItemDropped(item);
+      }
+    }
+  });
+
+  dd.bind(rootElement);
+  sheetInstance._rpgRefDragDrop = dd;
+  return dd;
+}

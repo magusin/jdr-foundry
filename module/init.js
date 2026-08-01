@@ -1250,7 +1250,8 @@ Hooks.once("init", async () => {
                   }
                   amount = Math.max(0, amount);
                   totals[b.resource] = (totals[b.resource] ?? 0) + amount;
-                  lines.push(`${b.label} : <b style="color:#1d9e75">+${amount}</b>`);
+                  const sign = b.resource === "fatigue" ? "-" : "+";
+                  lines.push(`${b.label} : <b style="color:#1d9e75">${sign}${amount}</b>`);
                 }
 
                 // La fatigue est un malus : « en rendre » revient à la faire
@@ -1281,7 +1282,7 @@ Hooks.once("init", async () => {
                 }));
 
                 const detail = applied.map(a =>
-                  `${a.icon} <b>${a.label}</b> +${a.amount}`
+                  `${a.icon} <b>${a.label}</b> ${a.resource === "fatigue" ? "-" : "+"}${a.amount}`
                   + hpSecret(benef, ` <span style="opacity:.75">(${a.cur} → <b>${a.next}</b>${a.max ? `/${a.max}` : ""})</span>`)
                 ).join("<br>");
 
@@ -1334,7 +1335,7 @@ Hooks.once("init", async () => {
                   for (const a of (d.applied ?? [])) updates[a.path] = a.next;
                   await benef.update(updates);
                 }
-                const summary = (d.applied ?? []).map(a => `${a.icon} ${a.label} +${a.amount}`).join(", ");
+                const summary = (d.applied ?? []).map(a => `${a.icon} ${a.label} ${a.resource === "fatigue" ? "-" : "+"}${a.amount}`).join(", ");
                 await ChatMessage.create({
                   content: `✅ <b>${d.name}</b> récupère : ${summary}.`
                 });

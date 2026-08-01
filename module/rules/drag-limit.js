@@ -91,7 +91,44 @@ function clampClone(clone, source) {
 }
 
 /**
- * Installe la contrainte en enveloppant Token#_onDragLeftMove.
+ * Corps commun de la contrainte, appelé après le _onDragLeftMove d'origine
+ * (Foundry lui-même, ou celui d'un autre module déjà enchaîné par
+ * libWrapper) — que le résultat parvienne d'un wrapper libWrapper ou d'un
+ * monkey-patch direct, la logique de clamp est strictement identique.
+ */
+function _applyDragClamp(self, event) {
+  try {
+    const clones = event?.interactionData?.clones ?? [];
+    for (const clone of clones) {
+      // Le token réel derrière l'aperçu
+      const source = clone?._original ?? clone?.document?._original?.object ?? self;
+      clampClone(clone, source);
+      // Repositionne l'aperçu à l'écran après correction (pas de redraw :
+      // on est appelé à chaque mouvement de souris).
+      if (clone.position?.set) clone.position.set(clone.document.x, clone.document.y);
+      else { clone.x = clone.document.x; clone.y = clone.document.y; }
+      // Signale en direct l'entrée dans l'allonge d'un ennemi — sinon rien
+      // ne le montre avant le dépôt du token.
+      try { updateDragThreatIndicator(clone); } catch (e) { /* indicateur optionnel */ }
+    }
+  } catch (e) {
+    console.warn("[RPG] blocage du déplacement au glisser :", e);
+  }
+}
+
+/**
+ * Installe la contrainte en enveloppant Token#_onDragLeftMove (et efface
+ * l'indicateur de danger sur _onDragLeftDrop/_onDragLeftCancel).
+ *
+ * Passe par libWrapper quand il est actif — c'est le mécanisme prévu par
+ * Foundry pour ce genre de "patch" de méthode core, justement pour éviter
+ * les conflits qu'un monkey-patch direct provoque quand un autre module
+ * wrappe la même méthode (ex: "Toggle Snap to Grid", qui modifie aussi
+ * _onDragLeftDrop — libWrapper le signalait en console : "system RPG and
+ * module Toggle Snap to Grid modify the same FoundryVTT functionality").
+ * Sans libWrapper installé, on retombe sur le monkey-patch direct d'origine
+ * (moins robuste faces à d'autres modules, mais fonctionnel seul).
+ *
  * Idempotent, et entièrement défensif : si l'API diffère, le glisser-déposer
  * reste celui de Foundry (la vérification à l'enregistrement prend le relais).
  */
@@ -107,28 +144,40 @@ export function installDragLimit() {
     return;
   }
 
+  if (globalThis.libWrapper) {
+    try {
+      libWrapper.register("rpg", "CONFIG.Token.objectClass.prototype._onDragLeftMove",
+        function (wrapped, event) {
+          const result = wrapped(event);
+          _applyDragClamp(this, event);
+          return result;
+        }, "WRAPPER");
+
+      for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
+        if (typeof proto[hookName] !== "function") continue;
+        libWrapper.register("rpg", `CONFIG.Token.objectClass.prototype.${hookName}`,
+          function (wrapped, event) {
+            try { clearDragThreatIndicator(); } catch { /* ignore */ }
+            return wrapped(event);
+          }, "WRAPPER");
+      }
+
+      globalThis.__rpgDragLimit = true;
+      Hooks.on("canvasTearDown", () => { _cache.clear(); clearDragThreatIndicator(); });
+      console.log("[RPG] Blocage du déplacement au glisser : actif (via libWrapper).");
+      return;
+    } catch (e) {
+      console.warn("[RPG] libWrapper.register a échoué, repli sur le monkey-patch direct :", e);
+    }
+  }
+
+  // ── Repli sans libWrapper : monkey-patch direct des prototypes ─────────
   globalThis.__rpgDragLimit = true;
   const original = proto._onDragLeftMove;
 
   proto._onDragLeftMove = function (event) {
     const result = original.call(this, event);
-    try {
-      const clones = event?.interactionData?.clones ?? [];
-      for (const clone of clones) {
-        // Le token réel derrière l'aperçu
-        const source = clone?._original ?? clone?.document?._original?.object ?? this;
-        clampClone(clone, source);
-        // Repositionne l'aperçu à l'écran après correction (pas de redraw :
-        // on est appelé à chaque mouvement de souris).
-        if (clone.position?.set) clone.position.set(clone.document.x, clone.document.y);
-        else { clone.x = clone.document.x; clone.y = clone.document.y; }
-        // Signale en direct l'entrée dans l'allonge d'un ennemi — sinon rien
-        // ne le montre avant le dépôt du token.
-        try { updateDragThreatIndicator(clone); } catch (e) { /* indicateur optionnel */ }
-      }
-    } catch (e) {
-      console.warn("[RPG] blocage du déplacement au glisser :", e);
-    }
+    _applyDragClamp(this, event);
     return result;
   };
 

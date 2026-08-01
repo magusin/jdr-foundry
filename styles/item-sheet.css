@@ -140,15 +140,6 @@
   margin: 10px 0 6px 0;
 }
 
-.rpg-quest-sheet .reward-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 6px;
-}
-.rpg-quest-sheet .reward-uuid { flex: 2; }
-.rpg-quest-sheet .reward-name { flex: 1; }
-.rpg-quest-sheet .reward-qty { width: 50px; }
 .rpg-quest-sheet .quest-add-reward-btn { margin-top: 4px; }
 
 /* Listes déroulantes (<option>/<optgroup>) : voir styles/theme.css, qui

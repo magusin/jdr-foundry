@@ -264,9 +264,19 @@ export function registerRegionBehaviors() {
     return;
   }
 
+  // Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg",
+  // ..., { types: ["character"] }) — jamais "rpg.character"), un sous-type
+  // de document déclaré par le SYSTÈME lui-même dans system.json n'est PAS
+  // préfixé par l'id du système ; seul un MODULE préfixerait ("moduleid.type").
+  // Foundry assigne donc "terrainDifficile" (pas "rpg.terrainDifficile") au
+  // document créé depuis le menu « Ajouter un comportement », qui lit ses
+  // types directement depuis documentTypes.RegionBehavior du manifeste. Un
+  // préfixe "rpg." ici ferait que CONFIG.RegionBehavior.dataModels ne
+  // contient jamais la bonne clé : le comportement du document ne serait
+  // jamais enveloppé dans un vrai DataModel, et la fiche de config core
+  // plante en lisant document.system.schema (undefined).
   for (const [typeKey, config] of Object.entries(TERRAIN_TYPES)) {
-    const fullKey = `rpg.${typeKey}`;
-    if (CONFIG.RegionBehavior.dataModels[fullKey]) continue; // déjà enregistré
+    if (CONFIG.RegionBehavior.dataModels[typeKey]) continue; // déjà enregistré
 
     // DataModel minimal pour Foundry V13
     class TerrainBehavior extends foundry.abstract.TypeDataModel {
@@ -282,17 +292,17 @@ export function registerRegionBehaviors() {
     }
     Object.defineProperty(TerrainBehavior, "name", { value: `${typeKey}Behavior` });
 
-    CONFIG.RegionBehavior.dataModels[fullKey] = TerrainBehavior;
+    CONFIG.RegionBehavior.dataModels[typeKey] = TerrainBehavior;
 
     // Libellé dans l'UI Foundry
     if (CONFIG.RegionBehavior.typeLabels) {
-      CONFIG.RegionBehavior.typeLabels[fullKey] = config.label;
+      CONFIG.RegionBehavior.typeLabels[typeKey] = config.label;
     }
     if (CONFIG.RegionBehavior.typeIcons) {
-      CONFIG.RegionBehavior.typeIcons[fullKey] = config.icon;
+      CONFIG.RegionBehavior.typeIcons[typeKey] = config.icon;
     }
 
-    console.log(`[RPG] Comportement région enregistré : ${fullKey} (${config.label})`);
+    console.log(`[RPG] Comportement région enregistré : ${typeKey} (${config.label})`);
   }
 }
 
@@ -312,7 +322,18 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
   };
 
   async _prepareContext(options) {
-    const ctx = await super._prepareContext(options);
+    // Voir la même garde dans ZoneEffectBehaviorSheet (zone-effects.js) :
+    // super._prepareContext() peut lever si this.document.system n'est pas
+    // (encore) un DataModel correctement instancié côté Foundry — notre
+    // template ne dépend pas de son retour, donc on ne doit jamais laisser
+    // ça empêcher l'édition de ce comportement.
+    let ctx;
+    try {
+      ctx = await super._prepareContext(options);
+    } catch (e) {
+      console.warn("[RPG] RegionBehaviorConfig._prepareContext (core) a échoué, repli manuel :", e);
+      ctx = { document: this.document, editable: this.isEditable ?? true };
+    }
     const typeKey = String(this.document.type ?? "").replace("rpg.", "");
     const terrain = TERRAIN_TYPES[typeKey] ?? {};
 
@@ -338,14 +359,25 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
  * Appelé après registerRegionBehaviors().
  */
 export function registerRegionBehaviorSheets() {
-  if (!foundry.applications.sheets?.RegionBehaviorConfig) return;
+  // "RegionBehaviorConfig.registerConfig" n'existe pas dans l'API Foundry —
+  // ça n'a jamais rien enregistré (l'erreur était avalée par le try/catch
+  // silencieux), donc Foundry retombait TOUJOURS sur son RegionBehaviorConfig
+  // générique par défaut pour ces types. Le mécanisme standard pour attacher
+  // une classe de fiche à un sous-type de document, quel qu'il soit (Actor,
+  // Item, RegionBehavior...), est DocumentSheetConfig.registerSheet — même
+  // fonction sous-jacente que Actors.registerSheet/Items.registerSheet
+  // utilisés plus haut dans init.js pour les fiches de personnage/objet.
+  const DocumentSheetConfig = foundry.applications?.apps?.DocumentSheetConfig;
+  const RegionBehaviorDoc   = getDocumentClass?.("RegionBehavior") ?? globalThis.RegionBehavior;
+  if (!DocumentSheetConfig || !RegionBehaviorDoc) return;
 
-  for (const typeKey of Object.keys(TERRAIN_TYPES)) {
-    const fullKey = `rpg.${typeKey}`;
-    try {
-      foundry.applications.sheets.RegionBehaviorConfig.registerConfig(
-        fullKey, TerrainBehaviorSheet
-      );
-    } catch { /* API peut varier selon la version V13 */ }
+  try {
+    DocumentSheetConfig.registerSheet(RegionBehaviorDoc, "rpg", TerrainBehaviorSheet, {
+      types: Object.keys(TERRAIN_TYPES),
+      makeDefault: true,
+      label: "Configuration du terrain (RPG)"
+    });
+  } catch (e) {
+    console.warn("[RPG] enregistrement sheet terrain :", e);
   }
 }

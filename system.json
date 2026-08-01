@@ -48,7 +48,7 @@
     },
     {
       "name": "loot-tables",
-      "label": "Tables de Butin",
+      "label": "Tables de Rencontre",
       "path": "packs/loot-tables/loot-tables.db",
       "type": "RollTable"
     },
