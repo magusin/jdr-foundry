@@ -3,14 +3,12 @@
 // Gestion côté MJ des boutons Échec / Touché / Critique dans les messages
 // de déclaration d'attaque physique (type "attackDeclaration").
 //
-// Flow : le joueur ne lance QUE le d20 de touché à la déclaration. Les dégâts
-// ne sont lancés qu'ICI, après que le MJ a tranché Échec/Touché/Critique —
-// cohérent avec le flow des sorts (on ne sait pas combien on fait avant
-// de savoir si on touche). Le MJ choisit librement, le d20/TN affichés ne
-// sont qu'une indication. Sur touché/critique, le jet de dégâts est lancé
-// (et posté en chat) tout de suite, mais son application aux PV de la cible
-// attend un clic MJ supplémentaire sur « Appliquer les dégâts » — voir
-// applyAttackDamage.
+// Flow : le joueur ne lance QUE le d20 de touché à la déclaration. Sur
+// touché/critique, le MJ ne fait que trancher — c'est ensuite au JOUEUR de
+// cliquer pour lancer son jet de dégâts (message "attackDamageRoll"), même
+// principe que le d20 de touché. Une fois ce jet lancé, l'application aux PV
+// de la cible attend encore un clic MJ supplémentaire sur « Appliquer les
+// dégâts » — voir applyAttackDamage.
 
 import { hpSecret } from "./chat-visibility.js";
 import { confirmAttackDeclaration, rollAttackDie } from "./attack-declare.js";
@@ -251,6 +249,25 @@ export function bindAttackChatButtons(htmlEl, message) {
     return;
   }
 
+  // ── Message "attackDamageRoll" : le joueur lance son jet de dégâts ──────
+  if (flags.type === "attackDamageRoll") {
+    const btn = root.querySelector(".rpg-roll-damage-attack:not([data-bound])");
+    if (!btn) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      btn.disabled = true;
+      try {
+        await rollAttackDamage(message);
+      } catch (e) {
+        console.error("[RPG][AttackDamageRoll]", e);
+        ui.notifications?.error?.(`Erreur jet de dégâts : ${e?.message ?? e}`);
+        btn.disabled = false;
+      }
+    });
+    return;
+  }
+
   // ── Message "attackDamagePending" : bouton MJ « Appliquer les dégâts » ──
   if (flags.type === "attackDamagePending") {
     if (!game.user.isGM) {
@@ -333,69 +350,45 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
     if (!weapon || !attacker) {
       content = `<b style="color:#c0392b">Erreur</b> — arme ou attaquant introuvable, impossible de lancer les dégâts.`;
     } else {
-      // ── Lance les dégâts MAINTENANT (après décision MJ) ──────────────
-      // weapon peut être une ARME ou une COMPÉTENCE de monstre (type spell) :
-      // rollDamage gère les deux. L'application des PV reste, elle, en
-      // attente d'une validation MJ distincte (bouton « Appliquer les
-      // dégâts ») — le MJ voit d'abord le résultat du jet avant de le
-      // faire encaisser à la cible.
-      const dmgResult = await weapon.rollDamage({
-        attackerActor: attacker,
-        targetActor:   target ?? null,
-        isCrit,
-        type:          String(f.livraison ?? weapon.system?.livraison ?? "physique"),
-        offhand:       f.offhandId ? resolveWeapon(attacker, f.offhandId) : null
-      });
-
+      // ── Le MJ a tranché : au JOUEUR de lancer son jet de dégâts ──────
+      // On ne lance rien ici. La fatigue/le slot de budget sont confirmés
+      // tout de suite (l'action a été tentée, indépendamment du jet de
+      // dégâts à venir), puis on poste un message avec un bouton que le
+      // joueur clique lui-même — même principe que le d20 de touché.
       const label = isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ";
       const col   = isCrit ? "gold" : "#27ae60";
 
-      const bonusLine = `🎲 Jet brut : <b>${dmgResult.rollTotal}</b> + bonus stat <b>${dmgResult.statBonus}</b>` +
-        (dmgResult.critBonus ? ` + bonus crit <b>${dmgResult.critBonus}</b>` : "") +
-        (dmgResult.offhandTotal
-          ? `<br>🗡️ ${dmgResult.offhandName} (${dmgResult.offhandDie}) : <b>${dmgResult.offhandTotal}</b> — dé seul`
-          : "");
-
-      const mitigLine = (dmgResult.fixe || dmgResult.pct)
-        ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`
-        : `🛡️ Aucune mitigation`;
-
-      const baseContent =
-        `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
-        `${bonusLine}<br>` +
-        `${mitigLine}<br>` +
-        `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>`;
-
-      // Confirme le slot de budget (l'action a été tentée) et la fatigue
-      // dès maintenant : indépendant de l'application des dégâts.
       await confirmBudgetSlot(realActionId);
       await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
 
       await message.delete();
 
-      const pendingMsg = await ChatMessage.create({
+      const rollContent =
+        `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b>` +
+        `<div style="font-size:11px;opacity:.7;margin-top:2px">En attente du jet de dégâts du joueur.</div>` +
+        `<div class="rpg-attack-damage-roll" style="margin-top:8px">` +
+        `<button type="button" class="rpg-roll-damage-attack" style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600">🎲 Lancer les dégâts</button>` +
+        `</div>`;
+
+      const rollMsg = await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: attacker }),
-        content: baseContent +
-          `<div style="font-size:11px;opacity:.7;margin-top:2px">En attente de la validation du MJ pour appliquer les dégâts.</div>` +
-          `<div class="rpg-attack-apply" style="margin-top:8px">` +
-          `<button type="button" class="rpg-attack-apply-btn" style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600;background:#c0392b;color:#fff;border:none">💥 Appliquer les dégâts</button>` +
-          `</div>`,
+        content: rollContent,
         flags: {
           rpg: {
-            type: "attackDamagePending",
-            baseContent,
+            type: "attackDamageRoll",
+            label, col,
             attackerId: attacker.id,
             targetId: target?.id ?? null,
             weaponId: weapon.id,
             offhandId: f.offhandId ?? null,
             isCrit,
-            final: dmgResult.final,
+            livraison: f.livraison,
             actionId: realActionId
           }
         }
       });
 
-      return { content: baseContent, messageId: pendingMsg.id };
+      return { content: rollContent, messageId: rollMsg.id };
     }
   }
 
@@ -413,6 +406,88 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   });
 
   return { content, messageId: resolMsg.id };
+}
+
+/**
+ * Le joueur lance son jet de dégâts, une fois que le MJ a tranché Touché/
+ * Critique sur le message "attackDamageRoll" créé par resolveAttack.
+ * N'importe qui peut cliquer (même permissivité que rollAttackDie) : le jet
+ * reste public. Une fois lancé, poste le message "attackDamagePending" avec
+ * le bouton MJ « Appliquer les dégâts » (voir applyAttackDamage) — l'appli-
+ * cation aux PV reste un clic MJ distinct.
+ */
+export async function rollAttackDamage(message) {
+  const flags = message?.flags?.rpg ?? {};
+  if (flags.type !== "attackDamageRoll") return;
+
+  const attacker = game.actors.get(flags.attackerId);
+  const target   = flags.targetId ? game.actors.get(flags.targetId) : null;
+  const { resolveWeapon } = await import("./unarmed.js");
+  const weapon = resolveWeapon(attacker, flags.weaponId);
+
+  const attackerName = attacker?.name ?? "?";
+  const targetName   = target?.name ?? "?";
+
+  if (!weapon || !attacker) {
+    await message.update({
+      content: `<b style="color:#c0392b">Erreur</b> — arme ou attaquant introuvable, impossible de lancer les dégâts.`
+    });
+    return null;
+  }
+
+  const isCrit = !!flags.isCrit;
+  const dmgResult = await weapon.rollDamage({
+    attackerActor: attacker,
+    targetActor:   target ?? null,
+    isCrit,
+    type:          String(flags.livraison ?? weapon.system?.livraison ?? "physique"),
+    offhand:       flags.offhandId ? resolveWeapon(attacker, flags.offhandId) : null
+  });
+
+  const label = flags.label ?? (isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ");
+  const col   = flags.col ?? (isCrit ? "gold" : "#27ae60");
+
+  const bonusLine = `🎲 Jet brut : <b>${dmgResult.rollTotal}</b> + bonus stat <b>${dmgResult.statBonus}</b>` +
+    (dmgResult.critBonus ? ` + bonus crit <b>${dmgResult.critBonus}</b>` : "") +
+    (dmgResult.offhandTotal
+      ? `<br>🗡️ ${dmgResult.offhandName} (${dmgResult.offhandDie}) : <b>${dmgResult.offhandTotal}</b> — dé seul`
+      : "");
+
+  const mitigLine = (dmgResult.fixe || dmgResult.pct)
+    ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`
+    : `🛡️ Aucune mitigation`;
+
+  const baseContent =
+    `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
+    `${bonusLine}<br>` +
+    `${mitigLine}<br>` +
+    `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>`;
+
+  await message.delete();
+
+  const pendingMsg = await ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ actor: attacker }),
+    content: baseContent +
+      `<div style="font-size:11px;opacity:.7;margin-top:2px">En attente de la validation du MJ pour appliquer les dégâts.</div>` +
+      `<div class="rpg-attack-apply" style="margin-top:8px">` +
+      `<button type="button" class="rpg-attack-apply-btn" style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600;background:#c0392b;color:#fff;border:none">💥 Appliquer les dégâts</button>` +
+      `</div>`,
+    flags: {
+      rpg: {
+        type: "attackDamagePending",
+        baseContent,
+        attackerId: attacker.id,
+        targetId: target?.id ?? null,
+        weaponId: weapon.id,
+        offhandId: flags.offhandId ?? null,
+        isCrit,
+        final: dmgResult.final,
+        actionId: flags.actionId ?? null
+      }
+    }
+  });
+
+  return { content: baseContent, messageId: pendingMsg.id };
 }
 
 /**
