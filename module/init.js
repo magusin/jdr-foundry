@@ -39,7 +39,7 @@ import * as Combat from "./rules/combat.js";
 import * as RPG_SPELLS from "./rules/spells.js";
 import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
-import { resolveEndOfCombat, lootMonsters } from "./rules/combat-end.js";
+import { resolveEndOfCombat, lootMonsters, resetSpellCooldowns, restoreManaFatigue } from "./rules/combat-end.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
@@ -1471,6 +1471,31 @@ Hooks.once("init", async () => {
             lootBtn.textContent = "Butin tiré";
             const ids = (lootBtn.dataset.monsterIds ?? "").split(",").filter(Boolean);
             await lootMonsters(ids);
+          });
+        }
+      } catch (e) { }
+      try {
+        const root = html instanceof HTMLElement ? html : html?.[0];
+        const cdBtn = root?.querySelector('[data-action="resetCooldowns"]');
+        if (cdBtn && !cdBtn.dataset.bound && game.user.isGM) {
+          cdBtn.dataset.bound = "1";
+          cdBtn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            cdBtn.disabled = true;
+            cdBtn.textContent = "CD réinitialisés";
+            const ids = (cdBtn.dataset.actorIds ?? "").split(",").filter(Boolean);
+            await resetSpellCooldowns(ids);
+          });
+        }
+        const restBtn = root?.querySelector('[data-action="restoreManaFatigue"]');
+        if (restBtn && !restBtn.dataset.bound && game.user.isGM) {
+          restBtn.dataset.bound = "1";
+          restBtn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            restBtn.disabled = true;
+            restBtn.textContent = "Mana & fatigue restaurés";
+            const ids = (restBtn.dataset.actorIds ?? "").split(",").filter(Boolean);
+            await restoreManaFatigue(ids);
           });
         }
       } catch (e) { }
