@@ -847,65 +847,16 @@
           });
         }
 
-        // 3. TN calculé AVANT le jet, pour que le joueur sache combien il doit faire
-        const tnData = combatAPI?.computeTN
-          ? combatAPI.computeTN(actor, targetToken.actor, weapon)
-          : { tnFinal: 11, tnBase: 11, diff: 0, livraison: "physique" };
-
-        // 4. Jet d20 du joueur (visible dans le chat) — UNIQUEMENT le jet de touché,
-        //    les dégâts ne sont lancés qu'après décision du MJ (cf. attack-resolve.js)
-        const roll20 = await (new Roll("1d20")).evaluate();
-        await roll20.toMessage({
-          speaker: ChatMessage.getSpeaker({ actor }),
-          flavor: `⚔️ <b>${actor.name}</b> attaque <b>${targetToken.actor.name}</b> avec <b>${weapon.name}</b> — il faut faire <b>${tnData.tnFinal}+</b>`
-        });
-        const d20 = roll20.total;
-
-        const isCrit  = d20 === 20;
-        const isAutoF = d20 <= 5;
-        const isAutoS = d20 >= 16;
-        const suggested = isCrit ? "crit" : isAutoF ? "fail" : (isAutoS || d20 >= tnData.tnFinal) ? "hit" : "fail";
-
-        // 5. Message pending — boutons DÉDIÉS Échec / Touché / Critique
-        //    (même pattern que les sorts : le MJ choisit librement, pas d'auto-confirm)
-        const pendingLabel = `Attaque : <b>${htmlEscape(weapon.name)}</b> → <b>${htmlEscape(targetToken.actor.name)}</b>`;
-        const detail       = `🎲 d20 = <b>${d20}</b> (TN ${tnData.tnFinal}+) — ${
-          isAutoF ? "Échec automatique (≤5)" : isAutoS ? "Succès automatique (≥16)" : isCrit ? "CRITIQUE !" : "résultat normal"
-        }`;
-
-        const msgContent = `
-          <div class="rpg-attack-declare" style="font-size:13px;line-height:1.6">
-            <div>${pendingLabel}</div>
-            <div style="opacity:.85;margin-top:2px">${detail}</div>
-            <div class="rpg-attack-gm" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-              <button type="button" class="rpg-attack-resolve" data-result="critfail"
-                style="flex:1;padding:4px 8px;cursor:pointer;color:#8b1a12;font-weight:700">Échec Critique</button>
-              <button type="button" class="rpg-attack-resolve" data-result="fail"
-                style="flex:1;padding:4px 8px;cursor:pointer">Échec</button>
-              <button type="button" class="rpg-attack-resolve" data-result="hit"
-                style="flex:1;padding:4px 8px;cursor:pointer">Touché</button>
-              <button type="button" class="rpg-attack-resolve" data-result="crit"
-                style="flex:1;padding:4px 8px;cursor:pointer;font-weight:700;color:gold">Critique !</button>
-            </div>
-          </div>`;
-
-        const msg = await ChatMessage.create({
-          speaker: ChatMessage.getSpeaker({ actor }),
-          content: msgContent,
-          flags: {
-            rpg: {
-              type: "attackDeclaration",
-              actionId,
-              attackDeclaration: {
-                actorId: actor.id, weaponId: weapon.id, targetId: targetToken.actor.id,
-                d20, tnFinal: tnData.tnFinal, livraison: tnData.livraison
-              }
-            }
-          }
-        });
+        // 3. Déclaration centralisée (point d'entrée UNIQUE, cf. attack-declare.js) :
+        //    poste le message "en attente de validation MJ" — PAS de jet ici. Le MJ
+        //    doit Valider/Annuler avant que le joueur puisse lancer son d20, qui à
+        //    son tour attend la décision Échec/Touché/Critique du MJ.
+        const attackAPI = game.rpg?.attack;
+        if (!attackAPI?.declareAttack) throw new Error("API d'attaque introuvable — rechargez le monde.");
+        const msg = await attackAPI.declareAttack(actor, weapon, targetToken.actor, { actionId });
 
         // Enregistre l'id du message dans le log
-        if (budgetAPI && combat && cbt) {
+        if (budgetAPI && combat && cbt && msg) {
           await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
         }
 

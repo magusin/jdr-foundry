@@ -10,6 +10,7 @@
 // sont qu'une indication.
 
 import { hpSecret } from "./chat-visibility.js";
+import { confirmAttackDeclaration, rollAttackDie } from "./attack-declare.js";
 
 const MISS_MESSAGES_MELEE = [
   "{target} esquive l'attaque au dernier moment !",
@@ -153,6 +154,58 @@ export function bindAttackChatButtons(htmlEl, message) {
 
   const root = htmlEl instanceof HTMLElement ? htmlEl : htmlEl?.[0];
   if (!root) return;
+
+  const phase = flags.phase ?? "pending";
+
+  // ── Phase "pending" : le MJ valide ou annule l'action, avant tout jet ──
+  if (phase === "pending") {
+    if (!game.user.isGM) {
+      root.querySelector(".rpg-attack-gm-confirm")?.remove();
+      return;
+    }
+    if (root.dataset.rpgAttackConfirmBound === "1") return;
+    root.dataset.rpgAttackConfirmBound = "1";
+
+    const confirmBtns = root.querySelectorAll(".rpg-attack-confirm");
+    confirmBtns.forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!game.user.isGM) return;
+        confirmBtns.forEach(b => b.disabled = true);
+        try {
+          await confirmAttackDeclaration(message, btn.dataset.ok === "1");
+        } catch (e) {
+          console.error("[RPG][AttackConfirm]", e);
+          ui.notifications?.error?.(`Erreur validation attaque : ${e?.message ?? e}`);
+          confirmBtns.forEach(b => b.disabled = false);
+        }
+      });
+    });
+    return;
+  }
+
+  // ── Phase "confirmed" : le joueur lance son jet de touché ───────────────
+  if (phase === "confirmed") {
+    const btn = root.querySelector(".rpg-roll-d20-attack:not([data-bound])");
+    if (!btn) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      btn.disabled = true;
+      try {
+        await rollAttackDie(message);
+      } catch (e) {
+        console.error("[RPG][AttackRoll]", e);
+        ui.notifications?.error?.(`Erreur jet de touché : ${e?.message ?? e}`);
+        btn.disabled = false;
+      }
+    });
+    return;
+  }
+
+  // ── Phase "rolled" : boutons Échec critique/Échec/Touché/Critique (MJ) ──
+  if (phase !== "rolled") return;
 
   // Joueurs : on retire la zone GM
   if (!game.user.isGM) {

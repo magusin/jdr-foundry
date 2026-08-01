@@ -41,6 +41,7 @@ import { onTurnStartForActor } from "./rules/turn-effects.js";
 import { setTokenPosOverride } from "./rules/auras.js";
 import { resolveEndOfCombat, lootMonsters, resetSpellCooldowns, restoreManaFatigue } from "./rules/combat-end.js";
 import { bindAttackChatButtons } from "./rules/attack-resolve.js";
+import { declareAttack } from "./rules/attack-declare.js";
 import { bindActionChatButtons, postConfirmedMessage } from "./rules/action-confirm.js";
 import { onPreUpdateToken, onUpdateToken, bindOpportunityAttackButtons } from "./rules/movement-tracker.js";
 import { registerRegionBehaviors, registerRegionBehaviorSheets } from "./rules/region-behaviors.js";
@@ -542,6 +543,7 @@ Hooks.once("init", async () => {
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 
   game.rpg.combat = Combat;
+  game.rpg.attack = { declareAttack };
 
   // Pièges / zones à effet — exposé pour les macros (placer/interroger une
   // zone, déclencher un jet de Perception pour la détecter).
@@ -1399,20 +1401,10 @@ Hooks.once("init", async () => {
             ev.preventDefault();
             btn.disabled = true;
             try {
-              const actorId = btn.dataset.actorId;
-              const tn = Number(btn.dataset.tn) || 11;
-              const spellName = btn.dataset.spell ?? "Sort";
-              const actor = game.actors.get(actorId);
-              const roll = await (new Roll("1d20")).evaluate();
-              const hit = roll.total >= tn;
-              // Le verdict reste réservé au MJ : c'est lui qui tranche avec les
-              // boutons de validation. Le joueur voit son jet, pas le résultat.
-              await roll.toMessage({
-                speaker: ChatMessage.getSpeaker({ actor }),
-                flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${spellName} : <b>${roll.total}</b> vs TN <b>${tn}+</b>`
-                      + gmOnly(` → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`)
-                      + `<span style="display:block;font-size:11px;opacity:.7">En attente de la validation du MJ.</span>`
-              });
+              // Le jet n'est possible qu'une fois la déclaration validée par
+              // le MJ (phase "awaitingRoll") — rollSpellDie révèle ensuite les
+              // boutons de verdict sur le message MJ lié.
+              await RPG_SPELLS.rollSpellDie(message);
             } catch(e) {
               console.error("[RPG] Erreur lancer d20 sort :", e);
             } finally {
