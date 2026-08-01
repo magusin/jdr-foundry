@@ -2,7 +2,7 @@
     "permissions": {
       "deny": [
         "Read(assets/**)",
-        "Read(packs/**)",
+        // "Read(packs/**)",
         "Read(**/*.png)",
         "Read(**/*.jpg)",
         "Read(**/*.webp)",
