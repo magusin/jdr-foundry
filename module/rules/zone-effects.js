@@ -314,7 +314,20 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
   };
 
   async _prepareContext(options) {
-    const ctx = await super._prepareContext(options);
+    // super._prepareContext() (RegionBehaviorConfig core) construit une liste
+    // de champs génériques via this.document.system.schema — si le behavior
+    // n'a pas (encore) un system correctement instancié en DataModel côté
+    // Foundry, ça lève une exception non catchée qui casse tout rendu futur
+    // de cette fiche. On ne dépend pas de ce résultat (notre template lit
+    // directement system.xxx), donc un échec ici ne doit jamais empêcher
+    // d'afficher/éditer le formulaire.
+    let ctx;
+    try {
+      ctx = await super._prepareContext(options);
+    } catch (e) {
+      console.warn("[RPG] RegionBehaviorConfig._prepareContext (core) a échoué, repli manuel :", e);
+      ctx = { document: this.document, editable: this.isEditable ?? true };
+    }
     ctx.system = this.document.system ?? {};
     return ctx;
   }

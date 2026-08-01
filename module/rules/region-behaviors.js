@@ -312,7 +312,18 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
   };
 
   async _prepareContext(options) {
-    const ctx = await super._prepareContext(options);
+    // Voir la même garde dans ZoneEffectBehaviorSheet (zone-effects.js) :
+    // super._prepareContext() peut lever si this.document.system n'est pas
+    // (encore) un DataModel correctement instancié côté Foundry — notre
+    // template ne dépend pas de son retour, donc on ne doit jamais laisser
+    // ça empêcher l'édition de ce comportement.
+    let ctx;
+    try {
+      ctx = await super._prepareContext(options);
+    } catch (e) {
+      console.warn("[RPG] RegionBehaviorConfig._prepareContext (core) a échoué, repli manuel :", e);
+      ctx = { document: this.document, editable: this.isEditable ?? true };
+    }
     const typeKey = String(this.document.type ?? "").replace("rpg.", "");
     const terrain = TERRAIN_TYPES[typeKey] ?? {};
 
