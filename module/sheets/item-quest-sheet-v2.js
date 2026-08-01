@@ -1,6 +1,7 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
 import { applyUiTheme, bindImageEditors } from "./sheet-helpers.js";
 import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { setupItemRefDrop } from "./drop-helper.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -58,6 +59,40 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     applyUiTheme(this.element);
     bindImageEditors(this.element, this.document);
     bindSendToActorsButton(this.element, this.document);
+
+    const root = this.element;
+    if (!root) return;
+
+    // ── UUID cliquable (récompense) → ouvre la fiche de l'objet ──────────
+    root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const uuid = btn.dataset.uuid;
+        if (!uuid) return;
+        try {
+          const doc = await fromUuid(uuid);
+          if (doc?.sheet) doc.sheet.render(true);
+          else ui.notifications?.warn?.("Objet introuvable pour cet UUID.");
+        } catch (e) {
+          ui.notifications?.error?.(`UUID invalide : ${uuid}`);
+        }
+      });
+    });
+
+    // ── Glisser un objet (compendium, inventaire, barre d'items) → l'ajoute
+    // en récompense, sans avoir à taper l'UUID à la main (même mécanisme que
+    // le butin d'un monstre, voir drop-helper.js).
+    if (game.user.isGM) {
+      setupItemRefDrop(this, root, (item) => this._addRewardItemFromDrop(item));
+    }
+  }
+
+  /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
+  async _addRewardItemFromDrop(item) {
+    if (!game.user.isGM || !item?.uuid) return;
+    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
+    list.push({ uuid: item.uuid, qty: 1 });
+    await this.document.update({ "system.recompense.items": list }, { render: true });
   }
 
   async _prepareContext(options) {
@@ -80,6 +115,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ));
     ctx.system.recompense = ctx.system.recompense ?? { xp: 0, items: [] };
     ctx.system.recompense.items = Array.isArray(ctx.system.recompense.items) ? ctx.system.recompense.items : [];
+
+    // Nom et image toujours résolus depuis l'objet lui-même (jamais un
+    // instantané figé) : si le MJ renomme l'objet, la récompense suit sans
+    // qu'il ait besoin de retoucher la quête — même logique que le butin
+    // d'un monstre (monster-sheet-v2.js).
+    if (game.user.isGM && ctx.system.recompense.items.length) {
+      ctx.system.recompense.items = await Promise.all(ctx.system.recompense.items.map(async (ri) => {
+        let name = "Objet introuvable", img = "icons/svg/item-bag.svg";
+        const uuid = String(ri?.uuid ?? "").trim();
+        if (uuid) {
+          try {
+            const doc = await fromUuid(uuid);
+            if (doc) { name = doc.name; img = doc.img ?? img; }
+          } catch { /* uuid invalide */ }
+        }
+        return { uuid, name, img, qty: Math.max(1, Number(ri?.qty ?? 1) || 1) };
+      }));
+    }
+
     ctx.system.statut = String(ctx.system.statut ?? "active");
     ctx.system.description = String(ctx.system.description ?? "");
 
@@ -130,16 +184,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       }
     }
 
+    // Nom/image ne sont jamais stockés (résolus en direct depuis l'objet à
+    // chaque rendu, voir _prepareContext) — seuls uuid et qty sont persistés.
     const riRaw = expanded?.system?.recompense?.items;
     if (riRaw && !Array.isArray(riRaw)) expanded.system.recompense.items = Object.values(riRaw);
     if (Array.isArray(expanded?.system?.recompense?.items)) {
-      for (const ri of expanded.system.recompense.items) {
-        if (ri) {
-          ri.uuid = String(ri.uuid ?? "").trim();
-          ri.name = String(ri.name ?? "").trim();
-          ri.qty  = Math.max(1, Number(ri.qty ?? 1) || 1);
-        }
-      }
+      expanded.system.recompense.items = expanded.system.recompense.items.map(ri => ri && {
+        uuid: String(ri.uuid ?? "").trim(),
+        qty:  Math.max(1, Number(ri.qty ?? 1) || 1)
+      });
     }
 
     await this.document.update(expanded, { render: true });
@@ -200,7 +253,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _actionAddRewardItem(event) {
     event?.preventDefault?.();
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
-    list.push({ uuid: "", name: "", qty: 1 });
+    list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
 

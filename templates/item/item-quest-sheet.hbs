@@ -127,12 +127,20 @@
 
     <div class="quest-reward-items">
       {{#each system.recompense.items as |ri idx|}}
-      <div class="reward-row" data-idx="{{idx}}">
+      <div class="reward-row" data-idx="{{idx}}" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px;background:var(--surface);border-radius:6px">
+        {{#if ri.uuid}}
+        <img src="{{ri.img}}" alt="" style="width:28px;height:28px;border-radius:5px;object-fit:cover" />
+        <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ri.name}}</span>
+        <button type="button" class="rpg-open-uuid" data-uuid="{{ri.uuid}}" title="Ouvrir la fiche de l'objet"
+          style="cursor:pointer;padding:1px 6px;font-size:10px">📄</button>
+        <input type="hidden" name="system.recompense.items.{{idx}}.uuid" value="{{ri.uuid}}" />
+        {{else}}
         <input type="text" name="system.recompense.items.{{idx}}.uuid" value="{{ri.uuid}}"
-          placeholder="UUID de l'objet (clic droit -> Copy UUID)" class="reward-uuid" {{#unless canEdit}}disabled{{/unless}} />
-        <input type="text" name="system.recompense.items.{{idx}}.name" value="{{ri.name}}"
-          placeholder="Nom affiché" class="reward-name" {{#unless canEdit}}disabled{{/unless}} />
-        <input type="number" name="system.recompense.items.{{idx}}.qty" value="{{ri.qty}}" min="1" class="reward-qty" {{#unless canEdit}}disabled{{/unless}} />
+          placeholder="UUID de l'objet (clic droit -> Copy UUID), ou glisse-le directement" class="reward-uuid"
+          style="flex:1;font-size:11px" {{#unless canEdit}}disabled{{/unless}} />
+        {{/if}}
+        <input type="number" name="system.recompense.items.{{idx}}.qty" value="{{ri.qty}}" min="1" class="reward-qty"
+          style="width:48px;font-size:12px;text-align:center" {{#unless canEdit}}disabled{{/unless}} />
         {{#if canEdit}}
         <button type="button" class="etape-remove-btn" data-action="removeRewardItem" data-idx="{{idx}}" title="Retirer">✕</button>
         {{/if}}
@@ -140,7 +148,10 @@
       {{/each}}
     </div>
     {{#if canEdit}}
-    <button type="button" class="quest-add-reward-btn" data-action="addRewardItem">+ Ajouter un objet en récompense</button>
+    <div class="quest-reward-dropzone" style="font-size:11px;opacity:.7;padding:6px;border:1px dashed var(--border);border-radius:6px;text-align:center;margin-bottom:6px">
+      🎁 Glisse un objet ici (compendium, inventaire, barre d'items) pour l'ajouter en récompense
+    </div>
+    <button type="button" class="quest-add-reward-btn" data-action="addRewardItem">+ Ajouter un objet via UUID</button>
     {{/if}}
     {{/if}}
 
