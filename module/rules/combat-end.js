@@ -120,15 +120,16 @@ export async function resolveEndOfCombat(combat) {
   const { proceed, selectedIds } = await promptEndOfCombatChoice({
     pjs: allPjs, totalXP, monsterNames: monsterNamesForPrompt
   });
-  if (!proceed) return; // le MJ a choisi de ne rien attribuer
 
-  const pjs = allPjs.filter((p) => selectedIds.includes(p.id));
-  if (!pjs.length) return; // personne sélectionné → rien à faire
+  // Le partage d'XP est indépendant de la remise à zéro des CD/mana/fatigue :
+  // même si le MJ ignore l'XP, tous les PJ ayant participé doivent pouvoir
+  // se voir proposer le repos de groupe ci-dessous.
+  const pjs = proceed ? allPjs.filter((p) => selectedIds.includes(p.id)) : [];
 
   // ── 4. Part par PJ ─────────────────────────────────────────────────────
-  const share      = totalXP / pjs.length;
+  const share      = pjs.length ? totalXP / pjs.length : 0;
   const shareFloor = Math.floor(share);
-  const shareRem   = Math.round(totalXP - shareFloor * pjs.length); // arrondi resto
+  const shareRem   = pjs.length ? Math.round(totalXP - shareFloor * pjs.length) : 0; // arrondi resto
 
   // ── 5. Applique XP + construit message ─────────────────────────────────
   const updates = [];
@@ -162,8 +163,9 @@ export async function resolveEndOfCombat(combat) {
   let content =
     `<h3>⚔️ Fin de combat</h3>` +
     `<p><b>Adversaires :</b> ${monsterNames}</p>` +
-    `<p><b>XP total :</b> ${totalXP} répartis entre ${pjs.length} PJ(s)</p>` +
-    `<ul>${lines.join("")}</ul>`;
+    (pjs.length
+      ? `<p><b>XP total :</b> ${totalXP} répartis entre ${pjs.length} PJ(s)</p><ul>${lines.join("")}</ul>`
+      : `<p><b>XP :</b> non distribué.</p>`);
 
   if (lootableMonsters.length) {
     const allIds = lootableMonsters.map(m => m.id).join(",");
@@ -201,12 +203,90 @@ export async function resolveEndOfCombat(combat) {
     content += `</div>`;
   }
 
+  // ── 8. Repos de groupe — CD des sorts + mana/fatigue ─────────────────────
+  // Proposé pour tous les PJ ayant participé, indépendamment du choix d'XP :
+  // la fatigue accumulée en combat n'a rien à voir avec qui touche de l'XP.
+  const restIds = allPjs.map((p) => p.id).join(",");
+  content +=
+    `<hr><div style="font-size:13px;font-weight:600;margin-bottom:6px">🧘 Repos de groupe</div>` +
+    `<div style="display:flex;gap:8px">` +
+    `<button type="button" data-action="resetCooldowns" data-actor-ids="${restIds}" ` +
+    `style="flex:1;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">🔄 Réinitialiser les CD</button>` +
+    `<button type="button" data-action="restoreManaFatigue" data-actor-ids="${restIds}" ` +
+    `style="flex:1;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">💧 Restaurer mana &amp; fatigue</button>` +
+    `</div>`;
+
   await ChatMessage.create({ content, type: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
 
-  const pjNames = pjs.map(p => p.name).join(", ");
-  appendToCampaignJournal(
-    `Combat contre <b>${monsterNames}</b> remporté par <b>${pjNames}</b>. XP distribué : ${totalXP}.`
-  ).catch(() => {});
+  if (pjs.length) {
+    const pjNames = pjs.map(p => p.name).join(", ");
+    appendToCampaignJournal(
+      `Combat contre <b>${monsterNames}</b> remporté par <b>${pjNames}</b>. XP distribué : ${totalXP}.`
+    ).catch(() => {});
+  }
+}
+
+/**
+ * Remet à zéro le CD (system.cooldown.restant + system.recharge.restant) de
+ * tous les sorts des acteurs donnés — déclenché par le bouton "Réinitialiser
+ * les CD" du récap de fin de combat, jamais automatiquement.
+ */
+export async function resetSpellCooldowns(actorIds) {
+  if (!game.user.isGM) return;
+
+  let spellCount = 0;
+  const actorNames = [];
+
+  for (const id of actorIds) {
+    const actor = game.actors.get(id);
+    if (!actor) continue;
+
+    const updates = actor.items
+      .filter((i) => i.type === "spell"
+        && (n(i.system?.cooldown?.restant, 0) > 0 || n(i.system?.recharge?.restant, 0) > 0))
+      .map((i) => ({ _id: i.id, "system.cooldown.restant": 0, "system.recharge.restant": 0 }));
+
+    if (updates.length) {
+      await actor.updateEmbeddedDocuments("Item", updates);
+      spellCount += updates.length;
+      actorNames.push(actor.name);
+    }
+  }
+
+  await ChatMessage.create({
+    content: spellCount
+      ? `<h3>🔄 CD réinitialisés</h3><p>${spellCount} sort(s) rechargé(s) pour : <b>${actorNames.join(", ")}</b>.</p>`
+      : `<p>🔄 Aucun sort en recharge — rien à réinitialiser.</p>`
+  });
+}
+
+/**
+ * Restaure la mana au maximum et remet la fatigue à 0 pour les acteurs
+ * donnés — déclenché par le bouton "Restaurer mana & fatigue", jamais
+ * automatiquement.
+ */
+export async function restoreManaFatigue(actorIds) {
+  if (!game.user.isGM) return;
+
+  const lines = [];
+
+  for (const id of actorIds) {
+    const actor = game.actors.get(id);
+    if (!actor) continue;
+
+    const manaMax = n(actor.system?.ressources?.mana?.max, 0);
+    await actor.update({
+      "system.ressources.mana.valeur": manaMax,
+      "system.ressources.fatigue.valeur": 0
+    });
+    lines.push(`<li><b>${actor.name}</b> : mana ${manaMax}/${manaMax}, fatigue 0</li>`);
+  }
+
+  if (!lines.length) return;
+
+  await ChatMessage.create({
+    content: `<h3>💧 Mana &amp; fatigue restaurés</h3><ul>${lines.join("")}</ul>`
+  });
 }
 
 /**

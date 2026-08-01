@@ -945,11 +945,21 @@
 
         <span>🎯 Diff: +{{it._ui.difficulte}}</span>
 
-        <span>
+        <span style="display:flex; align-items:center; gap:4px;">
           ⏳ CD:
           <b style="{{#if it._ui.onCooldown}}color:#b00;{{else}}color:#0a0;{{/if}}">
             {{it._ui.cdRestant}}/{{it._ui.cdMax}}
           </b>
+          {{#if ../flags.isGM}}
+          {{#if it._ui.cdMax}}
+          <button type="button" class="btn small" data-action="adjSpellCooldown"
+            data-item-id="{{it._id}}" data-delta="-1" title="Diminuer le CD"
+            style="padding:1px 6px; line-height:1;">−</button>
+          <button type="button" class="btn small" data-action="adjSpellCooldown"
+            data-item-id="{{it._id}}" data-delta="1" title="Augmenter le CD"
+            style="padding:1px 6px; line-height:1;">+</button>
+          {{/if}}
+          {{/if}}
         </span>
 
         {{#if it._ui.modsSummary}}
