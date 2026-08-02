@@ -41,22 +41,10 @@
       "type": "Macro"
     },
     {
-      "name": "items-reference",
-      "label": "Équipement de référence",
-      "path": "packs/items/items.db",
-      "type": "Item"
-    },
-    {
       "name": "loot-tables",
       "label": "Tables de Rencontre",
       "path": "packs/loot-tables/loot-tables.db",
       "type": "RollTable"
-    },
-    {
-      "name": "monsters-reference",
-      "label": "Monstres de Référence",
-      "path": "packs/monsters/monsters.db",
-      "type": "Actor"
     },
     {
       "name": "documentation",

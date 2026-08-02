@@ -482,7 +482,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
               <label style="font-size:12px">UUID de l'item (clic droit → Copy UUID), ou glisse-dépose
                 directement un item sur cet onglet.</label>
               <input id="loot-uuid" type="text" style="width:100%;margin-top:4px"
-                placeholder="Compendium.rpg.items-reference.Item.xxxx" />
+                placeholder="Compendium.monworld.mon-pack.Item.xxxx" />
             </div>`,
             buttons: {
               ok: {
