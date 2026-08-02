@@ -275,11 +275,21 @@ export function registerRegionBehaviors() {
   // contient jamais la bonne clé : le comportement du document ne serait
   // jamais enveloppé dans un vrai DataModel, et la fiche de config core
   // plante en lisant document.system.schema (undefined).
+  // Les comportements NATIFS de Foundry (TeleportToken, ToggleBehavior…)
+  // dérivent tous de foundry.data.regionBehaviors.RegionBehaviorType — une
+  // sous-classe de TypeDataModel propre aux RegionBehavior — jamais du
+  // TypeDataModel générique qu'on utilisait ici. Repli défensif sur
+  // l'ancien générique si l'espace de noms n'existe pas (vieille version).
+  // defineSchema() surcharge SANS appeler super() : le champ "events" que
+  // RegionBehaviorType ajoute par défaut ne sert à rien ici, nos
+  // déclenchements passent par nos propres hooks (movement-tracker.js).
+  const RegionBehaviorTypeBase = foundry.data?.regionBehaviors?.RegionBehaviorType
+                               ?? foundry.abstract.TypeDataModel;
+
   for (const [typeKey, config] of Object.entries(TERRAIN_TYPES)) {
     if (CONFIG.RegionBehavior.dataModels[typeKey]) continue; // déjà enregistré
 
-    // DataModel minimal pour Foundry V13
-    class TerrainBehavior extends foundry.abstract.TypeDataModel {
+    class TerrainBehavior extends RegionBehaviorTypeBase {
       static defineSchema() {
         const fields = foundry.data.fields;
         return {
