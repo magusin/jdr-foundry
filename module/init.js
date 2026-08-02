@@ -815,10 +815,22 @@ Hooks.once("init", async () => {
         // native quelconque par accident de contenu.
         const isRollTable = app?.document?.documentName === "RollTable";
 
+        // Nos propres compendiums (Documentation, Tables de Rencontre,
+        // Équipement/Monstres de référence, Macros système) et tout ce qu'on
+        // ouvre DEPUIS eux (le navigateur de compendium ET les fiches
+        // JournalEntry/Page — les Actor/Item de nos packs ont déjà .rpg-sheet
+        // via nos propres classes de fiche, donc rien à faire pour eux ici) :
+        // même logique que RollTable ci-dessus, ciblé par métadonnée de pack
+        // plutôt que par contenu détecté, pour ne jamais repeindre un journal
+        // ou un compendium d'un autre module/système.
+        const packId = app?.collection?.metadata?.id ?? app?.document?.pack ?? null;
+        const isOwnPack = typeof packId === "string" && packId.startsWith("rpg.");
+
         const isOurs = root.classList?.contains("rpg-window")
                     || root.matches?.(RPG_MARKERS)
                     || !!root.querySelector(RPG_MARKERS)
-                    || isRollTable;
+                    || isRollTable
+                    || isOwnPack;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }
     };
