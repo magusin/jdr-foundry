@@ -117,6 +117,28 @@ function clampDestination(self, point) {
   return stop;
 }
 
+// Ne prévient qu'une fois par session si le calcul échoue en cours de
+// glisser (ex : un futur changement d'API Foundry casse une hypothèse ici) —
+// le glisser doit rester utilisable (destination Foundry non bridée) plutôt
+// que de planter, la limite retombant alors sur la validation à l'enregistrement
+// (onPreUpdateToken, movement-tracker.js).
+let _clampErrorWarned = false;
+
+/** Enveloppe défensive de clampDestination : ne doit jamais interrompre un glisser. */
+function safeClampDestination(self, point) {
+  try {
+    return clampDestination(self, point) ?? point;
+  } catch (e) {
+    if (!_clampErrorWarned) {
+      _clampErrorWarned = true;
+      console.warn("[RPG] blocage du déplacement au glisser : erreur de calcul, "
+                 + "destination non bridée pour ce glisser (repli sur la validation "
+                 + "à l'enregistrement) :", e);
+    }
+    return point;
+  }
+}
+
 /**
  * Installe la contrainte en enveloppant Token#_updateDragDestination (le
  * point d'appel unique de la V13 pour l'aperçu ET le dépôt), et efface les
@@ -168,7 +190,7 @@ export function installDragLimit() {
 
       libWrapper.register("rpg", "CONFIG.Token.objectClass.prototype._updateDragDestination",
         function (wrapped, point, options) {
-          return wrapped(clampDestination(this, point), options);
+          return wrapped(safeClampDestination(this, point), options);
         }, "WRAPPER");
 
       for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
@@ -203,7 +225,7 @@ export function installDragLimit() {
 
   const originalUpdateDest = proto._updateDragDestination;
   proto._updateDragDestination = function (point, options) {
-    return originalUpdateDest.call(this, clampDestination(this, point), options);
+    return originalUpdateDest.call(this, safeClampDestination(this, point), options);
   };
 
   for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
