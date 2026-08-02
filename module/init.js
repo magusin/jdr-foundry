@@ -923,7 +923,6 @@ Hooks.once("init", async () => {
         ["Appliquer un Effet (MJ)",            "apply-effect.js",       "icons/svg/lightning.svg",       "gm"],
         ["Créer un État (MJ)",                 "state-builder-macro.js","icons/svg/aura.svg",            "gm"],
         ["Survie : Repos / Blessures (MJ)",    "survival-tools.js",     "icons/svg/blood.svg",           "gm"],
-        ["Météo (MJ)",                         "weather-control.js",    "icons/svg/wave.svg",            "gm"],
         ["Marché (MJ)",                        "market.js",             "systems/rpg/assets/icons/coins.svg","gm"],
         ["Réputation & Marché Régional (MJ)",  "reputation-tools.js",   "icons/svg/eye.svg",             "gm"],
         ["Position Tactique (MJ)",             "tactical-tools.js",     "icons/svg/shield.svg",          "gm"],
