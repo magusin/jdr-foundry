@@ -159,24 +159,24 @@ function defaultLayersFor(token) {
   if (!actor) return [];
   const layers = [];
 
-  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon —
-  // le libellé doit annoncer ce même rayon final, pas la valeur brute de
-  // l'allonge/portée, sinon le chiffre affiché ne correspond jamais à ce
-  // qu'on mesure à l'œil sur la grille (le cercle déborde toujours du
-  // libellé pour un token de taille ≥ 1 case).
+  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon, pour
+  // que le trait touche bien le bord du token — mais le LIBELLÉ, lui,
+  // affiche la valeur brute de la fiche d'objet (allonge/portée), pas ce
+  // rayon augmenté : un joueur qui compare au chiffre de sa fiche d'arme
+  // (ex. 1,5 m) ne doit pas voir un nombre différent (2 m) sur la carte.
   const foot = tokenFootprintMeters(token);
 
   const reach = getMeleeReach(actor);
   if (reach > 0) {
-    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
+    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
   }
 
   const wr = getWeaponRange(actor);
   // Inutile de doubler le cercle si l'arme ne fait que du corps à corps
   if (wr && wr.max > reach) {
     const lbl = wr.min > 0
-      ? `🏹 ${wr.name} ${fmtM(wr.min + foot)}–${fmtM(wr.max + foot)}`
-      : `🏹 ${wr.name} ${fmtM(wr.max + foot)}`;
+      ? `🏹 ${wr.name} ${fmtM(wr.min)}–${fmtM(wr.max)}`
+      : `🏹 ${wr.name} ${fmtM(wr.max)}`;
     layers.push({ min: wr.min, max: wr.max, color: COLORS.weapon, label: lbl });
   }
 
@@ -281,7 +281,10 @@ export async function showMovementLimit(token) {
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
     const foot = tokenFootprintMeters(token);
-    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
+    // Le rayon dessiné inclut le socle du token (bord à bord), mais le
+    // libellé affiche l'allonge brute de l'arme — celle de la fiche — pour
+    // que le chiffre corresponde à ce que le joueur voit sur son équipement.
+    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
     drewSomething = true;
     try {
       const rPx = metersToPixels(reach + foot);

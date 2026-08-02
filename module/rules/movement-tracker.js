@@ -74,6 +74,28 @@ export function areOpposedDisp(a, b) {
   return (a === D.FRIENDLY && b === D.HOSTILE) || (a === D.HOSTILE && b === D.FRIENDLY);
 }
 
+const MELEE_REACH_MAX = 3;
+
+/**
+ * Arme de corps à corps ÉQUIPÉE dont l'allonge est la plus haute (allonge >
+ * 0 et ≤ 3 m) — celle qui détermine la zone de menace affichée
+ * (getMeleeReach ci-dessous). Avec deux armes équipées, seule CELLE-CI doit
+ * porter l'attaque d'opportunité : sinon le cercle affiché au joueur
+ * (allonge de sa meilleure arme) ne correspondrait plus à l'arme qui frappe
+ * réellement quand il déclenche la réaction.
+ */
+export function bestMeleeWeapon(actor) {
+  let best = null, bestReach = 0;
+  try {
+    const equipped = (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipe);
+    for (const w of equipped) {
+      const a = Number(w.system?.allonge ?? 0) || 0;
+      if (a > 0 && a <= MELEE_REACH_MAX && a > bestReach) { bestReach = a; best = w; }
+    }
+  } catch { /* défaut null */ }
+  return best;
+}
+
 export function getMeleeReach(actor) {
   // Monstre : allonge propre. 0 = pas de menace (aucune attaque d'opportunité).
   // Non défini → 1 m par défaut (valeur du template). 0 explicite est respecté.
@@ -83,16 +105,7 @@ export function getMeleeReach(actor) {
   // Personnage/PNJ : plus grande ALLONGE parmi les armes ÉQUIPÉES de corps à corps
   // (allonge > 0 et ≤ 3 m). Aucune arme de mêlée équipée (ou allonge 0) → 0 =
   // pas de menace, donc pas d'attaque d'opportunité.
-  const MELEE_MAX = 3;
-  let reach = 0;
-  try {
-    const equipped = (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipe);
-    for (const w of equipped) {
-      const a = Number(w.system?.allonge ?? 0) || 0;
-      if (a > 0 && a <= MELEE_MAX && a > reach) reach = a;
-    }
-  } catch { /* défaut 0 */ }
-  return reach;
+  return Number(bestMeleeWeapon(actor)?.system?.allonge ?? 0) || 0;
 }
 
 /**
@@ -614,7 +627,13 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
     item = await _chooseOpportunityAbility(ea, ma, available);
     if (!item) return; // MJ a annulé
   } else {
-    item = ea.items.find(i => i.type === "weapon" && i.system?.equipe)
+    // Avec deux armes équipées, l'attaque d'opportunité doit porter avec
+    // celle qui a la plus haute allonge — c'est elle qui détermine le
+    // cercle de menace affiché au joueur (getMeleeReach) ; une autre arme
+    // "au hasard" du tableau d'objets donnerait un coup incohérent avec ce
+    // que ce cercle promettait.
+    item = bestMeleeWeapon(ea)
+        ?? ea.items.find(i => i.type === "weapon" && i.system?.equipe)
         ?? ea.items.find(i => i.type === "weapon");
     if (!item) { ui.notifications?.warn?.(`${ea.name} n'a aucune arme.`); return; }
     if (!(await _confirmOpportunity(ea, ma, item))) return; // MJ a refusé
