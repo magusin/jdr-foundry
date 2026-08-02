@@ -61,9 +61,19 @@
 }
 
 /* ═══════════════ THÈME SOMBRE (par défaut) — encre + violet/laiton ═══════ */
+/* ⚠️ Scopé à nos propres marqueurs (.rpg-sheet/.rpg-spell-menu/.rpg-window),
+   PAS à `body.rpg-theme-*` : ces variables portent les mêmes noms que des
+   variables internes de Foundry (--color-text-primary, etc.), et une
+   variable CSS posée sur <body> s'hérite dans TOUT le DOM — y compris les
+   fenêtres 100% natives de Foundry (RollTableConfig, ActiveEffectConfig...)
+   qui n'ont aucune classe à nous. Poser ça sur body les repeint à moitié
+   (patchwork clair/sombre illisible, icônes cassées) sans jamais les
+   couvrir entièrement. .rpg-window est ajouté explicitement par
+   themeWindow() pour nos propres dialogues de macro — c'est le bon endroit
+   pour étendre le thème hors de .rpg-sheet, pas <body>. */
 .rpg-sheet,
-body.rpg-theme-sombre,
 .rpg-sheet.rpg-theme-sombre,
+.rpg-window.rpg-theme-sombre,
 .rpg-spell-menu, .rpg-spell-menu.rpg-theme-sombre,
 #rpg-weather-hud, #rpg-biome-hud {
   --color-text-primary:      #ece4d3;
@@ -90,8 +100,8 @@ body.rpg-theme-sombre,
 }
 
 /* ═══════════════ THÈME CLAIR — parchemin, texte encre ═══════════════════ */
-body.rpg-theme-clair,
 .rpg-sheet.rpg-theme-clair,
+.rpg-window.rpg-theme-clair,
 .rpg-spell-menu.rpg-theme-clair {
   --color-text-primary:      #2b2418;
   --color-text-secondary:    #5c5340;
@@ -121,8 +131,8 @@ body.rpg-theme-clair,
 }
 
 /* ═══════════════ THÈME CONTRASTE — noir pur, accents vifs ═══════════════ */
-body.rpg-theme-contraste,
 .rpg-sheet.rpg-theme-contraste,
+.rpg-window.rpg-theme-contraste,
 .rpg-spell-menu.rpg-theme-contraste {
   --color-text-primary:      #ffffff;
   --color-text-secondary:    #e2e2e2;
