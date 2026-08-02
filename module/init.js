@@ -805,9 +805,20 @@ Hooks.once("init", async () => {
         // Jamais la barre latérale, le chat ni la barre de macros
         if (root.id === "sidebar" || root.closest?.("#sidebar, #chat, #hotbar")) return;
 
+        // Les tables aléatoires (tables de rencontre, butin…) sont une
+        // fenêtre 100% native de Foundry (RollTableConfig / RollTableSheet)
+        // mais font partie intégrante du jeu — contrairement aux autres
+        // fenêtres cœur qu'on laisse volontairement non themées, on l'inclut
+        // explicitement par TYPE de document (jamais par contenu détecté au
+        // hasard) pour rester dans l'esprit "on ne marque que ce qu'on
+        // reconnaît explicitement", sans risquer de repeindre une fenêtre
+        // native quelconque par accident de contenu.
+        const isRollTable = app?.document?.documentName === "RollTable";
+
         const isOurs = root.classList?.contains("rpg-window")
                     || root.matches?.(RPG_MARKERS)
-                    || !!root.querySelector(RPG_MARKERS);
+                    || !!root.querySelector(RPG_MARKERS)
+                    || isRollTable;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }
     };
