@@ -444,6 +444,15 @@ export async function rollAttackDamage(message) {
     offhand:       flags.offhandId ? resolveWeapon(attacker, flags.offhandId) : null
   });
 
+  // Une compétence de monstre (item type "spell", ex: attaque d'opportunité)
+  // part en recharge comme un sort normalement lancé — sinon rien ne
+  // l'empêche d'être réutilisée à la prochaine opportunité du même tour.
+  // Les armes n'ont pas ce champ, donc inoffensif pour une attaque classique.
+  const cdMax = Number(weapon.system?.cooldown?.max ?? 0) || 0;
+  if (weapon.type === "spell" && cdMax > 0) {
+    await weapon.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
+  }
+
   const label = flags.label ?? (isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ");
   const col   = flags.col ?? (isCrit ? "gold" : "#27ae60");
 
