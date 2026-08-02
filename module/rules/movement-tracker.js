@@ -650,7 +650,15 @@ export async function undoMovement(combat, actionId) {
   if (snap.tokenId && snap.oldX !== undefined) {
     const td = canvas?.scene?.tokens?.get(snap.tokenId)
       ?? game.scenes.active?.tokens?.get(snap.tokenId);
-    if (td) await td.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true });
+    if (td) {
+      // Sans couper l'animation ni la désactiver, le token glisse encore
+      // vers sa position annulée quand les cercles d'allonge/déplacement se
+      // redessinent (updateToken, ~80ms après) : ils se calent alors sur une
+      // position transitoire au lieu du point d'arrivée réel. Même parade
+      // que la correction de bridage de vitesse dans onUpdateToken.
+      try { td.stopMovement?.(); } catch { /* API absente : ignorer */ }
+      await td.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true, animate: false });
+    }
   }
   const budget = getBudget(combat, combatantId);
   await saveBudget(combat, combatantId,
