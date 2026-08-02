@@ -42,6 +42,48 @@ export function findGroupQuestItems(groupId, excludeUuid = null) {
 }
 
 /**
+ * Identifiant purement traçable — indépendant de "partagee" — posé sur
+ * TOUTE quête dès qu'elle est envoyée à au moins un PJ (bouton "Envoyer",
+ * glisser-déposer, macro de distribution). Sert uniquement à retrouver
+ * "qui a une copie de CETTE quête" pour l'afficher sur la fiche (liste des
+ * destinataires) — questGroupId, lui, ne se pose que si "partagee" est
+ * coché et sert à synchroniser la progression entre copies. Les deux
+ * peuvent coexister sur une même quête sans interférer : une quête non
+ * partagée envoyée à trois PJ séparément aura un distribGroupId commun
+ * (pour la liste des destinataires) mais pas de questGroupId (pas de
+ * synchro), et chaque copie garde sa progression indépendante.
+ */
+export async function ensureDistribGroupId(item) {
+  if (!item || item.type !== "quest") return null;
+  let gid = String(item.system?.distribGroupId ?? "").trim();
+  if (!gid) {
+    gid = foundry.utils.randomID(12);
+    await item.update({ "system.distribGroupId": gid });
+  }
+  return gid;
+}
+
+/**
+ * Toutes les copies embarquées (sur un acteur PJ) d'une quête, d'après son
+ * distribGroupId — c'est la liste des destinataires actuels, affichée sur
+ * la fiche de la quête source pour que le MJ sache qui la voit déjà.
+ */
+export function findDistribCopies(groupId, excludeUuid = null) {
+  if (!groupId) return [];
+  const found = [];
+  for (const actor of game.actors) {
+    if (actor.type !== "character") continue;
+    for (const it of actor.items) {
+      if (it.type !== "quest") continue;
+      if (String(it.system?.distribGroupId ?? "").trim() !== String(groupId)) continue;
+      if (excludeUuid && it.uuid === excludeUuid) continue;
+      found.push(it);
+    }
+  }
+  return found;
+}
+
+/**
  * Propage une mise à jour (étape, statut...) à toutes les autres copies
  * d'une même quête partagée. N'a aucun effet si la quête n'est pas
  * partagée (questGroupId vide).

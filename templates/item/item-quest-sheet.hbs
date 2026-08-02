@@ -28,6 +28,27 @@
     </div>
 
     {{#if isGM}}
+    <div class="form-group quest-recipients">
+      <label>Qui voit cette quête ?</label>
+      <p style="opacity:.75;font-size:12px;margin:0 0 4px">
+        Un PJ ne voit la quête que s'il en a sa propre copie — coche/décoche
+        pour la lui donner ou la lui retirer (chaque copie garde son propre
+        avancement, sauf si "Quête partagée" est cochée ci-dessus).
+      </p>
+      {{#if recipients.length}}
+      <div class="quest-recipients-list">
+        {{#each recipients as |r|}}
+        <label style="display:flex;align-items:center;gap:6px;padding:1px 0">
+          <input type="checkbox" class="quest-recipient-check" data-actor-id="{{r.id}}" {{#if r.hasCopy}}checked{{/if}} />
+          {{r.name}}
+        </label>
+        {{/each}}
+      </div>
+      {{else}}
+      <p style="opacity:.6;font-size:12px;margin:0">Aucun personnage joueur dans le monde.</p>
+      {{/if}}
+    </div>
+
     <div class="form-group">
       <label>Classe / Joueur requis (note pour toi, n'apparaît jamais au joueur)</label>
       <input type="text" name="system.classeRequise" value="{{system.classeRequise}}"

@@ -275,7 +275,21 @@ export function registerZoneEffectBehavior() {
   }
   if (CONFIG.RegionBehavior.dataModels[BEHAVIOR_KEY]) return;
 
-  class ZoneEffectBehavior extends foundry.abstract.TypeDataModel {
+  // Les comportements NATIFS de Foundry (TeleportToken, ToggleBehavior…)
+  // dérivent de foundry.data.regionBehaviors.RegionBehaviorType — une
+  // sous-classe de TypeDataModel propre aux RegionBehavior — et non du
+  // TypeDataModel générique. Une version de Foundry qui se met à exiger
+  // cette base précise pour qu'un sous-type apparaisse dans le menu
+  // « Ajouter un comportement » (ou s'instancie sans planter) rend nos
+  // comportements invisibles/instables tant qu'ils héritent du générique —
+  // d'où le repli défensif si l'espace de nom n'existe pas encore (anciennes
+  // versions). On surcharge defineSchema() SANS appeler super() : le champ
+  // "events" que RegionBehaviorType ajoute par défaut ne nous sert pas, nos
+  // déclenchements passent par nos propres hooks (action-confirm.js).
+  const RegionBehaviorTypeBase = foundry.data?.regionBehaviors?.RegionBehaviorType
+                               ?? foundry.abstract.TypeDataModel;
+
+  class ZoneEffectBehavior extends RegionBehaviorTypeBase {
     static defineSchema() {
       const fields = foundry.data.fields;
       return {

@@ -146,11 +146,16 @@
           const itemData = item.toObject();
           delete itemData._id;
 
-          // ✅ Quête partagée : un seul questGroupId pour toutes les copies
-          // données ici, pour que leur progression reste synchronisée
-          if (item.type === "quest" && item.system?.partagee && game.rpg?.questGroup) {
-            const gid = await game.rpg.questGroup.ensureQuestGroupId(item);
-            if (gid && itemData.system) itemData.system.questGroupId = gid;
+          // ✅ Quête : distribGroupId dans tous les cas (traçabilité "qui a
+          // cette quête", relu par la fiche source), + questGroupId si
+          // partagée (synchronise la progression entre les copies).
+          if (item.type === "quest" && game.rpg?.questGroup) {
+            const distribId = await game.rpg.questGroup.ensureDistribGroupId(item);
+            if (distribId && itemData.system) itemData.system.distribGroupId = distribId;
+            if (item.system?.partagee) {
+              const gid = await game.rpg.questGroup.ensureQuestGroupId(item);
+              if (gid && itemData.system) itemData.system.questGroupId = gid;
+            }
           }
 
           const givenNames = [];

@@ -74,6 +74,28 @@ export function areOpposedDisp(a, b) {
   return (a === D.FRIENDLY && b === D.HOSTILE) || (a === D.HOSTILE && b === D.FRIENDLY);
 }
 
+const MELEE_REACH_MAX = 3;
+
+/**
+ * Arme de corps à corps ÉQUIPÉE dont l'allonge est la plus haute (allonge >
+ * 0 et ≤ 3 m) — celle qui détermine la zone de menace affichée
+ * (getMeleeReach ci-dessous). Avec deux armes équipées, seule CELLE-CI doit
+ * porter l'attaque d'opportunité : sinon le cercle affiché au joueur
+ * (allonge de sa meilleure arme) ne correspondrait plus à l'arme qui frappe
+ * réellement quand il déclenche la réaction.
+ */
+export function bestMeleeWeapon(actor) {
+  let best = null, bestReach = 0;
+  try {
+    const equipped = (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipe);
+    for (const w of equipped) {
+      const a = Number(w.system?.allonge ?? 0) || 0;
+      if (a > 0 && a <= MELEE_REACH_MAX && a > bestReach) { bestReach = a; best = w; }
+    }
+  } catch { /* défaut null */ }
+  return best;
+}
+
 export function getMeleeReach(actor) {
   // Monstre : allonge propre. 0 = pas de menace (aucune attaque d'opportunité).
   // Non défini → 1 m par défaut (valeur du template). 0 explicite est respecté.
@@ -83,16 +105,7 @@ export function getMeleeReach(actor) {
   // Personnage/PNJ : plus grande ALLONGE parmi les armes ÉQUIPÉES de corps à corps
   // (allonge > 0 et ≤ 3 m). Aucune arme de mêlée équipée (ou allonge 0) → 0 =
   // pas de menace, donc pas d'attaque d'opportunité.
-  const MELEE_MAX = 3;
-  let reach = 0;
-  try {
-    const equipped = (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipe);
-    for (const w of equipped) {
-      const a = Number(w.system?.allonge ?? 0) || 0;
-      if (a > 0 && a <= MELEE_MAX && a > reach) reach = a;
-    }
-  } catch { /* défaut 0 */ }
-  return reach;
+  return Number(bestMeleeWeapon(actor)?.system?.allonge ?? 0) || 0;
 }
 
 /**
@@ -265,15 +278,34 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
       }
 
       const stop = _clampToBudget(startPos, newX, newY, distBrute, mult, remaining);
-      changes.x = stop.x;
-      changes.y = stop.y;
-      _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
+
+      if (stop.x === startPos.x && stop.y === startPos.y) {
+        // La dichotomie retombe sur le point de départ (terrain trop cher
+        // dès le premier pas) : rien à corriger, refus franc.
+        return _refuseMove(tokenDoc, "Plus de déplacement ce tour.");
+      }
 
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
       _notifyOnce(tokenDoc.id, () => ui.notifications?.info?.(
         `Déplacement arrêté à ${fmt(remaining)}${typeLabel} — c'est tout ce qu'il te reste ce tour.`
       ));
-      return;   // le déplacement raccourci est accepté
+
+      // On ne mute plus `changes.x/y` en espérant que Foundry honore la
+      // modification : depuis le pipeline de « déplacement planifié »
+      // (checkpoints / TokenDocument#move), rien ne garantit plus que ça se
+      // répercute sur ce qui est réellement écrit/animé — en pratique le
+      // token peut rester figé à son point de départ malgré ce message.
+      // On refuse CETTE mise à jour précise et on programme nous-mêmes,
+      // séparément, la mise à jour vers le point d'arrêt calculé — même
+      // principe que le filet de sécurité ci-dessous dans onUpdateToken,
+      // mais déclenché tout de suite plutôt qu'en réaction à un décalage
+      // constaté après coup.
+      _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
+      queueMicrotask(() => {
+        tokenDoc.update({ x: stop.x, y: stop.y }, { rpgNoTrack: true, animate: false })
+          .catch(e => console.warn("[RPG] correction du déplacement bridé (arrêt) :", e));
+      });
+      return false;   // cette mise à jour précise est refusée, le raccourci suit séparément
     }
   }
 }
@@ -595,7 +627,13 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
     item = await _chooseOpportunityAbility(ea, ma, available);
     if (!item) return; // MJ a annulé
   } else {
-    item = ea.items.find(i => i.type === "weapon" && i.system?.equipe)
+    // Avec deux armes équipées, l'attaque d'opportunité doit porter avec
+    // celle qui a la plus haute allonge — c'est elle qui détermine le
+    // cercle de menace affiché au joueur (getMeleeReach) ; une autre arme
+    // "au hasard" du tableau d'objets donnerait un coup incohérent avec ce
+    // que ce cercle promettait.
+    item = bestMeleeWeapon(ea)
+        ?? ea.items.find(i => i.type === "weapon" && i.system?.equipe)
         ?? ea.items.find(i => i.type === "weapon");
     if (!item) { ui.notifications?.warn?.(`${ea.name} n'a aucune arme.`); return; }
     if (!(await _confirmOpportunity(ea, ma, item))) return; // MJ a refusé

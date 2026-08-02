@@ -12,6 +12,7 @@
 // (rayon en pixels = mètres ÷ distance-par-case × taille-de-case).
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
+import { RPG_AURA_RENDER } from "./aura-render.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -159,24 +160,24 @@ function defaultLayersFor(token) {
   if (!actor) return [];
   const layers = [];
 
-  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon —
-  // le libellé doit annoncer ce même rayon final, pas la valeur brute de
-  // l'allonge/portée, sinon le chiffre affiché ne correspond jamais à ce
-  // qu'on mesure à l'œil sur la grille (le cercle déborde toujours du
-  // libellé pour un token de taille ≥ 1 case).
+  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon, pour
+  // que le trait touche bien le bord du token — mais le LIBELLÉ, lui,
+  // affiche la valeur brute de la fiche d'objet (allonge/portée), pas ce
+  // rayon augmenté : un joueur qui compare au chiffre de sa fiche d'arme
+  // (ex. 1,5 m) ne doit pas voir un nombre différent (2 m) sur la carte.
   const foot = tokenFootprintMeters(token);
 
   const reach = getMeleeReach(actor);
   if (reach > 0) {
-    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
+    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
   }
 
   const wr = getWeaponRange(actor);
   // Inutile de doubler le cercle si l'arme ne fait que du corps à corps
   if (wr && wr.max > reach) {
     const lbl = wr.min > 0
-      ? `🏹 ${wr.name} ${fmtM(wr.min + foot)}–${fmtM(wr.max + foot)}`
-      : `🏹 ${wr.name} ${fmtM(wr.max + foot)}`;
+      ? `🏹 ${wr.name} ${fmtM(wr.min)}–${fmtM(wr.max)}`
+      : `🏹 ${wr.name} ${fmtM(wr.max)}`;
     layers.push({ min: wr.min, max: wr.max, color: COLORS.weapon, label: lbl });
   }
 
@@ -281,7 +282,10 @@ export async function showMovementLimit(token) {
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
     const foot = tokenFootprintMeters(token);
-    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
+    // Le rayon dessiné inclut le socle du token (bord à bord), mais le
+    // libellé affiche l'allonge brute de l'arme — celle de la fiche — pour
+    // que le chiffre corresponde à ce que le joueur voit sur son équipement.
+    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
     drewSomething = true;
     try {
       const rPx = metersToPixels(reach + foot);
@@ -460,6 +464,46 @@ export function updateDragThreatIndicator(draggedToken) {
     } catch { /* étiquette optionnelle */ }
   }
 
+  // ── Auras : entrée dans le rayon d'une aura, alliée OU ennemie ───────────
+  // Contrairement à l'allonge ci-dessus, une aura affecte quiconque entre
+  // dans son rayon indépendamment du camp (soin de zone allié comme brûlure
+  // ennemie) — pas de filtre de disposition ici. Cercle + étiquette sous le
+  // token, dans la couleur propre de l'aura (jamais le rouge "danger" de
+  // l'allonge, réservé aux ennemis).
+  const enteredAuras = [];
+  try {
+    for (const other of canvas.tokens?.placeables ?? []) {
+      if (other === draggedToken || !other.actor) continue;
+      for (const aura of RPG_AURA_RENDER.aurasOnToken(other)) {
+        const maxPx = metersToPixels(aura.max);
+        if (!(maxPx > 0)) continue;
+        const dist = Math.hypot(cx - other.center.x, cy - other.center.y);
+        if (dist <= maxPx + 1 && !enteredAuras.some(a => a.label === aura.label)) {
+          enteredAuras.push(aura);
+        }
+      }
+    }
+  } catch { /* indicateur optionnel */ }
+
+  if (enteredAuras.length) {
+    const r = Math.max(draggedToken.w, draggedToken.h) * 0.55 + (inDanger ? 10 : 0);
+    for (const aura of enteredAuras) {
+      g.lineStyle(3, aura.color ?? 0x6ec4a8, 0.9);
+      g.drawCircle(cx, cy, r);
+    }
+    try {
+      const style = new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 14, fontWeight: "700",
+        fill: "#9ff0e0", stroke: "#000000", strokeThickness: 4
+      });
+      const names = enteredAuras.map(a => (a.label ?? "Aura").split(" ")[0]).join(" · ");
+      const t = new PIXI.Text(`🌀 Entre dans une aura : ${names}`, style);
+      t.anchor.set(0.5, 0);
+      t.position.set(cx, cy + r + 6);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+  }
+
   (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
   _dragGfx = g;
   return inDanger;
@@ -491,6 +535,18 @@ export function installRangeOverlay() {
   Hooks.on("updateCombat", () => setTimeout(() => refreshMovementLimit(), 80));
   Hooks.on("deleteCombat", () => _clearMoveLimit());
   Hooks.on("canvasReady", () => setTimeout(() => refreshMovementLimit(), 150));
+
+  // "updateToken" ne se déclenche qu'à la VALIDATION d'un déplacement (dépôt
+  // du glisser) : pendant le glisser lui-même, ce cercle restait donc figé à
+  // la position de départ du tour, contrairement à l'aura (aura-render.js)
+  // qui, elle, suit déjà "refreshToken" — le hook de rendu PIXI qui se
+  // redéclenche à CHAQUE frame où le token bouge visuellement, glisser
+  // compris. On ne redessine que si le token rafraîchi est bien le
+  // combattant actif (sinon showMovementLimit() se no-op de toute façon,
+  // mais autant éviter l'appel async pour chaque token survolé/animé).
+  Hooks.on("refreshToken", (token) => {
+    if (token?.id === activeCombatantToken()?.id) showMovementLimit(token);
+  });
 
   // Suppression du token du combattant actif (ou du combattant lui-même,
   // retiré du tracker sans supprimer le token) : rien ne redessinait/effaçait
