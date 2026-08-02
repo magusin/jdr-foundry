@@ -159,17 +159,24 @@ function defaultLayersFor(token) {
   if (!actor) return [];
   const layers = [];
 
+  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon —
+  // le libellé doit annoncer ce même rayon final, pas la valeur brute de
+  // l'allonge/portée, sinon le chiffre affiché ne correspond jamais à ce
+  // qu'on mesure à l'œil sur la grille (le cercle déborde toujours du
+  // libellé pour un token de taille ≥ 1 case).
+  const foot = tokenFootprintMeters(token);
+
   const reach = getMeleeReach(actor);
   if (reach > 0) {
-    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    layers.push({ min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
   }
 
   const wr = getWeaponRange(actor);
   // Inutile de doubler le cercle si l'arme ne fait que du corps à corps
   if (wr && wr.max > reach) {
     const lbl = wr.min > 0
-      ? `🏹 ${wr.name} ${fmtM(wr.min)}–${fmtM(wr.max)}`
-      : `🏹 ${wr.name} ${fmtM(wr.max)}`;
+      ? `🏹 ${wr.name} ${fmtM(wr.min + foot)}–${fmtM(wr.max + foot)}`
+      : `🏹 ${wr.name} ${fmtM(wr.max + foot)}`;
     layers.push({ min: wr.min, max: wr.max, color: COLORS.weapon, label: lbl });
   }
 
@@ -274,7 +281,7 @@ export async function showMovementLimit(token) {
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
     const foot = tokenFootprintMeters(token);
-    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach + foot)}` });
     drewSomething = true;
     try {
       const rPx = metersToPixels(reach + foot);
@@ -433,7 +440,7 @@ export function updateDragThreatIndicator(draggedToken) {
       min: 0, max: bodyToBody,
       color: engaged ? 0xff2b2b : COLORS.melee,
       alpha: engaged ? 1 : 0.55,
-      label: `⚔ ${fmtM(reach)}${engaged ? " — DANGER" : ""}`
+      label: `⚔ ${fmtM(bodyToBody)}${engaged ? " — DANGER" : ""}`
     });
   }
 

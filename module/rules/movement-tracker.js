@@ -47,6 +47,17 @@ export function getVitesse(actor) {
 }
 
 /**
+ * Un combat existe et est actif dès sa création (Foundry l'active
+ * automatiquement dans le tracker) — mais tant que le MJ n'a pas cliqué
+ * « Commencer le combat », `round` reste à 0 : personne n'a encore de tour,
+ * et les restrictions de déplacement ne doivent pas s'appliquer. `round > 0`
+ * est exactement ce que pose `Combat#startCombat()`.
+ */
+function isCombatEngaged(combat) {
+  return !!combat?.active && Number(combat?.round ?? 0) > 0;
+}
+
+/**
  * Allonge de menace au corps à corps d'un acteur, en mètres. Sert à savoir
  * jusqu'où il « engage » un adversaire (zone d'attaque d'opportunité).
  * = plus grande portée parmi ses armes ÉQUIPÉES de corps à corps (portée ≤ 3 m),
@@ -149,7 +160,7 @@ function _clampToBudget(startPos, destX, destY, distBrute, mult, budget) {
  */
 export function getMovementLimit(tokenDoc) {
   const none = { applies: false, remaining: Infinity, combatant: null, actor: tokenDoc?.actor ?? null };
-  if (!tokenDoc || !game.combat?.active) return none;
+  if (!tokenDoc || !isCombatEngaged(game.combat)) return none;
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return none;
@@ -173,7 +184,7 @@ export function getMovementLimit(tokenDoc) {
 export function onPreUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
-  if (!game.combat?.active) return;
+  if (!isCombatEngaged(game.combat)) return;
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
@@ -326,7 +337,7 @@ export async function onUpdateToken(tokenDoc, changes, options) {
   }
 
   if (!game.user.isGM) return;
-  if (!game.combat?.active) return;
+  if (!isCombatEngaged(game.combat)) return;
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
@@ -526,15 +537,26 @@ async function _confirmOpportunity(ea, ma, item) {
   return true; // fallback : pas de DialogV2 → considère confirmé
 }
 
-/** Laisse le MJ choisir la compétence d'un monstre (cooldown ignoré). null = annulé. */
+/**
+ * Une compétence de monstre (item type "spell") n'est utilisable que hors
+ * recharge — les armes (pas de champ cooldown) sont toujours disponibles.
+ */
+function _isAbilityAvailable(item) {
+  if (item?.type !== "spell") return true;
+  return Number(item?.system?.cooldown?.restant ?? 0) <= 0;
+}
+
+/** Laisse le MJ choisir la compétence d'un monstre parmi celles hors recharge. null = annulé. */
 async function _chooseOpportunityAbility(ea, ma, abilities) {
   const DialogV2 = foundry.applications?.api?.DialogV2;
-  const opts = abilities.map(a =>
-    `<option value="${a.id}">${htmlEsc(a.name)}${a.type === "spell" ? " (compétence)" : " (arme)"}</option>`
-  ).join("");
+  const opts = abilities.map(a => {
+    const cdRest = a.type === "spell" ? Number(a.system?.cooldown?.restant ?? 0) : 0;
+    const label = a.type === "spell" ? " (compétence)" : " (arme)";
+    return `<option value="${a.id}">${htmlEsc(a.name)}${label}${cdRest > 0 ? ` — en recharge (${cdRest})` : ""}</option>`;
+  }).join("");
   const content = `
     <p><b>${htmlEsc(ea.name)}</b> peut réagir contre <b>${htmlEsc(ma.name)}</b> qui se désengage.</p>
-    <p>Compétence à utiliser <i>(cooldown ignoré)</i> :</p>
+    <p>Compétence à utiliser :</p>
     <select name="ability" style="width:100%">${opts}</select>`;
   try {
     if (DialogV2?.wait) {
@@ -565,7 +587,12 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
     // Les monstres n'ont pas d'armes : ils attaquent avec leurs compétences (sorts/armes)
     const abilities = ea.items.filter(i => i.type === "spell" || i.type === "weapon");
     if (!abilities.length) { ui.notifications?.warn?.(`${ea.name} n'a aucune compétence.`); return; }
-    item = await _chooseOpportunityAbility(ea, ma, abilities);
+    const available = abilities.filter(_isAbilityAvailable);
+    if (!available.length) {
+      ui.notifications?.warn?.(`${ea.name} n'a aucune compétence disponible (toutes en recharge).`);
+      return;
+    }
+    item = await _chooseOpportunityAbility(ea, ma, available);
     if (!item) return; // MJ a annulé
   } else {
     item = ea.items.find(i => i.type === "weapon" && i.system?.equipe)
@@ -574,7 +601,7 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
     if (!(await _confirmOpportunity(ea, ma, item))) return; // MJ a refusé
   }
 
-  // ── Résolution — même mécanisme qu'une attaque normale, cooldown NON consommé ──
+  // ── Résolution — même mécanisme qu'une attaque normale ────────────────
   const tnData = game.rpg?.combat?.computeTN?.(ea, ma, item)
     ?? { tnFinal: 11, livraison: item.system?.livraison ?? "physique" };
   const roll = await (new Roll("1d20")).evaluate();
@@ -592,7 +619,7 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
         <button type="button" class="rpg-attack-resolve" data-result="crit" style="flex:1;padding:4px;cursor:pointer;font-weight:700;color:gold">Critique!</button>
       </div>
     </div>`,
-    flags: { rpg: { type: "attackDeclaration", actionId: foundry.utils.randomID(),
+    flags: { rpg: { type: "attackDeclaration", phase: "rolled", actionId: foundry.utils.randomID(),
       attackDeclaration: { actorId: ea.id, weaponId: item.id, targetId: ma.id,
         d20: roll.total, tnFinal: tnData.tnFinal, livraison: tnData.livraison } } }
   });
@@ -623,7 +650,15 @@ export async function undoMovement(combat, actionId) {
   if (snap.tokenId && snap.oldX !== undefined) {
     const td = canvas?.scene?.tokens?.get(snap.tokenId)
       ?? game.scenes.active?.tokens?.get(snap.tokenId);
-    if (td) await td.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true });
+    if (td) {
+      // Sans couper l'animation ni la désactiver, le token glisse encore
+      // vers sa position annulée quand les cercles d'allonge/déplacement se
+      // redessinent (updateToken, ~80ms après) : ils se calent alors sur une
+      // position transitoire au lieu du point d'arrivée réel. Même parade
+      // que la correction de bridage de vitesse dans onUpdateToken.
+      try { td.stopMovement?.(); } catch { /* API absente : ignorer */ }
+      await td.update({ x: snap.oldX, y: snap.oldY }, { rpgNoTrack: true, animate: false });
+    }
   }
   const budget = getBudget(combat, combatantId);
   await saveBudget(combat, combatantId,
@@ -644,7 +679,7 @@ export function debugMovement() {
   out["token sélectionné"] = token?.name ?? "❌ AUCUN — sélectionne un token";
   if (!token) { console.table(out); return out; }
 
-  out["combat actif"] = game.combat?.active ? "✔ oui" : "❌ non (aucune limite hors combat)";
+  out["combat actif"] = isCombatEngaged(game.combat) ? "✔ oui" : "❌ non (aucune limite hors combat, ou combat pas encore commencé)";
   const cbt = game.combat?.combatants?.find(c => c.tokenId === token.id) ?? null;
   out["token dans le combat"] = cbt ? "✔ oui" : "❌ non (ce token n'est pas un combattant)";
 

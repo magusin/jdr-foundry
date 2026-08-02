@@ -82,13 +82,30 @@ export function installRPGTokenRuler() {
 
         // Injecte notre texte dans tous les champs plausibles du gabarit :
         // selon la version, l'étiquette lit cost, distance ou action.
+        // `text` porte déjà son unité (« 2 m · reste 1 m ») : si le champ visé
+        // fait partie d'un objet {total/text/label, units} et que Foundry
+        // affiche `${total} ${units}` dans son gabarit, l'unité se retrouve
+        // dupliquée en fin de ligne (« 1 m m ») — on vide `units` en même
+        // temps pour ne jamais la laisser se réafficher en double.
         const setField = (key) => {
           const v = context[key];
           if (typeof v === "string") { context[key] = text; return true; }
           if (v && typeof v === "object") {
-            if (typeof v.total === "string") { v.total = text; return true; }
-            if (typeof v.text === "string")  { v.text = text;  return true; }
-            if (typeof v.label === "string") { v.label = text; return true; }
+            if (typeof v.total === "string") {
+              v.total = text;
+              if (typeof v.units === "string") v.units = "";
+              return true;
+            }
+            if (typeof v.text === "string") {
+              v.text = text;
+              if (typeof v.units === "string") v.units = "";
+              return true;
+            }
+            if (typeof v.label === "string") {
+              v.label = text;
+              if (typeof v.units === "string") v.units = "";
+              return true;
+            }
           }
           return false;
         };
