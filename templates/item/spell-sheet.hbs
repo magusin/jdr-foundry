@@ -486,10 +486,22 @@
             <small class="fx-hint">Facultatif — laisse vide si l'effet ne change aucune stat. Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>. La <b>Fatigue max</b> se gère ici aussi.</small>
           </fieldset>
 
-          {{!-- 5 · Aura & déplacement --}}
+          {{!-- 5 · Déplacement & Aura --}}
           <fieldset class="fx-fieldset">
-            <legend>5 · Aura &amp; déplacement</legend>
+            <legend>5 · Déplacement &amp; Aura</legend>
             <div class="fx-grid-4">
+              <div>
+                <label>🏃 Mode déplacement accordé</label>
+                <select data-fx-field="movementTypeGrant">
+                  <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
+                  <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
+                  <option value="aquatique"  {{#if (eq fx.movementTypeGrant "aquatique")}}selected{{/if}}>🐟 Nage</option>
+                  <option value="amphibie"   {{#if (eq fx.movementTypeGrant "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
+                  <option value="ethere"     {{#if (eq fx.movementTypeGrant "ethere")}}selected{{/if}}>👻 Éthéré</option>
+                  <option value="montagnard" {{#if (eq fx.movementTypeGrant "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
+                  <option value="forestier"  {{#if (eq fx.movementTypeGrant "forestier")}}selected{{/if}}>🌲 Forestier</option>
+                </select>
+              </div>
               <div>
                 <label>🌀 Aura</label>
                 <label class="fx-check" title="L'effet rayonne autour du porteur et touche les tokens dans la zone.">
@@ -498,7 +510,7 @@
                 </label>
               </div>
               <div data-fx-when="aura">
-                <label>Portée (m)</label>
+                <label>Portée de l'aura (m)</label>
                 <div class="fx-inline-2">
                   <input type="number" data-fx-field="auraMin" value="{{fx.auraMin}}" min="0" step="0.1" title="Portée minimale"/>
                   <input type="number" data-fx-field="auraMax" value="{{fx.auraMax}}" min="0" step="0.1" title="Portée maximale"/>
@@ -512,20 +524,8 @@
                   <option value="both"    {{#if (eq fx.auraTarget "both")}}selected{{/if}}>⚪ Tout le monde</option>
                 </select>
               </div>
-              <div>
-                <label>🏃 Mode déplacement accordé</label>
-                <select data-fx-field="movementTypeGrant">
-                  <option value="" {{#unless fx.movementTypeGrant}}selected{{/unless}}>— Aucun —</option>
-                  <option value="volant"     {{#if (eq fx.movementTypeGrant "volant")}}selected{{/if}}>🦅 Vol</option>
-                  <option value="aquatique"  {{#if (eq fx.movementTypeGrant "aquatique")}}selected{{/if}}>🐟 Nage</option>
-                  <option value="amphibie"   {{#if (eq fx.movementTypeGrant "amphibie")}}selected{{/if}}>🐸 Amphibie</option>
-                  <option value="ethere"     {{#if (eq fx.movementTypeGrant "ethere")}}selected{{/if}}>👻 Éthéré</option>
-                  <option value="montagnard" {{#if (eq fx.movementTypeGrant "montagnard")}}selected{{/if}}>⛰️ Montagnard</option>
-                  <option value="forestier"  {{#if (eq fx.movementTypeGrant "forestier")}}selected{{/if}}>🌲 Forestier</option>
-                </select>
-              </div>
             </div>
-            <small class="fx-hint">Facultatif — coche <b>Aura</b> seulement si l'effet doit rayonner autour de la cible.</small>
+            <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à la cible de l'effet (celle visée par le sort) — indépendant de l'Aura, marche très bien pour un simple buff sur une cible. Coche <b>Aura</b> seulement en plus, si l'effet doit AUSSI rayonner autour du porteur.</small>
           </fieldset>
 
         </div>
