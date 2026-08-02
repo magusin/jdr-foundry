@@ -12,6 +12,7 @@
 // (rayon en pixels = mètres ÷ distance-par-case × taille-de-case).
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
+import { RPG_AURA_RENDER } from "./aura-render.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -459,6 +460,46 @@ export function updateDragThreatIndicator(draggedToken) {
       const t = new PIXI.Text("⚠️ Allonge ennemie !", style);
       t.anchor.set(0.5, 1);
       t.position.set(cx, cy - r - 6);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+  }
+
+  // ── Auras : entrée dans le rayon d'une aura, alliée OU ennemie ───────────
+  // Contrairement à l'allonge ci-dessus, une aura affecte quiconque entre
+  // dans son rayon indépendamment du camp (soin de zone allié comme brûlure
+  // ennemie) — pas de filtre de disposition ici. Cercle + étiquette sous le
+  // token, dans la couleur propre de l'aura (jamais le rouge "danger" de
+  // l'allonge, réservé aux ennemis).
+  const enteredAuras = [];
+  try {
+    for (const other of canvas.tokens?.placeables ?? []) {
+      if (other === draggedToken || !other.actor) continue;
+      for (const aura of RPG_AURA_RENDER.aurasOnToken(other)) {
+        const maxPx = metersToPixels(aura.max);
+        if (!(maxPx > 0)) continue;
+        const dist = Math.hypot(cx - other.center.x, cy - other.center.y);
+        if (dist <= maxPx + 1 && !enteredAuras.some(a => a.label === aura.label)) {
+          enteredAuras.push(aura);
+        }
+      }
+    }
+  } catch { /* indicateur optionnel */ }
+
+  if (enteredAuras.length) {
+    const r = Math.max(draggedToken.w, draggedToken.h) * 0.55 + (inDanger ? 10 : 0);
+    for (const aura of enteredAuras) {
+      g.lineStyle(3, aura.color ?? 0x6ec4a8, 0.9);
+      g.drawCircle(cx, cy, r);
+    }
+    try {
+      const style = new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 14, fontWeight: "700",
+        fill: "#9ff0e0", stroke: "#000000", strokeThickness: 4
+      });
+      const names = enteredAuras.map(a => (a.label ?? "Aura").split(" ")[0]).join(" · ");
+      const t = new PIXI.Text(`🌀 Entre dans une aura : ${names}`, style);
+      t.anchor.set(0.5, 0);
+      t.position.set(cx, cy + r + 6);
       g.addChild(t);
     } catch { /* étiquette optionnelle */ }
   }

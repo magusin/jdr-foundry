@@ -185,6 +185,17 @@ export const RPG_AURA_RENDER = {
     if (token) drawToken(token);
   },
 
+  /**
+   * Auras (auto + manuelles) portées par ce token, quel que soit son camp —
+   * une aura affecte qui entre dans son rayon, allié ou ennemi, contrairement
+   * à l'allonge de mêlée qui ne menace que les opposés. Exposé pour que
+   * range-overlay.js puisse prévenir un joueur qui va glisser son token dans
+   * le rayon d'une aura, sans dupliquer la lecture des états actifs/flags ici.
+   */
+  aurasOnToken(token) {
+    return [...autoAurasOnToken(token), ...manualAurasOnToken(token)];
+  },
+
   init() {
     if (_inited) return;
     _inited = true;
