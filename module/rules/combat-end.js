@@ -216,7 +216,7 @@ export async function resolveEndOfCombat(combat) {
     `style="flex:1;padding:5px;cursor:pointer;border-radius:6px;font-weight:600">💧 Restaurer mana &amp; fatigue</button>` +
     `</div>`;
 
-  await ChatMessage.create({ content, type: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
+  await ChatMessage.create({ content, style: CONST.CHAT_MESSAGE_STYLES?.OTHER ?? 0 });
 
   if (pjs.length) {
     const pjNames = pjs.map(p => p.name).join(", ");
