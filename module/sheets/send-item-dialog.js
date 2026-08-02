@@ -104,10 +104,21 @@ export async function promptSendItemToActors(item) {
   const baseData = item.toObject();
   delete baseData._id;
 
-  if (item.type === "quest" && targets.length > 1) {
+  if (item.type === "quest") {
+    // Traçabilité "qui a cette quête" — posée dans tous les cas (même un
+    // envoi à un seul PJ), indépendamment de "partagee" : c'est elle que la
+    // fiche de la quête source relit pour afficher la liste des
+    // destinataires. Persistée sur l'ITEM SOURCE (pas seulement la copie)
+    // pour qu'un second envoi ultérieur retrouve le même identifiant.
+    const { ensureDistribGroupId } = await import("../rules/quest-group.js");
+    const distribId = await ensureDistribGroupId(item);
     baseData.system = baseData.system ?? {};
-    baseData.system.partagee = true;
-    baseData.system.questGroupId = baseData.system.questGroupId || foundry.utils.randomID(12);
+    if (distribId) baseData.system.distribGroupId = distribId;
+
+    if (targets.length > 1) {
+      baseData.system.partagee = true;
+      baseData.system.questGroupId = baseData.system.questGroupId || foundry.utils.randomID(12);
+    }
   }
 
   const sentTo = [];

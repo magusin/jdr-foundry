@@ -1,7 +1,8 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
 import { applyUiTheme, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { bindSendToActorsButton, partyCharacters } from "./send-item-dialog.js";
 import { setupItemRefDrop } from "./drop-helper.js";
+import { ensureDistribGroupId, findDistribCopies } from "../rules/quest-group.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -85,6 +86,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (game.user.isGM) {
       setupItemRefDrop(this, root, (item) => this._addRewardItemFromDrop(item));
     }
+
+    // ── Destinataires : coche/décoche un PJ → donne/retire sa copie ────────
+    root.querySelectorAll(".quest-recipient-check").forEach(input => {
+      input.addEventListener("change", (ev) => this._toggleRecipient(ev.target));
+    });
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
@@ -145,6 +151,26 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
+
+    // ── Destinataires : quels PJ voient cette quête ─────────────────────────
+    // Un PJ ne voit une quête que s'il en a sa PROPRE copie embarquée (voir
+    // note d'architecture en tête de fichier) — il n'y a pas de "permission"
+    // à cocher sur l'objet source lui-même. Cette liste rend ça visible et
+    // modifiable directement depuis la fiche, au lieu du seul bouton
+    // "Envoyer" (un aller simple, sans retour possible sur qui l'a déjà).
+    if (ctx.isGM) {
+      const distribId = String(item.system?.distribGroupId ?? "").trim();
+      const copies = distribId ? findDistribCopies(distribId, item.uuid) : [];
+      const actorIdsWithCopy = new Set(copies.map(c => c.actor?.id).filter(Boolean));
+      // L'item lui-même, s'il est embarqué sur un PJ, compte comme sa propre copie.
+      if (item.actor?.type === "character") actorIdsWithCopy.add(item.actor.id);
+
+      ctx.recipients = partyCharacters().map(a => ({
+        id: a.id,
+        name: a.name,
+        hasCopy: actorIdsWithCopy.has(a.id)
+      }));
+    }
 
     // ── Vue joueur : n'expose ni les étapes à venir, ni les notes MJ ────────
     // (PNJ, lieux, récompenses de mise en scène...), ni la note de casting
@@ -264,5 +290,51 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
+  }
+
+  /**
+   * Coche/décoche un PJ dans la liste des destinataires : donne ou retire
+   * SA COPIE de la quête. C'est cette copie embarquée — pas une permission
+   * sur l'objet source — qui détermine s'il la voit (voir _prepareContext).
+   */
+  async _toggleRecipient(input) {
+    if (!game.user.isGM) return;
+    const actorId = input?.dataset?.actorId;
+    const actor = actorId ? game.actors.get(actorId) : null;
+    if (!actor) return;
+
+    const item = this.document;
+    const checked = !!input.checked;
+
+    try {
+      if (checked) {
+        const distribId = await ensureDistribGroupId(item);
+        const already = actor.items.find(i => i.type === "quest"
+          && String(i.system?.distribGroupId ?? "").trim() === distribId);
+        if (already) return;
+
+        const baseData = item.toObject();
+        delete baseData._id;
+        baseData.system = baseData.system ?? {};
+        baseData.system.distribGroupId = distribId;
+        await actor.createEmbeddedDocuments("Item", [baseData]);
+        ui.notifications?.info?.(`« ${item.name} » envoyé à ${actor.name}.`);
+      } else {
+        const distribId = String(item.system?.distribGroupId ?? "").trim();
+        const copy = distribId
+          ? actor.items.find(i => i.type === "quest"
+              && String(i.system?.distribGroupId ?? "").trim() === distribId)
+          : null;
+        if (!copy) return;
+        await copy.delete();
+        ui.notifications?.info?.(`« ${item.name} » retiré de ${actor.name}.`);
+      }
+    } catch (e) {
+      console.error("[RPG] Bascule destinataire de quête :", e);
+      ui.notifications?.error?.("Erreur — voir la console.");
+      input.checked = !checked; // annule visuellement l'action ratée
+      return;
+    }
+    this.render();
   }
 }
