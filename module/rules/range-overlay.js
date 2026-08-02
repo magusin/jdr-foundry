@@ -492,6 +492,18 @@ export function installRangeOverlay() {
   Hooks.on("deleteCombat", () => _clearMoveLimit());
   Hooks.on("canvasReady", () => setTimeout(() => refreshMovementLimit(), 150));
 
+  // "updateToken" ne se déclenche qu'à la VALIDATION d'un déplacement (dépôt
+  // du glisser) : pendant le glisser lui-même, ce cercle restait donc figé à
+  // la position de départ du tour, contrairement à l'aura (aura-render.js)
+  // qui, elle, suit déjà "refreshToken" — le hook de rendu PIXI qui se
+  // redéclenche à CHAQUE frame où le token bouge visuellement, glisser
+  // compris. On ne redessine que si le token rafraîchi est bien le
+  // combattant actif (sinon showMovementLimit() se no-op de toute façon,
+  // mais autant éviter l'appel async pour chaque token survolé/animé).
+  Hooks.on("refreshToken", (token) => {
+    if (token?.id === activeCombatantToken()?.id) showMovementLimit(token);
+  });
+
   // Suppression du token du combattant actif (ou du combattant lui-même,
   // retiré du tracker sans supprimer le token) : rien ne redessinait/effaçait
   // le cercle de déplacement dans ce cas — activeCombatantToken() ne renvoie
