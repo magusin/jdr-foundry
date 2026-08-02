@@ -238,6 +238,18 @@ export function showSpellRangeOverlay(actor, spell) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 let _moveGfx = null;
+// showMovementLimit est async (import dynamique + await) mais appelée à
+// CHAQUE frame de refreshToken pendant un glisser : plusieurs appels se
+// chevauchent donc dans le temps. Sans ce compteur, un appel plus ANCIEN qui
+// termine après un appel plus RÉCENT écrase _moveGfx avec son propre graphique
+// périmé — celui du plus récent (déjà posé sur la scène) devient orphelin et
+// n'est plus jamais détruit, puisque seul ce que pointe _moveGfx à l'instant T
+// est nettoyé. Sur un glisser de plusieurs dizaines de frames, ça empile des
+// dizaines de cercles/étiquettes qui ne s'effacent jamais. Chaque appel se
+// voit attribuer un numéro de génération ; s'il n'est plus le dernier en date
+// à la reprise après l'await, il détruit son propre graphique au lieu de
+// l'ajouter à la scène.
+let _moveGen = 0;
 
 function _clearMoveLimit() {
   try { _moveGfx?.destroy({ children: true }); } catch { /* ignore */ }
@@ -261,6 +273,7 @@ function activeCombatantToken() {
  */
 export async function showMovementLimit(token) {
   _clearMoveLimit();
+  const gen = ++_moveGen;
   if (!token?.actor || !canvas?.ready) return;
 
   const combat = game.combat;
@@ -340,7 +353,10 @@ export async function showMovementLimit(token) {
     }
   }
 
-  if (!drewSomething) { try { g.destroy({ children: true }); } catch { /* ignore */ } return; }
+  if (!drewSomething || gen !== _moveGen) {
+    try { g.destroy({ children: true }); } catch { /* ignore */ }
+    return;
+  }
 
   (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
   _moveGfx = g;

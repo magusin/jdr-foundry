@@ -17,10 +17,17 @@
      .rpg-theme-contraste— noir pur + accents vifs, lisibilité maximale
    ============================================================================ */
 
-.rpg-sheet, .rpg-spell-menu, #rpg-weather-hud, #rpg-biome-hud {
+.rpg-sheet, .rpg-window, .rpg-spell-menu, #rpg-weather-hud, #rpg-biome-hud {
   /* ── Fige les variables Foundry natives — indépendant du thème clair/sombre
      choisi dans les réglages CORE de Foundry. Nos fiches gèrent leur propre
-     thème via .rpg-theme-*, peu importe le mode d'interface Foundry actif. ── */
+     thème via .rpg-theme-*, peu importe le mode d'interface Foundry actif.
+     .rpg-window est inclus ici aussi : c'est ce qui manquait pour les
+     fenêtres natives qu'on marque explicitement comme nôtres (ex. les
+     tables aléatoires) — sans --color-bg-option fixé ici, leurs lignes de
+     résultats restaient sur la valeur native de Foundry (grise, indifférente
+     à notre thème) alors que le reste de la fenêtre (var(--ink)/var(--ink-text))
+     suivait bien le thème choisi via les blocs .rpg-window.rpg-theme-*
+     ci-dessous — d'où l'aspect "moitié thémé" du corps de liste. ── */
   --color-text-hyperlink:    #a172e0;
   --color-bg-option:         #1b1d2b;
 

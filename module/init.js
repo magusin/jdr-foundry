@@ -805,9 +805,32 @@ Hooks.once("init", async () => {
         // Jamais la barre latérale, le chat ni la barre de macros
         if (root.id === "sidebar" || root.closest?.("#sidebar, #chat, #hotbar")) return;
 
+        // Les tables aléatoires (tables de rencontre, butin…) sont une
+        // fenêtre 100% native de Foundry (RollTableConfig / RollTableSheet)
+        // mais font partie intégrante du jeu — contrairement aux autres
+        // fenêtres cœur qu'on laisse volontairement non themées, on l'inclut
+        // explicitement par TYPE de document (jamais par contenu détecté au
+        // hasard) pour rester dans l'esprit "on ne marque que ce qu'on
+        // reconnaît explicitement", sans risquer de repeindre une fenêtre
+        // native quelconque par accident de contenu.
+        const isRollTable = app?.document?.documentName === "RollTable";
+
+        // Nos propres compendiums (Documentation, Tables de Rencontre,
+        // Équipement/Monstres de référence, Macros système) et tout ce qu'on
+        // ouvre DEPUIS eux (le navigateur de compendium ET les fiches
+        // JournalEntry/Page — les Actor/Item de nos packs ont déjà .rpg-sheet
+        // via nos propres classes de fiche, donc rien à faire pour eux ici) :
+        // même logique que RollTable ci-dessus, ciblé par métadonnée de pack
+        // plutôt que par contenu détecté, pour ne jamais repeindre un journal
+        // ou un compendium d'un autre module/système.
+        const packId = app?.collection?.metadata?.id ?? app?.document?.pack ?? null;
+        const isOwnPack = typeof packId === "string" && packId.startsWith("rpg.");
+
         const isOurs = root.classList?.contains("rpg-window")
                     || root.matches?.(RPG_MARKERS)
-                    || !!root.querySelector(RPG_MARKERS);
+                    || !!root.querySelector(RPG_MARKERS)
+                    || isRollTable
+                    || isOwnPack;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }
     };
@@ -900,7 +923,6 @@ Hooks.once("init", async () => {
         ["Appliquer un Effet (MJ)",            "apply-effect.js",       "icons/svg/lightning.svg",       "gm"],
         ["Créer un État (MJ)",                 "state-builder-macro.js","icons/svg/aura.svg",            "gm"],
         ["Survie : Repos / Blessures (MJ)",    "survival-tools.js",     "icons/svg/blood.svg",           "gm"],
-        ["Météo (MJ)",                         "weather-control.js",    "icons/svg/wave.svg",            "gm"],
         ["Marché (MJ)",                        "market.js",             "systems/rpg/assets/icons/coins.svg","gm"],
         ["Réputation & Marché Régional (MJ)",  "reputation-tools.js",   "icons/svg/eye.svg",             "gm"],
         ["Position Tactique (MJ)",             "tactical-tools.js",     "icons/svg/shield.svg",          "gm"],
