@@ -265,15 +265,34 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
       }
 
       const stop = _clampToBudget(startPos, newX, newY, distBrute, mult, remaining);
-      changes.x = stop.x;
-      changes.y = stop.y;
-      _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
+
+      if (stop.x === startPos.x && stop.y === startPos.y) {
+        // La dichotomie retombe sur le point de départ (terrain trop cher
+        // dès le premier pas) : rien à corriger, refus franc.
+        return _refuseMove(tokenDoc, "Plus de déplacement ce tour.");
+      }
 
       const typeLabel = mult < 1 ? ` (terrain ×${mult})` : "";
       _notifyOnce(tokenDoc.id, () => ui.notifications?.info?.(
         `Déplacement arrêté à ${fmt(remaining)}${typeLabel} — c'est tout ce qu'il te reste ce tour.`
       ));
-      return;   // le déplacement raccourci est accepté
+
+      // On ne mute plus `changes.x/y` en espérant que Foundry honore la
+      // modification : depuis le pipeline de « déplacement planifié »
+      // (checkpoints / TokenDocument#move), rien ne garantit plus que ça se
+      // répercute sur ce qui est réellement écrit/animé — en pratique le
+      // token peut rester figé à son point de départ malgré ce message.
+      // On refuse CETTE mise à jour précise et on programme nous-mêmes,
+      // séparément, la mise à jour vers le point d'arrêt calculé — même
+      // principe que le filet de sécurité ci-dessous dans onUpdateToken,
+      // mais déclenché tout de suite plutôt qu'en réaction à un décalage
+      // constaté après coup.
+      _pendingRevert.set(tokenDoc.id, { x: stop.x, y: stop.y, at: Date.now() });
+      queueMicrotask(() => {
+        tokenDoc.update({ x: stop.x, y: stop.y }, { rpgNoTrack: true, animate: false })
+          .catch(e => console.warn("[RPG] correction du déplacement bridé (arrêt) :", e));
+      });
+      return false;   // cette mise à jour précise est refusée, le raccourci suit séparément
     }
   }
 }
