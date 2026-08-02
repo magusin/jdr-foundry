@@ -14,9 +14,7 @@
 
   const RPG_PACKS = [
     "rpg.macros-rpg",
-    "rpg.items-reference",
     "rpg.loot-tables",
-    "rpg.monsters-reference",
     "rpg.documentation"
   ];
 
