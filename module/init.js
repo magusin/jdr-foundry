@@ -1025,6 +1025,30 @@ Hooks.once("init", async () => {
         }
       }
       console.log(`[RPG] Macros : ${created} créée(s), ${updated} mise(s) à jour.`);
+
+      // ── Nettoyage des macros orphelines ──────────────────────────────────
+      // Un nom retiré de MACRO_DEFS (renommage, macro abandonnée — ex. l'ancienne
+      // "Terrain (MJ)") n'est plus jamais revisité par la boucle ci-dessus, qui ne
+      // connaît que les entrées ACTUELLES : le(s) exemplaire(s) qu'il avait pu
+      // laisser derrière lui dans le monde ne sont donc jamais supprimés, juste
+      // parce que le code qui les créait a changé de nom ou disparu — reporté
+      // directement par un MJ avec deux "Terrain (MJ)" identiques dans son
+      // dossier. On ne touche qu'à ce qu'on a nous-mêmes posé (flag
+      // rpg.systemMacro — jamais une macro du MJ) dans nos deux dossiers, et on
+      // supprime tout nom qui ne correspond plus à une entrée courante — pas
+      // seulement les doublons d'un nom encore valide, déjà gérés ligne par
+      // ligne ci-dessus.
+      const wantedNames = new Set(MACRO_DEFS.map(([n]) => n));
+      const ourFolderIds = new Set([folderAll.id, folderGM.id]);
+      let orphaned = 0;
+      for (const m of game.macros) {
+        if (!ourFolderIds.has(m.folder?.id)) continue;
+        if (!m.getFlag("rpg", "systemMacro")) continue;
+        if (wantedNames.has(m.name)) continue;
+        await m.delete().catch(() => {});
+        orphaned++;
+      }
+      if (orphaned) console.log(`[RPG] Macros : ${orphaned} orpheline(s) supprimée(s).`);
     } catch(e) { console.error("[RPG] Erreur macros :", e); }
     // ✅ Boutons MJ dans les messages chat (sorts + attaques)
     Hooks.on("renderChatMessageHTML", (message, html) => {
