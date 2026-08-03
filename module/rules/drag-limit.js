@@ -39,9 +39,9 @@ const _cache = new Map();
 const _dragOrigin = new Map();
 
 /** Coût RP réel d'un trajet en ligne droite, terrain compris. */
-function costOf(actor, from, to) {
+function costOf(actor, from, to, elevation = 0) {
   try {
-    const { cost } = calculateMovementCost([from, to], actor);
+    const { cost } = calculateMovementCost([from, to], actor, elevation);
     return Number(cost) || 0;
   } catch {
     return 0;
@@ -54,8 +54,8 @@ function costOf(actor, from, to) {
  * difficile varie le long du trajet), on ne peut pas simplement mettre le
  * vecteur à l'échelle.
  */
-function furthestReachable(actor, origin, dest, budget) {
-  if (costOf(actor, origin, dest) <= budget) return dest;
+function furthestReachable(actor, origin, dest, budget, elevation = 0) {
+  if (costOf(actor, origin, dest, elevation) <= budget) return dest;
 
   let lo = 0, hi = 1;
   const at = (t) => ({ x: origin.x + t * (dest.x - origin.x),
@@ -63,7 +63,7 @@ function furthestReachable(actor, origin, dest, budget) {
 
   for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
-    if (costOf(actor, origin, at(mid)) <= budget) lo = mid;
+    if (costOf(actor, origin, at(mid), elevation) <= budget) lo = mid;
     else hi = mid;
   }
   const p = at(lo);
@@ -94,13 +94,14 @@ function clampDestination(self, point) {
   if (limit.remaining <= 0.05) return { x: origin.x, y: origin.y };
 
   // Dichotomie coûteuse : on ne la relance que si la destination a changé
+  const elevation = doc.elevation ?? 0;
   const key = `${Math.round(point.x)}:${Math.round(point.y)}:${limit.remaining}`;
   const hit = _cache.get(self.id);
   let stop;
   if (hit && hit.key === key) {
     stop = { x: hit.x, y: hit.y };
   } else {
-    stop = furthestReachable(limit.actor, origin, point, limit.remaining);
+    stop = furthestReachable(limit.actor, origin, point, limit.remaining, elevation);
     _cache.set(self.id, { key, x: stop.x, y: stop.y });
   }
 

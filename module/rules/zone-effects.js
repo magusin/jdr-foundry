@@ -41,9 +41,14 @@ function slugKey(s) {
     .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "zone";
 }
 
-function _pointInRegion(region, x, y) {
+// `elevation` doit toujours être un nombre — jamais omis. RegionDocument#testPoint
+// compare l'élévation du point aux bornes d'élévation de la région, et en JS
+// `undefined >= -Infinity` vaut `false` : un point sans élévation échoue cette
+// comparaison même pour une région sans restriction d'élévation (voir la même
+// note, plus détaillée, sur _pointInRegion dans region-behaviors.js).
+function _pointInRegion(region, x, y, elevation = 0) {
   try {
-    if (region.document?.testPoint) return region.document.testPoint({ x, y });
+    if (region.document?.testPoint) return region.document.testPoint({ x, y, elevation });
     if (region.polygon?.contains) return region.polygon.contains(x, y);
     if (region.polygons?.some(p => p.contains?.(x, y))) return true;
     const b = region.bounds;
@@ -100,12 +105,12 @@ async function applyZoneStateEffect(actor, state) {
   return { applied: true, resisted: false, state: adjusted };
 }
 
-/** Régions actives à (x,y) portant un comportement zoneEffet. */
-export function getZoneEffectsAt(x, y) {
+/** Régions actives à (x,y[,élévation]) portant un comportement zoneEffet. */
+export function getZoneEffectsAt(x, y, elevation = 0) {
   if (!canvas?.regions?.placeables) return [];
   const out = [];
   for (const region of canvas.regions.placeables) {
-    if (!_pointInRegion(region, x, y)) continue;
+    if (!_pointInRegion(region, x, y, elevation)) continue;
     for (const behavior of (region.document?.behaviors ?? [])) {
       if (String(behavior.type ?? "") !== BEHAVIOR_KEY) continue;
       if (behavior.system?.enabled === false) continue;
@@ -116,9 +121,9 @@ export function getZoneEffectsAt(x, y) {
 }
 
 /** Multiplicateur de vitesse le plus pénalisant parmi les zones à ce point (1 = aucun). */
-export function getZoneSpeedMultAt(x, y) {
+export function getZoneSpeedMultAt(x, y, elevation = 0) {
   let mult = 1;
-  for (const { behavior } of getZoneEffectsAt(x, y)) {
+  for (const { behavior } of getZoneEffectsAt(x, y, elevation)) {
     const m = n(behavior.system?.speedMult, 1);
     if (m < mult) mult = m;
   }
@@ -130,9 +135,9 @@ export function getZoneSpeedMultAt(x, y) {
  * validation MJ du déplacement. Applique dégâts + effet, marque la zone
  * comme révélée (elle vient de se manifester) et poste un message.
  */
-export async function triggerZoneEffectsForToken({ actor, tokenId, x, y }) {
+export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, elevation = 0 }) {
   if (!game.user.isGM || !actor) return;
-  const zones = getZoneEffectsAt(x, y);
+  const zones = getZoneEffectsAt(x, y, elevation);
   if (!zones.length) return;
 
   for (const { region, behavior } of zones) {

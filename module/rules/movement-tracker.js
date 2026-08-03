@@ -254,7 +254,7 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
     const newX = changes.x ?? tokenDoc.x;
     const newY = changes.y ?? tokenDoc.y;
 
-    const destTerrains = getTerrainAt(newX, newY);
+    const destTerrains = getTerrainAt(newX, newY, tokenDoc.elevation ?? 0);
     const getEffMult = game?.rpg?.movementTypes?.getEffectiveSpeedMult;
     let mult = 1;
     for (const t of destTerrains) {
@@ -420,7 +420,8 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   const vitesse = getVitesse(actor);
 
   // ── Calcul du coût réel avec terrain + type de déplacement ─────────────
-  const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints, actor);
+  const elevation = tokenDoc.elevation ?? 0;
+  const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints, actor, elevation);
   const distBrute = segments.reduce((s, seg) => s + seg.rawDist, 0);
   const terrainInfo = formatTerrainSummary(terrainsCrossed);
 
@@ -444,7 +445,7 @@ async function _processMove(tokenDoc, combatant, waypoints) {
     casterId: actor.id, tokenId: tokenDoc.id,
     oldX: startPos.x, oldY: startPos.y,
     newX: endPos.x,   newY: endPos.y,
-    cost, waypoints
+    cost, waypoints, elevation
   };
 
   // Réserve les mètres (+ 1 slot d'action au tout 1er déplacement du tour)

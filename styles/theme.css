@@ -608,3 +608,33 @@ body.rpg-theme-contraste .rpg-window {
 .rpg-sheet .cm-editor {
   color-scheme: dark !important;
 }
+
+/* `color-scheme: dark` above fixes every color CodeMirror computes ITSELF via
+   light-dark() — but it does nothing about a color we impose from OUTSIDE.
+   `body.rpg-theme-clair .rpg-window .window-content { color: var(--ink-text)
+   !important; }` above (added for the journal reading-pane fix) sets
+   --ink-text to #2b2418 in Clair — a dark ink tone meant for a light page
+   background. `color` is inherited, and !important on an ancestor still
+   loses to any element that has its OWN color rule, but CodeMirror's
+   unstyled/default text (whitespace, punctuation not covered by a specific
+   syntax-token class) has no such rule of its own — it simply inherits, and
+   the nearest ancestor's WINS regardless of how many levels up it sits. That
+   ancestor's forced #2b2418 lands on top of .cm-editor's still-correctly-dark
+   background (the background isn't inherited, so color-scheme pinning it
+   dark was never the problem) — dark ink on a dark editor, exactly the
+   "quasi invisible" bug the comment above already describes, just
+   reintroduced by a later, unrelated fix that never accounted for CodeMirror
+   sitting inside the same .window-content. Only syntax-highlighted tokens
+   (which set their own explicit color) survive; everything else vanishes.
+   Fixed by giving .cm-editor's own default text color an !important value —
+   closer in the DOM than .window-content, so descendants without a color of
+   their own inherit THIS instead, while any token with its own rule is
+   untouched either way. Hardcoded (not var(--ink-text)): CodeMirror here is
+   ALWAYS a dark island regardless of the chosen theme, so this can't read a
+   theme-dependent variable — #ece4d3 matches this system's own Sombre
+   --ink-text, for a consistent look regardless of which of the two dark
+   surfaces it's read from. */
+.rpg-window .cm-editor,
+.rpg-sheet .cm-editor {
+  color: #ece4d3 !important;
+}

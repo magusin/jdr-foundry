@@ -214,7 +214,8 @@ async function handlePendingAction(message, result, actionId) {
             actor: moverActor,
             tokenId: entry.snapshot?.tokenId,
             x: entry.snapshot.newX,
-            y: entry.snapshot.newY
+            y: entry.snapshot.newY,
+            elevation: entry.snapshot?.elevation ?? 0
           });
         } catch (e) { console.error("[RPG][Zone] déclenchement:", e); }
       }
