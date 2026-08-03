@@ -13,8 +13,7 @@
   }
 
   const RPG_PACKS = [
-    "rpg.loot-tables",
-    "rpg.documentation"
+    "rpg.loot-tables"
   ];
 
   let unlocked = 0;
