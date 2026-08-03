@@ -1045,6 +1045,16 @@ Hooks.once("init", async () => {
         if (!ourFolderIds.has(m.folder?.id)) continue;
         if (!m.getFlag("rpg", "systemMacro")) continue;
         if (wantedNames.has(m.name)) continue;
+        // Ne supprime jamais un document dont la fiche est OUVERTE à l'instant :
+        // un MJ en train d'éditer/regarder cette macro précise verrait son
+        // formulaire pointer vers un document qui vient de disparaître sous
+        // lui — Foundry n'a alors plus d'`_id` valide à envoyer et le
+        // "Enregistrer" natif plante avec une erreur qui n'a plus aucun
+        // rapport visible avec ce nettoyage (`You must provide an _id for
+        // every object in the update data Array`). On se contente de
+        // repousser sa suppression au prochain rechargement, une fois la
+        // fiche refermée.
+        if (m.sheet?.rendered) continue;
         await m.delete().catch(() => {});
         orphaned++;
       }
