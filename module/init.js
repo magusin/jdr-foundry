@@ -830,6 +830,16 @@ Hooks.once("init", async () => {
         const isJournalSheet = app?.document?.documentName === "JournalEntry"
                              || app?.document?.documentName === "JournalEntryPage";
 
+        // La fiche d'édition d'une Macro (le "Tableau de bord MJ" et consorts)
+        // est native à 100% elle aussi. Signalé illisible en thème Clair :
+        // l'éditeur "Script" (CodeMirror) restait sombre pendant que le reste
+        // de la fenêtre suivait le rendu natif de Foundry — même famille de
+        // patchwork que RollTable/Journal. Ciblé par TYPE de document, jamais
+        // par contenu détecté. Voir le pin color-scheme sur .cm-editor dans
+        // theme.css : marquer la fenêtre ne suffit pas seul, CodeMirror a son
+        // propre thème interne qu'il faut explicitement garder cohérent.
+        const isMacroSheet = app?.document?.documentName === "Macro";
+
         // Nos propres compendiums (Documentation, Tables de Rencontre,
         // Équipement/Monstres de référence, Macros système) et tout ce qu'on
         // ouvre DEPUIS eux (le navigateur de compendium ET les fiches
@@ -841,11 +851,25 @@ Hooks.once("init", async () => {
         const packId = app?.collection?.metadata?.id ?? app?.document?.pack ?? null;
         const isOwnPack = typeof packId === "string" && packId.startsWith("rpg.");
 
+        // Un répertoire (Objets, Acteurs, Scènes…) DÉTACHÉ de la barre
+        // latérale dans sa propre fenêtre flottante n'est plus concerné par
+        // l'exclusion "jamais la barre latérale" ci-dessus (celle-ci ne vise
+        // que la barre ANCRÉE, pour ne jamais risquer de repeindre le flux de
+        // chat qui y vit aussi) — mais restait quand même non reconnu, donc
+        // 100% natif (fond noir quel que soit notre thème). `app.collection`
+        // distingue une collection de MONDE (game.items, game.actors… pas de
+        // metadata.id) d'un compendium (metadata.id présent, déjà couvert et
+        // filtré par isOwnPack ci-dessus) : on ne veut détacher-thémer QUE le
+        // premier cas, jamais le navigateur d'un compendium d'un autre module.
+        const isWorldDirectory = !packId && typeof app?.collection?.documentName === "string";
+
         const isOurs = root.classList?.contains("rpg-window")
                     || root.matches?.(RPG_MARKERS)
                     || !!root.querySelector(RPG_MARKERS)
                     || isRollTable
                     || isJournalSheet
+                    || isMacroSheet
+                    || isWorldDirectory
                     || isOwnPack;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }

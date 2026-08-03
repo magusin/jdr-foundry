@@ -588,3 +588,23 @@ body.rpg-theme-contraste .rpg-window {
 .rpg-sheet.rpg-theme-clair, .rpg-window.rpg-theme-clair, .rpg-spell-menu.rpg-theme-clair {
   color-scheme: light;
 }
+
+/* ── Éditeur CodeMirror (macros de type "Script") ──────────────────────────
+   CodeMirror gère son propre thème interne (fond + couleurs de syntaxe
+   assorties, pensées ensemble pour un color-scheme sombre) — c'est lui, pas
+   nos variables --ink, qui reste la source de vérité pour tout ce qui est
+   À L'INTÉRIEUR de .cm-editor. Une fois la fenêtre de macro marquée
+   .rpg-window (cf. isMacroSheet dans init.js), elle hérite du bloc
+   .rpg-window.rpg-theme-clair ci-dessus, dont color-scheme:light. Foundry
+   calcule certaines couleurs de l'éditeur avec la fonction CSS light-dark(),
+   qui lit ce color-scheme hérité : ses couleurs de TEXTE basculent alors en
+   tons clairs (foncés, pensés pour un fond blanc) alors que son FOND reste
+   fixé sombre indépendamment (pas piloté par light-dark(), ou fixé à part)
+   → texte foncé sur fond foncé, quasi invisible. On fixe color-scheme:dark
+   localement sur .cm-editor pour que fond ET texte soient recalculés
+   ENSEMBLE, cohérents, quel que soit le thème choisi autour — sans jamais
+   repeindre le texte nous-mêmes (on perdrait la coloration syntaxique). */
+.rpg-window .cm-editor,
+.rpg-sheet .cm-editor {
+  color-scheme: dark !important;
+}
