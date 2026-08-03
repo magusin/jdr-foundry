@@ -527,12 +527,22 @@ body.rpg-theme-contraste .rpg-window {
 .rpg-window input::placeholder,
 .rpg-window textarea::placeholder { color: var(--ink-text-faint); }
 
-.rpg-window button {
+/* ⚠️ Même piège que .rpg-sheet .window-content button plus haut : exclut
+   .header-control, la classe réutilisée par Foundry V13 pour les petits
+   boutons icône-seule — pas seulement dans .window-header (la barre de
+   titre), mais aussi dans les mini-barres d'outils internes d'une fiche
+   native (ex. la colonne Sommaire d'un JournalEntry : recherche/tri/
+   réduire-tout/ajouter une page). Repeindre ces boutons en <button> plein
+   ("carré uni" à la place de l'icône) les rend illisibles — reporté sur
+   une fiche JournalEntry en carrés vides alors que le même style passait
+   sans souci sur le navigateur de compendium (où ces contrôles n'utilisent
+   pas .header-control). */
+.rpg-window button:not(.header-control) {
   background: var(--surface-2);
   color: var(--ink-text);
   border: 1px solid var(--border);
 }
-.rpg-window button:hover { border-color: var(--brass, #d1a144); }
+.rpg-window button:not(.header-control):hover { border-color: var(--brass, #d1a144); }
 
 .rpg-window a { color: var(--brass, #d1a144); }
 .rpg-window hr { border-color: var(--border-soft, var(--border)); }
