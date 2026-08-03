@@ -486,11 +486,29 @@ div.rpg-sheet {
    ══════════════════════════════════════════════════════════════════════ */
 
 /* Fenêtres marquées comme nôtres (DialogV2 lancés par le système) */
+/* ⚠️ !important nécessaire pour les fenêtres de JournalEntry/Page (voir
+   isJournalSheet dans init.js) : la zone de lecture d'une page texte a son
+   propre rendu par défaut chez Foundry (souvent plus sombre que le reste du
+   chrome de la fenêtre), avec des sélecteurs internes (.journal-page-content
+   et consorts) au moins aussi spécifiques que .rpg-window .window-content —
+   sans !important cette règle perdait la bataille de spécificité et on
+   retombait sur le patchwork clair/sombre illisible qu'elle est censée
+   éviter. Les autres fenêtres marquées .rpg-window (dialogues de macro)
+   n'ont pas de fond concurrent aussi spécifique, donc ça ne change rien
+   pour elles. */
 body.rpg-theme-sombre .rpg-window .window-content,
 body.rpg-theme-clair .rpg-window .window-content,
 body.rpg-theme-contraste .rpg-window .window-content {
-  background: var(--ink);
-  color: var(--ink-text);
+  background: var(--ink) !important;
+  color: var(--ink-text) !important;
+}
+
+.rpg-window .window-content .journal-page-content,
+.rpg-window .window-content .journal-entry-content,
+.rpg-window .window-content .journal-entry-page,
+.rpg-window .window-content .editor-content {
+  background: transparent !important;
+  color: var(--ink-text) !important;
 }
 
 body.rpg-theme-sombre .rpg-window,
