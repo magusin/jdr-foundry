@@ -992,6 +992,7 @@ Hooks.once("init", async () => {
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
         ["Détecter un piège",                  "trap-detect.js",        "icons/svg/trap.svg",            "gm"],
         ["Désamorcer un piège",                "trap-disarm.js",        "icons/svg/trap.svg",            "gm"],
+        ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
       ];
       const getFolder = async (name) => {
         let f = game.folders.find(x => x.type === "Macro" && x.name === name);

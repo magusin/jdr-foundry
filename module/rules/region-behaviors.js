@@ -119,8 +119,58 @@ export function getTerrainAt(x, y) {
 }
 
 /**
+ * Multiplicateur de vitesse + libellé de terrain à un point (x, y) précis,
+ * en tenant compte des immunités/réductions de type de déplacement de
+ * l'acteur. Ajoute au passage tout type de terrain restrictif rencontré à
+ * `crossed` (Set de typeKey), même s'il n'est pas le plus pénalisant à CE
+ * point précis — un acteur peut chevaucher deux régions à la fois.
+ */
+function _terrainMultAt(x, y, actor, getEffectiveSpeedMult, crossed) {
+  let speedMult = 1;
+  let terrainLabel = null;
+
+  for (const t of getTerrainAt(x, y)) {
+    if (t.behavior?.system?.enabled === false) continue;
+
+    // Récupère le multiplicateur configuré sur CETTE région (peut différer du défaut du type)
+    const regionMult = Number(t.behavior?.system?.speedMult ?? t.terrain.speedMult ?? 1);
+
+    // Applique les immunités du type de déplacement de l'acteur
+    let effectiveMult = regionMult;
+    if (actor && getEffectiveSpeedMult) {
+      effectiveMult = getEffectiveSpeedMult(actor, t.typeKey, regionMult);
+    }
+
+    if (effectiveMult < 1) crossed.add(t.typeKey);
+
+    if (effectiveMult < speedMult) {
+      speedMult    = effectiveMult;
+      terrainLabel = t.behavior?.system?.notes
+        ? `${t.terrain.label} (${t.behavior.system.notes})`
+        : t.terrain.label;
+      if (effectiveMult < regionMult) terrainLabel += " [immunité partielle]";
+    }
+  }
+
+  return { speedMult, terrainLabel };
+}
+
+/**
  * Calcule le coût de déplacement en mètres pour un chemin donné,
  * en tenant compte des terrains traversés ET du type de déplacement de l'acteur.
+ *
+ * Chaque segment [from, to] est sous-découpé en pas d'environ une demi-case,
+ * plutôt qu'un unique échantillon pris à son point médian : le terrain peut
+ * changer EN COURS de segment (un pas qui part de l'herbe et n'entre en
+ * terrain difficile que sur sa deuxième moitié — typiquement un glisser qui
+ * ne fait qu'effleurer une petite zone près de sa destination), et un
+ * échantillon unique loupe alors ce changement dès qu'il ne tombe pas pile
+ * sur le milieu exact du segment ENTIER. Vu depuis drag-limit.js/movement-
+ * ruler.js, ce segment va toujours de l'origine du glisser jusqu'au point
+ * survolé — potentiellement plusieurs mètres — donc ce cas est fréquent, pas
+ * une curiosité de bord de carte : c'était la cause du blocage de terrain
+ * qui ne se déclenchait jamais alors que la case d'arrivée était bien en
+ * terrain difficile.
  *
  * @param {Array} waypoints — [{x, y}] points du trajet
  * @param {Actor} actor     — acteur qui se déplace (pour type de mouvement)
@@ -139,52 +189,44 @@ export function calculateMovementCost(waypoints, actor = null) {
   const segments = [];
   const terrainsCrossed = new Set();
   let totalCost = 0;
+  const gridSizePx = canvas?.scene?.grid?.size || 100;
 
   for (let i = 0; i < waypoints.length - 1; i++) {
     const from = waypoints[i];
     const to   = waypoints[i + 1];
     const rawDist = _measureSegment(from.x, from.y, to.x, to.y);
+    if (!(rawDist > 0)) continue;
 
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
-    const terrains = getTerrainAt(midX, midY);
+    const pxDist = Math.hypot(to.x - from.x, to.y - from.y);
+    const stepCount = Math.min(64, Math.max(1, Math.round(pxDist / (gridSizePx / 2))));
 
-    // Multiplicateur le plus pénalisant avec prise en compte du type de mouvement
-    let speedMult = 1;
-    let terrainLabel = null;
-    for (const t of terrains) {
-      if (!t.terrain.enabled && t.behavior?.system?.enabled === false) continue;
+    // Fusionne les pas consécutifs de même terrain en un seul segment (pour
+    // un résumé de chat lisible : "3m en Terrain difficile"), tout en
+    // additionnant le coût réel pas par pas en dessous.
+    let runLabel = null, runMult = 1, runRaw = 0, runCost = 0;
+    const flushRun = () => {
+      if (runRaw > 0) segments.push({ from, to, rawDist: runRaw, speedMult: runMult, cost: runCost, terrainLabel: runLabel });
+    };
 
-      // Récupère le multiplicateur configuré sur CETTE région (peut différer du défaut du type)
-      const regionMult = Number(t.behavior?.system?.speedMult ?? t.terrain.speedMult ?? 1);
+    for (let s = 0; s < stepCount; s++) {
+      const t = (s + 0.5) / stepCount;
+      const stepRaw = rawDist / stepCount;
+      const { speedMult, terrainLabel } = _terrainMultAt(
+        from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t,
+        actor, getEffectiveSpeedMult, terrainsCrossed
+      );
+      const stepCost = speedMult > 0 ? stepRaw / speedMult : stepRaw * 10;
+      totalCost += stepCost;
 
-      // Applique les immunités du type de déplacement de l'acteur
-      let effectiveMult = regionMult;
-      if (actor && getEffectiveSpeedMult) {
-        effectiveMult = getEffectiveSpeedMult(actor, t.typeKey, regionMult);
+      if (terrainLabel === runLabel) {
+        runRaw  += stepRaw;
+        runCost += stepCost;
+      } else {
+        flushRun();
+        runLabel = terrainLabel; runMult = speedMult; runRaw = stepRaw; runCost = stepCost;
       }
-
-      if (effectiveMult < speedMult) {
-        speedMult    = effectiveMult;
-        terrainLabel = t.behavior?.system?.notes
-          ? `${t.terrain.label} (${t.behavior.system.notes})`
-          : t.terrain.label;
-        if (effectiveMult < regionMult) {
-          terrainLabel += " [immunité partielle]";
-        }
-        if (effectiveMult < speedMult || effectiveMult === 1 && regionMult < 1) {
-          // Acteur immunisé → ne signale pas le terrain
-        } else {
-          terrainsCrossed.add(t.typeKey);
-        }
-      }
-      if (effectiveMult < 1) terrainsCrossed.add(t.typeKey);
     }
-
-    const cost = speedMult > 0 ? rawDist / speedMult : rawDist * 10;
-    totalCost += cost;
-
-    segments.push({ from, to, rawDist, speedMult, cost, terrainLabel });
+    flushRun();
   }
 
   return { cost: totalCost, segments, terrainsCrossed };
