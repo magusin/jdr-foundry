@@ -566,8 +566,25 @@ body.rpg-theme-contraste .rpg-window {
   color: #17171d;
 }
 
-/* Les variables de thème doivent exister sur body pour que les règles
-   ci-dessus aient de quoi puiser. */
-body.rpg-theme-sombre    { color-scheme: dark; }
-body.rpg-theme-clair     { color-scheme: light; }
-body.rpg-theme-contraste { color-scheme: dark; }
+/* ⚠️ color-scheme sur <body> était le même genre de fuite que celle décrite
+   plus haut pour les variables --ink/--color-text-* (« PAS à body.rpg-theme-* »)
+   — sauf que celle-ci n'avait pas été repérée : color-scheme est hérité par
+   TOUT le DOM lui aussi, y compris les fenêtres 100% natives qui n'ont rien
+   à voir avec nous. Repéré via l'éditeur CodeMirror des macros (« Script ») :
+   Foundry calcule certaines de ses couleurs avec la fonction CSS light-dark(),
+   qui lit le color-scheme hérité — forcer color-scheme:light en thème Clair
+   faisait basculer le TEXTE de l'éditeur vers ses tons « clairs » (donc
+   foncés, pensés pour un fond blanc) alors que le FOND de l'éditeur restait
+   sombre (non concerné par light-dark ou fixé indépendamment) : du texte
+   presque invisible, foncé sur foncé, dans une fenêtre qu'on ne thème même
+   pas. Scopé comme le reste du fichier à nos propres fenêtres : ça ne perd
+   que l'indice de rendu natif (scrollbars, contrôles de formulaire) pour les
+   fenêtres qui ne sont pas les nôtres — elles n'ont de toute façon aucune
+   autre variable de thème à disposition. */
+.rpg-sheet.rpg-theme-sombre, .rpg-window.rpg-theme-sombre, .rpg-spell-menu.rpg-theme-sombre,
+.rpg-sheet.rpg-theme-contraste, .rpg-window.rpg-theme-contraste, .rpg-spell-menu.rpg-theme-contraste {
+  color-scheme: dark;
+}
+.rpg-sheet.rpg-theme-clair, .rpg-window.rpg-theme-clair, .rpg-spell-menu.rpg-theme-clair {
+  color-scheme: light;
+}
