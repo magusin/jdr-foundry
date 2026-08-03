@@ -966,7 +966,26 @@ Hooks.once("init", async () => {
 
     // ✅ Auto-installation des macros système (GM uniquement)
     // ── Mise à jour des macros système ────────────────────────────────
-    try {
+    // Le commentaire ci-dessus disait déjà "GM uniquement" mais rien ne le
+    // vérifiait : ce bloc tournait sur CHAQUE client connecté (joueurs
+    // compris) à chaque `ready`, et pire, sur chaque onglet/session GM
+    // ouvert en parallèle. Deux clients qui passent la boucle de création en
+    // même temps peuvent tous les deux conclure "n'existe pas encore" avant
+    // que l'un des deux ait fini de le créer → doublon créé par une course,
+    // pas par un bug de logique — c'est très probablement comme les anciens
+    // doublons de "Terrain (MJ)" sont nés. Même souci pour le nettoyage :
+    // le garde-fou `m.sheet?.rendered` (voir plus bas) n'est visible que
+    // dans SON PROPRE client — un second onglet du même GM (ou un autre GM)
+    // ne voit pas qu'une fiche est ouverte ailleurs, la supprime quand même,
+    // et le "Enregistrer" de la fiche restée ouverte plante ensuite avec
+    // "You must provide an _id for every object in the update data Array"
+    // (le document a disparu sous elle entre l'ouverture et la sauvegarde).
+    // `activeGM` élit un seul GM connecté pour exécuter ce genre de tâche
+    // "une seule fois" — ça ne protège pas encore le cas de deux onglets du
+    // MÊME GM (activeGM ne distingue pas les onglets d'un même utilisateur),
+    // mais ça élimine déjà la course entre plusieurs GMs et l'exécution
+    // inutile (et à risque de permissions) côté joueurs.
+    if (game.user.isGM && game.user === game.users.activeGM) try {
       const MACRO_DEFS = [
         ["Menu Combat",                        "menu.js",               "icons/svg/sword.svg",           "all"],
         ["Lancer un Sort",                     "cast-spell.js",         "icons/svg/lightning.svg",       "all"],
