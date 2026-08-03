@@ -497,9 +497,11 @@
           // Terrain à la position actuelle du token
           let terrainInfo = "";
           try {
+            const getTerrainAt = game.rpg?.terrain?.getTerrainAt;
             if (typeof getTerrainAt === "function") {
               const tx = token?.x ?? 0, ty = token?.y ?? 0;
-              const terrains = getTerrainAt(tx, ty);
+              const tElevation = token?.document?.elevation ?? 0;
+              const terrains = getTerrainAt(tx, ty, tElevation);
               if (terrains.length) {
                 const t = terrains.reduce((a, b) => b.terrain.speedMult < a.terrain.speedMult ? b : a);
                 const vitEff = (vitesse * t.terrain.speedMult).toFixed(1);

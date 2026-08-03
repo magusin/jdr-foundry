@@ -77,13 +77,13 @@ export const TERRAIN_TYPES = {
  * Cherche toutes les régions qui contiennent ce point et ont un comportement
  * de type terrain RPG.
  */
-export function getTerrainAt(x, y) {
+export function getTerrainAt(x, y, elevation = 0) {
   if (!canvas?.regions?.placeables) return [];
 
   const terrains = [];
   for (const region of canvas.regions.placeables) {
     // Vérifie si le point est dans la région
-    const contains = _pointInRegion(region, x, y);
+    const contains = _pointInRegion(region, x, y, elevation);
     if (!contains) continue;
 
     // Cherche un comportement terrain RPG sur cette région
@@ -97,7 +97,7 @@ export function getTerrainAt(x, y) {
 
   // ── Zones à effet (pièges / sorts de zone) : contribuent aussi au coût de
   // déplacement (ralentissement, jusqu'à quasi-impassable) — voir zone-effects.js.
-  for (const { region, behavior } of getZoneEffectsAt(x, y)) {
+  for (const { region, behavior } of getZoneEffectsAt(x, y, elevation)) {
     const speedMult = Number(behavior.system?.speedMult ?? 1) || 1;
     // Clé partagée "zoneEffetSol" pour toutes les zones « au sol uniquement »
     // (réglage par défaut) : ça leur donne l'immunité volant/éthéré déjà
@@ -125,11 +125,11 @@ export function getTerrainAt(x, y) {
  * `crossed` (Set de typeKey), même s'il n'est pas le plus pénalisant à CE
  * point précis — un acteur peut chevaucher deux régions à la fois.
  */
-function _terrainMultAt(x, y, actor, getEffectiveSpeedMult, crossed) {
+function _terrainMultAt(x, y, actor, getEffectiveSpeedMult, crossed, elevation = 0) {
   let speedMult = 1;
   let terrainLabel = null;
 
-  for (const t of getTerrainAt(x, y)) {
+  for (const t of getTerrainAt(x, y, elevation)) {
     if (t.behavior?.system?.enabled === false) continue;
 
     // Récupère le multiplicateur configuré sur CETTE région (peut différer du défaut du type)
@@ -172,11 +172,17 @@ function _terrainMultAt(x, y, actor, getEffectiveSpeedMult, crossed) {
  * qui ne se déclenchait jamais alors que la case d'arrivée était bien en
  * terrain difficile.
  *
- * @param {Array} waypoints — [{x, y}] points du trajet
- * @param {Actor} actor     — acteur qui se déplace (pour type de mouvement)
+ * @param {Array} waypoints    — [{x, y}] points du trajet
+ * @param {Actor} actor        — acteur qui se déplace (pour type de mouvement)
+ * @param {number} [elevation] — élévation du token (mètres) : RegionDocument#testPoint
+ *   attend un point {x, y, elevation} et compare cette élévation aux bornes de la
+ *   région — un point sans élévation (`undefined`) échoue TOUJOURS cette comparaison
+ *   (`undefined >= -Infinity` vaut `false` en JS), y compris pour une région SANS
+ *   restriction d'élévation configurée. Omettre ce paramètre ne rendait donc pas la
+ *   détection de terrain seulement imprécise : elle ne détectait plus JAMAIS rien.
  * @returns {{ cost: number, segments: Array, terrainsCrossed: Set }}
  */
-export function calculateMovementCost(waypoints, actor = null) {
+export function calculateMovementCost(waypoints, actor = null, elevation = 0) {
   if (!waypoints || waypoints.length < 2) return { cost: 0, segments: [], terrainsCrossed: new Set() };
 
   // Import dynamique pour éviter les dépendances circulaires
@@ -213,7 +219,7 @@ export function calculateMovementCost(waypoints, actor = null) {
       const stepRaw = rawDist / stepCount;
       const { speedMult, terrainLabel } = _terrainMultAt(
         from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t,
-        actor, getEffectiveSpeedMult, terrainsCrossed
+        actor, getEffectiveSpeedMult, terrainsCrossed, elevation
       );
       const stepCost = speedMult > 0 ? stepRaw / speedMult : stepRaw * 10;
       totalCost += stepCost;
@@ -272,11 +278,21 @@ function _measureSegment(x1, y1, x2, y2) {
 
 /**
  * Vérifie si un point est dans une région Foundry V13.
+ *
+ * `elevation` DOIT être un nombre, jamais omis : RegionDocument#testPoint prend un
+ * point ÉLEVÉ `{x, y, elevation}` et compare `elevation` aux bornes d'élévation de
+ * la région (`-Infinity`/`Infinity` par défaut, sans restriction) — mais en JS,
+ * `undefined >= -Infinity` vaut `false` (comparaison numérique avec `undefined` →
+ * `NaN`, toujours fausse), donc un point SANS élévation échoue cette comparaison
+ * MÊME quand la région n'a aucune restriction d'élévation. Résultat observé avant
+ * ce correctif : `getTerrainAt(x, y)` (sans élévation) ne détectait plus JAMAIS
+ * aucune région, quel que soit son type — le terrain difficile n'avait donc
+ * strictement aucun effet, peu importe où l'on se déplaçait.
  */
-function _pointInRegion(region, x, y) {
+function _pointInRegion(region, x, y, elevation = 0) {
   try {
     // V13 API officielle
-    if (region.document?.testPoint) return region.document.testPoint({ x, y });
+    if (region.document?.testPoint) return region.document.testPoint({ x, y, elevation });
     // Fallback via polygones
     if (region.polygon?.contains) return region.polygon.contains(x, y);
     if (region.polygons?.some(p => p.contains?.(x, y))) return true;

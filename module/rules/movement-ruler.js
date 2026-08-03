@@ -46,7 +46,8 @@ export function installRPGTokenRuler() {
         if (pts.length < 2) return context;
 
         // Coût RP (diagonales + terrain) — même calcul que le chat
-        const { cost } = calculateMovementCost(pts, actor);
+        const elevation = this.token?.document?.elevation ?? 0;
+        const { cost } = calculateMovementCost(pts, actor, elevation);
         let text = fmtM(cost);
 
         // Restant du tour si en combat pour cet acteur
