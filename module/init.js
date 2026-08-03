@@ -1033,14 +1033,27 @@ Hooks.once("init", async () => {
           m.name === name || m.name === `RPG — ${name}` || m.name === `JDR — ${name}`
         );
         if (existing.length > 1) for (const d of existing.slice(1)) await d.delete().catch(()=>{});
-        if (existing[0]) {
-          await existing[0].update({ name, command: cmd, img, folder: folder.id,
-            flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
-          updated++;
-        } else {
-          await Macro.create({ name, type: "script", command: cmd, img, folder: folder.id,
-            flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
-          created++;
+        try {
+          if (existing[0]) {
+            await existing[0].update({ name, command: cmd, img, folder: folder.id,
+              flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
+            updated++;
+          } else {
+            await Macro.create({ name, type: "script", command: cmd, img, folder: folder.id,
+              flags: { rpg: { systemMacro: true, version: "2.1.2" } } });
+            created++;
+          }
+        } catch (e) {
+          // Une macro qui échoue ici (permission, document verrouillé, etc.)
+          // ne doit pas empêcher les suivantes d'être traitées : avant ce
+          // try/catch, une exception ici sortait de la boucle for entière et
+          // toutes les entrées de MACRO_DEFS situées APRÈS celle en échec
+          // n'étaient plus jamais créées — silencieusement, à chaque
+          // rechargement, pour toujours (reporté par un MJ dont le dossier
+          // "Macros système (MJ)" ne contenait plus AUCUNE des ~19 macros MJ
+          // ajoutées depuis, alors que les 5 macros "all" qui précèdent la
+          // première macro MJ dans la liste étaient bien présentes).
+          console.error(`[RPG] Macro "${name}" (${file}) : échec de création/mise à jour`, e);
         }
       }
       console.log(`[RPG] Macros : ${created} créée(s), ${updated} mise(s) à jour.`);
