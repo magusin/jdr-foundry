@@ -17,9 +17,11 @@
 // pour rester dans le flux déclare → MJ valide → résout du reste du système.
 
 import { computeFinalDamage, applyFinalDamage } from "./combat.js";
-import { applyEffect } from "./status-effects.js";
 import { hpSecret } from "./chat-visibility.js";
 import { isImmuneToTerrain } from "./movement-types.js";
+import { applyResistances } from "./resistances.js";
+import { listEffects, EFFECT_TAGS } from "./effect-library.js";
+import { applyUiTheme } from "../sheets/sheet-helpers.js";
 
 // Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg", ...,
 // { types: ["character"] }) — jamais "rpg.character"), un sous-type de
@@ -48,6 +50,54 @@ function _pointInRegion(region, x, y) {
     if (b && !(x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)) return false;
     return true;
   } catch { return false; }
+}
+
+/**
+ * Convertit `system.effectMods` (tableau [{stat, mode, value}], value déjà
+ * SIGNÉE — négatif = malus, même convention que normMods() dans la fiche de
+ * sort) vers le format {stat: {flat, pct}} que sumActiveEffectMods() (status-
+ * effects.js) lit pour calculer les stats dérivées. C'est le format MODERNE
+ * (KEY_TO_BUCKET y couvre toucherPhysique/toucherMagique/fatigueMax/podsMax
+ * en plus des stats de base) — pas l'ancien modsFlat.groupe.stat restreint
+ * qu'utilisait applyEffect() d'status-effects.js, qui ignorait silencieusement
+ * ces 4 stats-là faute de bucket prévu pour elles.
+ */
+function modsToBuckets(entries) {
+  const out = {};
+  for (const m of (Array.isArray(entries) ? entries : [])) {
+    const stat = String(m?.stat ?? "").trim();
+    if (!stat) continue;
+    const mode = m?.mode === "pct" ? "pct" : "flat";
+    const v = n(m?.value, 0);
+    if (!out[stat]) out[stat] = { flat: 0, pct: 0 };
+    out[stat][mode] += v;
+  }
+  return out;
+}
+
+/**
+ * Applique un état de zone/piège à une cible, résistances comprises (même
+ * primitive — applyResistances() de resistances.js — que le système de
+ * sorts ; ce fichier est explicitement cité dans son en-tête comme un futur
+ * consommateur : "sorts, catalogue MJ, futurs pièges"). Remplace par clé
+ * (stacking "replace") plutôt que d'empiler : redéclencher la même zone
+ * persistante sur la même cible rafraîchit sa durée au lieu d'accumuler des
+ * doublons — même règle que applyEffect() qu'on remplace ici.
+ */
+async function applyZoneStateEffect(actor, state) {
+  const adjusted = applyResistances(actor, state);
+  if (adjusted?._resisted) {
+    return { applied: false, resisted: true, resistanceInfo: adjusted.resistanceInfo };
+  }
+
+  const current = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  const next = current.filter(e => e?.key !== adjusted.key);
+  next.push({ ...adjusted, id: adjusted.id || foundry.utils.randomID() });
+
+  await actor.update({ "system.etatsActifs": next });
+  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+
+  return { applied: true, resisted: false, state: adjusted };
 }
 
 /** Régions actives à (x,y) portant un comportement zoneEffet. */
@@ -118,21 +168,27 @@ export async function triggerZoneEffectsForToken({ actor, tokenId, x, y }) {
     const effectLabel = String(sys.effectLabel ?? "").trim();
     if (effectLabel) {
       const dotPerTick = n(sys.effectDotPerTick, 0);
-      const vitesseFlat = n(sys.effectVitesseFlat, 0);
-      await applyEffect({
-        sourceActor: null,
-        targetActor: actor,
-        item: { id: `zone:${region.id}:${behavior.id}` },
-        effectDef: {
-          key: slugKey(effectLabel),
-          label: effectLabel,
-          duration: Math.max(1, n(sys.effectDuration, 1)),
-          cleanseDC: 0,
-          dot: dotPerTick > 0 ? { perTick: dotPerTick } : null,
-          modsFlat: vitesseFlat ? { move: { vitesse: vitesseFlat } } : null
-        }
+      // La zone/piège stocke sa propre étiquette libre (compat des zones déjà
+      // configurées), mais on la fait correspondre au catalogue quand elle y
+      // figure — même clé/tag qu'un sort appliquant le même effet, pour que
+      // les résistances par tag (résistances.js) et le remplacement par clé
+      // (applyZoneStateEffect ci-dessus) fonctionnent pareil dans les deux cas.
+      const def = listEffects().find(e => e.label === effectLabel);
+      const result = await applyZoneStateEffect(actor, {
+        key: def?.key ?? slugKey(effectLabel),
+        label: effectLabel,
+        tag: def?.tag ?? null,
+        duration: Math.max(1, n(sys.effectDuration, 1)),
+        remaining: Math.max(1, n(sys.effectDuration, 1)),
+        cleanseDC: 0,
+        dot: dotPerTick > 0 ? { perTick: dotPerTick, flat: dotPerTick } : {},
+        mods: modsToBuckets(sys.effectMods)
       });
-      lines.push(`✨ État appliqué : <b>${effectLabel}</b>`);
+      if (result.resisted) {
+        lines.push(`🛡️ <b>${effectLabel}</b> résisté${result.resistanceInfo?.immune ? " (immunité)" : ""}`);
+      } else {
+        lines.push(`✨ État appliqué : <b>${effectLabel}</b>`);
+      }
     }
 
     if (!lines.length) continue; // zone purement passive (ralentissement seul) : rien à annoncer
@@ -308,7 +364,21 @@ export function registerZoneEffectBehavior() {
         effectLabel:       new fields.StringField({ initial: "" }),
         effectDuration:    new fields.NumberField({ initial: 1, min: 1, max: 20 }),
         effectDotPerTick:  new fields.NumberField({ initial: 0, min: 0 }),
-        effectVitesseFlat: new fields.NumberField({ initial: 0 }),
+        // Remplace l'ancien effectVitesseFlat (un seul nombre, vitesse
+        // uniquement) — un tableau de modificateurs de stat, même forme que
+        // system.effectsUI[].mods sur la fiche de sort (item-spell-sheet-v2.js),
+        // pour offrir la même palette de stats (pas seulement la vitesse) et
+        // la même UI d'édition (voir ZoneEffectBehaviorSheet ci-dessous).
+        // Une zone/piège déjà configurée AVANT ce changement gardait sa
+        // valeur dans effectVitesseFlat côté données brutes (Foundry ignore
+        // simplement une clé qui ne fait plus partie du schéma) : à
+        // ressaisir manuellement ici si besoin, aucune migration auto.
+        effectMods:        new fields.ArrayField(new fields.SchemaField({
+          stat:  new fields.StringField({ initial: "vitesse" }),
+          sens:  new fields.StringField({ initial: "malus", choices: ["bonus", "malus"] }),
+          mode:  new fields.StringField({ initial: "flat", choices: ["flat", "pct"] }),
+          value: new fields.NumberField({ initial: 0 })
+        }), { initial: [] }),
         triggeredTokens:   new fields.ArrayField(new fields.StringField(), { initial: [] }),
         revealedActorIds:  new fields.ArrayField(new fields.StringField(), { initial: [] })
       };
@@ -323,6 +393,21 @@ export function registerZoneEffectBehavior() {
   console.log(`[RPG] Comportement région enregistré : ${BEHAVIOR_KEY}`);
 }
 
+// Même liste que STAT_LABELS dans item-spell-sheet-v2.js (dupliquée comme
+// dans les autres consommateurs de ce catalogue — apply-effect.js, spells.js
+// — plutôt que centralisée : trop petit pour justifier un module partagé).
+const STAT_LABELS = {
+  force: "Force", dexterite: "Dextérité", intelligence: "Intelligence",
+  acuite: "Acuité", endurance: "Endurance",
+  armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
+  scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
+  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+  initiativeMod: "Initiative", vitesse: "Vitesse",
+  pvMax: "PV max", manaMax: "Mana max",
+  regenPv: "Régén PV", regenMana: "Régén Mana",
+  fatigueMax: "Fatigue max", podsMax: "Pods max"
+};
+
 export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionBehaviorConfig {
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS ?? {},
@@ -335,7 +420,25 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
     // impossible de scroller jusqu'aux dégâts en jeu). "auto" laisse la fenêtre
     // s'ajuster au contenu réel ; resizable donne une échappatoire manuelle si
     // l'écran est trop petit pour la hauteur obtenue.
-    { window: { title: "Piège / Zone à effet", resizable: true }, position: { width: 460, height: "auto" } },
+    {
+      // "rpg-sheet"/"rpg-zone-sheet" ajoutés à ceux de RegionBehaviorConfig
+      // (jamais en remplacement : mergeObject ne fusionne pas les tableaux
+      // élément par élément, un simple "classes: [...]" ici écraserait les
+      // classes core). rpg-sheet branche le thème (clair/sombre/contraste) ;
+      // rpg-zone-sheet réutilise le CSS des blocs bonus/malus déjà écrit pour
+      // la fiche de sort (styles/item-sheet.css, sélecteurs .fx-* partagés
+      // entre .rpg-spell-sheet et .rpg-zone-sheet) sans le dupliquer.
+      classes: [
+        ...(Array.isArray(super.DEFAULT_OPTIONS?.classes) ? super.DEFAULT_OPTIONS.classes : []),
+        "rpg-sheet", "rpg-zone-sheet"
+      ],
+      window: { title: "Piège / Zone à effet", resizable: true },
+      position: { width: 460, height: "auto" },
+      actions: {
+        addEffectMod:    async function (event) { await this._actionAddEffectMod(event); },
+        removeEffectMod: async function (event) { await this._actionRemoveEffectMod(event); }
+      }
+    },
     { inplace: false }
   );
 
@@ -359,11 +462,52 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
       ctx = { document: this.document, editable: this.isEditable ?? true };
     }
     ctx.system = this.document.system ?? {};
+
+    // Catalogue d'effets groupé par tag (même contenu que le <select> de la
+    // macro "Appliquer un Effet (MJ)") — remplace le champ texte libre par
+    // une liste fermée, pour que la zone retombe sur la même clé/tag qu'un
+    // sort appliquant le même effet (résistances, remplacement par clé).
+    // "selected" précalculé ici plutôt qu'en gymnastique de contexte relatif
+    // (../../) dans un {{#each}} imbriqué deux fois côté template — plus
+    // simple à lire et moins fragile si la structure du template bouge.
+    const currentLabel = String(ctx.system.effectLabel ?? "");
+    const byTag = {};
+    for (const def of listEffects()) {
+      (byTag[def.tag] ??= []).push({ ...def, selected: def.label === currentLabel });
+    }
+    ctx.effectGroups = Object.entries(byTag).map(([tag, defs]) => ({
+      tag, tagLabel: EFFECT_TAGS[tag] ?? tag, effects: defs
+    }));
+
+    // Décore les modificateurs pour l'affichage : sens explicite (bonus/malus)
+    // + quantité toujours positive dans le champ nombre — même convention que
+    // decorateMod() dans item-spell-sheet-v2.js, réutilise le même CSS.
+    const mods = Array.isArray(ctx.system.effectMods) ? ctx.system.effectMods : [];
+    ctx.effectModsUI = mods.map(m => {
+      const isMalus = m?.sens === "malus";
+      return {
+        stat: m?.stat ?? "vitesse",
+        mode: m?.mode ?? "flat",
+        isMalus,
+        absValue: Math.abs(n(m?.value, 0)),
+        statLabel: STAT_LABELS[m?.stat] ?? m?.stat
+      };
+    });
+
     return ctx;
   }
 
   async _onRender(context, options) {
-    await super._onRender(context, options);
+    try {
+      await super._onRender(context, options);
+    } catch (e) {
+      // Même esprit que le repli de _prepareContext ci-dessus : le rendu
+      // NATIF de RegionBehaviorConfig (ex. un pied de fenêtre générique) ne
+      // doit jamais empêcher NOTRE template (déjà inséré dans le DOM à ce
+      // stade par le pipeline ApplicationV2) de rester utilisable.
+      console.warn("[RPG] RegionBehaviorConfig._onRender (core) a échoué :", e);
+    }
+    applyUiTheme(this.element);
     // Filet de sécurité indépendant de "auto" ci-dessus : même si une future
     // version de Foundry recalcule la hauteur autrement, le contenu doit
     // rester atteignable au lieu de se couper silencieusement en bas.
@@ -372,6 +516,28 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
       content.style.overflowY = "auto";
       content.style.maxHeight = "80vh";
     }
+  }
+
+  /** Ajoute une ligne de modificateur vierge — repart des données du document
+   *  (tableau à un seul niveau, contrairement à effectsUI[].mods sur la fiche
+   *  de sort : pas besoin de relire le DOM pour ne pas perdre une saisie en
+   *  cours ailleurs dans le formulaire). */
+  async _actionAddEffectMod(event) {
+    event?.preventDefault?.();
+    const mods = foundry.utils.deepClone(this.document.system.effectMods ?? []);
+    mods.push({ stat: "vitesse", sens: "malus", mode: "flat", value: 0 });
+    await this.document.update({ "system.effectMods": mods }, { render: false });
+    await this.render({ force: true });
+  }
+
+  async _actionRemoveEffectMod(event) {
+    event?.preventDefault?.();
+    const idx = Number(event?.target?.closest?.("[data-mod-index]")?.dataset?.modIndex ?? -1);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    const mods = foundry.utils.deepClone(this.document.system.effectMods ?? []);
+    mods.splice(idx, 1);
+    await this.document.update({ "system.effectMods": mods }, { render: false });
+    await this.render({ force: true });
   }
 }
 

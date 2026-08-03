@@ -317,6 +317,25 @@ Hooks.once("init", async () => {
   // ✅ Protection globale contre les crashes non-catchés
   installGlobalErrorHandler();
 
+  // ✅ Réglette de déplacement custom (coût terrain + restant du tour en
+  // direct) — DOIT être posée ici, dans "init", pas dans "ready" comme avant.
+  // CONFIG.Token.rulerClass est une classe que Foundry lit pour CONSTRUIRE
+  // la réglette de chaque token, au dessin du canevas de la scène active —
+  // qui a déjà eu lieu avant que "ready" ne se déclenche. Un token déjà
+  // affiché à ce moment-là garde donc la réglette NATIVE (coût terrain
+  // ignoré, seule la distance de grille brute s'affiche pendant le glisser —
+  // symptôme observé : le nombre affiché ne bouge pas quand on modifie le
+  // terrain), et seul un token dessiné après coup (nouvelle scène chargée
+  // après le démarrage) profitait du remplacement. "init" se déclenche avant
+  // toute construction de canevas/token, donc avant toute lecture de cette
+  // valeur — c'est l'endroit conventionnel pour ce genre de substitution de
+  // classe CONFIG.*, contrairement à installRangeOverlay()/installDragLimit()
+  // ci-dessous (restés dans "ready" : l'un n'enregistre que des hooks
+  // d'événements, l'autre patche un PROTOTYPE partagé par toutes les
+  // instances existantes ou futures — aucun des deux n'a ce problème de
+  // timing propre à un remplacement de référence de classe).
+  try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
+
   // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
   registerRegionBehaviors();
   registerZoneEffectBehavior();
@@ -758,9 +777,6 @@ Hooks.once("init", async () => {
     // ✅ Aligne la règle de diagonale de Foundry sur le réglage RP (réaliste par défaut)
     rpgSyncCoreDiagonals();
 
-    // ✅ Réglette de déplacement custom : coût terrain + restant du tour en direct
-    try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
-
     // ✅ Indicateur d'allonge (zone de menace) au survol d'un token
     try { installRangeOverlay(); } catch (e) { console.warn("[RPG] affichage des portées:", e); }
 
@@ -830,6 +846,16 @@ Hooks.once("init", async () => {
         const isJournalSheet = app?.document?.documentName === "JournalEntry"
                              || app?.document?.documentName === "JournalEntryPage";
 
+        // La fiche d'édition d'une Macro (le "Tableau de bord MJ" et consorts)
+        // est native à 100% elle aussi. Signalé illisible en thème Clair :
+        // l'éditeur "Script" (CodeMirror) restait sombre pendant que le reste
+        // de la fenêtre suivait le rendu natif de Foundry — même famille de
+        // patchwork que RollTable/Journal. Ciblé par TYPE de document, jamais
+        // par contenu détecté. Voir le pin color-scheme sur .cm-editor dans
+        // theme.css : marquer la fenêtre ne suffit pas seul, CodeMirror a son
+        // propre thème interne qu'il faut explicitement garder cohérent.
+        const isMacroSheet = app?.document?.documentName === "Macro";
+
         // Nos propres compendiums (Documentation, Tables de Rencontre,
         // Équipement/Monstres de référence, Macros système) et tout ce qu'on
         // ouvre DEPUIS eux (le navigateur de compendium ET les fiches
@@ -841,11 +867,25 @@ Hooks.once("init", async () => {
         const packId = app?.collection?.metadata?.id ?? app?.document?.pack ?? null;
         const isOwnPack = typeof packId === "string" && packId.startsWith("rpg.");
 
+        // Un répertoire (Objets, Acteurs, Scènes…) DÉTACHÉ de la barre
+        // latérale dans sa propre fenêtre flottante n'est plus concerné par
+        // l'exclusion "jamais la barre latérale" ci-dessus (celle-ci ne vise
+        // que la barre ANCRÉE, pour ne jamais risquer de repeindre le flux de
+        // chat qui y vit aussi) — mais restait quand même non reconnu, donc
+        // 100% natif (fond noir quel que soit notre thème). `app.collection`
+        // distingue une collection de MONDE (game.items, game.actors… pas de
+        // metadata.id) d'un compendium (metadata.id présent, déjà couvert et
+        // filtré par isOwnPack ci-dessus) : on ne veut détacher-thémer QUE le
+        // premier cas, jamais le navigateur d'un compendium d'un autre module.
+        const isWorldDirectory = !packId && typeof app?.collection?.documentName === "string";
+
         const isOurs = root.classList?.contains("rpg-window")
                     || root.matches?.(RPG_MARKERS)
                     || !!root.querySelector(RPG_MARKERS)
                     || isRollTable
                     || isJournalSheet
+                    || isMacroSheet
+                    || isWorldDirectory
                     || isOwnPack;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }

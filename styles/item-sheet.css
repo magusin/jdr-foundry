@@ -9,6 +9,13 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    /* Texture "toile tissée" propre au type objet générique — reprend le
+       laiton déjà utilisé pour les liserés de carte (cf. armor-sheet.css
+       pour le même principe : couleur/opacité fixées dans le SVG, pas de
+       var(--...), une image externe ne peut pas hériter nos variables). */
+    background-image: url("systems/rpg/assets/backgrounds/item-texture.svg");
+    background-repeat: repeat;
+    background-size: 60px 60px;
   }
 
   /* 1) Le container de contenu de la fenêtre doit être en flex et limiter la hauteur */
@@ -149,7 +156,7 @@
 /* ══════════════════════════════════════════════════════════════════════
    Fiche de sort — bloc « Effets secondaires »
    ══════════════════════════════════════════════════════════════════════ */
-.rpg-spell-sheet .fx-card {
+.rpg-spell-sheet .fx-card , .rpg-zone-sheet .fx-card {
   border: 1px solid var(--color-border-light-2, rgba(255,255,255,0.12));
   border-radius: 10px;
   margin-bottom: 8px;
@@ -157,7 +164,7 @@
 }
 
 /* En-tête : nom + pastilles resumant l'effet, lisible replie */
-.rpg-spell-sheet .fx-summary {
+.rpg-spell-sheet .fx-summary , .rpg-zone-sheet .fx-summary {
   cursor: pointer;
   padding: 7px 10px;
   background: var(--surface, rgba(255,255,255,0.04));
@@ -167,20 +174,20 @@
   flex-wrap: wrap;
   list-style: none;
 }
-.rpg-spell-sheet .fx-summary::-webkit-details-marker { display: none; }
-.rpg-spell-sheet .fx-title {
+.rpg-spell-sheet .fx-summary::-webkit-details-marker , .rpg-zone-sheet .fx-summary::-webkit-details-marker { display: none; }
+.rpg-spell-sheet .fx-title , .rpg-zone-sheet .fx-title {
   font-weight: 700;
   font-size: 13px;
   flex: 0 0 auto;
 }
-.rpg-spell-sheet .fx-chips {
+.rpg-spell-sheet .fx-chips , .rpg-zone-sheet .fx-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
 }
-.rpg-spell-sheet .fx-chip {
+.rpg-spell-sheet .fx-chip , .rpg-zone-sheet .fx-chip {
   font-size: 10px;
   font-weight: 600;
   padding: 1px 7px;
@@ -189,13 +196,13 @@
   border: 1px solid rgba(255,255,255,0.10);
   white-space: nowrap;
 }
-.rpg-spell-sheet .fx-chip-when  { background: rgba(209,161,68,0.18);  border-color: rgba(209,161,68,0.40); }
-.rpg-spell-sheet .fx-chip-tick  { background: rgba(192,57,43,0.16);   border-color: rgba(192,57,43,0.38); }
-.rpg-spell-sheet .fx-chip-aura  { background: rgba(120,110,200,0.18); border-color: rgba(120,110,200,0.40); }
-.rpg-spell-sheet .fx-chip-bonus { background: rgba(29,158,117,0.18);  border-color: rgba(29,158,117,0.40); }
-.rpg-spell-sheet .fx-chip-malus { background: rgba(192,57,43,0.18);   border-color: rgba(192,57,43,0.40); }
+.rpg-spell-sheet .fx-chip-when  , .rpg-zone-sheet .fx-chip-when  { background: rgba(209,161,68,0.18);  border-color: rgba(209,161,68,0.40); }
+.rpg-spell-sheet .fx-chip-tick  , .rpg-zone-sheet .fx-chip-tick  { background: rgba(192,57,43,0.16);   border-color: rgba(192,57,43,0.38); }
+.rpg-spell-sheet .fx-chip-aura  , .rpg-zone-sheet .fx-chip-aura  { background: rgba(120,110,200,0.18); border-color: rgba(120,110,200,0.40); }
+.rpg-spell-sheet .fx-chip-bonus , .rpg-zone-sheet .fx-chip-bonus { background: rgba(29,158,117,0.18);  border-color: rgba(29,158,117,0.40); }
+.rpg-spell-sheet .fx-chip-malus , .rpg-zone-sheet .fx-chip-malus { background: rgba(192,57,43,0.18);   border-color: rgba(192,57,43,0.40); }
 
-.rpg-spell-sheet .fx-body {
+.rpg-spell-sheet .fx-body , .rpg-zone-sheet .fx-body {
   padding: 10px;
   display: flex;
   flex-direction: column;
@@ -203,21 +210,21 @@
 }
 
 /* Grilles internes */
-.rpg-spell-sheet .fx-grid-2,
-.rpg-spell-sheet .fx-grid-4,
-.rpg-spell-sheet .fx-grid-5 {
+.rpg-spell-sheet .fx-grid-2, .rpg-zone-sheet .fx-grid-2,
+.rpg-spell-sheet .fx-grid-4, .rpg-zone-sheet .fx-grid-4,
+.rpg-spell-sheet .fx-grid-5 , .rpg-zone-sheet .fx-grid-5 {
   display: grid;
   gap: 8px;
 }
-.rpg-spell-sheet .fx-grid-2 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.rpg-spell-sheet .fx-grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-.rpg-spell-sheet .fx-grid-5 { grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); }
+.rpg-spell-sheet .fx-grid-2 , .rpg-zone-sheet .fx-grid-2 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.rpg-spell-sheet .fx-grid-4 , .rpg-zone-sheet .fx-grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.rpg-spell-sheet .fx-grid-5 , .rpg-zone-sheet .fx-grid-5 { grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); }
 
-.rpg-spell-sheet .fx-grid-2 > div,
-.rpg-spell-sheet .fx-grid-4 > div,
-.rpg-spell-sheet .fx-grid-5 > div { min-width: 0; }
+.rpg-spell-sheet .fx-grid-2 > div, .rpg-zone-sheet .fx-grid-2 > div,
+.rpg-spell-sheet .fx-grid-4 > div, .rpg-zone-sheet .fx-grid-4 > div,
+.rpg-spell-sheet .fx-grid-5 > div , .rpg-zone-sheet .fx-grid-5 > div { min-width: 0; }
 
-.rpg-spell-sheet .fx-body label {
+.rpg-spell-sheet .fx-body label , .rpg-zone-sheet .fx-body label {
   display: block;
   font-size: 11px;
   color: var(--ink-text-dim, #b6ad9a);
@@ -227,16 +234,16 @@
   text-overflow: ellipsis;
   cursor: help;
 }
-.rpg-spell-sheet .fx-body input,
-.rpg-spell-sheet .fx-body select { width: 100%; min-width: 0; }
+.rpg-spell-sheet .fx-body input, .rpg-zone-sheet .fx-body input,
+.rpg-spell-sheet .fx-body select , .rpg-zone-sheet .fx-body select { width: 100%; min-width: 0; }
 
-.rpg-spell-sheet .fx-inline-2 {
+.rpg-spell-sheet .fx-inline-2 , .rpg-zone-sheet .fx-inline-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
 
-.rpg-spell-sheet .fx-check {
+.rpg-spell-sheet .fx-check , .rpg-zone-sheet .fx-check {
   display: flex !important;
   align-items: center;
   gap: 5px;
@@ -246,21 +253,21 @@
   margin-bottom: 0;
   opacity: 1;
 }
-.rpg-spell-sheet .fx-check input[type="checkbox"] { width: auto; margin: 0; }
+.rpg-spell-sheet .fx-check input[type="checkbox"] , .rpg-zone-sheet .fx-check input[type="checkbox"] { width: auto; margin: 0; }
 
-.rpg-spell-sheet .fx-fieldset {
+.rpg-spell-sheet .fx-fieldset , .rpg-zone-sheet .fx-fieldset {
   border: 1px solid var(--color-border-light-2, rgba(255,255,255,0.12));
   border-radius: 8px;
   padding: 8px 10px 10px;
   margin: 0;
 }
-.rpg-spell-sheet .fx-fieldset > legend {
+.rpg-spell-sheet .fx-fieldset > legend , .rpg-zone-sheet .fx-fieldset > legend {
   font-size: 11px;
   font-weight: 700;
   padding: 0 6px;
   color: var(--brass, #d1a144);
 }
-.rpg-spell-sheet .fx-hint {
+.rpg-spell-sheet .fx-hint , .rpg-zone-sheet .fx-hint {
   display: block;
   font-size: 10px;
   color: var(--ink-text-faint, #847c6d);
@@ -269,28 +276,28 @@
 }
 
 /* Lignes Bonus / Malus */
-.rpg-spell-sheet .fx-mod-row {
+.rpg-spell-sheet .fx-mod-row , .rpg-zone-sheet .fx-mod-row {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 0.9fr) 24px;
   gap: 5px;
   align-items: center;
   margin-bottom: 4px;
 }
-.rpg-spell-sheet .fx-mod-head {
+.rpg-spell-sheet .fx-mod-head , .rpg-zone-sheet .fx-mod-head {
   font-size: 10px;
   font-weight: 700;
   color: var(--ink-text-dim, #b6ad9a);
   margin-bottom: 2px;
 }
-.rpg-spell-sheet .fx-mod-head > span { padding-left: 2px; }
+.rpg-spell-sheet .fx-mod-head > span , .rpg-zone-sheet .fx-mod-head > span { padding-left: 2px; }
 
-.rpg-spell-sheet .fx-add-btn {
+.rpg-spell-sheet .fx-add-btn , .rpg-zone-sheet .fx-add-btn {
   font-size: 11px;
   cursor: pointer;
   padding: 3px 10px;
   margin-top: 2px;
 }
-.rpg-spell-sheet .fx-del-btn {
+.rpg-spell-sheet .fx-del-btn , .rpg-zone-sheet .fx-del-btn {
   cursor: pointer;
   color: #c0392b;
   border: none;
@@ -301,7 +308,7 @@
 }
 
 /* Vue joueur : liste lisible, pas de formulaire */
-.rpg-spell-sheet .fx-readonly .fx-read-list {
+.rpg-spell-sheet .fx-readonly .fx-read-list , .rpg-zone-sheet .fx-readonly .fx-read-list {
   margin: 0;
   padding-left: 18px;
   font-size: 12px;

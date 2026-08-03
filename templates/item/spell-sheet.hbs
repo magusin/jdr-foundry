@@ -294,6 +294,7 @@
             {{#if fx.uiAura}}<span class="fx-chip fx-chip-aura">{{fx.uiAura}}</span>{{/if}}
             {{#if fx.uiMove}}<span class="fx-chip">{{fx.uiMove}}</span>{{/if}}
             {{#if fx.uiRemove}}<span class="fx-chip">{{fx.uiRemove}}</span>{{/if}}
+            {{#if fx.uiResist}}<span class="fx-chip">{{fx.uiResist}}</span>{{/if}}
           </span>
           {{#if @root.canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"
@@ -373,10 +374,6 @@
               <div>
                 <label title="Difficulté du jet que la cible doit réussir pour se débarrasser de l'effet (macro « Retirer un État »). 0 = l'effet ne peut pas être retiré par un jet.">🧹 TN de retrait</label>
                 <input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" title="0 = impossible à retirer par un jet"/>
-              </div>
-              <div>
-                <label title="Modificateur ajouté au TN de retrait : positif = plus difficile à dissiper, négatif = plus facile. S'ajoute aux modificateurs d'équipement et d'états.">↕️ Modif. de retrait</label>
-                <input type="number" data-fx-field="retraitMod" value="{{fx.retraitMod}}" placeholder="0" title="+ = plus dur à retirer, − = plus facile"/>
               </div>
             </div>
           </fieldset>
@@ -528,6 +525,45 @@
             <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à la cible de l'effet (celle visée par le sort) — indépendant de l'Aura, marche très bien pour un simple buff sur une cible. Coche <b>Aura</b> seulement en plus, si l'effet doit AUSSI rayonner autour du porteur.</small>
           </fieldset>
 
+          {{!-- 6 · Résistance accordée --}}
+          <fieldset class="fx-fieldset">
+            <legend>6 · Résistance accordée (optionnel)</legend>
+            <div class="fx-grid-4">
+              <div>
+                <label title="Type d'effet visé par cette résistance/vulnérabilité — indépendant du Type/Élément de CET effet en partie 1 (ex : un buff « Écaille de dragon », lui-même magique, peut accorder une résistance au feu).">🛡️ Élément visé</label>
+                <select data-fx-field="resistTag">
+                  <option value="" {{#unless fx.resistTag}}selected{{/unless}}>— Aucun —</option>
+                  <option value="magique"  {{#if (eq fx.resistTag "magique")}}selected{{/if}}>✨ Magique</option>
+                  <option value="physique" {{#if (eq fx.resistTag "physique")}}selected{{/if}}>⚔️ Physique</option>
+                  <option value="feu"    {{#if (eq fx.resistTag "feu")}}selected{{/if}}>🔥 Feu</option>
+                  <option value="air"    {{#if (eq fx.resistTag "air")}}selected{{/if}}>🌬️ Air</option>
+                  <option value="eau"    {{#if (eq fx.resistTag "eau")}}selected{{/if}}>💧 Eau</option>
+                  <option value="glace"  {{#if (eq fx.resistTag "glace")}}selected{{/if}}>❄️ Glace</option>
+                  <option value="eclair" {{#if (eq fx.resistTag "eclair")}}selected{{/if}}>⚡ Éclair</option>
+                  <option value="terre"  {{#if (eq fx.resistTag "terre")}}selected{{/if}}>🌿 Terre</option>
+                  <option value="lumiere"  {{#if (eq fx.resistTag "lumiere")}}selected{{/if}}>✨ Lumière</option>
+                  <option value="obscurite" {{#if (eq fx.resistTag "obscurite")}}selected{{/if}}>🌑 Obscurité</option>
+                </select>
+              </div>
+              <div>
+                <label title="Retiré à la durée d'un effet du type visé quand la cible le reçoit — pas seulement de ce sort, de n'importe quel sort ou piège. Positif = résistance (dure moins longtemps) ; négatif = vulnérabilité (dure plus longtemps).">⏳ Réduction de durée (tours)</label>
+                <input type="number" data-fx-field="resistDurationReduction" value="{{fx.resistDurationReduction}}" step="1" placeholder="0"/>
+              </div>
+              <div>
+                <label title="Retiré aux dégâts/soin par tour d'un effet du type visé. Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
+                <input type="number" data-fx-field="resistDotPct" value="{{fx.resistDotPct}}" step="5" placeholder="0"/>
+              </div>
+              <div>
+                <label>🚫 Immunité totale</label>
+                <label class="fx-check" title="La cible ignore complètement tout effet du type visé — les deux champs ci-dessus ne comptent plus dans ce cas.">
+                  <input type="checkbox" data-fx-field="resistImmune" {{#if fx.resistImmune}}checked{{/if}} />
+                  <span>Immunisé</span>
+                </label>
+              </div>
+            </div>
+            <small class="fx-hint">Facultatif — laisse « Aucun » si cet effet n'accorde ni résistance ni vulnérabilité. Une fois cet effet actif sur une cible, s'applique à TOUS les effets du type visé qu'elle reçoit ensuite (sorts, pièges...), pas seulement ceux de ce sort-ci. Ex. Écaille de dragon : <b>Feu · durée −2 · dégâts −50%</b>.</small>
+          </fieldset>
+
         </div>
         {{else}}
         {{!-- ════════ VUE JOUEUR — lecture seule, sans formulaire ════════ --}}
@@ -539,6 +575,7 @@
             {{#if fx.uiAura}}<li>{{fx.uiAura}}</li>{{/if}}
             {{#if fx.uiMove}}<li>{{fx.uiMove}}</li>{{/if}}
             {{#if fx.uiRemove}}<li>{{fx.uiRemove}}</li>{{/if}}
+            {{#if fx.uiResist}}<li>{{fx.uiResist}}</li>{{/if}}
           </ul>
           {{else}}
           <div class="fx-hint">Aucun effet chiffré — voir la description du sort.</div>
