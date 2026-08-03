@@ -1,5 +1,5 @@
 {{!-- Template pour la fiche de configuration d'un piège / d'une zone à effet --}}
-<div style="display:flex;flex-direction:column;gap:12px;padding:4px">
+<div class="rpg-sheet rpg-zone-sheet" style="display:flex;flex-direction:column;gap:12px;padding:4px">
 
   <div class="form-group">
     <label style="font-weight:700">Nom (note MJ, visible dans le message de déclenchement)</label>
@@ -66,7 +66,17 @@
 
   <div class="form-group">
     <label style="font-weight:700">État appliqué à l'entrée (optionnel)</label>
-    <input type="text" name="system.effectLabel" value="{{system.effectLabel}}" placeholder="Ex: Empoisonné, Entravé... (laisser vide = pas d'état)" style="width:100%" />
+    <select name="system.effectLabel" style="width:100%">
+      <option value="" {{#unless system.effectLabel}}selected{{/unless}}>— Aucun —</option>
+      {{#each effectGroups as |grp|}}
+      <optgroup label="{{grp.tagLabel}}">
+        {{#each grp.effects as |fx|}}
+        <option value="{{fx.label}}" {{#if fx.selected}}selected{{/if}}>{{fx.label}}</option>
+        {{/each}}
+      </optgroup>
+      {{/each}}
+    </select>
+    <span style="font-size:11px;opacity:.7">Laisser sur « Aucun » = pas d'état appliqué. Le reste de ce bloc (durée, dégâts/tour, stats) ne compte que si un état est choisi ici.</span>
   </div>
   <div class="form-group">
     <label style="font-weight:700">Durée de l'état (tours)</label>
@@ -76,10 +86,64 @@
     <label style="font-weight:700">Dégâts par tour (optionnel)</label>
     <input type="number" name="system.effectDotPerTick" value="{{system.effectDotPerTick}}" min="0" style="width:100%" />
   </div>
-  <div class="form-group">
-    <label style="font-weight:700">Malus/bonus de vitesse (m, optionnel)</label>
-    <input type="number" name="system.effectVitesseFlat" value="{{system.effectVitesseFlat}}" style="width:100%" placeholder="Ex: -3" />
-  </div>
+
+  <fieldset class="fx-fieldset">
+    <legend>Bonus / Malus de stats de l'état appliqué</legend>
+    <div class="fx-mods-list">
+      {{#if effectModsUI.length}}
+      <div class="fx-mod-row fx-mod-head">
+        <span>Stat</span><span>Sens</span><span>Type</span><span>Valeur</span><span></span>
+      </div>
+      {{/if}}
+      {{#each effectModsUI as |mod mi|}}
+      <div class="fx-mod-row" data-mod-index="{{mi}}">
+        <select name="system.effectMods.{{mi}}.stat">
+          <optgroup label="Caractéristiques">
+            <option value="force"        {{#if (eq mod.stat "force")}}selected{{/if}}>Force</option>
+            <option value="dexterite"    {{#if (eq mod.stat "dexterite")}}selected{{/if}}>Dextérité</option>
+            <option value="intelligence" {{#if (eq mod.stat "intelligence")}}selected{{/if}}>Intelligence</option>
+            <option value="acuite"       {{#if (eq mod.stat "acuite")}}selected{{/if}}>Acuité</option>
+            <option value="endurance"    {{#if (eq mod.stat "endurance")}}selected{{/if}}>Endurance</option>
+          </optgroup>
+          <optgroup label="Défenses">
+            <option value="armureFixe"      {{#if (eq mod.stat "armureFixe")}}selected{{/if}}>Armure fixe</option>
+            <option value="resistanceFixe"  {{#if (eq mod.stat "resistanceFixe")}}selected{{/if}}>Résistance fixe</option>
+            <option value="scoreArmure"     {{#if (eq mod.stat "scoreArmure")}}selected{{/if}}>Score Armure</option>
+            <option value="scoreResistance" {{#if (eq mod.stat "scoreResistance")}}selected{{/if}}>Score Résistance</option>
+          </optgroup>
+          <optgroup label="Combat">
+            <option value="toucherPhysique" {{#if (eq mod.stat "toucherPhysique")}}selected{{/if}}>Toucher physique</option>
+            <option value="toucherMagique"  {{#if (eq mod.stat "toucherMagique")}}selected{{/if}}>Toucher magique</option>
+            <option value="initiativeMod"   {{#if (eq mod.stat "initiativeMod")}}selected{{/if}}>Initiative</option>
+            <option value="vitesse"         {{#if (eq mod.stat "vitesse")}}selected{{/if}}>Vitesse</option>
+          </optgroup>
+          <optgroup label="Ressources">
+            <option value="pvMax"      {{#if (eq mod.stat "pvMax")}}selected{{/if}}>PV max</option>
+            <option value="manaMax"    {{#if (eq mod.stat "manaMax")}}selected{{/if}}>Mana max</option>
+            <option value="regenPv"    {{#if (eq mod.stat "regenPv")}}selected{{/if}}>Régén PV</option>
+            <option value="regenMana"  {{#if (eq mod.stat "regenMana")}}selected{{/if}}>Régén Mana</option>
+            <option value="fatigueMax" {{#if (eq mod.stat "fatigueMax")}}selected{{/if}}>Fatigue max</option>
+            <option value="podsMax"    {{#if (eq mod.stat "podsMax")}}selected{{/if}}>Pods max</option>
+          </optgroup>
+        </select>
+        <select name="system.effectMods.{{mi}}.sens">
+          <option value="bonus" {{#unless mod.isMalus}}selected{{/unless}}>⬆️ Bonus</option>
+          <option value="malus" {{#if mod.isMalus}}selected{{/if}}>⬇️ Malus</option>
+        </select>
+        <select name="system.effectMods.{{mi}}.mode">
+          <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe</option>
+          <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
+        </select>
+        <input type="number" name="system.effectMods.{{mi}}.value" value="{{mod.absValue}}" min="0" placeholder="0"
+          title="Quantité, toujours positive — le sens est choisi à gauche."/>
+        <button type="button" data-action="removeEffectMod" data-mod-index="{{mi}}"
+          class="fx-del-btn" title="Retirer cette stat">✕</button>
+      </div>
+      {{/each}}
+    </div>
+    <button type="button" data-action="addEffectMod" class="fx-add-btn">+ Ajouter une stat</button>
+    <small class="fx-hint">Facultatif — laisse vide si l'état ne change aucune stat. Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>.</small>
+  </fieldset>
 
   <div class="form-group">
     <label style="font-weight:700">Actif</label>
