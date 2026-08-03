@@ -35,12 +35,6 @@
   ],
   "packs": [
     {
-      "name": "macros-rpg",
-      "label": "Macros système",
-      "path": "packs/macros/macros.db",
-      "type": "Macro"
-    },
-    {
       "name": "loot-tables",
       "label": "Tables de Rencontre",
       "path": "packs/loot-tables/loot-tables.db",
