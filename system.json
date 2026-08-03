@@ -39,12 +39,6 @@
       "label": "Tables de Rencontre",
       "path": "packs/loot-tables/loot-tables.db",
       "type": "RollTable"
-    },
-    {
-      "name": "documentation",
-      "label": "Documentation",
-      "path": "packs/documentation/documentation.db",
-      "type": "JournalEntry"
     }
   ],
   "documentTypes": {
