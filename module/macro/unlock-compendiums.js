@@ -13,7 +13,6 @@
   }
 
   const RPG_PACKS = [
-    "rpg.macros-rpg",
     "rpg.loot-tables",
     "rpg.documentation"
   ];
