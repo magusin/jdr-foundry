@@ -326,7 +326,16 @@ export function registerZoneEffectBehavior() {
 export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionBehaviorConfig {
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS ?? {},
-    { window: { title: "Piège / Zone à effet" }, position: { width: 460 } },
+    // Le template compte une quinzaine de champs (nom, 3 cases à cocher, 2 DD,
+    // curseur de ralentissement, dégâts, état...) — nettement plus long que le
+    // formulaire générique auto-généré pour lequel RegionBehaviorConfig calcule
+    // sa hauteur par défaut. Sans hauteur explicite ni resizable, la fenêtre
+    // s'ouvrait tronquée avant même les champs de dégâts, sans molette de
+    // redimensionnement ni ascenseur pour aller les chercher (repéré à l'usage :
+    // impossible de scroller jusqu'aux dégâts en jeu). "auto" laisse la fenêtre
+    // s'ajuster au contenu réel ; resizable donne une échappatoire manuelle si
+    // l'écran est trop petit pour la hauteur obtenue.
+    { window: { title: "Piège / Zone à effet", resizable: true }, position: { width: 460, height: "auto" } },
     { inplace: false }
   );
 
@@ -351,6 +360,18 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
     }
     ctx.system = this.document.system ?? {};
     return ctx;
+  }
+
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    // Filet de sécurité indépendant de "auto" ci-dessus : même si une future
+    // version de Foundry recalcule la hauteur autrement, le contenu doit
+    // rester atteignable au lieu de se couper silencieusement en bas.
+    const content = this.element?.querySelector(".window-content");
+    if (content) {
+      content.style.overflowY = "auto";
+      content.style.maxHeight = "80vh";
+    }
   }
 }
 

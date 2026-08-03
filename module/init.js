@@ -815,6 +815,21 @@ Hooks.once("init", async () => {
         // native quelconque par accident de contenu.
         const isRollTable = app?.document?.documentName === "RollTable";
 
+        // Les journaux (fiches JournalEntry/Page) sont natifs à 100% eux
+        // aussi, mais rester non themés les laissait dans un entre-deux :
+        // le chrome de la fenêtre (barre latérale des pages, en-tête) suit
+        // le thème CŒUR de Foundry (donc potentiellement clair), tandis que
+        // la zone de lecture d'une page texte a son propre rendu par
+        // défaut, sombre — plus rien à voir avec notre thème rpg-*, mais le
+        // résultat est un patchwork clair/sombre illisible par endroits.
+        // Ça touche autant nos propres journaux (le "Journal de Campagne"
+        // auto-généré par campaign-journal.js — un document de MONDE, donc
+        // jamais couvert par isOwnPack ci-dessous) que tout journal créé
+        // par le MJ. Même logique que RollTable : ciblé par TYPE de
+        // document, jamais par contenu détecté.
+        const isJournalSheet = app?.document?.documentName === "JournalEntry"
+                             || app?.document?.documentName === "JournalEntryPage";
+
         // Nos propres compendiums (Documentation, Tables de Rencontre,
         // Équipement/Monstres de référence, Macros système) et tout ce qu'on
         // ouvre DEPUIS eux (le navigateur de compendium ET les fiches
@@ -830,6 +845,7 @@ Hooks.once("init", async () => {
                     || root.matches?.(RPG_MARKERS)
                     || !!root.querySelector(RPG_MARKERS)
                     || isRollTable
+                    || isJournalSheet
                     || isOwnPack;
         if (isOurs) themeWindow(root);
       } catch { /* habillage optionnel */ }

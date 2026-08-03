@@ -179,6 +179,24 @@ div.rpg-sheet {
     radial-gradient(circle at 85% 100%, rgba(209,161,68,0.05), transparent 40%) !important;
 }
 
+/* ── Barre de titre — jusqu'ici seul le TEXTE de .window-header héritait de
+   --ink-text (color se propage aux enfants) : le FOND, lui, restait celui
+   -- non maîtrisé par nous — du chrome natif de Foundry. Selon la combinaison
+   thème RPG × rendu natif, ça donnait un titre illisible : texte clair
+   (sombre/contraste) sur un en-tête natif clair, ou texte sombre (clair) sur
+   un en-tête natif sombre. On fixe nous-mêmes le fond ET la couleur du
+   titre, comme déjà fait pour .window-content ci-dessus. On ne touche
+   jamais .header-control/les boutons (icônes Font Awesome) : cf. l'avertissement
+   plus bas sur les boutons de .window-content, même risque ici. */
+.rpg-sheet .window-header,
+.rpg-window .window-header {
+  background: var(--ink-2, #1b1d2b) !important;
+}
+.rpg-sheet .window-header .window-title,
+.rpg-window .window-header .window-title {
+  color: var(--ink-text, #ece4d3) !important;
+}
+
 .rpg-sheet .sheet-body,
 .rpg-sheet .tab {
   background: transparent;
@@ -468,11 +486,29 @@ div.rpg-sheet {
    ══════════════════════════════════════════════════════════════════════ */
 
 /* Fenêtres marquées comme nôtres (DialogV2 lancés par le système) */
+/* ⚠️ !important nécessaire pour les fenêtres de JournalEntry/Page (voir
+   isJournalSheet dans init.js) : la zone de lecture d'une page texte a son
+   propre rendu par défaut chez Foundry (souvent plus sombre que le reste du
+   chrome de la fenêtre), avec des sélecteurs internes (.journal-page-content
+   et consorts) au moins aussi spécifiques que .rpg-window .window-content —
+   sans !important cette règle perdait la bataille de spécificité et on
+   retombait sur le patchwork clair/sombre illisible qu'elle est censée
+   éviter. Les autres fenêtres marquées .rpg-window (dialogues de macro)
+   n'ont pas de fond concurrent aussi spécifique, donc ça ne change rien
+   pour elles. */
 body.rpg-theme-sombre .rpg-window .window-content,
 body.rpg-theme-clair .rpg-window .window-content,
 body.rpg-theme-contraste .rpg-window .window-content {
-  background: var(--ink);
-  color: var(--ink-text);
+  background: var(--ink) !important;
+  color: var(--ink-text) !important;
+}
+
+.rpg-window .window-content .journal-page-content,
+.rpg-window .window-content .journal-entry-content,
+.rpg-window .window-content .journal-entry-page,
+.rpg-window .window-content .editor-content {
+  background: transparent !important;
+  color: var(--ink-text) !important;
 }
 
 body.rpg-theme-sombre .rpg-window,
@@ -530,8 +566,25 @@ body.rpg-theme-contraste .rpg-window {
   color: #17171d;
 }
 
-/* Les variables de thème doivent exister sur body pour que les règles
-   ci-dessus aient de quoi puiser. */
-body.rpg-theme-sombre    { color-scheme: dark; }
-body.rpg-theme-clair     { color-scheme: light; }
-body.rpg-theme-contraste { color-scheme: dark; }
+/* ⚠️ color-scheme sur <body> était le même genre de fuite que celle décrite
+   plus haut pour les variables --ink/--color-text-* (« PAS à body.rpg-theme-* »)
+   — sauf que celle-ci n'avait pas été repérée : color-scheme est hérité par
+   TOUT le DOM lui aussi, y compris les fenêtres 100% natives qui n'ont rien
+   à voir avec nous. Repéré via l'éditeur CodeMirror des macros (« Script ») :
+   Foundry calcule certaines de ses couleurs avec la fonction CSS light-dark(),
+   qui lit le color-scheme hérité — forcer color-scheme:light en thème Clair
+   faisait basculer le TEXTE de l'éditeur vers ses tons « clairs » (donc
+   foncés, pensés pour un fond blanc) alors que le FOND de l'éditeur restait
+   sombre (non concerné par light-dark ou fixé indépendamment) : du texte
+   presque invisible, foncé sur foncé, dans une fenêtre qu'on ne thème même
+   pas. Scopé comme le reste du fichier à nos propres fenêtres : ça ne perd
+   que l'indice de rendu natif (scrollbars, contrôles de formulaire) pour les
+   fenêtres qui ne sont pas les nôtres — elles n'ont de toute façon aucune
+   autre variable de thème à disposition. */
+.rpg-sheet.rpg-theme-sombre, .rpg-window.rpg-theme-sombre, .rpg-spell-menu.rpg-theme-sombre,
+.rpg-sheet.rpg-theme-contraste, .rpg-window.rpg-theme-contraste, .rpg-spell-menu.rpg-theme-contraste {
+  color-scheme: dark;
+}
+.rpg-sheet.rpg-theme-clair, .rpg-window.rpg-theme-clair, .rpg-spell-menu.rpg-theme-clair {
+  color-scheme: light;
+}
