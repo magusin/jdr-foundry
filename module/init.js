@@ -317,6 +317,25 @@ Hooks.once("init", async () => {
   // ✅ Protection globale contre les crashes non-catchés
   installGlobalErrorHandler();
 
+  // ✅ Réglette de déplacement custom (coût terrain + restant du tour en
+  // direct) — DOIT être posée ici, dans "init", pas dans "ready" comme avant.
+  // CONFIG.Token.rulerClass est une classe que Foundry lit pour CONSTRUIRE
+  // la réglette de chaque token, au dessin du canevas de la scène active —
+  // qui a déjà eu lieu avant que "ready" ne se déclenche. Un token déjà
+  // affiché à ce moment-là garde donc la réglette NATIVE (coût terrain
+  // ignoré, seule la distance de grille brute s'affiche pendant le glisser —
+  // symptôme observé : le nombre affiché ne bouge pas quand on modifie le
+  // terrain), et seul un token dessiné après coup (nouvelle scène chargée
+  // après le démarrage) profitait du remplacement. "init" se déclenche avant
+  // toute construction de canevas/token, donc avant toute lecture de cette
+  // valeur — c'est l'endroit conventionnel pour ce genre de substitution de
+  // classe CONFIG.*, contrairement à installRangeOverlay()/installDragLimit()
+  // ci-dessous (restés dans "ready" : l'un n'enregistre que des hooks
+  // d'événements, l'autre patche un PROTOTYPE partagé par toutes les
+  // instances existantes ou futures — aucun des deux n'a ce problème de
+  // timing propre à un remplacement de référence de classe).
+  try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
+
   // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
   registerRegionBehaviors();
   registerZoneEffectBehavior();
@@ -757,9 +776,6 @@ Hooks.once("init", async () => {
 
     // ✅ Aligne la règle de diagonale de Foundry sur le réglage RP (réaliste par défaut)
     rpgSyncCoreDiagonals();
-
-    // ✅ Réglette de déplacement custom : coût terrain + restant du tour en direct
-    try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
 
     // ✅ Indicateur d'allonge (zone de menace) au survol d'un token
     try { installRangeOverlay(); } catch (e) { console.warn("[RPG] affichage des portées:", e); }
