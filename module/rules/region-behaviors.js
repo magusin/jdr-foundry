@@ -323,7 +323,11 @@ export function registerRegionBehaviors() {
 export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBehaviorConfig {
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS ?? {},
-    { window: { title: "Configuration du terrain" }, position: { width: 420 } },
+    // Voir le même correctif (et sa raison) dans ZoneEffectBehaviorSheet
+    // (zone-effects.js) : hauteur "auto" + resizable, plutôt que la hauteur
+    // par défaut de RegionBehaviorConfig dimensionnée pour son propre
+    // formulaire générique, plus court que notre template custom.
+    { window: { title: "Configuration du terrain", resizable: true }, position: { width: 420, height: "auto" } },
     { inplace: false }
   );
 
@@ -361,6 +365,15 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
     ctx.trueCost       = mult > 0 ? (6 / mult).toFixed(1) : "∞";
 
     return ctx;
+  }
+
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const content = this.element?.querySelector(".window-content");
+    if (content) {
+      content.style.overflowY = "auto";
+      content.style.maxHeight = "80vh";
+    }
   }
 }
 
