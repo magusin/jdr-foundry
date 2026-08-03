@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">
+  <!-- Cercles runiques — un motif défini une fois puis posé aux 4 coins +
+       au centre (même technique de carrelage sans coutures que les deux
+       autres textures) pour donner un cercle complet à chaque intersection. -->
+  <defs>
+    <g id="rune" fill="none" stroke="#8a5fc0" stroke-width="1.6">
+      <circle r="34"/>
+      <circle r="22"/>
+      <circle r="3" fill="#8a5fc0" stroke="none"/>
+      <line x1="26" y1="0" x2="32" y2="0"/>
+      <line x1="18.39" y1="18.39" x2="22.63" y2="22.63"/>
+      <line x1="0" y1="26" x2="0" y2="32"/>
+      <line x1="-18.39" y1="18.39" x2="-22.63" y2="22.63"/>
+      <line x1="-26" y1="0" x2="-32" y2="0"/>
+      <line x1="-18.39" y1="-18.39" x2="-22.63" y2="-22.63"/>
+      <line x1="0" y1="-26" x2="0" y2="-32"/>
+      <line x1="18.39" y1="-18.39" x2="22.63" y2="-22.63"/>
+    </g>
+  </defs>
+  <g opacity="0.16">
+    <use href="#rune" x="0" y="0"/>
+    <use href="#rune" x="140" y="0"/>
+    <use href="#rune" x="0" y="140"/>
+    <use href="#rune" x="140" y="140"/>
+    <use href="#rune" x="70" y="70"/>
+  </g>
+</svg>

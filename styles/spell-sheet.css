@@ -8,7 +8,16 @@
   overflow-x: hidden;
 }
 
-.rpg-spell-sheet .sheet-body { padding: 10px; }
+.rpg-spell-sheet .sheet-body {
+  padding: 10px;
+  /* Texture "cercle runique" propre au type sort — reprend le violet arcane
+     déjà utilisé pour les liserés de carte (cf. armor-sheet.css pour le
+     même principe : couleur/opacité fixées dans le SVG, pas de var(--...),
+     une image externe ne peut pas hériter nos variables). */
+  background-image: url("systems/rpg/assets/backgrounds/spell-texture.svg");
+  background-repeat: repeat;
+  background-size: 140px 140px;
+}
 
 .rpg-spell-sheet .card {
   border-left: 3px solid var(--arcane, #a172e0);

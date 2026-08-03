@@ -9,6 +9,13 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    /* Texture "toile tissée" propre au type objet générique — reprend le
+       laiton déjà utilisé pour les liserés de carte (cf. armor-sheet.css
+       pour le même principe : couleur/opacité fixées dans le SVG, pas de
+       var(--...), une image externe ne peut pas hériter nos variables). */
+    background-image: url("systems/rpg/assets/backgrounds/item-texture.svg");
+    background-repeat: repeat;
+    background-size: 60px 60px;
   }
 
   /* 1) Le container de contenu de la fenêtre doit être en flex et limiter la hauteur */
