@@ -77,6 +77,21 @@ function decorateMod(m) {
  * Handlebars et la mise à jour en place après une saisie, pour que les deux
  * ne divergent jamais.
  */
+/** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
+function buildResistSummary(fx) {
+  if (!fx.resistTag && !fx.resistImmune) return null;
+  const bits = [fx.resistTag || "?"];
+  if (fx.resistImmune) {
+    bits.push("immunité");
+  } else {
+    const dur = n(fx.resistDurationReduction, 0);
+    if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
+    const pct = n(fx.resistDotPct, 0);
+    if (pct) bits.push(`dégâts ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
+  }
+  return `🛡️ ${bits.join(" · ")}`;
+}
+
 function buildFxUi(fx) {
   const tick = fx.tick ?? {};
   let uiTick = null;
@@ -98,8 +113,9 @@ function buildFxUi(fx) {
       : null,
     uiMove: fx.movementTypeGrant ? `🏃 ${fx.movementTypeGrant}` : null,
     uiRemove: n(fx.removeBaseTN, 0)
-      ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+${n(fx.retraitMod, 0) ? ` (${n(fx.retraitMod, 0) > 0 ? "+" : ""}${n(fx.retraitMod, 0)})` : ""}`
+      ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+`
       : null,
+    uiResist: buildResistSummary(fx),
     mods
   };
 }
@@ -593,8 +609,12 @@ static PARTS = foundry.utils.mergeObject(
       fx.tick = normTick(fx);
 
       fx.removeBaseTN = n(fx.removeBaseTN, 0);
-      fx.retraitMod   = n(fx.retraitMod, 0);
       fx.auraTarget   = String(fx.auraTarget ?? "allies");
+
+      fx.resistTag = String(fx.resistTag ?? "");
+      fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
+      fx.resistDotPct = n(fx.resistDotPct, 0);
+      fx.resistImmune = !!fx.resistImmune;
 
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
       // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
@@ -624,7 +644,7 @@ static PARTS = foundry.utils.mergeObject(
       // ── Résumé lisible (pastilles) : visible replié pour le MJ et
       //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
       Object.assign(fx, buildFxUi(fx));
-      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.mods.length);
+      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.uiResist || fx.mods.length);
     }
 
     // ui flags joueur
@@ -701,7 +721,18 @@ static PARTS = foundry.utils.mergeObject(
         duration:  num("duration", 0),
         permanent: bool("permanent"),
         removeBaseTN: num("removeBaseTN", 0),
-        retraitMod:   num("retraitMod", 0),
+        // Champ retiré de l'UI (redondant avec TN de retrait ci-dessus : les
+        // deux ne faisaient que s'additionner sur le MÊME effet — autant
+        // saisir directement le total voulu dans removeBaseTN). Forcé à 0
+        // ici plutôt que juste supprimé du template, pour qu'un effet créé
+        // AVANT ce nettoyage perde sa valeur résiduelle dès son prochain
+        // enregistrement au lieu de continuer à l'appliquer invisiblement
+        // (remove-state-macro.js additionne toujours ce champ s'il existe).
+        retraitMod: 0,
+        resistTag:               str("resistTag", prev.resistTag ?? ""),
+        resistDurationReduction: num("resistDurationReduction", 0),
+        resistDotPct:            num("resistDotPct", 0),
+        resistImmune:            bool("resistImmune"),
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
         // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
         // via la stat « Fatigue max » dans les bonus/malus.

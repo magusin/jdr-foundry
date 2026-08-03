@@ -1463,7 +1463,19 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
           ...(fx.movementTypeGrant ? { movementTypeGrant: fx.movementTypeGrant } : {})
         },
         removeBaseTN: n(fx.removeBaseTN, 0) || null,
-        retraitMod:   n(fx.retraitMod, 0)
+        // Résistance/vulnérabilité ACCORDÉE par cet effet (ex: "Écaille de
+        // dragon" réduit la durée/les dégâts des effets tag "feu" reçus
+        // ENSUITE par la cible) — lu par resistances.js's applyResistances()
+        // via getStateResistances() tant que cet effet reste actif sur elle.
+        // Toujours construit, même vide : {tag:null,...} est filtré sans
+        // effet côté lecture (computeResistanceFor ignore une résistance sans
+        // tag ni effectKey), pas besoin d'un if ici.
+        resistance: {
+          tag: String(fx.resistTag ?? "").trim() || null,
+          durationReduction: n(fx.resistDurationReduction, 0),
+          dotReductionPct: n(fx.resistDotPct, 0),
+          immune: !!fx.resistImmune
+        }
       };
       if (isAura) state.aura = {
         min: n(fx.auraMin, 0),
