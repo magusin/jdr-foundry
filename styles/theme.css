@@ -179,6 +179,24 @@ div.rpg-sheet {
     radial-gradient(circle at 85% 100%, rgba(209,161,68,0.05), transparent 40%) !important;
 }
 
+/* ── Barre de titre — jusqu'ici seul le TEXTE de .window-header héritait de
+   --ink-text (color se propage aux enfants) : le FOND, lui, restait celui
+   -- non maîtrisé par nous — du chrome natif de Foundry. Selon la combinaison
+   thème RPG × rendu natif, ça donnait un titre illisible : texte clair
+   (sombre/contraste) sur un en-tête natif clair, ou texte sombre (clair) sur
+   un en-tête natif sombre. On fixe nous-mêmes le fond ET la couleur du
+   titre, comme déjà fait pour .window-content ci-dessus. On ne touche
+   jamais .header-control/les boutons (icônes Font Awesome) : cf. l'avertissement
+   plus bas sur les boutons de .window-content, même risque ici. */
+.rpg-sheet .window-header,
+.rpg-window .window-header {
+  background: var(--ink-2, #1b1d2b) !important;
+}
+.rpg-sheet .window-header .window-title,
+.rpg-window .window-header .window-title {
+  color: var(--ink-text, #ece4d3) !important;
+}
+
 .rpg-sheet .sheet-body,
 .rpg-sheet .tab {
   background: transparent;
