@@ -11,6 +11,7 @@ import {
   calculateMovementCost, formatTerrainSummary, getTerrainAt, TERRAIN_TYPES,
   measureSegmentMeters
 } from "./region-behaviors.js";
+import { triggerZoneEffectsForToken } from "./zone-effects.js";
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
@@ -18,6 +19,36 @@ const htmlEsc = (s) =>
 // Debounce : regroupe les updates rapides en un seul message
 const _pendingMoves = new Map(); // tokenId → { timer, startPos, lastPos, waypoints }
 const DEBOUNCE_MS = 350;
+
+// Hors combat, il n'y a pas de réserve de déplacement à gérer (personne n'a
+// de tour) — mais un piège/zone doit quand même se déclencher : sinon un
+// piège rencontré en exploration (l'essentiel des cas concrets, hors combat
+// structuré) ne se déclenche jamais, toute la chaîne de suivi plus bas
+// (budget, message d'attente, triggerZoneEffectsForToken) étant conditionnée
+// à isCombatEngaged(). Même débounce qu'en combat (un seul geste de glisser
+// V13 déclenche plusieurs cycles updateToken), mais sans budget ni message
+// d'attente : la zone se déclenche directement sur la position d'arrivée une
+// fois le geste retombé, toujours côté GM (triggerZoneEffectsForToken exige
+// game.user.isGM en interne).
+const _pendingFreeMoves = new Map(); // tokenId → timer
+
+function _scheduleFreeZoneTrigger(tokenDoc) {
+  clearTimeout(_pendingFreeMoves.get(tokenDoc.id));
+  const timer = setTimeout(async () => {
+    _pendingFreeMoves.delete(tokenDoc.id);
+    const actor = tokenDoc.actor;
+    if (!actor) return;
+    try {
+      const center = _tokenCenterAt(tokenDoc, tokenDoc.x, tokenDoc.y);
+      await triggerZoneEffectsForToken({
+        actor, tokenId: tokenDoc.id,
+        x: center.x, y: center.y,
+        elevation: tokenDoc.elevation ?? 0
+      });
+    } catch (e) { console.error("[RPG][Zone] déclenchement hors combat:", e); }
+  }, DEBOUNCE_MS);
+  _pendingFreeMoves.set(tokenDoc.id, timer);
+}
 
 // Position avant le move (capturée dans preUpdateToken)
 const _prevPos = new Map();
@@ -118,6 +149,26 @@ function measureDist(x1, y1, x2, y2) {
 }
 
 function fmt(m) { return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`; }
+
+/**
+ * Centre pixel d'un token pour une position (top-left) donnée. `tokenDoc.x`/
+ * `.y` sont le coin haut-gauche (le champ réel du document) — mais tester une
+ * région à ce coin plutôt qu'au centre du token peut manquer une zone que le
+ * token chevauche visuellement de l'autre côté de sa case (jusqu'à une demi-
+ * case d'écart sur un token 1×1, plus pour un plus grand). Tout le reste du
+ * système (range-overlay.js, drag-limit.js, movement-ruler.js, gm-aura.js,
+ * aura-render.js) teste déjà au centre (`token.center`) — seul ce fichier
+ * testait encore au coin, ce qui pouvait faire qu'un piège/zone ne se
+ * déclenche jamais alors que le token semblait clairement dedans à l'écran.
+ * Prend x/y en paramètres (pas seulement tokenDoc.x/y) pour pouvoir tester
+ * une position hypothétique pas encore validée (glisser en cours).
+ */
+function _tokenCenterAt(tokenDoc, x, y) {
+  const gridSize = tokenDoc?.parent?.grid?.size ?? canvas?.grid?.size ?? 100;
+  const w = (Number(tokenDoc?.width) || 1) * gridSize;
+  const h = (Number(tokenDoc?.height) || 1) * gridSize;
+  return { x: x + w / 2, y: y + h / 2 };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -254,7 +305,8 @@ export function onPreUpdateToken(tokenDoc, changes, options) {
     const newX = changes.x ?? tokenDoc.x;
     const newY = changes.y ?? tokenDoc.y;
 
-    const destTerrains = getTerrainAt(newX, newY, tokenDoc.elevation ?? 0);
+    const destCenter = _tokenCenterAt(tokenDoc, newX, newY);
+    const destTerrains = getTerrainAt(destCenter.x, destCenter.y, tokenDoc.elevation ?? 0);
     const getEffMult = game?.rpg?.movementTypes?.getEffectiveSpeedMult;
     let mult = 1;
     for (const t of destTerrains) {
@@ -369,7 +421,10 @@ export async function onUpdateToken(tokenDoc, changes, options) {
   }
 
   if (!game.user.isGM) return;
-  if (!isCombatEngaged(game.combat)) return;
+  if (!isCombatEngaged(game.combat)) {
+    _scheduleFreeZoneTrigger(tokenDoc);
+    return;
+  }
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
@@ -420,8 +475,12 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   const vitesse = getVitesse(actor);
 
   // ── Calcul du coût réel avec terrain + type de déplacement ─────────────
+  // Échantillonné au CENTRE du token à chaque point, pas au coin haut-gauche
+  // (waypoints) — la distance parcourue est la même (décalage constant), mais
+  // le test de région redevient précis (voir _tokenCenterAt ci-dessus).
   const elevation = tokenDoc.elevation ?? 0;
-  const { cost, segments, terrainsCrossed } = calculateMovementCost(waypoints, actor, elevation);
+  const centerWaypoints = waypoints.map(p => _tokenCenterAt(tokenDoc, p.x, p.y));
+  const { cost, segments, terrainsCrossed } = calculateMovementCost(centerWaypoints, actor, elevation);
   const distBrute = segments.reduce((s, seg) => s + seg.rawDist, 0);
   const terrainInfo = formatTerrainSummary(terrainsCrossed);
 
@@ -440,11 +499,18 @@ async function _processMove(tokenDoc, combatant, waypoints) {
     .map(s => `${fmt(s.rawDist)} en ${s.terrainLabel} (coût ${fmt(s.cost)})`)
     .join(", ");
 
+  // centerX/centerY : point testé contre les zones/pièges au moment de la
+  // validation MJ (action-confirm.js) — distinct de newX/newY (coin haut-
+  // gauche), qui doit rester le coin réel puisque undoMovement() l'utilise
+  // pour replacer le token via tokenDoc.update({x, y}).
+  const endCenter = _tokenCenterAt(tokenDoc, endPos.x, endPos.y);
+
   const actionId = foundry.utils.randomID();
   const snapshot = {
     casterId: actor.id, tokenId: tokenDoc.id,
     oldX: startPos.x, oldY: startPos.y,
     newX: endPos.x,   newY: endPos.y,
+    centerX: endCenter.x, centerY: endCenter.y,
     cost, waypoints, elevation
   };
 
