@@ -67,6 +67,39 @@
   color: var(--ink-text);
 }
 
+/* ⚠️ font-family est HÉRITÉ : la règle ci-dessus s'applique à absolument
+   tout ce que contient une fenêtre marquée .rpg-window (dont chaque
+   JournalEntry/Page depuis isJournalSheet dans init.js — cf. commentaire
+   sur .rpg-window button:not(.header-control) plus bas, même famille de
+   bug que celle documentée là). Ça inclut les icônes natives Font Awesome
+   de Foundry (loupe de recherche, tri, réduire-tout, ajouter une page…
+   dans la colonne Sommaire d'un journal) : ce sont des glyphes tirés d'une
+   police dédiée via un codepoint de la zone privée Unicode — si Foundry
+   pose leur `font-family` avec une spécificité/un ordre plus faible que
+   notre police d'interface héritée depuis la fenêtre, le glyphe attendu
+   n'existe pas dans NOTRE police et le navigateur affiche un rectangle
+   vide ("tofu") à la place. Reporté sur un JournalEntry (« Pense-bête
+   MJ ») : toute la colonne d'icônes à côté du champ de recherche s'affiche
+   en carrés vides. Les deux autres correctifs journal de ce fichier
+   (background/border des boutons, fond de .window-content) ne touchent
+   jamais `font-family` — cette fuite-là n'était donc pas couverte. On
+   réaffirme donc explicitement la police d'icônes sur tout ce qui porte
+   une classe Font Awesome usuelle (FA5 et FA6, Foundry mélange encore les
+   deux selon les endroits) à l'intérieur de nos fenêtres. */
+.rpg-sheet .fa, .rpg-sheet .fas, .rpg-sheet .far, .rpg-sheet .fal, .rpg-sheet .fat,
+.rpg-sheet .fa-solid, .rpg-sheet .fa-regular, .rpg-sheet .fa-light, .rpg-sheet .fa-thin,
+.rpg-window .fa, .rpg-window .fas, .rpg-window .far, .rpg-window .fal, .rpg-window .fat,
+.rpg-window .fa-solid, .rpg-window .fa-regular, .rpg-window .fa-light, .rpg-window .fa-thin,
+.rpg-spell-menu .fa, .rpg-spell-menu .fas, .rpg-spell-menu .far, .rpg-spell-menu .fal, .rpg-spell-menu .fat,
+.rpg-spell-menu .fa-solid, .rpg-spell-menu .fa-regular, .rpg-spell-menu .fa-light, .rpg-spell-menu .fa-thin {
+  font-family: "Font Awesome 6 Free", "Font Awesome 5 Free", "Font Awesome 6 Pro", "Font Awesome 5 Pro" !important;
+}
+.rpg-sheet .fab, .rpg-sheet .fa-brands,
+.rpg-window .fab, .rpg-window .fa-brands,
+.rpg-spell-menu .fab, .rpg-spell-menu .fa-brands {
+  font-family: "Font Awesome 6 Brands", "Font Awesome 5 Brands" !important;
+}
+
 /* ═══════════════ THÈME SOMBRE (par défaut) — encre + violet/laiton ═══════ */
 /* ⚠️ Scopé à nos propres marqueurs (.rpg-sheet/.rpg-spell-menu/.rpg-window),
    PAS à `body.rpg-theme-*` : ces variables portent les mêmes noms que des
