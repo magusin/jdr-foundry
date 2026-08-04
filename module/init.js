@@ -840,6 +840,21 @@ Hooks.once("init", async () => {
         // native quelconque par accident de contenu.
         const isRollTable = app?.document?.documentName === "RollTable";
 
+        // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (test d'isolation, Foundry V14) : un GM
+        // a signalé qu'éditer une page de journal puis fermer SANS
+        // sauvegarder rend ce journal impossible à rouvrir (aucune erreur en
+        // console, seul un F5 débloque, jusqu'à la prochaine édition) — y
+        // compris sur des journaux créés par lui, donc pas spécifique à un
+        // contenu ou une origine (compendium/monde) particulière. Reporter
+        // la pose des classes d'un frame (voir plus bas, tenté avant ce
+        // commit) n'a rien changé, ce qui élimine un problème de TIMING
+        // pendant le rendu — reste la possibilité que la SEULE PRÉSENCE de
+        // .rpg-window/.rpg-theme-* sur une fenêtre de journal casse quelque
+        // chose côté V14, peu importe quand elle est posée. isJournalSheet
+        // ci-dessous est neutralisé (toujours faux) le temps de confirmer ou
+        // d'écarter cette piste : si le bug persiste malgré ça, c'est la
+        // preuve que ce n'est PAS ce hook, et donc pas ce dépôt. Les
+        // journaux redeviennent 100% natifs (non themés) pendant ce test.
         // Les journaux (fiches JournalEntry/Page) sont natifs à 100% eux
         // aussi, mais rester non themés les laissait dans un entre-deux :
         // le chrome de la fenêtre (barre latérale des pages, en-tête) suit
@@ -852,8 +867,10 @@ Hooks.once("init", async () => {
         // jamais couvert par isOwnPack ci-dessous) que tout journal créé
         // par le MJ. Même logique que RollTable : ciblé par TYPE de
         // document, jamais par contenu détecté.
-        const isJournalSheet = app?.document?.documentName === "JournalEntry"
-                             || app?.document?.documentName === "JournalEntryPage";
+        const isJournalDoc = app?.document?.documentName === "JournalEntry"
+                           || app?.document?.documentName === "JournalEntryPage";
+        void isJournalDoc; // gardé pour la ré-activation, voir commentaire ci-dessus
+        const isJournalSheet = false;
 
         // La fiche d'édition d'une Macro (le "Tableau de bord MJ" et consorts)
         // est native à 100% elle aussi. Signalé illisible en thème Clair :
