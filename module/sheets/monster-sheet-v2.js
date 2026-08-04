@@ -425,6 +425,10 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     });
 
     // ── DeclareSpell / castSpell ──────────────────────
+    // Les actions de base (Attaquer, Changer d'arme, Retirer un état) ont
+    // leur propre logique (runDefaultAction) ; tout le reste passe par le
+    // workflow de sort habituel — même dispatch que _declareItem côté fiche
+    // personnage.
     const onDeclare = async (ev) => {
       ev.preventDefault();
       const li = ev.currentTarget.closest("[data-item-id]");
@@ -434,6 +438,19 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       if (!item) return;
       const casterToken = this.document.getActiveTokens()?.[0] ?? null;
       const targetToken = Array.from(game.user.targets)[0] ?? null;
+
+      try {
+        const { runDefaultAction } = await import("../rules/default-actions.js");
+        const special = await runDefaultAction(this.document, item, { targetToken });
+        if (special.handled) {
+          if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+          this.render({ force: false });
+          return;
+        }
+      } catch (e) {
+        console.error("[RPG] action de base (monstre) :", e);
+      }
+
       const res = await declareSpell(this.document, item, { casterToken, targetToken });
       if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
       this.render({ force: false });

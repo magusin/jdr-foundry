@@ -20,7 +20,7 @@ const FLAG_SCOPE = "rpg";
 const FLAG_KEY   = "defaultActions";
 // Incrémenté à chaque nouvelle action de base : le rattrapage au chargement
 // complète alors les acteurs déjà traités par une version antérieure.
-const VERSION    = 3;
+const VERSION    = 4;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -144,15 +144,58 @@ function swapActionData() {
   };
 }
 
+/**
+ * Retirer un état — choisit parmi les états actifs retirables, le MJ valide
+ * la tentative, puis le TN à battre (difficulté de retrait de l'état,
+ * ajustée par les bonus/malus de retrait des équipements et effets actifs)
+ * est révélé avant que le joueur ne lance son dé. Logique dédiée dans
+ * remove-state.js — voir runDefaultAction plus bas.
+ */
+function removeStateActionData() {
+  return {
+    name: "Retirer un état",
+    type: "spell",
+    img: "icons/svg/cancel.svg",
+    system: {
+      speed: "normal",
+      livraison: "physique",
+      tag: "neutre",
+      coutMana: 0,
+      fatigueCost: 0,
+      difficulte: 0,
+      range: { min: 0, max: 0 },
+      targetCount: { min: 0, max: 0 },   // aucune cible requise — toujours sur soi
+      cooldown: { max: 0, restant: 0 },
+      damages: [], restores: [], effectsUI: [],
+      description: "<p>Tente de se défaire d'un état actif retirable par un jet. "
+                 + "Choisis l'état, le MJ valide la tentative, puis le seuil à "
+                 + "atteindre (difficulté de retrait de l'état, ajustée par les "
+                 + "bonus/malus de retrait apportés par sorts et équipements) "
+                 + "est révélé avant le jet.</p>"
+    },
+    flags: { [FLAG_SCOPE]: { [ACTION_KEY_FLAG]: "retirerEtat" } }
+  };
+}
+
 /** Toutes les actions de base, indexées par clé. */
 const DEFAULT_ACTIONS = {
   repos: restActionData,
   attaquer: attackActionData,
-  changerArme: swapActionData
+  changerArme: swapActionData,
+  retirerEtat: removeStateActionData
 };
 
 /** Types d'acteurs concernés. */
 const TARGET_TYPES = new Set(["character", "monster"]);
+
+/**
+ * Actions de base non pertinentes pour certains types d'acteur : un monstre
+ * n'a pas besoin de déclarer un « Changer d'arme » (pas d'échange d'arme en
+ * tour par tour pour un monstre dans ce système).
+ */
+const ACTION_EXCLUDED_TYPES = {
+  changerArme: new Set(["monster"])
+};
 
 /**
  * Ajoute à un acteur les actions de base qui lui manquent.
@@ -164,6 +207,7 @@ export async function grantDefaultActions(actor) {
 
   const missing = [];
   for (const [key, build] of Object.entries(DEFAULT_ACTIONS)) {
+    if (ACTION_EXCLUDED_TYPES[key]?.has(actor.type)) continue;
     const already = actor.items.some(i =>
       i.getFlag?.(FLAG_SCOPE, ACTION_KEY_FLAG) === key || i.name === build().name);
     if (!already) missing.push(build());
@@ -330,7 +374,13 @@ function handLabel(weapon) {
  */
 export async function runDefaultAction(actor, item, { targetToken = null } = {}) {
   const key = defaultActionKey(item);
-  if (key !== "attaquer" && key !== "changerArme") return { handled: false };
+  if (key !== "attaquer" && key !== "changerArme" && key !== "retirerEtat") return { handled: false };
+
+  // ── Retirer un état ────────────────────────────────────────────────────
+  if (key === "retirerEtat") {
+    const { declareRemoveState } = await import("./remove-state.js");
+    return declareRemoveState(actor);
+  }
 
   // ── Attaquer ───────────────────────────────────────────────────────────
   if (key === "attaquer") {

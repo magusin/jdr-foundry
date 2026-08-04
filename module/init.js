@@ -25,6 +25,7 @@ import { installHotbarSupport, useItemFromHotbar } from "./rules/hotbar.js";
 import { applyChatVisibility, gmOnly, hpSecret } from "./rules/chat-visibility.js";
 import { installDefaultActions, grantDefaultActions, backfillDefaultActions,
          bindSwapChatButtons } from "./rules/default-actions.js";
+import { bindRemoveStateChatButtons } from "./rules/remove-state.js";
 import { installCodex } from "./rules/codex.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
@@ -1098,6 +1099,7 @@ Hooks.once("init", async () => {
       try { bindActionChatButtons(html, message); } catch (e) { }
       try { bindForgeChatButtons(html, message); } catch (e) { }
       try { bindSwapChatButtons(html, message); } catch (e) { }
+      try { bindRemoveStateChatButtons(html, message); } catch (e) { }
       try { bindAgonieChatButtons(html, message); } catch (e) { }
       // ── Nouveau : bouton "Lancer le dé" (jet de compétence initié par MJ) ──
       {
