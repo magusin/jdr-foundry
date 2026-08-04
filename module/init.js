@@ -896,7 +896,24 @@ Hooks.once("init", async () => {
                     || isMacroSheet
                     || isWorldDirectory
                     || isOwnPack;
-        if (isOurs) themeWindow(root);
+        if (!isOurs) return;
+
+        // Signalé sur Foundry V14 (jamais reproduit sur les autres fenêtres
+        // marquées .rpg-window comme les RollTable) : une simple bascule
+        // vue → édition → fermeture SANS sauvegarder sur une page de
+        // journal la rend impossible à rouvrir ensuite (aucun message en
+        // console, seul un F5 la débloque, jusqu'au prochain aller-retour
+        // en édition). isJournalSheet est le seul endroit de ce fichier qui
+        // traite les JournalEntry/Page différemment des autres fenêtres —
+        // themeWindow() posant ses classes de façon SYNCHRONE pendant le
+        // hook renderApplicationV2 (donc PENDANT le pipeline de rendu
+        // interne de Foundry) est la seule piste plausible restante côté
+        // code : on la repousse d'une frame pour cette fenêtre précise, une
+        // fois que Foundry a fini son propre rendu/bascule de mode. Les
+        // autres types de fenêtre n'ont montré aucun symptôme de ce genre,
+        // donc on ne change que celui-ci pour garder l'expérience ciblée.
+        if (isJournalSheet) requestAnimationFrame(() => themeWindow(root));
+        else themeWindow(root);
       } catch { /* habillage optionnel */ }
     };
     Hooks.on("renderApplication", themeIfOurs);
