@@ -14,8 +14,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     {
       id: "rpg-quest-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "quest"],
-      position: { width: 520, height: 700 },
+      position: { width: 780, height: 660 },
       window: { contentClasses: ["rpg-sheet-window"] },
+      tabs: [
+        { navSelector: ".quest-page-nav", contentSelector: ".quest-page-content", initial: "apercu" }
+      ],
 
       form: {
         closeOnSubmit: false,
@@ -38,6 +41,22 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     },
     { inplace: false }
   );
+
+  /** Pages façon journal : navigation propre (Tabs), pas le tabbing auto de
+   *  DocumentSheetV2 — même mécanisme que RPGCharacterSheetV2, voir
+   *  _prepareTabs() juste en dessous pour la raison du court-circuit. */
+  static TABS = {
+    primary: {
+      navSelector: ".quest-page-nav",
+      contentSelector: ".quest-page-content",
+      initial: "apercu"
+    }
+  };
+
+  /** Empêche DocumentSheetV2 de crasher (tabs undefined -> reduce) */
+  _prepareTabs() {
+    return [];
+  }
 
   static PARTS = foundry.utils.mergeObject(
     super.PARTS ?? {},
@@ -63,6 +82,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     const root = this.element;
     if (!root) return;
+
+    // ── Pages façon journal : liste à gauche, contenu de la page active à
+    // droite. Un vrai re-render (via changeTab de DocumentSheetV2) perdrait
+    // l'état d'édition ProseMirror en cours — on utilise donc la même
+    // instance de Tabs bindée en DOM que RPGCharacterSheetV2, recréée une
+    // seule fois et re-bindée à chaque render pour survivre aux
+    // submitOnChange (elle garde sa page active en mémoire toute seule).
+    if (!this._tabs) {
+      this._tabs = new foundry.applications.ux.Tabs({
+        navSelector: ".quest-page-nav",
+        contentSelector: ".quest-page-content",
+        initial: "apercu"
+      });
+    }
+    this._tabs.bind(root);
+    if (this._pendingTab) {
+      this._tabs.activate(this._pendingTab);
+      this._pendingTab = null;
+    }
 
     // ── UUID cliquable (récompense) → ouvre la fiche de l'objet ──────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
@@ -104,16 +142,32 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _prepareContext(options) {
     const ctx = await super._prepareContext(options);
     const item = this.document;
+    // Même repli défensif que drop-helper.js pour TextEditor : .implementation
+    // porte l'API V13, avec le global comme filet si jamais absent.
+    const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation ?? foundry.applications.ux.TextEditor;
 
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
     ctx.system.etapes = Array.isArray(ctx.system.etapes) ? ctx.system.etapes : [];
-    ctx.system.etapes = ctx.system.etapes.map((e, i) => ({
-      label: e?.label ?? "",
-      description: e?.description ?? "",
-      notesMJ: e?.notesMJ ?? "",
-      objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
-      etapeNum: i + 1
+    // Récit et notes MJ passent par enrichHTML pour que @UUID[...] (PNJ,
+    // objet, scène glissé dans l'éditeur) devienne un lien cliquable —
+    // value= (source brute) alimente l'éditeur ProseMirror en mode édition,
+    // le HTML enrichi ci-dessous alimente l'affichage lecture seule/joueur.
+    ctx.system.etapes = await Promise.all(ctx.system.etapes.map(async (e, i) => {
+      const description = e?.description ?? "";
+      const notesMJ = e?.notesMJ ?? "";
+      return {
+        label: e?.label ?? "",
+        // Titre de secours pour la liste de pages seulement — ne remplace
+        // jamais la vraie valeur (vide) de l'input éditable.
+        navLabel: (e?.label ?? "").trim() || `Étape ${i + 1}`,
+        description,
+        descriptionHTML: await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item }),
+        notesMJ,
+        notesMJHTML: await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item }),
+        objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
+        etapeNum: i + 1
+      };
     }));
     // etapeActuelle peut valoir etapes.length (un cran au-delà de la
     // dernière étape réelle) : c'est l'état "toutes les étapes terminées",
@@ -147,6 +201,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     ctx.system.statut = String(ctx.system.statut ?? "active");
     ctx.system.description = String(ctx.system.description ?? "");
+    ctx.descriptionHTML = await TextEditorImpl.enrichHTML(ctx.system.description, { secrets: game.user.isGM, relativeTo: item });
 
     ctx.calc = {
       etapeActuelleNum: ctx.system.etapes.length ? ctx.system.etapeActuelle + 1 : 0,
@@ -187,8 +242,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       ctx.system.etapes = ctx.system.etapes
         .filter((e, i) => i <= cur)
         .map((e, i) => i === cur
-          ? { label: e.label, description: e.description, objectifs: e.objectifs, etapeNum: e.etapeNum }
-          : { label: e.label, etapeNum: e.etapeNum, termine: true });
+          ? { label: e.label, navLabel: e.navLabel, description: e.description, descriptionHTML: e.descriptionHTML, objectifs: e.objectifs, etapeNum: e.etapeNum }
+          : { label: e.label, navLabel: e.navLabel, etapeNum: e.etapeNum, termine: true });
       ctx.system.classeRequise = "";
       ctx.system.recompense = { xp: 0, items: [] };
     }
@@ -234,6 +289,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
     list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
+    // Amène directement le MJ sur la page de la nouvelle étape plutôt que
+    // de le laisser sur "Aperçu" en devinant où elle a atterri.
+    this._pendingTab = `etape-${list.length - 1}`;
     await this.document.update({ "system.etapes": list }, { render: true });
   }
 
@@ -253,6 +311,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const wasComplete = etapeActuelle >= oldEtapes.length;
     etapeActuelle = wasComplete ? list.length : Math.min(etapeActuelle, Math.max(0, list.length - 1));
 
+    // La page retirée n'existe plus : retour à "Aperçu" plutôt que de
+    // laisser Tabs pointer vers un data-tab qui n'a plus de panneau.
+    this._pendingTab = "apercu";
     await this.document.update({ "system.etapes": list, "system.etapeActuelle": etapeActuelle }, { render: true });
   }
 
@@ -265,6 +326,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // depuis la dernière étape la marque terminée au lieu de rester bloquée
     // dessus indéfiniment (voir la note dans _prepareContext).
     etapeActuelle = Math.max(0, Math.min(etapes.length, etapeActuelle + delta));
+    this._pendingTab = etapeActuelle < etapes.length ? `etape-${etapeActuelle}` : "apercu";
     await this.document.update({ "system.etapeActuelle": etapeActuelle }, { render: true });
   }
 

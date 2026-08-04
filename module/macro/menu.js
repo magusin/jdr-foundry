@@ -291,7 +291,7 @@
             <div class="rpg-stats">
               <span>⚔️ Dégâts <b>${dmgTxt}</b></span>
               <span>${tnTxt}</span>
-              <span>📏 Portée <b>${portee}m</b>${distCases !== null ? ` (cible à ${distCases?.toFixed?.(1) ?? distCases}m)` : ""}</span>
+              <span>📏 Portée <b>${porteeMax}m</b>${distCases !== null ? ` (cible à ${distCases?.toFixed?.(1) ?? distCases}m)` : ""}</span>
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>
