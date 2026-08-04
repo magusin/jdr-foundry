@@ -337,6 +337,17 @@ Hooks.once("init", async () => {
   // timing propre à un remplacement de référence de classe).
   try { installRPGTokenRuler(); } catch (e) { console.warn("[RPG] réglette custom:", e); }
 
+  // ✅ États maison dans le menu clic-droit du token (icônes Foundry natives)
+  // — comme installRPGTokenRuler() ci-dessus, DOIT rester synchrone tout en
+  // haut du hook "init", avant le premier `await` de cette fonction : Foundry
+  // ne réattend jamais un callback "init" async (Hooks.callAll est
+  // synchrone), donc tout ce qui suit un `await` ici s'exécute "un jour",
+  // après que Foundry ait déjà enchaîné sur setup/ready — trop tard pour du
+  // code que d'autres parties du core pourraient consulter tôt. Repéré via
+  // Actor#toggleStatusEffect qui rejetait "rpg-brulure" comme ID invalide :
+  // cet appel vivait plus bas dans le hook, après plusieurs `await import(...)`.
+  installCustomStatusEffects();
+
   // ✅ Enregistrement des comportements de région (terrain difficile, eau, etc.)
   registerRegionBehaviors();
   registerZoneEffectBehavior();
@@ -639,9 +650,6 @@ Hooks.once("init", async () => {
     formula: "1d100 + @init",
     decimals: 0
   };
-
-  // ✅ États maison dans le menu clic-droit du token (icônes Foundry natives)
-  installCustomStatusEffects();
 
   // ---------------------------
   // Defaults Actor (création)
