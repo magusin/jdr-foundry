@@ -82,9 +82,77 @@
 .rpg-quest-sheet .header-fields { flex: 1; }
 .rpg-quest-sheet .quest-send-btn { cursor: pointer; padding: 4px 10px; white-space: nowrap; }
 
-.rpg-quest-sheet .sheet-body { padding: 14px !important; }
+.rpg-quest-sheet .sheet-body { padding: 0 !important; }
 .rpg-quest-sheet h3 { margin: 0 0 8px 0; }
-.rpg-quest-sheet .quest-section-title { margin-top: 18px; }
+.rpg-quest-sheet .quest-section-title { margin-top: 0; }
+
+/* ── Pages façon journal : liste des pages à gauche, contenu à droite ──── */
+.rpg-quest-sheet .quest-layout {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.rpg-quest-sheet .quest-page-nav {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft, var(--color-border-tertiary));
+  background: var(--surface, rgba(255,255,255,0.03));
+}
+.rpg-quest-sheet .quest-page-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm, 5px);
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-text-dim, var(--color-text-secondary));
+  cursor: pointer;
+  line-height: 1.3;
+}
+.rpg-quest-sheet .quest-page-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rpg-quest-sheet .quest-page-item:hover {
+  color: var(--ink-text, var(--color-text-primary));
+  background: var(--ink-2, rgba(255,255,255,0.06));
+}
+.rpg-quest-sheet .quest-page-item.active {
+  color: var(--arcane, #9b59b6);
+  background: var(--ink-2, rgba(255,255,255,0.08));
+  border-color: var(--border-soft, var(--color-border-tertiary));
+}
+.rpg-quest-sheet .quest-page-item.quest-page-current:not(.active) { color: #1d9e75; }
+.rpg-quest-sheet .quest-page-item.quest-page-done { opacity: .6; }
+
+.rpg-quest-sheet .quest-page-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* ── Éditeurs ProseMirror (récit, notes MJ, description) ─────────────── */
+.rpg-quest-sheet prose-mirror.rpg-quest-editor {
+  display: block;
+  min-height: 100px;
+  font-size: 12px;
+}
+.rpg-quest-sheet .rpg-enriched-text {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.rpg-quest-sheet .rpg-enriched-text > *:first-child { margin-top: 0; }
+.rpg-quest-sheet .rpg-enriched-text > *:last-child { margin-bottom: 0; }
 
 /* Groupes de champs du haut (statut, partagée, destinataires, étape
    actuelle...) : aucune règle ne les espaçait avant, d'où l'aspect tassé
