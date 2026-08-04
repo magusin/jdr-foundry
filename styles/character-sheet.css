@@ -562,6 +562,7 @@
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
   padding: 12px;
+  color: var(--ink-text);
 }
 
 .panel-states .panel-title {
@@ -570,6 +571,10 @@
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.panel-states .panel-title h2 {
+  color: var(--ink-text);
 }
 
 .panel-states .state-list {
@@ -596,6 +601,11 @@
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
+  color: var(--ink-text);
+}
+
+.panel-states .state-main .muted {
+  color: var(--ink-text-faint);
 }
 
 .panel-states .state-actions {
