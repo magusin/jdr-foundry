@@ -68,12 +68,17 @@ export function installGlobalErrorHandler() {
   window.addEventListener("unhandledrejection", (event) => {
     const err = event.reason;
     const msg = err?.message ?? String(err ?? "");
-    
-    // Ignorer les erreurs non-RPG
-    if (!msg.includes("[RPG]") && !msg.includes("rpg") && !msg.toLowerCase().includes("foundry")) {
-      // On laisse passer les erreurs tierces
-    }
-    
+
+    // ⚠️ Ce bloc était un no-op : la condition ne faisait jamais que passer
+    // dans son commentaire ("on laisse passer les erreurs tierces") sans
+    // jamais réellement sortir/ignorer quoi que ce soit — TOUTE promesse
+    // rejetée non catchée sur toute la page (cœur Foundry, autres modules,
+    // erreurs navigateur…), pas seulement celles de ce système, finissait
+    // quand même loguée juste en dessous avec notre préfixe [RPG]. Ce
+    // listener est posé sur `window`, donc global à toute la page — pas
+    // scopé à ce système — d'où l'intérêt de vraiment sortir tôt ici.
+    if (!msg.includes("[RPG]") && !msg.includes("rpg")) return;
+
     console.error("[RPG] Promesse rejetée non-catchée :", err);
     
     // Empêcher Foundry d'afficher une erreur fatale si c'est une erreur système RPG

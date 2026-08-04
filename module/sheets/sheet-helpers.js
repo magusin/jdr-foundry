@@ -75,6 +75,19 @@ export function currentUiTheme() {
 }
 
 /**
+ * true si le joueur a choisi le thème "natif" (échappatoire de diagnostic —
+ * voir le choix "natif" sur le réglage rpg.uiTheme dans init.js). N'affecte
+ * QUE les fenêtres natives qu'on habille EN PLUS (journaux, tables
+ * aléatoires, macros, répertoires détachés, nos propres compendiums) via
+ * themeWindow()/applyGlobalTheme() — jamais nos propres fiches .rpg-sheet
+ * (applyUiTheme), qui dépendent structurellement des variables posées par
+ * un thème pour s'afficher correctement, pas juste pour leur couleur.
+ */
+export function isNativeThemingDisabled() {
+  return String(game.settings?.get?.("rpg", "uiTheme") ?? "sombre") === "natif";
+}
+
+/**
  * Pose le thème sur <body>, ce qui rend les variables disponibles pour TOUTES
  * les fenêtres — y compris les boîtes de dialogue créées à la volée par les
  * macros, qui n'ont aucune classe à nous.
@@ -83,6 +96,7 @@ export function applyGlobalTheme() {
   const body = document?.body;
   if (!body) return;
   body.classList.remove(...THEME_CLASSES);
+  if (isNativeThemingDisabled()) return;
   body.classList.add(`rpg-theme-${currentUiTheme()}`);
 }
 
@@ -93,6 +107,12 @@ export function applyGlobalTheme() {
  */
 export function themeWindow(root) {
   if (!root?.classList) return;
+  if (isNativeThemingDisabled()) {
+    // Retire ce qu'un rendu précédent (thème changé en direct) aurait pu
+    // poser, pour repasser 100% natif sans recharger.
+    root.classList.remove("rpg-window", ...THEME_CLASSES);
+    return;
+  }
   root.classList.add("rpg-window");
   root.classList.remove(...THEME_CLASSES);
   root.classList.add(`rpg-theme-${currentUiTheme()}`);

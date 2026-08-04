@@ -316,7 +316,19 @@ Hooks.once("init", async () => {
   console.log("RPG init chargé");
 
   // ✅ Protection globale contre les crashes non-catchés
-  installGlobalErrorHandler();
+  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (test d'isolation, bug journaux V14) : c'est
+  // le seul autre bout de code de ce dépôt qui touche quelque chose d'aussi
+  // global que `window` (unhandledrejection/onerror, page entière, pas
+  // scopé aux fenêtres de ce système) plutôt qu'une fenêtre/un document
+  // précis — tout le reste (theming des journaux, hooks Actor/Item/Token,
+  // monkey-patch de drag Token) a déjà été écarté un par un sans succès sur
+  // un monde vierge, système rpg seul, aucun autre module. Un bug corrigé
+  // juste au-dessus (branche de filtrage no-op, voir error-handler.js) ne
+  // change pas le comportement observable pour une erreur de journal
+  // (preventDefault() ne se déclenche que sur des messages spécifiques à ce
+  // système), donc ce n'est probablement pas ça — mais c'est le seul
+  // candidat "vraiment global" qui reste, donc autant le tester à fond.
+  // installGlobalErrorHandler();
 
   // ✅ Réglette de déplacement custom (coût terrain + restant du tour en
   // direct) — DOIT être posée ici, dans "init", pas dans "ready" comme avant.
@@ -374,7 +386,16 @@ Hooks.once("init", async () => {
     choices: {
       sombre:    "🌑 Sombre — Grimoire Arcanique (par défaut)",
       clair:     "☀️ Clair — Parchemin",
-      contraste: "⚡ Contraste élevé — accessibilité"
+      contraste: "⚡ Contraste élevé — accessibilité",
+      // Échappatoire de diagnostic (et confort si jamais ça reste préféré) :
+      // n'affecte QUE les fenêtres natives qu'on habille en plus (journaux,
+      // tables aléatoires, macros, répertoires détachés, nos compendiums) —
+      // jamais nos propres fiches .rpg-sheet, qui dépendent structurellement
+      // des variables posées par un thème pour s'afficher correctement, pas
+      // juste pour leur couleur (les détémer casserait leur mise en page,
+      // pas juste leur look). Voir isNativeThemingDisabled() dans
+      // sheet-helpers.js.
+      natif:     "🎨 Natif Foundry — n'habille plus les fenêtres natives (journaux, tables, macros…)"
     },
     default: "sombre",
     requiresReload: false,
@@ -840,21 +861,6 @@ Hooks.once("init", async () => {
         // native quelconque par accident de contenu.
         const isRollTable = app?.document?.documentName === "RollTable";
 
-        // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (test d'isolation, Foundry V14) : un GM
-        // a signalé qu'éditer une page de journal puis fermer SANS
-        // sauvegarder rend ce journal impossible à rouvrir (aucune erreur en
-        // console, seul un F5 débloque, jusqu'à la prochaine édition) — y
-        // compris sur des journaux créés par lui, donc pas spécifique à un
-        // contenu ou une origine (compendium/monde) particulière. Reporter
-        // la pose des classes d'un frame (voir plus bas, tenté avant ce
-        // commit) n'a rien changé, ce qui élimine un problème de TIMING
-        // pendant le rendu — reste la possibilité que la SEULE PRÉSENCE de
-        // .rpg-window/.rpg-theme-* sur une fenêtre de journal casse quelque
-        // chose côté V14, peu importe quand elle est posée. isJournalSheet
-        // ci-dessous est neutralisé (toujours faux) le temps de confirmer ou
-        // d'écarter cette piste : si le bug persiste malgré ça, c'est la
-        // preuve que ce n'est PAS ce hook, et donc pas ce dépôt. Les
-        // journaux redeviennent 100% natifs (non themés) pendant ce test.
         // Les journaux (fiches JournalEntry/Page) sont natifs à 100% eux
         // aussi, mais rester non themés les laissait dans un entre-deux :
         // le chrome de la fenêtre (barre latérale des pages, en-tête) suit
@@ -867,10 +873,22 @@ Hooks.once("init", async () => {
         // jamais couvert par isOwnPack ci-dessous) que tout journal créé
         // par le MJ. Même logique que RollTable : ciblé par TYPE de
         // document, jamais par contenu détecté.
-        const isJournalDoc = app?.document?.documentName === "JournalEntry"
-                           || app?.document?.documentName === "JournalEntryPage";
-        void isJournalDoc; // gardé pour la ré-activation, voir commentaire ci-dessus
-        const isJournalSheet = false;
+        //
+        // ⚠️ Un GM (Foundry V14) a signalé qu'éditer une page de journal
+        // puis fermer SANS sauvegarder rend ce journal impossible à rouvrir
+        // (aucune erreur en console, seul un F5 débloque). Deux tests
+        // d'isolation menés en direct sur son monde n'ont rien changé :
+        // reporter la pose des classes d'un frame (élimine un problème de
+        // TIMING), puis désactiver complètement le theming des journaux
+        // (élimine .rpg-window/.rpg-theme-* eux-mêmes comme cause) — le bug
+        // a persisté dans les deux cas. Donc SI c'est bien ce dépôt qui est
+        // en cause, ce n'est pas via ce hook. Le choix de thème "natif"
+        // (voir isNativeThemingDisabled dans sheet-helpers.js, choix ajouté
+        // au réglage juste en dessous) offre la même échappatoire de façon
+        // permanente/opt-in plutôt qu'un hardcode temporaire — themeWindow()
+        // s'en charge lui-même, donc la détection ci-dessous reste normale.
+        const isJournalSheet = app?.document?.documentName === "JournalEntry"
+                             || app?.document?.documentName === "JournalEntryPage";
 
         // La fiche d'édition d'une Macro (le "Tableau de bord MJ" et consorts)
         // est native à 100% elle aussi. Signalé illisible en thème Clair :
