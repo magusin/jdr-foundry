@@ -11,6 +11,7 @@ import {
   calculateMovementCost, formatTerrainSummary, getTerrainAt, TERRAIN_TYPES,
   measureSegmentMeters
 } from "./region-behaviors.js";
+import { triggerZoneEffectsForToken } from "./zone-effects.js";
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
@@ -18,6 +19,35 @@ const htmlEsc = (s) =>
 // Debounce : regroupe les updates rapides en un seul message
 const _pendingMoves = new Map(); // tokenId → { timer, startPos, lastPos, waypoints }
 const DEBOUNCE_MS = 350;
+
+// Hors combat, il n'y a pas de réserve de déplacement à gérer (personne n'a
+// de tour) — mais un piège/zone doit quand même se déclencher : sinon un
+// piège rencontré en exploration (l'essentiel des cas concrets, hors combat
+// structuré) ne se déclenche jamais, toute la chaîne de suivi plus bas
+// (budget, message d'attente, triggerZoneEffectsForToken) étant conditionnée
+// à isCombatEngaged(). Même débounce qu'en combat (un seul geste de glisser
+// V13 déclenche plusieurs cycles updateToken), mais sans budget ni message
+// d'attente : la zone se déclenche directement sur la position d'arrivée une
+// fois le geste retombé, toujours côté GM (triggerZoneEffectsForToken exige
+// game.user.isGM en interne).
+const _pendingFreeMoves = new Map(); // tokenId → timer
+
+function _scheduleFreeZoneTrigger(tokenDoc) {
+  clearTimeout(_pendingFreeMoves.get(tokenDoc.id));
+  const timer = setTimeout(async () => {
+    _pendingFreeMoves.delete(tokenDoc.id);
+    const actor = tokenDoc.actor;
+    if (!actor) return;
+    try {
+      await triggerZoneEffectsForToken({
+        actor, tokenId: tokenDoc.id,
+        x: tokenDoc.x, y: tokenDoc.y,
+        elevation: tokenDoc.elevation ?? 0
+      });
+    } catch (e) { console.error("[RPG][Zone] déclenchement hors combat:", e); }
+  }, DEBOUNCE_MS);
+  _pendingFreeMoves.set(tokenDoc.id, timer);
+}
 
 // Position avant le move (capturée dans preUpdateToken)
 const _prevPos = new Map();
@@ -369,7 +399,10 @@ export async function onUpdateToken(tokenDoc, changes, options) {
   }
 
   if (!game.user.isGM) return;
-  if (!isCombatEngaged(game.combat)) return;
+  if (!isCombatEngaged(game.combat)) {
+    _scheduleFreeZoneTrigger(tokenDoc);
+    return;
+  }
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
