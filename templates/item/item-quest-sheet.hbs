@@ -21,49 +21,44 @@
     </div>
 
     <div class="form-group">
-      <label>
+      <label class="quest-checkbox-label" title="Plusieurs PJ peuvent l'avoir ; la progression reste synchronisée pour tous.">
         <input type="checkbox" name="system.partagee" {{#if system.partagee}}checked{{/if}} {{#unless canEdit}}disabled{{/unless}} />
-        Quête partagée (plusieurs PJ peuvent l'avoir, la progression reste synchronisée pour tous)
+        Quête partagée
       </label>
     </div>
 
     {{#if isGM}}
     <div class="form-group quest-recipients">
-      <label>Qui voit cette quête ?</label>
-      <p style="opacity:.75;font-size:12px;margin:0 0 4px">
-        Un PJ ne voit la quête que s'il en a sa propre copie — coche/décoche
-        pour la lui donner ou la lui retirer (chaque copie garde son propre
-        avancement, sauf si "Quête partagée" est cochée ci-dessus).
-      </p>
+      <label title="Un PJ ne voit la quête que s'il en a sa propre copie — coche/décoche pour la lui donner ou la lui retirer.">Qui voit cette quête ?</label>
       {{#if recipients.length}}
       <div class="quest-recipients-list">
         {{#each recipients as |r|}}
-        <label style="display:flex;align-items:center;gap:6px;padding:1px 0">
+        <label class="quest-checkbox-label">
           <input type="checkbox" class="quest-recipient-check" data-actor-id="{{r.id}}" {{#if r.hasCopy}}checked{{/if}} />
           {{r.name}}
         </label>
         {{/each}}
       </div>
       {{else}}
-      <p style="opacity:.6;font-size:12px;margin:0">Aucun personnage joueur dans le monde.</p>
+      <p class="quest-hint">Aucun personnage joueur dans le monde.</p>
       {{/if}}
     </div>
 
     <div class="form-group">
-      <label>Classe / Joueur requis (note pour toi, n'apparaît jamais au joueur)</label>
+      <label title="Note pour toi, n'apparaît jamais au joueur.">Classe / Joueur requis</label>
       <input type="text" name="system.classeRequise" value="{{system.classeRequise}}"
         placeholder="ex: Mage uniquement, ou nom du joueur" {{#unless canEdit}}disabled{{/unless}} />
     </div>
     {{/if}}
 
     <div class="form-group quest-progress">
-      <label>Étape actuelle (le joueur ne voit que celle-ci + les étapes terminées en titre seul)</label>
+      <label title="Le joueur ne voit que celle-ci + les étapes terminées en titre seul.">Étape actuelle</label>
       <div class="quest-progress-value">
-        Étape {{calc.etapeActuelleNum}} / {{calc.totalEtapes}}
+        {{#if calc.complete}}✅ Toutes les étapes terminées{{else}}Étape {{calc.etapeActuelleNum}} / {{calc.totalEtapes}}{{/if}}
       </div>
     </div>
 
-    <h3>Déroulé de la quête (étapes)</h3>
+    <h3>Déroulé de la quête</h3>
     <div class="quest-etapes">
       {{#each system.etapes as |etape ei|}}
       {{#if etape.termine}}
@@ -80,7 +75,7 @@
             Étape {{etape.etapeNum}}
             {{#if (eq ei ../system.etapeActuelle)}}<span class="etape-heading-tag etape-heading-tag-current">— EN COURS</span>{{/if}}
             {{#if (lt ei ../system.etapeActuelle)}}<span class="etape-heading-tag">— terminée</span>{{/if}}
-            {{#if (gt ei ../system.etapeActuelle)}}<span class="etape-heading-tag">— à venir (caché du joueur)</span>{{/if}}
+            {{#if (gt ei ../system.etapeActuelle)}}<span class="etape-heading-tag" title="Caché du joueur">— à venir</span>{{/if}}
           </span>
           {{#if canEdit}}
           <button type="button" class="etape-remove-btn" data-action="removeEtape" data-etape-idx="{{ei}}" title="Retirer l'étape">✕</button>
@@ -92,14 +87,14 @@
           {{#unless ../canEdit}}disabled{{/unless}} />
 
         <div class="etape-block">
-          <label class="etape-block-label">Récit de l'étape (visible du joueur pendant qu'elle est en cours)</label>
+          <label class="etape-block-label" title="Visible du joueur pendant que cette étape est en cours.">Récit de l'étape</label>
           <textarea class="etape-description" name="system.etapes.{{ei}}.description" rows="3"
             placeholder="Ex: Tu arrives à l'auberge du Cerf. Le tenancier semble nerveux et évite ton regard..."
             {{#unless ../canEdit}}disabled{{/unless}}>{{etape.description}}</textarea>
         </div>
 
         <div class="etape-block">
-          <label class="etape-block-label">Objectifs à cocher (visibles du joueur)</label>
+          <label class="etape-block-label" title="Visibles du joueur.">Objectifs à cocher</label>
           <div class="etape-objectifs">
             {{#each etape.objectifs as |obj oi|}}
             <div class="etape-objectif-row">
@@ -120,8 +115,7 @@
 
         {{#if canEdit}}
         <div class="etape-block">
-          <label class="etape-block-label etape-block-label-mj">📝 Notes MJ pour cette étape (PNJ, lieux, récompense de mise en
-            scène... — jamais visible du joueur)</label>
+          <label class="etape-block-label etape-block-label-mj" title="PNJ, lieux, récompense de mise en scène... — jamais visible du joueur.">📝 Notes MJ</label>
           <textarea class="etape-notes-mj" name="system.etapes.{{ei}}.notesMJ" rows="3"
             placeholder="Ex: PNJ Maître Aldric à l'auberge du Cerf ; lieu : quartier des artisans...">{{etape.notesMJ}}</textarea>
         </div>
@@ -140,7 +134,7 @@
     {{/if}}
 
     {{#if isGM}}
-    <h3 class="quest-section-title">Récompense (à la fin de la quête — jamais visible du joueur)</h3>
+    <h3 class="quest-section-title" title="Distribuée à la fin de la quête — jamais visible du joueur.">Récompense</h3>
     <div class="form-group">
       <label>XP</label>
       <input type="number" name="system.recompense.xp" value="{{system.recompense.xp}}" min="0" {{#unless canEdit}}disabled{{/unless}} />
@@ -169,8 +163,8 @@
       {{/each}}
     </div>
     {{#if canEdit}}
-    <div class="quest-reward-dropzone" style="font-size:11px;opacity:.7;padding:6px;border:1px dashed var(--border);border-radius:6px;text-align:center;margin-bottom:6px">
-      🎁 Glisse un objet ici (compendium, inventaire, barre d'items) pour l'ajouter en récompense
+    <div class="quest-reward-dropzone" title="Compendium, inventaire, barre d'items...">
+      🎁 Glisse un objet ici pour l'ajouter en récompense
     </div>
     <button type="button" class="quest-add-reward-btn" data-action="addRewardItem">+ Ajouter un objet via UUID</button>
     {{/if}}
