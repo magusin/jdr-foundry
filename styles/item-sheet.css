@@ -86,6 +86,26 @@
 .rpg-quest-sheet h3 { margin: 0 0 8px 0; }
 .rpg-quest-sheet .quest-section-title { margin-top: 18px; }
 
+/* Groupes de champs du haut (statut, partagée, destinataires, étape
+   actuelle...) : aucune règle ne les espaçait avant, d'où l'aspect tassé
+   (labels et champs collés les uns aux autres). */
+.rpg-quest-sheet .form-group { margin-bottom: 12px; }
+.rpg-quest-sheet .form-group:last-child { margin-bottom: 0; }
+.rpg-quest-sheet .form-group > label { display: block; margin-bottom: 4px; }
+
+/* Case à cocher + son texte sur une même ligne, alignés — sans ça un
+   <label> englobant un <input type="checkbox"> suivi d'un texte long
+   peut se retrouver visuellement scindé (case seule, texte qui repart
+   en dessous). */
+.rpg-quest-sheet .quest-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0 !important;
+}
+.rpg-quest-sheet .quest-recipients-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.rpg-quest-sheet .quest-hint { opacity: .6; font-size: 12px; margin: 4px 0 0; }
+
 .rpg-quest-sheet .quest-progress-value { font-size: 13px; font-weight: 600; }
 
 .rpg-quest-sheet .quest-etapes { margin-bottom: 10px; }
@@ -147,6 +167,15 @@
   margin: 10px 0 6px 0;
 }
 
+.rpg-quest-sheet .quest-reward-dropzone {
+  font-size: 11px;
+  opacity: .7;
+  padding: 6px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 6px;
+}
 .rpg-quest-sheet .quest-add-reward-btn { margin-top: 4px; }
 
 /* Listes déroulantes (<option>/<optgroup>) : voir styles/theme.css, qui

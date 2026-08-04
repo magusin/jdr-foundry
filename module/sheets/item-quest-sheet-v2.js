@@ -115,9 +115,14 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
       etapeNum: i + 1
     }));
+    // etapeActuelle peut valoir etapes.length (un cran au-delà de la
+    // dernière étape réelle) : c'est l'état "toutes les étapes terminées",
+    // sinon la dernière étape ne pouvait jamais passer "terminée" — rien
+    // dans l'ancien clamp (max etapes.length-1) ne permettait de la
+    // dépasser via "Étape suivante".
     ctx.system.etapeActuelle = Math.max(0, Math.min(
       Number(ctx.system.etapeActuelle ?? 0) || 0,
-      Math.max(0, ctx.system.etapes.length - 1)
+      ctx.system.etapes.length
     ));
     ctx.system.recompense = ctx.system.recompense ?? { xp: 0, items: [] };
     ctx.system.recompense.items = Array.isArray(ctx.system.recompense.items) ? ctx.system.recompense.items : [];
@@ -145,7 +150,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     ctx.calc = {
       etapeActuelleNum: ctx.system.etapes.length ? ctx.system.etapeActuelle + 1 : 0,
-      totalEtapes: ctx.system.etapes.length
+      totalEtapes: ctx.system.etapes.length,
+      complete: ctx.system.etapes.length > 0 && ctx.system.etapeActuelle >= ctx.system.etapes.length
     };
 
     // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
@@ -235,11 +241,17 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(idx)) return;
-    const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+    const oldEtapes = this.document.system?.etapes ?? [];
+    const list = foundry.utils.deepClone(oldEtapes);
     list.splice(idx, 1);
 
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
-    if (etapeActuelle >= list.length) etapeActuelle = Math.max(0, list.length - 1);
+    // Si la quête était déjà "toutes étapes terminées" (etapeActuelle au
+    // cran sentinelle oldEtapes.length), elle doit le rester après retrait
+    // d'une étape — pas retomber sur la dernière étape restante comme "en
+    // cours".
+    const wasComplete = etapeActuelle >= oldEtapes.length;
+    etapeActuelle = wasComplete ? list.length : Math.min(etapeActuelle, Math.max(0, list.length - 1));
 
     await this.document.update({ "system.etapes": list, "system.etapeActuelle": etapeActuelle }, { render: true });
   }
@@ -249,7 +261,10 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const etapes = this.document.system?.etapes ?? [];
     if (!etapes.length) return;
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
-    etapeActuelle = Math.max(0, Math.min(etapes.length - 1, etapeActuelle + delta));
+    // Le maximum est etapes.length (pas etapes.length - 1) : "Étape suivante"
+    // depuis la dernière étape la marque terminée au lieu de rester bloquée
+    // dessus indéfiniment (voir la note dans _prepareContext).
+    etapeActuelle = Math.max(0, Math.min(etapes.length, etapeActuelle + delta));
     await this.document.update({ "system.etapeActuelle": etapeActuelle }, { render: true });
   }
 

@@ -24,10 +24,17 @@ const DIFF_TN = {
   trivial: 6, facile: 9, moyen: 11, difficile: 14, tresDifficile: 17, quasiImpossible: 19
 };
 
-/** États actifs qu'on peut tenter de retirer par un jet (mêmes critères que l'ancienne macro dédiée). */
+/**
+ * États actifs qu'on peut tenter de retirer par un jet. `removeDifficulty`/
+ * `removeBaseTN` viennent des effets construits par l'éditeur de sort
+ * (spells.js) ; `cleanseDC` vient du dialogue manuel "Ajouter/Éditer un
+ * état" du MJ sur la fiche (character-sheet-v2.js/monster-sheet-v2.js), qui
+ * n'écrit jamais les deux premiers — un état posé à la main y était donc
+ * invisible malgré son "Retrait: X+" affiché sur la fiche.
+ */
 export function removableStates(actor) {
   return (actor?.system?.etatsActifs ?? []).filter(s =>
-    !s.permanent && (s.removeDifficulty || s.removeBaseTN));
+    !s.permanent && (s.removeDifficulty || s.removeBaseTN || s.cleanseDC));
 }
 
 /** Modificateurs globaux au retrait : équipements équipés + états actifs. */
@@ -45,7 +52,7 @@ export function computeRemoveMods(actor) {
 
 /** TN final pour tenter de retirer un état donné (base + mods équip/effets + mod propre à l'état). */
 export function computeStateTN(actor, state) {
-  const baseTN = n(state.removeBaseTN, 0) || DIFF_TN[state.removeDifficulty] || 11;
+  const baseTN = n(state.removeBaseTN, 0) || DIFF_TN[state.removeDifficulty] || n(state.cleanseDC, 0) || 11;
   const stMod = n(state.retraitMod, 0);
   const { equipMod, effectMod } = computeRemoveMods(actor);
   return { baseTN, equipMod, effectMod, stMod, finalTN: baseTN + equipMod + effectMod + stMod };

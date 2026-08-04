@@ -30,9 +30,10 @@
     difficile: "Difficile (14+)", tresDifficile: "Très difficile (17+)", quasiImpossible: "Quasi impossible (19+)"
   };
 
-  // États retirables (ont un removeDifficulty ou un removeBaseTN)
+  // États retirables (ont un removeDifficulty, un removeBaseTN, ou un cleanseDC
+  // posé via le dialogue manuel "Ajouter/Éditer un état" de la fiche)
   const states = (actor.system?.etatsActifs ?? []).filter(s =>
-    !s.permanent && (s.removeDifficulty || s.removeBaseTN)
+    !s.permanent && (s.removeDifficulty || s.removeBaseTN || s.cleanseDC)
   );
 
   if (!states.length) {
@@ -55,7 +56,7 @@
   }
 
   const options = states.map(s => {
-    const baseTN = n(s.removeBaseTN, 0) || DIFF_TN[s.removeDifficulty] || 11;
+    const baseTN = n(s.removeBaseTN, 0) || DIFF_TN[s.removeDifficulty] || n(s.cleanseDC, 0) || 11;
     const stMod  = n(s.retraitMod, 0);
     const totalMod = equipMod + effectMod + stMod;
     const finalTN = baseTN + totalMod;
