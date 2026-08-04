@@ -998,9 +998,7 @@ Hooks.once("init", async () => {
         ["Appliquer un Effet (MJ)",            "apply-effect.js",       "icons/svg/lightning.svg",       "gm"],
         ["Créer un État (MJ)",                 "state-builder-macro.js","icons/svg/aura.svg",            "gm"],
         ["Survie : Repos / Blessures (MJ)",    "survival-tools.js",     "icons/svg/blood.svg",           "gm"],
-        ["Marché (MJ)",                        "market.js",             "systems/rpg/assets/icons/coins.svg","gm"],
         ["Réputation & Marché Régional (MJ)",  "reputation-tools.js",   "icons/svg/eye.svg",             "gm"],
-        ["Position Tactique (MJ)",             "tactical-tools.js",     "icons/svg/shield.svg",          "gm"],
         ["Compétences (MJ)",                   "skills-tools.js",       "icons/svg/book.svg",            "gm"],
         ["Distribuer un Objet (MJ)",           "item-distribute.js",    "icons/svg/item-bag.svg",        "gm"],
         ["Distribuer une Recette (MJ)",        "recipe-distribute.js",  "systems/rpg/assets/icons/anvil.svg","gm"],
@@ -1009,8 +1007,6 @@ Hooks.once("init", async () => {
         ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
         ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
-        ["Détecter un piège",                  "trap-detect.js",        "icons/svg/trap.svg",            "gm"],
-        ["Désamorcer un piège",                "trap-disarm.js",        "icons/svg/trap.svg",            "gm"],
         ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
       ];
       const getFolder = async (name) => {
