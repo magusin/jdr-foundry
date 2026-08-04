@@ -208,13 +208,16 @@ async function handlePendingAction(message, result, actionId) {
 
       // Pièges / zones à effet : ne se déclenchent qu'une fois le déplacement
       // validé par le MJ, jamais à la simple déclaration du joueur.
-      if (moverActor && entry.snapshot?.newX != null && entry.snapshot?.newY != null) {
+      // centerX/centerY (centre du token à l'arrivée) plutôt que newX/newY
+      // (coin haut-gauche) — tester le coin pouvait manquer une zone que le
+      // token chevauchait visiblement de l'autre côté de sa case.
+      if (moverActor && entry.snapshot?.centerX != null && entry.snapshot?.centerY != null) {
         try {
           await triggerZoneEffectsForToken({
             actor: moverActor,
             tokenId: entry.snapshot?.tokenId,
-            x: entry.snapshot.newX,
-            y: entry.snapshot.newY,
+            x: entry.snapshot.centerX,
+            y: entry.snapshot.centerY,
             elevation: entry.snapshot?.elevation ?? 0
           });
         } catch (e) { console.error("[RPG][Zone] déclenchement:", e); }

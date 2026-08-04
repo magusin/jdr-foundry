@@ -120,6 +120,23 @@ export function getZoneEffectsAt(x, y, elevation = 0) {
   return out;
 }
 
+/**
+ * Le filtre de cible (système.targetDisposition) compare la DISPOSITION du
+ * token qui marche dessus — pas le type d'acteur — même logique que
+ * areOpposedDisp() dans movement-tracker.js (un PNJ hostile est un
+ * "character" comme un joueur). "tous" (défaut) ne filtre rien : un piège
+ * déjà configuré avant l'ajout de ce champ garde son comportement d'origine.
+ */
+function _targetMatchesDisposition(sys, moverTokenDoc) {
+  const want = String(sys.targetDisposition ?? "tous");
+  if (want === "tous") return true;
+  const D = CONST?.TOKEN_DISPOSITIONS ?? { FRIENDLY: 1, HOSTILE: -1 };
+  const disp = moverTokenDoc?.disposition;
+  if (want === "allies") return disp === D.FRIENDLY;
+  if (want === "hostiles") return disp === D.HOSTILE;
+  return true;
+}
+
 /** Multiplicateur de vitesse le plus pénalisant parmi les zones à ce point (1 = aucun). */
 export function getZoneSpeedMultAt(x, y, elevation = 0) {
   let mult = 1;
@@ -138,19 +155,41 @@ export function getZoneSpeedMultAt(x, y, elevation = 0) {
 export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, elevation = 0 }) {
   if (!game.user.isGM || !actor) return;
   const zones = getZoneEffectsAt(x, y, elevation);
+  // Repère de débogage : si un piège semble ne "rien faire", ce log dit
+  // d'abord si le point testé tombe même dans une région zoneEffet — sans
+  // ça, un rapport "ça ne se déclenche pas" ne dit pas si c'est une région
+  // jamais atteinte (mauvais point testé, mauvaise scène...) ou une région
+  // atteinte mais ignorée plus bas (onceOnly, immunité, cible).
+  console.debug(`[RPG][Zone] test à (${Math.round(x)}, ${Math.round(y)}, élév. ${elevation}) pour ${actor.name} : ${zones.length} zone(s) trouvée(s).`);
   if (!zones.length) return;
+
+  const moverTokenDoc = tokenId
+    ? (canvas?.scene?.tokens?.get(tokenId) ?? game.scenes?.active?.tokens?.get(tokenId))
+    : null;
 
   for (const { region, behavior } of zones) {
     const sys = behavior.system ?? {};
+    const label = String(sys.label ?? "").trim() || region.document?.name || "Zone";
     const triggered = Array.isArray(sys.triggeredTokens) ? sys.triggeredTokens : [];
-    if (sys.onceOnly && tokenId && triggered.includes(tokenId)) continue;
+    if (sys.onceOnly && tokenId && triggered.includes(tokenId)) {
+      console.debug(`[RPG][Zone] « ${label} » ignorée pour ${actor.name} : déjà déclenchée pour ce token (onceOnly).`);
+      continue;
+    }
 
     // Piège « au sol uniquement » (par défaut) : un acteur volant ou éthéré
     // passe au-dessus sans jamais le déclencher. Décoché sur la fiche pour
     // un nuage toxique ou une zone de sort censée toucher tout le monde.
-    if (sys.groundOnly !== false && isImmuneToTerrain(actor, "zoneEffetSol")) continue;
+    if (sys.groundOnly !== false && isImmuneToTerrain(actor, "zoneEffetSol")) {
+      console.debug(`[RPG][Zone] « ${label} » ignorée pour ${actor.name} : immunisé (vol/éthéré).`);
+      continue;
+    }
 
-    const label = String(sys.label ?? "").trim() || "Zone";
+    // Filtre de cible (allié/hostile) — voir _targetMatchesDisposition ci-dessus.
+    if (!_targetMatchesDisposition(sys, moverTokenDoc)) {
+      console.debug(`[RPG][Zone] « ${label} » ignorée pour ${actor.name} : filtre de cible « ${sys.targetDisposition} » ne correspond pas à sa disposition.`);
+      continue;
+    }
+
     const lines = [];
 
     // ── Dégâts directs ──────────────────────────────────────────────────
@@ -361,6 +400,13 @@ export function registerZoneEffectBehavior() {
         // Ignoré par un acteur volant/éthéré (vol, lévitation...) — décocher
         // pour un nuage toxique ou un mur de zone censé toucher tout le monde.
         groundOnly:        new fields.BooleanField({ initial: true }),
+        // Filtre par DISPOSITION du token qui marche dessus (pas le type
+        // d'acteur — un PNJ hostile est un "character" comme un joueur, même
+        // logique que areOpposedDisp() dans movement-tracker.js) — utile pour
+        // un piège posé par un joueur censé ne viser que les ennemis, ou une
+        // zone de soin censée ne bénéficier qu'aux alliés. "tous" = ancien
+        // comportement par défaut, ne filtre rien.
+        targetDisposition: new fields.StringField({ initial: "tous", choices: ["tous", "allies", "hostiles"] }),
         detectDC:          new fields.NumberField({ initial: 12, min: 1, max: 25 }),
         disarmDC:          new fields.NumberField({ initial: 14, min: 1, max: 25 }),
         speedMult:         new fields.NumberField({ initial: 1, min: 0.1, max: 1 }),
