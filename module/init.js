@@ -316,19 +316,19 @@ Hooks.once("init", async () => {
   console.log("RPG init chargé");
 
   // ✅ Protection globale contre les crashes non-catchés
-  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (test d'isolation, bug journaux V14) : c'est
-  // le seul autre bout de code de ce dépôt qui touche quelque chose d'aussi
-  // global que `window` (unhandledrejection/onerror, page entière, pas
-  // scopé aux fenêtres de ce système) plutôt qu'une fenêtre/un document
-  // précis — tout le reste (theming des journaux, hooks Actor/Item/Token,
-  // monkey-patch de drag Token) a déjà été écarté un par un sans succès sur
-  // un monde vierge, système rpg seul, aucun autre module. Un bug corrigé
-  // juste au-dessus (branche de filtrage no-op, voir error-handler.js) ne
-  // change pas le comportement observable pour une erreur de journal
-  // (preventDefault() ne se déclenche que sur des messages spécifiques à ce
-  // système), donc ce n'est probablement pas ça — mais c'est le seul
-  // candidat "vraiment global" qui reste, donc autant le tester à fond.
-  // installGlobalErrorHandler();
+  // Réactivé : la campagne d'isolation menée pour le bug "fiches journaux
+  // impossibles à sauvegarder/rouvrir en V14" (thème désactivé, autre monde,
+  // monkey-patch de drag Token, et ce handler lui-même, chacun testé seul)
+  // n'avait jamais réussi à l'imputer à quoi que ce soit dans ce dépôt —
+  // pour cause : la vraie cause était monster-sheet-v2.js qui appelait
+  // mergeObject(super.DEFAULT_OPTIONS, {...}) SANS { inplace: false },
+  // polluant l'objet DEFAULT_OPTIONS partagé de DocumentSheetV2 (dont
+  // héritent aussi les fiches JournalEntry natives) dès le chargement du
+  // module — un mécanisme qui se déclenche à l'IMPORT, bien avant que le
+  // moindre hook de rendu (celui-ci compris) n'entre en jeu. Voir le
+  // correctif et son commentaire dans monster-sheet-v2.js. Ce handler n'a
+  // donc jamais été la cause ; pas de raison de le laisser désactivé.
+  installGlobalErrorHandler();
 
   // ✅ Réglette de déplacement custom (coût terrain + restant du tour en
   // direct) — DOIT être posée ici, dans "init", pas dans "ready" comme avant.
