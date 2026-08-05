@@ -131,22 +131,36 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     });
 
     // ── Éditeurs ProseMirror : sauvegarde explicite, indépendante de
-    // submitOnChange. Rapporté : taper puis cliquer le ✓ interne de
-    // l'éditeur ne persistait jamais rien sur le document (le texte ne
-    // survivait que dans l'état local de l'élément <prose-mirror> —
-    // visible en rouvrant l'édition, absent de la vue lecture/rendue
-    // après un submitOnChange qui, lui, marche très bien pour les
-    // <input>/<select> classiques du même formulaire). submitOnChange
-    // s'appuie sur un évènement natif du champ pour se déclencher ; on ne
-    // dépend plus de deviner lequel/si <prose-mirror> le déclenche
-    // correctement pour ce composant — on lit directement sa propriété
-    // .value (déjà ce que le template lui donne via l'attribut value=) et
-    // on écrit au chemin exact de son attribut name= dès qu'il committe.
+    // submitOnChange (voir plus bas). Rapporté : taper puis cliquer le ✓
+    // interne de l'éditeur ne persistait jamais rien (le texte ne
+    // survivait que dans l'état local de <prose-mirror>). MAIS envoyer un
+    // update en chemin pointé "brut" tel que name= le donne (ex.
+    // "system.etapes.0.description") est exactement le piège que toutes
+    // les autres méthodes de ce fichier évitent : system.etapes est un
+    // ArrayField, et Foundry ne fusionne pas un index pointé dans un
+    // ArrayField existant — un premier essai comme ça a effacé l'étape
+    // entière au lieu de n'en changer qu'un champ (repro confirmé : "ajoute
+    // du texte et sauvegarder a complètement supprimé la page"). Toute
+    // écriture dans etapes[] doit, comme _actionAddEtape/_actionAddObjectif
+    // etc., cloner le tableau ENTIER, muter l'entrée visée, et renvoyer le
+    // tableau complet — jamais un chemin pointé indexé directement.
+    const ETAPE_FIELD_RE = /^system\.etapes\.(\d+)\.(description|notesMJ)$/;
     root.querySelectorAll("prose-mirror[name]").forEach(pm => {
       const commit = () => {
         const path = pm.getAttribute("name");
         if (!path) return;
-        this.document.update({ [path]: pm.value ?? "" }, { render: true });
+        const value = pm.value ?? "";
+        const m = path.match(ETAPE_FIELD_RE);
+        if (m) {
+          const idx = Number(m[1]);
+          const field = m[2];
+          const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+          if (!list[idx]) return;
+          list[idx][field] = value;
+          this.document.update({ "system.etapes": list }, { render: true });
+        } else {
+          this.document.update({ [path]: value }, { render: true });
+        }
       };
       pm.addEventListener("save", commit);
       pm.addEventListener("change", commit);
