@@ -147,41 +147,34 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       input.addEventListener("change", (ev) => this._toggleRecipient(ev.target));
     });
 
-    // ── Éditeurs ProseMirror : sauvegarde explicite, indépendante de
-    // submitOnChange (voir plus bas). Rapporté : taper puis cliquer le ✓
-    // interne de l'éditeur ne persistait jamais rien (le texte ne
-    // survivait que dans l'état local de <prose-mirror>). MAIS envoyer un
-    // update en chemin pointé "brut" tel que name= le donne (ex.
-    // "system.etapes.0.description") est exactement le piège que toutes
-    // les autres méthodes de ce fichier évitent : system.etapes est un
-    // ArrayField, et Foundry ne fusionne pas un index pointé dans un
-    // ArrayField existant — un premier essai comme ça a effacé l'étape
-    // entière au lieu de n'en changer qu'un champ (repro confirmé : "ajoute
-    // du texte et sauvegarder a complètement supprimé la page"). Toute
-    // écriture dans etapes[] doit, comme _actionAddEtape/_actionAddObjectif
-    // etc., cloner le tableau ENTIER, muter l'entrée visée, et renvoyer le
-    // tableau complet — jamais un chemin pointé indexé directement.
-    const ETAPE_FIELD_RE = /^system\.etapes\.(\d+)\.(description|notesMJ)$/;
-    root.querySelectorAll("prose-mirror[name]").forEach(pm => {
-      const commit = () => {
-        const path = pm.getAttribute("name");
-        if (!path) return;
-        const value = pm.value ?? "";
-        const m = path.match(ETAPE_FIELD_RE);
-        if (m) {
-          const idx = Number(m[1]);
-          const field = m[2];
-          const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-          if (!list[idx]) return;
-          list[idx][field] = value;
-          this.document.update({ "system.etapes": list }, { render: true });
-        } else {
-          this.document.update({ [path]: value }, { render: true });
-        }
+    // ── Soumission explicite du formulaire, indépendante de submitOnChange.
+    // Rapporté en plusieurs temps : d'abord le contenu ProseMirror qui ne
+    // persistait jamais (corrigé ici par un correctif ciblé, propre à
+    // <prose-mirror>, qui a lui-même introduit un bug de corruption de
+    // tableau — voir asEtapesArray), PUIS le titre d'étape et le nom de la
+    // quête — deux <input> tout ce qu'il y a de standard — qui ne
+    // persistaient pas non plus après fermeture/réouverture. Le point
+    // commun de tout ce qui MARCHE dans ce fichier (_actionAddEtape,
+    // _toggleRecipient, etc.) : un appel direct à document.update(),
+    // jamais le passage par submitOnChange/options.form.handler. Plutôt
+    // que de continuer à ajouter des correctifs ciblés champ par champ, on
+    // reproduit ce même schéma pour le formulaire entier : un seul
+    // listener "change" posé nous-mêmes sur le <form> à CHAQUE _onRender
+    // (donc jamais perdu si un re-render déclenché par une action
+    // remplace le nœud DOM du formulaire — contrairement à un éventuel
+    // listener natif attaché une seule fois par Foundry). FormDataExtended
+    // gère nativement la lecture de <prose-mirror> (cf. doc Foundry), donc
+    // un seul chemin de soumission suffit pour tous les champs.
+    const formEl = root.tagName === "FORM" ? root : root.querySelector("form");
+    if (formEl && !formEl.dataset.rpgChangeBound) {
+      formEl.dataset.rpgChangeBound = "1";
+      const submitForm = (ev) => {
+        const formData = new foundry.applications.ux.FormDataExtended(formEl);
+        this._onFormSubmitV2(ev, formEl, formData, {});
       };
-      pm.addEventListener("save", commit);
-      pm.addEventListener("change", commit);
-    });
+      formEl.addEventListener("change", submitForm);
+      formEl.addEventListener("save", submitForm);
+    }
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
