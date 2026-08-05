@@ -76,12 +76,32 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     main: { template: "systems/rpg/templates/actor/monster-sheet.hbs" }
   };
 
+  // ⚠️ { inplace: false } est CRITIQUE ici : sans lui, mergeObject() mute
+  // super.DEFAULT_OPTIONS en place (comportement par défaut) au lieu d'en
+  // renvoyer une copie. super.DEFAULT_OPTIONS remonte, via la chaîne de
+  // prototypes, jusqu'à DocumentSheetV2.DEFAULT_OPTIONS — un objet PARTAGÉ
+  // par toutes les fiches de documents Foundry, y compris les fiches
+  // JournalEntry/JournalEntryPage 100% natives. Sans ce flag, l'id/classes/
+  // position de la fiche monstre ("rpg-sheet sheet actor monster") fuitaient
+  // dans cet objet partagé dès le chargement du module — bien avant qu'aucun
+  // hook de rendu ne s'exécute, donc invisible à tout test d'isolation basé
+  // sur les hooks (thème désactivé, etc.) puisque la fuite se produit à
+  // l'IMPORT, pas au rendu. Symptôme observé : une nouvelle fiche de journal
+  // héritait des classes/id du monstre, cassant son rendu et faisant
+  // disparaître les boutons éditer/sauvegarder. Toutes les autres fiches du
+  // dépôt passent déjà { inplace: false } ; celle-ci seule l'omettait.
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "rpg-monster-sheet-v2",
     classes: ["rpg", "rpg-sheet", "sheet", "actor", "monster"],
     position: { width: 1080, height: 820 },
     window: { resizable: true }
-  });
+  }, { inplace: false });
+
+  /** Un GM ouvre souvent plusieurs monstres à la fois (comparer des stat
+   *  blocks) — un id statique non unique ferait entrer en collision les
+   *  éléments DOM de deux fiches simultanées, comme RPGCharacterSheetV2. */
+  get id() {
+    return `rpg-monster-sheet-v2-${this.document.id}`;
+  }
 
   _activeTab = "main";
   _scrollTop = 0;
