@@ -2,12 +2,13 @@
  * Macro "Basculer les Repères de Carte (MJ)"
  *
  * Sur une scène utilisée comme carte régionale (déplacement des tokens
- * joueurs par-dessus), les repères de lieux — Notes Foundry (icône +
- * libellé) placées sur la carte — peuvent gêner la lecture pendant qu'on
- * déplace des tokens. Cette macro bascule en un clic la visibilité de
- * TOUTES les Notes de la scène active, pour tout le monde (MJ et joueurs) :
- * `hidden` est un champ du document Note, pas un réglage d'affichage local
- * au client MJ, donc ça cache/montre bien les repères pour la table entière.
+ * joueurs par-dessus), les repères de lieux — Dessins Foundry (icône en
+ * texture de remplissage + libellé texte) placés sur la carte — peuvent
+ * gêner la lecture pendant qu'on déplace des tokens. Un Dessin, contrairement
+ * à une Note, n'a besoin d'aucune Entrée de journal ni permission séparée
+ * pour être visible des joueurs : seul son propre champ `hidden` compte.
+ * Cette macro bascule en un clic la visibilité de TOUS les Dessins de la
+ * scène active, pour tout le monde (MJ et joueurs).
  */
 (async () => {
   if (!game.user.isGM) {
@@ -19,14 +20,14 @@
     ui.notifications.warn("Aucune scène active.");
     return;
   }
-  const notes = scene.notes;
-  if (!notes.size) {
-    ui.notifications.warn("Aucun repère (Note) sur cette scène.");
+  const drawings = scene.drawings;
+  if (!drawings.size) {
+    ui.notifications.warn("Aucun repère (Dessin) sur cette scène.");
     return;
   }
-  const nextHidden = notes.some(n => !n.hidden);
-  await scene.updateEmbeddedDocuments("Note", notes.map(n => ({ _id: n.id, hidden: nextHidden })));
+  const nextHidden = drawings.some(d => !d.hidden);
+  await scene.updateEmbeddedDocuments("Drawing", drawings.map(d => ({ _id: d.id, hidden: nextHidden })));
   ui.notifications.info(nextHidden
-    ? `Repères de carte cachés (${notes.size}).`
-    : `Repères de carte affichés (${notes.size}).`);
+    ? `Repères de carte cachés (${drawings.size}).`
+    : `Repères de carte affichés (${drawings.size}).`);
 })();
