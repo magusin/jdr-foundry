@@ -27,27 +27,46 @@ const DEBOUNCE_MS = 350;
 // (budget, message d'attente, triggerZoneEffectsForToken) étant conditionnée
 // à isCombatEngaged(). Même débounce qu'en combat (un seul geste de glisser
 // V13 déclenche plusieurs cycles updateToken), mais sans budget ni message
-// d'attente : la zone se déclenche directement sur la position d'arrivée une
-// fois le geste retombé, toujours côté GM (triggerZoneEffectsForToken exige
-// game.user.isGM en interne).
-const _pendingFreeMoves = new Map(); // tokenId → timer
+// d'attente : la zone se déclenche directement une fois le geste retombé,
+// toujours côté GM (triggerZoneEffectsForToken exige game.user.isGM en
+// interne). Accumule les points intermédiaires (comme _pendingMoves en
+// combat) pour tester tout le TRAJET, pas seulement la case d'arrivée — un
+// token qui traverse un piège sans s'y arrêter doit tout de même le
+// déclencher (voir _freeStartPos ci-dessous pour le point de départ).
+const _pendingFreeMoves = new Map(); // tokenId → { timer, waypoints:[{x,y}...] }
 
-function _scheduleFreeZoneTrigger(tokenDoc) {
-  clearTimeout(_pendingFreeMoves.get(tokenDoc.id));
-  const timer = setTimeout(async () => {
+// Position avant le début du geste de glisser HORS combat — _prevPos (au-
+// dessus) n'est jamais peuplé dans ce cas puisque onPreUpdateToken sortait
+// avant, faute de combat engagé ; il faut son propre point de départ pour
+// pouvoir tester tout le trajet plutôt que juste le point d'arrivée.
+const _freeStartPos = new Map(); // tokenId → { x, y }
+
+function _scheduleFreeZoneTrigger(tokenDoc, newX, newY) {
+  const existing = _pendingFreeMoves.get(tokenDoc.id);
+  if (existing) {
+    clearTimeout(existing.timer);
+    existing.waypoints.push({ x: newX, y: newY });
+  } else {
+    const start = _freeStartPos.get(tokenDoc.id) ?? { x: tokenDoc.x, y: tokenDoc.y };
+    _pendingFreeMoves.set(tokenDoc.id, { waypoints: [start, { x: newX, y: newY }] });
+  }
+  const pending = _pendingFreeMoves.get(tokenDoc.id);
+  pending.timer = setTimeout(async () => {
     _pendingFreeMoves.delete(tokenDoc.id);
+    _freeStartPos.delete(tokenDoc.id);
     const actor = tokenDoc.actor;
     if (!actor) return;
     try {
-      const center = _tokenCenterAt(tokenDoc, tokenDoc.x, tokenDoc.y);
+      const elevation = tokenDoc.elevation ?? 0;
+      const centerWaypoints = pending.waypoints.map(p => _tokenCenterAt(tokenDoc, p.x, p.y));
       await triggerZoneEffectsForToken({
         actor, tokenId: tokenDoc.id,
-        x: center.x, y: center.y,
-        elevation: tokenDoc.elevation ?? 0
+        waypoints: centerWaypoints,
+        elevation
       });
     } catch (e) { console.error("[RPG][Zone] déclenchement hors combat:", e); }
   }, DEBOUNCE_MS);
-  _pendingFreeMoves.set(tokenDoc.id, timer);
+  _pendingFreeMoves.set(tokenDoc.id, pending);
 }
 
 // Position avant le move (capturée dans preUpdateToken)
@@ -248,7 +267,16 @@ export function getMovementLimit(tokenDoc) {
 export function onPreUpdateToken(tokenDoc, changes, options) {
   if (options?.rpgNoTrack) return;              // déplacement interne (annulation) : ne pas suivre
   if (!("x" in changes) && !("y" in changes)) return;
-  if (!isCombatEngaged(game.combat)) return;
+  if (!isCombatEngaged(game.combat)) {
+    // Mémorise le point de départ du geste (une seule fois, comme _prevPos
+    // ci-dessous) pour que _scheduleFreeZoneTrigger puisse tester tout le
+    // trajet plutôt que seulement la case d'arrivée — effacé une fois le
+    // déclenchement débounce traité (voir _scheduleFreeZoneTrigger).
+    if (!_freeStartPos.has(tokenDoc.id)) {
+      _freeStartPos.set(tokenDoc.id, { x: tokenDoc.x, y: tokenDoc.y });
+    }
+    return;
+  }
 
   const combatant = game.combat.combatants.find(c => c.tokenId === tokenDoc.id);
   if (!combatant) return;
@@ -422,7 +450,9 @@ export async function onUpdateToken(tokenDoc, changes, options) {
 
   if (!game.user.isGM) return;
   if (!isCombatEngaged(game.combat)) {
-    _scheduleFreeZoneTrigger(tokenDoc);
+    const newX = "x" in changes ? changes.x : tokenDoc.x;
+    const newY = "y" in changes ? changes.y : tokenDoc.y;
+    _scheduleFreeZoneTrigger(tokenDoc, newX, newY);
     return;
   }
 
@@ -499,10 +529,14 @@ async function _processMove(tokenDoc, combatant, waypoints) {
     .map(s => `${fmt(s.rawDist)} en ${s.terrainLabel} (coût ${fmt(s.cost)})`)
     .join(", ");
 
-  // centerX/centerY : point testé contre les zones/pièges au moment de la
-  // validation MJ (action-confirm.js) — distinct de newX/newY (coin haut-
-  // gauche), qui doit rester le coin réel puisque undoMovement() l'utilise
-  // pour replacer le token via tokenDoc.update({x, y}).
+  // centerX/centerY : point d'arrivée testé contre les zones/pièges au
+  // moment de la validation MJ (action-confirm.js) — distinct de newX/newY
+  // (coin haut-gauche), qui doit rester le coin réel puisque undoMovement()
+  // l'utilise pour replacer le token via tokenDoc.update({x, y}).
+  // centerWaypoints : tout le TRAJET (déjà calculé ci-dessus pour le coût de
+  // terrain) — permet à action-confirm.js de tester les zones traversées en
+  // chemin, pas seulement la case d'arrivée (un piège qu'on traverse sans
+  // s'y arrêter doit tout de même se déclencher).
   const endCenter = _tokenCenterAt(tokenDoc, endPos.x, endPos.y);
 
   const actionId = foundry.utils.randomID();
@@ -511,6 +545,7 @@ async function _processMove(tokenDoc, combatant, waypoints) {
     oldX: startPos.x, oldY: startPos.y,
     newX: endPos.x,   newY: endPos.y,
     centerX: endCenter.x, centerY: endCenter.y,
+    centerWaypoints,
     cost, waypoints, elevation
   };
 

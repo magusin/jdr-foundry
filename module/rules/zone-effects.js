@@ -148,19 +148,63 @@ export function getZoneSpeedMultAt(x, y, elevation = 0) {
 }
 
 /**
- * Déclenche les zones présentes à la position d'arrivée d'un token, après
- * validation MJ du déplacement. Applique dégâts + effet, marque la zone
- * comme révélée (elle vient de se manifester) et poste un message.
+ * Zones rencontrées n'importe où sur un TRAJET (pas seulement à son point
+ * d'arrivée) — même sous-découpage par pas d'environ une demi-case que
+ * calculateMovementCost() dans region-behaviors.js, pour la même raison :
+ * un piège traversé en passant, sans que le déplacement s'y arrête, tombe
+ * hors du point d'arrivée dès que la case finale n'est pas elle-même dans la
+ * zone. Dédupliqué par comportement (région+behavior), pas par pas
+ * d'échantillonnage — traverser deux fois le bord d'une même zone ne doit
+ * pas la déclencher deux fois pour un seul mouvement.
  */
-export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, elevation = 0 }) {
+export function getZoneEffectsAlongPath(waypoints, elevation = 0) {
+  if (!Array.isArray(waypoints) || !waypoints.length) return [];
+  if (waypoints.length === 1) return getZoneEffectsAt(waypoints[0].x, waypoints[0].y, elevation);
+
+  const seen = new Set();
+  const out = [];
+  const gridSizePx = canvas?.scene?.grid?.size || 100;
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const from = waypoints[i], to = waypoints[i + 1];
+    const pxDist = Math.hypot(to.x - from.x, to.y - from.y);
+    const stepCount = Math.min(64, Math.max(1, Math.round(pxDist / (gridSizePx / 2))));
+    // s va jusqu'à stepCount INCLUS : couvre aussi bien from (s=0, déjà vu
+    // par le segment précédent sauf pour i=0) que to (s=stepCount), donc le
+    // point d'arrivée reste testé comme avant, juste plus seul désormais.
+    for (let s = 0; s <= stepCount; s++) {
+      const t = s / stepCount;
+      const x = from.x + (to.x - from.x) * t;
+      const y = from.y + (to.y - from.y) * t;
+      for (const hit of getZoneEffectsAt(x, y, elevation)) {
+        const key = `${hit.region.id}:${hit.behavior.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(hit);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Déclenche les zones rencontrées par un token après validation MJ du
+ * déplacement — sur tout le TRAJET (`waypoints`, ≥2 points) s'il est fourni,
+ * sinon seulement au point (`x`,`y`) pour un appel ponctuel sans trajet
+ * connu (compat). Applique dégâts + effet, marque la zone comme révélée
+ * (elle vient de se manifester) et poste un message.
+ */
+export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, waypoints, elevation = 0 }) {
   if (!game.user.isGM || !actor) return;
-  const zones = getZoneEffectsAt(x, y, elevation);
+  const onPath = Array.isArray(waypoints) && waypoints.length >= 2;
+  const zones = onPath ? getZoneEffectsAlongPath(waypoints, elevation) : getZoneEffectsAt(x, y, elevation);
   // Repère de débogage : si un piège semble ne "rien faire", ce log dit
-  // d'abord si le point testé tombe même dans une région zoneEffet — sans
-  // ça, un rapport "ça ne se déclenche pas" ne dit pas si c'est une région
-  // jamais atteinte (mauvais point testé, mauvaise scène...) ou une région
-  // atteinte mais ignorée plus bas (onceOnly, immunité, cible).
-  console.debug(`[RPG][Zone] test à (${Math.round(x)}, ${Math.round(y)}, élév. ${elevation}) pour ${actor.name} : ${zones.length} zone(s) trouvée(s).`);
+  // d'abord si le trajet/point testé tombe même dans une région zoneEffet —
+  // sans ça, un rapport "ça ne se déclenche pas" ne dit pas si c'est une
+  // région jamais atteinte (mauvais point testé, mauvaise scène...) ou une
+  // région atteinte mais ignorée plus bas (onceOnly, immunité, cible).
+  const where = onPath ? `trajet (${waypoints.length} points)` : `point (${Math.round(x)}, ${Math.round(y)})`;
+  console.debug(`[RPG][Zone] test sur ${where}, élév. ${elevation}, pour ${actor.name} : ${zones.length} zone(s) trouvée(s).`);
   if (!zones.length) return;
 
   const moverTokenDoc = tokenId

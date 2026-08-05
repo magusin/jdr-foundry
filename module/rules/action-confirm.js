@@ -208,14 +208,18 @@ async function handlePendingAction(message, result, actionId) {
 
       // Pièges / zones à effet : ne se déclenchent qu'une fois le déplacement
       // validé par le MJ, jamais à la simple déclaration du joueur.
-      // centerX/centerY (centre du token à l'arrivée) plutôt que newX/newY
-      // (coin haut-gauche) — tester le coin pouvait manquer une zone que le
-      // token chevauchait visiblement de l'autre côté de sa case.
-      if (moverActor && entry.snapshot?.centerX != null && entry.snapshot?.centerY != null) {
+      // centerWaypoints (tout le trajet, centre du token) plutôt que
+      // seulement centerX/centerY (l'arrivée) — un token qui traverse un
+      // piège sans s'y arrêter doit tout de même le déclencher ; centerX/Y
+      // reste le repli si une entrée plus ancienne n'a pas ce champ.
+      const path = entry.snapshot?.centerWaypoints;
+      const hasPoint = entry.snapshot?.centerX != null && entry.snapshot?.centerY != null;
+      if (moverActor && ((Array.isArray(path) && path.length >= 2) || hasPoint)) {
         try {
           await triggerZoneEffectsForToken({
             actor: moverActor,
             tokenId: entry.snapshot?.tokenId,
+            waypoints: path,
             x: entry.snapshot.centerX,
             y: entry.snapshot.centerY,
             elevation: entry.snapshot?.elevation ?? 0
