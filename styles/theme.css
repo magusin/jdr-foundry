@@ -539,7 +539,8 @@ body.rpg-theme-contraste .rpg-window .window-content {
 .rpg-window .window-content .journal-page-content,
 .rpg-window .window-content .journal-entry-content,
 .rpg-window .window-content .journal-entry-page,
-.rpg-window .window-content .editor-content {
+.rpg-window .window-content .editor-content,
+.rpg-sheet .window-content .editor-content {
   background: transparent !important;
   color: var(--ink-text) !important;
 }

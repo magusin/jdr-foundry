@@ -141,11 +141,23 @@
   padding: 14px;
 }
 
-/* ── Éditeurs ProseMirror (récit, notes MJ, description) ─────────────── */
+/* ── Éditeurs ProseMirror (récit, notes MJ, description) ───────────────
+   La couleur/fond du texte tapé vient de la règle globale
+   ".rpg-sheet .window-content .editor-content" (theme.css) — sans elle
+   le champ hérite du rendu "page blanche" par défaut de Foundry, ce qui
+   avec notre encre claire (--ink-text) donnait un texte quasi invisible
+   dès qu'on tapait dedans (rapporté comme "n'accepte pas le texte", alors
+   que la saisie fonctionnait bel et bien, juste invisible). min-height
+   est répété ici sur .editor-content lui-même (pas seulement l'élément
+   <prose-mirror> englobant) car ce dernier n'étant qu'en display:block,
+   rien ne garantit que sa zone de saisie interne hérite de sa hauteur. */
 .rpg-quest-sheet prose-mirror.rpg-quest-editor {
   display: block;
   min-height: 100px;
   font-size: 12px;
+}
+.rpg-quest-sheet prose-mirror.rpg-quest-editor .editor-content {
+  min-height: 90px;
 }
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
