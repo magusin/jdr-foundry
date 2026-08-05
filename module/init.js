@@ -1070,6 +1070,7 @@ Hooks.once("init", async () => {
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
         ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
         ["Basculer les Repères de Carte (MJ)", "toggle-map-markers.js", "icons/svg/eye.svg",             "gm"],
+        ["Repères de Carte : Configurer (MJ)", "map-notes-manager.js", "icons/svg/book.svg",            "gm"],
       ];
       const getFolder = async (name) => {
         let f = game.folders.find(x => x.type === "Macro" && x.name === name);
