@@ -6,6 +6,23 @@ import { ensureDistribGroupId, findDistribCopies } from "../rules/quest-group.js
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
+/**
+ * system.etapes doit toujours être lu comme un vrai Array. Un update() vers
+ * un chemin pointé indexé (ex. "system.etapes.0.description") peut laisser
+ * Foundry le stocker comme un objet à clés numériques ({0:{...}, 1:{...}})
+ * plutôt qu'un Array — Object.values() ici récupère les entrées existantes
+ * au lieu de les faire silencieusement disparaître. _onFormSubmitV2 avait
+ * déjà cette normalisation pour les données venant du formulaire ; tous les
+ * autres points de lecture de system.etapes (actions, _prepareContext, le
+ * commit ProseMirror) doivent la partager pour ne pas re-perdre les mêmes
+ * données à la prochaine lecture.
+ */
+function asEtapesArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") return Object.values(raw);
+  return [];
+}
+
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
@@ -154,7 +171,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         if (m) {
           const idx = Number(m[1]);
           const field = m[2];
-          const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+          const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
           if (!list[idx]) return;
           list[idx][field] = value;
           this.document.update({ "system.etapes": list }, { render: true });
@@ -184,7 +201,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
-    ctx.system.etapes = Array.isArray(ctx.system.etapes) ? ctx.system.etapes : [];
+    ctx.system.etapes = asEtapesArray(ctx.system.etapes);
     // Récit et notes MJ passent par enrichHTML pour que @UUID[...] (PNJ,
     // objet, scène glissé dans l'éditeur) devienne un lien cliquable —
     // value= (source brute) alimente l'éditeur ProseMirror en mode édition,
@@ -323,7 +340,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionAddEtape(event) {
     event?.preventDefault?.();
-    const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
     // Amène directement le MJ sur la page de la nouvelle étape plutôt que
     // de le laisser sur "Aperçu" en devinant où elle a atterri.
@@ -335,7 +352,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(idx)) return;
-    const oldEtapes = this.document.system?.etapes ?? [];
+    const oldEtapes = asEtapesArray(this.document.system?.etapes);
     const list = foundry.utils.deepClone(oldEtapes);
     list.splice(idx, 1);
 
@@ -355,7 +372,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionShiftEtape(event, delta) {
     event?.preventDefault?.();
-    const etapes = this.document.system?.etapes ?? [];
+    const etapes = asEtapesArray(this.document.system?.etapes);
     if (!etapes.length) return;
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
     // Le maximum est etapes.length (pas etapes.length - 1) : "Étape suivante"
@@ -370,7 +387,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const etapeIdx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(etapeIdx)) return;
-    const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]) return;
     list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
     list[etapeIdx].objectifs.push({ text: "", fait: false });
@@ -383,7 +400,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const etapeIdx = Number(btn?.dataset?.etapeIdx);
     const objIdx   = Number(btn?.dataset?.objIdx);
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
-    const list = foundry.utils.deepClone(this.document.system?.etapes ?? []);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]?.objectifs) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
