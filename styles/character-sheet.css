@@ -418,6 +418,22 @@
   box-sizing: border-box;
 }
 
+/* La règle ci-dessus vise les champs texte/nombre — une case à cocher (ou
+   un radio) étirée à width:100% dans une ligne flex se retrouve à
+   réclamer toute la largeur de la ligne à la place de sa taille native,
+   écrasant ses voisins (rapporté : la case "Objectifs à cocher" de la
+   fiche de quête s'affichait comme une large barre orange, réduisant le
+   champ texte voisin à un filet inutilisable). Un correctif ponctuel
+   existait déjà pour un seul cas (.fx-check dans item-sheet.css) sans
+   jamais être généralisé — posé ici une bonne fois pour ne plus avoir à
+   le redécouvrir à chaque nouvelle case à cocher ajoutée dans une ligne
+   flex, sur n'importe quelle fiche. */
+.rpg-sheet input[type="checkbox"],
+.rpg-sheet input[type="radio"] {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .rpg-sheet .pv-row {
   display: flex;
   align-items: center;

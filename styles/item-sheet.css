@@ -141,11 +141,33 @@
   padding: 14px;
 }
 
-/* ── Éditeurs ProseMirror (récit, notes MJ, description) ─────────────── */
+/* ── Éditeurs ProseMirror (récit, notes MJ, description) ───────────────
+   La couleur/fond du texte tapé vient de la règle globale
+   ".rpg-sheet .window-content .editor-content" (theme.css) — sans elle
+   le champ hérite du rendu "page blanche" par défaut de Foundry, ce qui
+   avec notre encre claire (--ink-text) donnait un texte quasi invisible
+   dès qu'on tapait dedans.
+
+   Un forçage `display: block` ici écrasait la mise en page interne de
+   Foundry pour ce composant (menu + zone de saisie +, quand on bascule
+   sur "éditer la source", un textarea superposé) — Foundry empile
+   vraisemblablement ces éléments via flexbox en interne, et notre
+   sélecteur (plus spécifique que le sien) gagnait la bataille de
+   spécificité et cassait cet empilement : la zone de saisie retombait à
+   une hauteur quasi nulle (rapporté : champ minuscule, quasi impossible
+   à cliquer dedans) et le panneau "source" se dessinait par-dessus le
+   reste de la barre d'outils au lieu de prendre sa propre place (boutons
+   de la barre — dont Sauvegarder — masqués derrière). On ne force plus
+   `display` du tout : seule une hauteur minimale généreuse est imposée,
+   en `!important` pour gagner face à un éventuel style inline posé par
+   le composant lui-même, sans toucher à la propriété qui gérait
+   l'agencement interne. */
 .rpg-quest-sheet prose-mirror.rpg-quest-editor {
-  display: block;
-  min-height: 100px;
+  min-height: 180px !important;
   font-size: 12px;
+}
+.rpg-quest-sheet prose-mirror.rpg-quest-editor .editor-content {
+  min-height: 140px !important;
 }
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
