@@ -129,6 +129,28 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     root.querySelectorAll(".quest-recipient-check").forEach(input => {
       input.addEventListener("change", (ev) => this._toggleRecipient(ev.target));
     });
+
+    // ── Éditeurs ProseMirror : sauvegarde explicite, indépendante de
+    // submitOnChange. Rapporté : taper puis cliquer le ✓ interne de
+    // l'éditeur ne persistait jamais rien sur le document (le texte ne
+    // survivait que dans l'état local de l'élément <prose-mirror> —
+    // visible en rouvrant l'édition, absent de la vue lecture/rendue
+    // après un submitOnChange qui, lui, marche très bien pour les
+    // <input>/<select> classiques du même formulaire). submitOnChange
+    // s'appuie sur un évènement natif du champ pour se déclencher ; on ne
+    // dépend plus de deviner lequel/si <prose-mirror> le déclenche
+    // correctement pour ce composant — on lit directement sa propriété
+    // .value (déjà ce que le template lui donne via l'attribut value=) et
+    // on écrit au chemin exact de son attribut name= dès qu'il committe.
+    root.querySelectorAll("prose-mirror[name]").forEach(pm => {
+      const commit = () => {
+        const path = pm.getAttribute("name");
+        if (!path) return;
+        this.document.update({ [path]: pm.value ?? "" }, { render: true });
+      };
+      pm.addEventListener("save", commit);
+      pm.addEventListener("change", commit);
+    });
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
