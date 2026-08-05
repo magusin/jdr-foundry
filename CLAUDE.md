@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A custom French-language Foundry VTT game system (`id: "rpg"`, system.json), built for Foundry V13 (ApplicationV2 / DocumentSheetV2 / HandlebarsApplicationMixin). No build step: pure ES modules loaded directly by Foundry (`esmodules: ["module/init.js"]` in `system.json`), no bundler, no `package.json` scripts. `node_modules/handlebars` at repo root exists only to validate templates locally (see Verifying changes below).
+A custom French-language Foundry VTT game system (`id: "rpg"`, system.json), built on the ApplicationV2 / DocumentSheetV2 / HandlebarsApplicationMixin APIs introduced in Foundry V13. `system.json`'s `compatibility` block is `{ minimum: "13", verified: "14" }` — the live world now runs on Foundry V14, so V13 is a supported floor, not the active target; don't assume V13-only behavior when debugging something reported from the actual running world. No build step: pure ES modules loaded directly by Foundry (`esmodules: ["module/init.js"]` in `system.json`), no bundler, no `package.json` scripts. `node_modules/handlebars` at repo root exists only to validate templates locally (see Verifying changes below).
 
 ## Verifying changes (no build, no test suite)
 
