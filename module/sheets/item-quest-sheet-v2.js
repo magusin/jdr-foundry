@@ -101,8 +101,18 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // item.name à chaque rendu) mais jamais sur la barre de titre elle-même
     // tant que la fiche n'était pas fermée puis rouverte. this.title est un
     // getter qui lit déjà this.document.name en direct : il suffit de le
-    // réappliquer nous-mêmes à chaque rendu.
-    if (this.window?.title) this.window.title.textContent = this.title;
+    // réappliquer nous-mêmes à chaque rendu. Ciblé par classe CSS plutôt que
+    // via l'API this.window (jamais vérifiée en direct dans Foundry — une
+    // précédente tentative avec this.window.title a cassé tout le reste de
+    // _onRender, y compris le ré-attachement du listener "change" juste en
+    // dessous, en plantant ici avant de l'atteindre) et protégé par
+    // try/catch pour ne jamais pouvoir interrompre le reste de la méthode.
+    try {
+      const titleEl = this.element?.querySelector(".window-header .window-title");
+      if (titleEl) titleEl.textContent = this.title;
+    } catch (e) {
+      console.warn("[RPG] Rafraîchissement du titre de fenêtre (quête) :", e);
+    }
 
     applyUiTheme(this.element);
     applySheetViewMode(this.element, { isGM: game.user.isGM });
@@ -192,7 +202,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
   async _addRewardItemFromDrop(item) {
     if (!game.user.isGM || !item?.uuid) return;
-    const list = this._readRewardItemsFromForm();
+    await this._flushPendingEdits();
+    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: item.uuid, qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
@@ -344,62 +355,33 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   }
 
   /**
-   * Reconstruit system.etapes depuis le DOM actuel du formulaire (mêmes
-   * règles de normalisation que _onFormSubmitV2) plutôt que depuis
-   * this.document. Un clic sur un bouton d'action (+Objectif, +Étape, ✕...)
-   * déclenche d'abord un blur+change sur le champ en cours d'édition — sa
-   * soumission passe par le listener "change" du formulaire, asynchrone,
-   * pas encore appliquée à this.document au moment où l'action elle-même
-   * s'exécute juste après (avant même le premier await de son propre
-   * document.update()). Lire this.document ici récupérait donc une copie
-   * plus ancienne des étapes/objectifs, sur laquelle l'action écrivait
-   * ensuite — écrasant au passage tout ce qui venait d'être saisi mais pas
-   * encore persisté (rapporté : "+ Objectif efface les objectifs déjà
-   * renseignés"). Toutes les pages d'étapes sont présentes simultanément
-   * dans le DOM (seule leur visibilité bascule via Tabs), donc lire le
-   * formulaire entier capture bien l'état de TOUTES les étapes, pas
-   * seulement celle actuellement affichée.
+   * Sauvegarde tout ce qui est actuellement affiché dans le formulaire,
+   * AVANT qu'une action (+Objectif, +Étape, ✕...) ne lise this.document.
+   * Un clic sur ces boutons déclenche d'abord un blur+change sur le champ
+   * en cours d'édition — sa soumission passe par le listener "change" du
+   * formulaire (posé plus haut dans _onRender), asynchrone et pas encore
+   * résolue au moment où l'action elle-même s'exécute juste après (avant
+   * même le premier await de son propre document.update()). Sans ce flush
+   * explicite ET ATTENDU ici, l'action lisait une copie de this.document
+   * plus ancienne que ce qui est affiché à l'écran, et écrivait par-dessus
+   * — écrasant tout ce qui venait d'être saisi mais pas encore persisté
+   * (rapporté : "+ Objectif efface les objectifs déjà renseignés"). Réutilise
+   * _onFormSubmitV2 tel quel (le même chemin que le listener "change", déjà
+   * éprouvé) plutôt qu'une lecture DOM maison — plus sûr qu'une
+   * réimplémentation séparée du même parsing de formulaire.
    */
-  _readEtapesFromForm() {
+  async _flushPendingEdits(event) {
     const root = this.element;
     const formEl = root?.tagName === "FORM" ? root : root?.querySelector("form");
-    if (!formEl) return foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-
+    if (!formEl) return;
     const formData = new foundry.applications.ux.FormDataExtended(formEl);
-    const expanded = foundry.utils.expandObject(formData.object);
-    const etapes = asEtapesArray(expanded?.system?.etapes);
-
-    return etapes.map(e => {
-      if (!e) return e;
-      const etape = foundry.utils.deepClone(e);
-      etape.label = String(etape.label ?? "").trim();
-      etape.description = String(etape.description ?? "");
-      etape.notesMJ = String(etape.notesMJ ?? "");
-      etape.objectifs = asEtapesArray(etape.objectifs)
-        .map(o => o ? { text: String(o.text ?? "").trim(), fait: !!o.fait } : o);
-      return etape;
-    });
-  }
-
-  /** Même principe que _readEtapesFromForm, pour system.recompense.items. */
-  _readRewardItemsFromForm() {
-    const root = this.element;
-    const formEl = root?.tagName === "FORM" ? root : root?.querySelector("form");
-    if (!formEl) return foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
-
-    const formData = new foundry.applications.ux.FormDataExtended(formEl);
-    const expanded = foundry.utils.expandObject(formData.object);
-    const items = asEtapesArray(expanded?.system?.recompense?.items);
-
-    return items.map(ri => ri ? {
-      uuid: String(ri.uuid ?? "").trim(),
-      qty:  Math.max(1, Number(ri.qty ?? 1) || 1)
-    } : ri);
+    await this._onFormSubmitV2(event, formEl, formData, {});
   }
 
   async _actionAddEtape(event) {
     event?.preventDefault?.();
-    const list = this._readEtapesFromForm();
+    await this._flushPendingEdits(event);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
     // Amène directement le MJ sur la page de la nouvelle étape plutôt que
     // de le laisser sur "Aperçu" en devinant où elle a atterri.
@@ -411,8 +393,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(idx)) return;
-    const oldEtapes = this._readEtapesFromForm();
-    const list = oldEtapes.slice();
+    await this._flushPendingEdits(event);
+    const oldEtapes = asEtapesArray(this.document.system?.etapes);
+    const list = foundry.utils.deepClone(oldEtapes);
     list.splice(idx, 1);
 
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
@@ -446,7 +429,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const etapeIdx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(etapeIdx)) return;
-    const list = this._readEtapesFromForm();
+    await this._flushPendingEdits(event);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]) return;
     list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
     list[etapeIdx].objectifs.push({ text: "", fait: false });
@@ -459,7 +443,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const etapeIdx = Number(btn?.dataset?.etapeIdx);
     const objIdx   = Number(btn?.dataset?.objIdx);
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
-    const list = this._readEtapesFromForm();
+    await this._flushPendingEdits(event);
+    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]?.objectifs) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
@@ -467,7 +452,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionAddRewardItem(event) {
     event?.preventDefault?.();
-    const list = this._readRewardItemsFromForm();
+    await this._flushPendingEdits(event);
+    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
@@ -476,7 +462,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
     if (!Number.isFinite(idx)) return;
-    const list = this._readRewardItemsFromForm();
+    await this._flushPendingEdits(event);
+    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
