@@ -98,6 +98,13 @@
   flex: 0 0 200px;
   display: flex;
   flex-direction: column;
+  /* Foundry stylise nativement .tabs avec justify-content: space-between
+     (pensé pour une barre d'onglets HORIZONTALE) — sans ce reset, passer
+     cette nav en colonne hérite quand même cette règle et étale les
+     entrées sur toute la hauteur du panneau au lieu de les empiler en
+     haut (rapporté : "Aperçu des étapes trop espacé, faut que ça se
+     suive"). */
+  justify-content: flex-start;
   gap: 2px;
   padding: 10px 8px;
   overflow-y: auto;
@@ -137,8 +144,52 @@
 .rpg-quest-sheet .quest-page-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+/* Chaque page (Aperçu, Étape N, Récompense, Description) devient elle-même
+   une colonne flex qui prend toute la hauteur du panneau — c'est ce qui
+   permet aux gros champs de texte ci-dessous de s'étirer jusqu'en bas de
+   la fenêtre au lieu de s'arrêter à leur min-height et de laisser un vide
+   (rapporté : "le champ [Description] doit aller jusqu'en bas de la
+   fenêtre"). Foundry stylise nativement .tab.active en display:block —
+   !important nécessaire pour gagner sur cette règle plus spécifique.
+   Le scroll de la page, auparavant sur .quest-page-content, vit ici. */
+.rpg-quest-sheet .quest-page-content .tab.active {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 14px;
+}
+/* Champ « Description » (page dédiée, un seul gros champ) : s'étire pour
+   occuper tout l'espace restant sous le titre. */
+.rpg-quest-sheet .quest-page-content .tab[data-tab="description"] prose-mirror.rpg-quest-editor,
+.rpg-quest-sheet .quest-page-content .tab[data-tab="description"] .rpg-enriched-text {
+  flex: 1;
+  min-height: 0;
+}
+/* Étape : « Récit » et « Notes MJ » s'étirent et se partagent l'espace
+   restant sous l'en-tête/titre/objectifs, qui gardent leur taille
+   naturelle (compacte) — display/flex de .etape-card lui-même sont posés
+   avec le reste de ses règles (border, padding...) plus bas dans ce
+   fichier, pour ne pas dupliquer le sélecteur. */
+.rpg-quest-sheet .etape-block-recit,
+.rpg-quest-sheet .etape-block-notes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.rpg-quest-sheet .etape-block-recit prose-mirror.rpg-quest-editor,
+.rpg-quest-sheet .etape-block-recit .rpg-enriched-text,
+.rpg-quest-sheet .etape-block-notes prose-mirror.rpg-quest-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ── Éditeurs ProseMirror (récit, notes MJ, description) ───────────────
@@ -205,6 +256,13 @@
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 12px;
+  /* Colonne flex qui prend toute la hauteur de l'onglet actif (voir plus
+     haut dans ce fichier) — c'est ce qui permet à .etape-block-recit et
+     .etape-block-notes de s'étirer jusqu'en bas de la fenêtre. */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 .rpg-quest-sheet .etape-card-done { opacity: .6; }
 .rpg-quest-sheet .etape-card-current { background: rgba(29, 158, 117, 0.08); }
