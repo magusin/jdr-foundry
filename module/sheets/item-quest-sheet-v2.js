@@ -1,5 +1,5 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
-import { applyUiTheme, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 import { bindSendToActorsButton, partyCharacters } from "./send-item-dialog.js";
 import { setupItemRefDrop } from "./drop-helper.js";
 import { ensureDistribGroupId, findDistribCopies } from "../rules/quest-group.js";
@@ -94,6 +94,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   async _onRender(context, options) {
     await super._onRender(context, options);
     applyUiTheme(this.element);
+    applySheetViewMode(this.element, { isGM: game.user.isGM });
     bindImageEditors(this.element, this.document);
     bindSendToActorsButton(this.element, this.document);
 
