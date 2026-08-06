@@ -158,7 +158,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       this._tabs = new foundry.applications.ux.Tabs({
         navSelector: ".quest-page-nav",
         contentSelector: ".quest-page-content",
-        initial: "apercu"
+        initial: "apercu",
+        // Recalcule la taille du champ Description au clic sur cet onglet
+        // (voir _sizeDescriptionEditor) — Tabs.activate() est un simple
+        // bascule de classes CSS, sans re-render, donc _onRender ne
+        // repasse pas par ici tout seul à ce moment-là.
+        callback: () => this._sizeDescriptionEditor()
       });
     }
     this._tabs.bind(root);
@@ -172,6 +177,16 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       if (scroller) scroller.scrollTop = this._pendingScrollTop;
     }
     this._pendingScrollTop = null;
+
+    // Redimensionne le champ Description à ce render (page déjà active au
+    // premier affichage, ou re-render déclenché par une sauvegarde de
+    // champ pendant qu'on y est) — et à chaque redimensionnement de la
+    // fenêtre (la fiche est une fenêtre Foundry redimensionnable).
+    this._sizeDescriptionEditor();
+    if (!this._sizeRO) this._sizeRO = new ResizeObserver(() => this._sizeDescriptionEditor());
+    this._sizeRO.disconnect();
+    const scrollerEl = root.querySelector(".quest-page-content");
+    if (scrollerEl) this._sizeRO.observe(scrollerEl);
 
     // ── UUID cliquable (récompense) → ouvre la fiche de l'objet ──────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
@@ -330,8 +345,40 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    *  mais jamais committé (voir _flushProseMirrorFields) disparaissait
    *  silencieusement en fermant la fenêtre. */
   async close(options = {}) {
+    this._sizeRO?.disconnect();
     await this._flushProseMirrorFields();
     return super.close(options);
+  }
+
+  /**
+   * Étire le champ Description jusqu'en bas de la fenêtre — seulement sur
+   * cette page (un seul champ, rien d'autre à partager l'espace avec,
+   * contrairement aux pages d'étape où Récit/Objectifs/Notes MJ
+   * coexistent). Les deux tentatives précédentes de faire ça en CSS pur
+   * (flex + min-height:0 posés directement, puis en cascade depuis les
+   * parents, sur <prose-mirror>) ont cassé son agencement interne à
+   * chaque fois — voir l'historique dans item-sheet.css. On mesure donc
+   * l'espace RÉELLEMENT disponible en JS et on fixe min-height/max-height
+   * (les deux seules propriétés déjà confirmées sans risque sur ce
+   * composant) à cette valeur calculée, sans jamais toucher flex/display/
+   * overflow de l'élément lui-même au-delà de ce qui marche déjà.
+   */
+  _sizeDescriptionEditor() {
+    const root = this.element;
+    if (!root) return;
+    const scroller = root.querySelector(".quest-page-content");
+    const tab = root.querySelector('.tab[data-tab="description"]');
+    if (!scroller || !tab?.classList.contains("active")) return;
+    const target = tab.querySelector("prose-mirror.rpg-quest-editor, .rpg-enriched-text");
+    if (!target) return;
+
+    const bottom = scroller.getBoundingClientRect().bottom;
+    const top = target.getBoundingClientRect().top;
+    const available = bottom - top - 14; // 14px = marge basse de .quest-page-content
+    const h = Math.max(150, Math.floor(available));
+    target.style.setProperty("min-height", `${h}px`, "important");
+    target.style.setProperty("max-height", `${h}px`, "important");
+    target.style.overflowY = "auto";
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
