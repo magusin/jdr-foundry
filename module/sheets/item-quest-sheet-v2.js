@@ -208,6 +208,16 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (root.dataset.rpgLiveSave) return;
     root.dataset.rpgLiveSave = "1";
 
+    const commit = async (path, val, fieldLabel) => {
+      try {
+        this._lastFieldSave = this.document.update({ [path]: val }, { render: false });
+        await this._lastFieldSave;
+      } catch (e) {
+        console.error("[RPG] Enregistrement fiche Quête :", e, "| champ :", fieldLabel);
+        ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
+      }
+    };
+
     const persist = async (el) => {
       if (!(game.user.isGM || this.isEditable)) return;
       const name = el.getAttribute?.("name");
@@ -219,13 +229,33 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
       else value = el.value ?? "";
 
-      try {
-        this._lastFieldSave = this.document.update({ [name]: value }, { render: false });
-        await this._lastFieldSave;
-      } catch (e) {
-        console.error("[RPG] Enregistrement fiche Quête :", e, "| champ :", name);
-        ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
+      // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
+      // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
+      // pour system.etapes.{i}.label qui, lui, persiste correctement) —
+      // Foundry ne fusionne pas ce chemin pointé proprement à cette
+      // profondeur : chaque frappe réduisait le tableau objectifs de
+      // l'étape aux seuls index explicitement écrits, supprimant les
+      // autres objectifs déjà remplis en silence. Symptôme : "+Objectif
+      // efface les objectifs déjà renseignés" persistait même après avoir
+      // éliminé la course de lecture (_awaitPendingFieldSave) — le bug
+      // était dans l'ÉCRITURE elle-même, pas dans l'ordre lecture/écriture.
+      // Fixé en remontant d'un cran : on réécrit l'étape ENTIÈRE
+      // (system.etapes.{i}, un objet complet) — structurellement
+      // identique au cas label, qui fonctionne déjà.
+      const objMatch = name.match(/^system\.etapes\.(\d+)\.objectifs\.(\d+)\.(text|fait)$/);
+      if (objMatch) {
+        const [, eIdx, oIdx, field] = objMatch;
+        const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+        const etape = etapes[Number(eIdx)];
+        if (!etape) return;
+        etape.objectifs = asEtapesArray(etape.objectifs);
+        if (!etape.objectifs[Number(oIdx)]) return;
+        etape.objectifs[Number(oIdx)][field] = value;
+        await commit(`system.etapes.${eIdx}`, etape, name);
+        return;
       }
+
+      await commit(name, value, name);
     };
 
     root.addEventListener("change", (ev) => {
