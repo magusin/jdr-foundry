@@ -18,15 +18,6 @@ export const DIFFICULTY_TIERS = {
   quasiImpossible:{ label: "Quasi impossible", tn: 19 }
 };
 
-// Stat dont dépend chaque compétence pour le bonus au jet (cohérent avec
-// son "grants" déjà défini sur l'acteur — réutilise la même logique).
-function statForSkill(actor, skillKey) {
-  const skill = actor.system?.skills?.[skillKey];
-  const grants = skill?.grants ?? {};
-  const firstStat = Object.keys(grants)[0];
-  return firstStat ?? "dexterite";
-}
-
 /**
  * Déclare un jet de compétence : lance 1d20 + bonus de stat + niveau de
  * compétence, affiche le TN visé, poste un message MJ Réussite/Échec.

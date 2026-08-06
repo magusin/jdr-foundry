@@ -76,36 +76,6 @@ function sumBonuses(actor) {
   return totals;
 }
 
-function sumSkillBonuses(actor) {
-  const skills = actor.system?.skills ?? {};
-  const totals = {
-    principales: { force: 0, intelligence: 0, dexterite: 0, acuite: 0, endurance: 0 },
-    defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
-    ressources: { pvMax: 0, manaMax: 0 },
-    regen: { pvPct: 0, manaPct: 0 },
-    move: { vitesse: 0 }
-  };
-
-  for (const s of Object.values(skills)) {
-    const lvl = Number(s?.level) || 0;
-    const grants = s?.grants ?? {};
-
-    if (grants.force) totals.principales.force += lvl * Number(grants.force);
-    if (grants.intelligence) totals.principales.intelligence += lvl * Number(grants.intelligence);
-    if (grants.dexterite) totals.principales.dexterite += lvl * Number(grants.dexterite);
-    if (grants.acuite) totals.principales.acuite += lvl * Number(grants.acuite);
-    if (grants.endurance) totals.principales.endurance += lvl * Number(grants.endurance);
-
-    if (grants.vitesse) totals.move.vitesse += lvl * Number(grants.vitesse);
-    if (grants.pvMax) totals.ressources.pvMax += lvl * Number(grants.pvMax);
-    if (grants.manaMax) totals.ressources.manaMax += lvl * Number(grants.manaMax);
-    if (grants.scoreArmure) totals.defenses.scoreArmure += lvl * Number(grants.scoreArmure);
-    if (grants.scoreResistance) totals.defenses.scoreResistance += lvl * Number(grants.scoreResistance);
-  }
-
-  return totals;
-}
-
 export class RPGActor extends Actor {
   getRollData() {
     const data = super.getRollData();
@@ -169,32 +139,10 @@ export class RPGActor extends Actor {
       sys.base.vitesse = Number(baseMove.vitesse ?? 6) || 6;
     }
 
-    // BONUS items / sorts passifs + skills
-    const bonusItems = sumBonuses(this);
-    const bonusSkills = sumSkillBonuses(this);
-
-    const bonus = foundry.utils.deepClone(bonusItems);
-    bonus.principales.force += bonusSkills.principales.force;
-    bonus.principales.intelligence += bonusSkills.principales.intelligence;
-    bonus.principales.dexterite += bonusSkills.principales.dexterite;
-    bonus.principales.acuite += bonusSkills.principales.acuite;
-    bonus.principales.endurance += bonusSkills.principales.endurance;
-
-    bonus.defenses.armureFixe += bonusSkills.defenses.armureFixe;
-    bonus.defenses.resistanceFixe += bonusSkills.defenses.resistanceFixe;
-    bonus.defenses.scoreArmure += bonusSkills.defenses.scoreArmure;
-    bonus.defenses.scoreResistance += bonusSkills.defenses.scoreResistance;
-
-    bonus.ressources.pvMax += bonusSkills.ressources.pvMax;
-    bonus.ressources.manaMax += bonusSkills.ressources.manaMax;
-
-    bonus.regen.pvPct += bonusSkills.regen.pvPct;
-    bonus.regen.manaPct += bonusSkills.regen.manaPct;
-
-    bonus.move.vitesse += bonusSkills.move.vitesse;
+    // BONUS items / sorts passifs
+    const bonus = sumBonuses(this);
 
     sys.derived.bonus = bonus;
-    sys.derived.bonusSkills = bonusSkills;
 
     // Etats (mods)
     const modsAE = (typeof sumActiveEffectMods === "function") ? sumActiveEffectMods(this) : null;
@@ -222,20 +170,12 @@ export class RPGActor extends Actor {
       effP[s] += niveau;
     }
 
-    // Stocke les contributions pour l'affichage sur la fiche
+    // Stocke la contribution pour l'affichage sur la fiche
     sys.derived.fromLevel = niveau;
-    sys.derived.fromSkills = {
-      force:        bonusSkills.principales.force,
-      intelligence: bonusSkills.principales.intelligence,
-      dexterite:    bonusSkills.principales.dexterite,
-      acuite:       bonusSkills.principales.acuite,
-      endurance:    bonusSkills.principales.endurance,
-    };
 
     // ✅ Photo AVANT les effets temporaires : c'est la valeur « permanente »
-    // du personnage (base + niveau + compétences + équipement). La fiche
-    // l'affiche à côté du total pour que le joueur voie ce que le combat
-    // ajoute ou retire.
+    // du personnage (base + niveau + équipement). La fiche l'affiche à côté
+    // du total pour que le joueur voie ce que le combat ajoute ou retire.
     sys.derived.permanent = sys.derived.permanent ?? {};
     sys.derived.permanent.principales = { ...effP };
 
