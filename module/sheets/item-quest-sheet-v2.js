@@ -103,6 +103,20 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     return game.user.isGM;
   }
 
+  /**
+   * Capture le scroll de la page active AVANT que _renderHTML/_replaceHTML
+   * ne remplace le DOM — chaque action (+Objectif, cocher un objectif,
+   * changer le statut...) déclenche un document.update({render:true}) qui
+   * reconstruit tout le formulaire, ramenant le scroll en haut à chaque
+   * clic (rapporté : "+Objectif remonte en haut de la fenêtre, c'est
+   * pénible"). Restauré dans _onRender, une fois le nouveau DOM en place.
+   */
+  async _preRender(context, options) {
+    await super._preRender(context, options);
+    const scroller = this.element?.querySelector(".quest-page-content");
+    this._pendingScrollTop = scroller ? scroller.scrollTop : null;
+  }
+
   async _onRender(context, options) {
     await super._onRender(context, options);
 
@@ -149,9 +163,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
     this._tabs.bind(root);
     if (this._pendingTab) {
+      // Navigation volontaire vers une autre page (ex. +Étape saute sur la
+      // nouvelle étape) : restaurer l'ancien scroll n'aurait pas de sens ici.
       this._tabs.activate(this._pendingTab);
       this._pendingTab = null;
+    } else if (this._pendingScrollTop != null) {
+      const scroller = root.querySelector(".quest-page-content");
+      if (scroller) scroller.scrollTop = this._pendingScrollTop;
     }
+    this._pendingScrollTop = null;
 
     // ── UUID cliquable (récompense) → ouvre la fiche de l'objet ──────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {

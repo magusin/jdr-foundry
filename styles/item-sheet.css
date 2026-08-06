@@ -177,15 +177,23 @@
    d'outils restait visible), et en plus les boutons ✕ des objectifs
    juste en dessous ne répondaient plus au clic (probablement
    interceptés par une zone du composant devenue plus grande que sa
-   partie visible). Retiré : on se limite à nouveau à un min-height plus
-   généreux (doublé), sans jamais toucher flex/display/overflow de ce
-   composant. */
+   partie visible). Retiré : flex/display de ce composant ne sont plus
+   jamais touchés.
+
+   Suite (demande : que le champ s'adapte au texte tapé, jusqu'au maximum
+   actuel) : min-height ramené à une valeur modeste (le plancher qui
+   évitait la régression historique "champ minuscule") et un max-height +
+   overflow-y ajoutés — SANS toucher flex/display, donc sans le risque
+   déjà rencontré deux fois avec ces deux propriétés-là sur ce composant.
+   L'ancien plafond (360px/320px) devient le nouveau max-height. */
 .rpg-quest-sheet prose-mirror.rpg-quest-editor {
-  min-height: 360px !important;
+  min-height: 150px !important;
+  max-height: 360px !important;
+  overflow-y: auto;
   font-size: 12px;
 }
 .rpg-quest-sheet prose-mirror.rpg-quest-editor .editor-content {
-  min-height: 320px !important;
+  min-height: 110px !important;
 }
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
