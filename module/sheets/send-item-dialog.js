@@ -137,15 +137,26 @@ export async function promptSendItemToActors(item) {
   }
 }
 
-/** Branche le bouton [data-action="sendToActors"] d'une fiche d'objet (idempotent). */
-export function bindSendToActorsButton(root, item) {
+/**
+ * Branche le bouton [data-action="sendToActors"] d'une fiche d'objet
+ * (idempotent). `options.beforeSend`, si fourni, est attendu AVANT
+ * promptSendItemToActors — utilisé par la fiche Quête pour forcer la
+ * sauvegarde de ses champs <prose-mirror> (récit/notes MJ/description)
+ * avant que la copie envoyée au PJ (un item.toObject() de l'instant T) ne
+ * soit prise, sans quoi un texte tapé mais jamais committé serait absent
+ * de cette copie-là aussi.
+ */
+export function bindSendToActorsButton(root, item, options = {}) {
   const btn = root?.querySelector('[data-action="sendToActors"]');
   if (!btn || btn.dataset.rpgSendBound) return;
   btn.dataset.rpgSendBound = "1";
   btn.addEventListener("click", async (ev) => {
     ev.preventDefault();
     if (!game.user.isGM) return;
-    try { await promptSendItemToActors(item); }
+    try {
+      await options.beforeSend?.();
+      await promptSendItemToActors(item);
+    }
     catch (e) { console.error("[RPG] Envoyer à un PJ :", e); ui.notifications?.error?.("Erreur — voir la console."); }
   });
 }
