@@ -143,7 +143,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     applyUiTheme(this.element);
     applySheetViewMode(this.element, { isGM: game.user.isGM });
     bindImageEditors(this.element, this.document);
-    bindSendToActorsButton(this.element, this.document);
+    bindSendToActorsButton(this.element, this.document, {
+      beforeSend: () => this._awaitPendingFieldSave()
+    });
 
     const root = this.element;
     if (!root) return;
@@ -572,6 +574,14 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionShiftEtape(event, delta) {
     event?.preventDefault?.();
+    // Manquait ici (seul handler d'action à ne pas l'avoir) : sans ce
+    // flush, un récit/notes MJ/description tapé puis jamais committé
+    // (voir _flushProseMirrorFields) restait vide dans le document — le
+    // re-render déclenché par cette action se contentait de RÉVÉLER cette
+    // valeur jamais sauvegardée plutôt que de l'effacer activement.
+    // Rapporté : "le joueur ne voit pas la description" après avoir
+    // avancé d'étape sans jamais avoir déclenché de sauvegarde entre-temps.
+    await this._awaitPendingFieldSave();
     const etapes = asEtapesArray(this.document.system?.etapes);
     if (!etapes.length) return;
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
@@ -636,6 +646,13 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const actorId = input?.dataset?.actorId;
     const actor = actorId ? game.actors.get(actorId) : null;
     if (!actor) return;
+
+    // La copie envoyée au PJ (branche "checked" plus bas) est un instantané
+    // (item.toObject()) de this.document — sans ce flush, un récit/notes
+    // MJ/description tapé mais jamais committé (voir
+    // _flushProseMirrorFields) serait absent de CETTE copie-là aussi,
+    // pas seulement de this.document.
+    await this._awaitPendingFieldSave();
 
     const item = this.document;
     const checked = !!input.checked;
