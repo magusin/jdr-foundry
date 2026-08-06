@@ -119,7 +119,7 @@
             placeholder="Titre de l'étape (ex: Trouver l'auberge)"
             {{#unless ../canEdit}}disabled{{/unless}} />
 
-          <div class="etape-block etape-block-recit">
+          <div class="etape-block">
             <label class="etape-block-label" title="Visible du joueur pendant que cette étape est en cours. Glisse un PNJ, un objet ou une scène dans le texte pour créer un lien cliquable.">Récit de l'étape</label>
             {{#if ../canEdit}}
             <prose-mirror name="system.etapes.{{ei}}.description" value="{{etape.description}}"
@@ -150,7 +150,7 @@
           </div>
 
           {{#if ../canEdit}}
-          <div class="etape-block etape-block-notes">
+          <div class="etape-block">
             <label class="etape-block-label etape-block-label-mj" title="PNJ, lieux, récompense de mise en scène... — jamais visible du joueur. Glisse un PNJ ou un objet dans le texte pour créer un lien cliquable.">📝 Notes MJ</label>
             <prose-mirror name="system.etapes.{{ei}}.notesMJ" value="{{etape.notesMJ}}"
               button="true" editable="true" toggled="false" class="rpg-quest-editor">{{{etape.notesMJHTML}}}</prose-mirror>
