@@ -37,9 +37,21 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         { navSelector: ".quest-page-nav", contentSelector: ".quest-page-content", initial: "apercu" }
       ],
 
+      /**
+       * submitOnChange est VOLONTAIREMENT désactivé (même choix que
+       * item-spell-sheet-v2.js, voir son commentaire DEFAULT_OPTIONS.form) :
+       * une soumission complète du formulaire à chaque frappe déclenche un
+       * re-render — qui, avant même de considérer la course avec les
+       * boutons d'action (+Objectif...), pouvait tout simplement retomber
+       * sur un formulaire dont un <prose-mirror> ou un <input> venait
+       * d'être remplacé sous les doigts de l'utilisateur (rapporté : rien
+       * n'était plus sauvegardé du tout, même les paragraphes, à la
+       * fermeture/réouverture de la fiche). On enregistre désormais champ
+       * par champ, sans re-render — voir _bindLiveSave().
+       */
       form: {
         closeOnSubmit: false,
-        submitOnChange: true,
+        submitOnChange: false,
         handler: async function (event, form, formData, options) {
           await this._onFormSubmitV2(event, form, formData, options);
         }
@@ -169,40 +181,84 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       input.addEventListener("change", (ev) => this._toggleRecipient(ev.target));
     });
 
-    // ── Soumission explicite du formulaire, indépendante de submitOnChange.
-    // Rapporté en plusieurs temps : d'abord le contenu ProseMirror qui ne
-    // persistait jamais (corrigé ici par un correctif ciblé, propre à
-    // <prose-mirror>, qui a lui-même introduit un bug de corruption de
-    // tableau — voir asEtapesArray), PUIS le titre d'étape et le nom de la
-    // quête — deux <input> tout ce qu'il y a de standard — qui ne
-    // persistaient pas non plus après fermeture/réouverture. Le point
-    // commun de tout ce qui MARCHE dans ce fichier (_actionAddEtape,
-    // _toggleRecipient, etc.) : un appel direct à document.update(),
-    // jamais le passage par submitOnChange/options.form.handler. Plutôt
-    // que de continuer à ajouter des correctifs ciblés champ par champ, on
-    // reproduit ce même schéma pour le formulaire entier : un seul
-    // listener "change" posé nous-mêmes sur le <form> à CHAQUE _onRender
-    // (donc jamais perdu si un re-render déclenché par une action
-    // remplace le nœud DOM du formulaire — contrairement à un éventuel
-    // listener natif attaché une seule fois par Foundry). FormDataExtended
-    // gère nativement la lecture de <prose-mirror> (cf. doc Foundry), donc
-    // un seul chemin de soumission suffit pour tous les champs.
-    const formEl = root.tagName === "FORM" ? root : root.querySelector("form");
-    if (formEl && !formEl.dataset.rpgChangeBound) {
-      formEl.dataset.rpgChangeBound = "1";
-      const submitForm = (ev) => {
-        const formData = new foundry.applications.ux.FormDataExtended(formEl);
-        this._onFormSubmitV2(ev, formEl, formData, {});
-      };
-      formEl.addEventListener("change", submitForm);
-      formEl.addEventListener("save", submitForm);
-    }
+    this._bindLiveSave(root);
+  }
+
+  /**
+   * Enregistre chaque champ individuellement dès qu'il change, sans jamais
+   * re-render (même principe que item-spell-sheet-v2.js#_bindLiveSave) —
+   * PAS de sérialisation du formulaire entier via FormDataExtended : un
+   * champ édité déclenche une seule écriture ciblée sur SON chemin pointé
+   * (ex. "system.etapes.0.label"), que Foundry applique très bien même à
+   * l'intérieur d'un tableau existant. Ça élimine d'un coup :
+   *  - le risque qu'un re-render en cours de frappe remplace le DOM sous
+   *    les doigts de l'utilisateur et fasse "disparaître" ce qu'il tape ;
+   *  - la course entre la sauvegarde d'un champ et un bouton d'action
+   *    (+Objectif, +Étape...) qui lisait auparavant this.document AVANT
+   *    que la sauvegarde en cours n'ait fini d'appliquer sa valeur —
+   *    chaque action attend maintenant explicitement _lastFieldSave (voir
+   *    _awaitPendingFieldSave) avant de relire this.document.
+   * <prose-mirror> est un élément form-associated (ElementInternals) qui
+   * expose son contenu courant via sa propriété .value et déclenche un
+   * évènement "change" comme n'importe quel champ natif — écouté ici au
+   * même titre que les <input>/<select>/<textarea>, plus l'évènement
+   * "save" spécifique à cet élément en filet de sécurité.
+   */
+  _bindLiveSave(root) {
+    if (root.dataset.rpgLiveSave) return;
+    root.dataset.rpgLiveSave = "1";
+
+    const persist = async (el) => {
+      if (!(game.user.isGM || this.isEditable)) return;
+      const name = el.getAttribute?.("name");
+      if (!name) return;
+
+      let value;
+      if (el.tagName === "PROSE-MIRROR") value = el.value ?? "";
+      else if (el.type === "checkbox") value = el.checked;
+      else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
+      else value = el.value ?? "";
+
+      try {
+        this._lastFieldSave = this.document.update({ [name]: value }, { render: false });
+        await this._lastFieldSave;
+      } catch (e) {
+        console.error("[RPG] Enregistrement fiche Quête :", e, "| champ :", name);
+        ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
+      }
+    };
+
+    root.addEventListener("change", (ev) => {
+      const el = ev.target;
+      if (!el?.matches?.("input, select, textarea, prose-mirror")) return;
+      persist(el);
+    });
+    // Filet de sécurité : si <prose-mirror> ne déclenche pas "change" dans
+    // cette version de Foundry, son propre évènement "save" (émis quand
+    // l'éditeur commit son contenu) prend le relais.
+    root.addEventListener("save", (ev) => {
+      const el = ev.target;
+      if (el?.tagName !== "PROSE-MIRROR") return;
+      persist(el);
+    });
+  }
+
+  /**
+   * À appeler avant qu'une action (+Objectif, +Étape, ✕...) ne lise
+   * this.document : attend que la dernière sauvegarde de champ démarrée
+   * par _bindLiveSave soit bien appliquée, pour ne jamais lire une copie
+   * de this.document plus ancienne que ce qui est affiché à l'écran (voir
+   * _bindLiveSave plus haut).
+   */
+  async _awaitPendingFieldSave() {
+    if (!this._lastFieldSave) return;
+    try { await this._lastFieldSave; } catch { /* déjà loggé dans _bindLiveSave */ }
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
   async _addRewardItemFromDrop(item) {
     if (!game.user.isGM || !item?.uuid) return;
-    await this._flushPendingEdits();
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: item.uuid, qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
@@ -354,33 +410,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this.document.update(expanded, { render: true });
   }
 
-  /**
-   * Sauvegarde tout ce qui est actuellement affiché dans le formulaire,
-   * AVANT qu'une action (+Objectif, +Étape, ✕...) ne lise this.document.
-   * Un clic sur ces boutons déclenche d'abord un blur+change sur le champ
-   * en cours d'édition — sa soumission passe par le listener "change" du
-   * formulaire (posé plus haut dans _onRender), asynchrone et pas encore
-   * résolue au moment où l'action elle-même s'exécute juste après (avant
-   * même le premier await de son propre document.update()). Sans ce flush
-   * explicite ET ATTENDU ici, l'action lisait une copie de this.document
-   * plus ancienne que ce qui est affiché à l'écran, et écrivait par-dessus
-   * — écrasant tout ce qui venait d'être saisi mais pas encore persisté
-   * (rapporté : "+ Objectif efface les objectifs déjà renseignés"). Réutilise
-   * _onFormSubmitV2 tel quel (le même chemin que le listener "change", déjà
-   * éprouvé) plutôt qu'une lecture DOM maison — plus sûr qu'une
-   * réimplémentation séparée du même parsing de formulaire.
-   */
-  async _flushPendingEdits(event) {
-    const root = this.element;
-    const formEl = root?.tagName === "FORM" ? root : root?.querySelector("form");
-    if (!formEl) return;
-    const formData = new foundry.applications.ux.FormDataExtended(formEl);
-    await this._onFormSubmitV2(event, formEl, formData, {});
-  }
-
   async _actionAddEtape(event) {
     event?.preventDefault?.();
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
     // Amène directement le MJ sur la page de la nouvelle étape plutôt que
@@ -393,7 +425,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(idx)) return;
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const oldEtapes = asEtapesArray(this.document.system?.etapes);
     const list = foundry.utils.deepClone(oldEtapes);
     list.splice(idx, 1);
@@ -429,7 +461,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const etapeIdx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(etapeIdx)) return;
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]) return;
     list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
@@ -443,7 +475,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const etapeIdx = Number(btn?.dataset?.etapeIdx);
     const objIdx   = Number(btn?.dataset?.objIdx);
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]?.objectifs) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
@@ -452,7 +484,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionAddRewardItem(event) {
     event?.preventDefault?.();
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
@@ -462,7 +494,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
     if (!Number.isFinite(idx)) return;
-    await this._flushPendingEdits(event);
+    await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
