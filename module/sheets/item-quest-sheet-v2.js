@@ -210,99 +210,128 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * PAS de sérialisation du formulaire entier via FormDataExtended : un
    * champ édité déclenche une seule écriture ciblée sur SON chemin pointé
    * (ex. "system.etapes.0.label"), que Foundry applique très bien même à
-   * l'intérieur d'un tableau existant. Ça élimine d'un coup :
-   *  - le risque qu'un re-render en cours de frappe remplace le DOM sous
-   *    les doigts de l'utilisateur et fasse "disparaître" ce qu'il tape ;
-   *  - la course entre la sauvegarde d'un champ et un bouton d'action
-   *    (+Objectif, +Étape...) qui lisait auparavant this.document AVANT
-   *    que la sauvegarde en cours n'ait fini d'appliquer sa valeur —
-   *    chaque action attend maintenant explicitement _lastFieldSave (voir
-   *    _awaitPendingFieldSave) avant de relire this.document.
-   * <prose-mirror> est un élément form-associated (ElementInternals) qui
-   * expose son contenu courant via sa propriété .value et déclenche un
-   * évènement "change" comme n'importe quel champ natif — écouté ici au
-   * même titre que les <input>/<select>/<textarea>, plus l'évènement
-   * "save" spécifique à cet élément en filet de sécurité.
+   * l'intérieur d'un tableau existant. Ça élimine le risque qu'un
+   * re-render en cours de frappe remplace le DOM sous les doigts de
+   * l'utilisateur et fasse "disparaître" ce qu'il tape.
+   *
+   * <prose-mirror> NE déclenche apparemment ni "change" ni "save" tant que
+   * l'utilisateur n'a pas cliqué sur le bouton Sauvegarder de SA PROPRE
+   * barre d'outils — contrairement à un <input>, qui committe sur simple
+   * blur. Ces deux listeners restent posés en filet de sécurité (au cas
+   * où l'utilisateur clique bien ce bouton), mais _flushProseMirrorFields
+   * (voir plus bas) est le vrai filet : appelé avant toute action et à la
+   * fermeture, il relit .value en direct sur chaque <prose-mirror> — qui
+   * lui reste TOUJOURS à jour même sans évènement — au lieu de dépendre
+   * d'un évènement qui ne vient pas forcément.
    */
   _bindLiveSave(root) {
     if (root.dataset.rpgLiveSave) return;
     root.dataset.rpgLiveSave = "1";
 
-    const commit = async (path, val, fieldLabel) => {
-      try {
-        this._lastFieldSave = this.document.update({ [path]: val }, { render: false });
-        await this._lastFieldSave;
-      } catch (e) {
-        console.error("[RPG] Enregistrement fiche Quête :", e, "| champ :", fieldLabel);
-        ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
-      }
-    };
-
-    const persist = async (el) => {
-      if (!(game.user.isGM || this.isEditable)) return;
-      const name = el.getAttribute?.("name");
-      if (!name) return;
-
-      let value;
-      if (el.tagName === "PROSE-MIRROR") value = el.value ?? "";
-      else if (el.type === "checkbox") value = el.checked;
-      else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
-      else value = el.value ?? "";
-
-      // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
-      // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
-      // pour system.etapes.{i}.label qui, lui, persiste correctement) —
-      // Foundry ne fusionne pas ce chemin pointé proprement à cette
-      // profondeur : chaque frappe réduisait le tableau objectifs de
-      // l'étape aux seuls index explicitement écrits, supprimant les
-      // autres objectifs déjà remplis en silence. Symptôme : "+Objectif
-      // efface les objectifs déjà renseignés" persistait même après avoir
-      // éliminé la course de lecture (_awaitPendingFieldSave) — le bug
-      // était dans l'ÉCRITURE elle-même, pas dans l'ordre lecture/écriture.
-      // Fixé en remontant d'un cran : on réécrit l'étape ENTIÈRE
-      // (system.etapes.{i}, un objet complet) — structurellement
-      // identique au cas label, qui fonctionne déjà.
-      const objMatch = name.match(/^system\.etapes\.(\d+)\.objectifs\.(\d+)\.(text|fait)$/);
-      if (objMatch) {
-        const [, eIdx, oIdx, field] = objMatch;
-        const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-        const etape = etapes[Number(eIdx)];
-        if (!etape) return;
-        etape.objectifs = asEtapesArray(etape.objectifs);
-        if (!etape.objectifs[Number(oIdx)]) return;
-        etape.objectifs[Number(oIdx)][field] = value;
-        await commit(`system.etapes.${eIdx}`, etape, name);
-        return;
-      }
-
-      await commit(name, value, name);
-    };
-
     root.addEventListener("change", (ev) => {
       const el = ev.target;
       if (!el?.matches?.("input, select, textarea, prose-mirror")) return;
-      persist(el);
+      this._persistField(el);
     });
-    // Filet de sécurité : si <prose-mirror> ne déclenche pas "change" dans
-    // cette version de Foundry, son propre évènement "save" (émis quand
-    // l'éditeur commit son contenu) prend le relais.
     root.addEventListener("save", (ev) => {
       const el = ev.target;
       if (el?.tagName !== "PROSE-MIRROR") return;
-      persist(el);
+      this._persistField(el);
     });
+  }
+
+  async _commitField(path, val, fieldLabel) {
+    try {
+      this._lastFieldSave = this.document.update({ [path]: val }, { render: false });
+      await this._lastFieldSave;
+    } catch (e) {
+      console.error("[RPG] Enregistrement fiche Quête :", e, "| champ :", fieldLabel);
+      ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
+    }
+  }
+
+  async _persistField(el) {
+    if (!(game.user.isGM || this.isEditable)) return;
+    const name = el.getAttribute?.("name");
+    if (!name) return;
+
+    let value;
+    if (el.tagName === "PROSE-MIRROR") value = el.value ?? "";
+    else if (el.type === "checkbox") value = el.checked;
+    else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
+    else value = el.value ?? "";
+
+    // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
+    // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
+    // pour system.etapes.{i}.label qui, lui, persiste correctement) —
+    // Foundry ne fusionne pas ce chemin pointé proprement à cette
+    // profondeur : chaque frappe réduisait le tableau objectifs de
+    // l'étape aux seuls index explicitement écrits, supprimant les
+    // autres objectifs déjà remplis en silence. Symptôme : "+Objectif
+    // efface les objectifs déjà renseignés" persistait même après avoir
+    // éliminé la course de lecture (_awaitPendingFieldSave) — le bug
+    // était dans l'ÉCRITURE elle-même, pas dans l'ordre lecture/écriture.
+    // Fixé en remontant d'un cran : on réécrit l'étape ENTIÈRE
+    // (system.etapes.{i}, un objet complet) — structurellement
+    // identique au cas label, qui fonctionne déjà.
+    const objMatch = name.match(/^system\.etapes\.(\d+)\.objectifs\.(\d+)\.(text|fait)$/);
+    if (objMatch) {
+      const [, eIdx, oIdx, field] = objMatch;
+      const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+      const etape = etapes[Number(eIdx)];
+      if (!etape) return;
+      etape.objectifs = asEtapesArray(etape.objectifs);
+      if (!etape.objectifs[Number(oIdx)]) return;
+      etape.objectifs[Number(oIdx)][field] = value;
+      await this._commitField(`system.etapes.${eIdx}`, etape, name);
+      return;
+    }
+
+    await this._commitField(name, value, name);
+  }
+
+  /**
+   * Relit .value en direct sur CHAQUE <prose-mirror> du DOM et le
+   * committe nous-mêmes — voir _bindLiveSave plus haut pour le pourquoi
+   * (cet élément ne committe apparemment que sur clic explicite de son
+   * propre bouton Sauvegarder, jamais sur simple blur/changement de
+   * focus). Sans ça : un bouton d'action (+Objectif...) qui déclenche un
+   * document.update() réécrivant system.etapes lisait this.document AVANT
+   * que le récit/les notes MJ tapés n'aient jamais été committés nulle
+   * part — l'update repartait donc de l'ANCIENNE valeur (rapporté :
+   * "+Objectif efface le récit de l'étape et notes MJ"). Même chose à la
+   * fermeture de la fenêtre (voir close() plus bas) — rapporté aussi :
+   * "notes MJ et récit disparaissent parfois à la fermeture".
+   */
+  async _flushProseMirrorFields() {
+    const root = this.element;
+    if (!root) return;
+    for (const el of root.querySelectorAll("prose-mirror[name]")) {
+      await this._persistField(el);
+    }
   }
 
   /**
    * À appeler avant qu'une action (+Objectif, +Étape, ✕...) ne lise
    * this.document : attend que la dernière sauvegarde de champ démarrée
-   * par _bindLiveSave soit bien appliquée, pour ne jamais lire une copie
-   * de this.document plus ancienne que ce qui est affiché à l'écran (voir
-   * _bindLiveSave plus haut).
+   * par _bindLiveSave soit bien appliquée (course de lecture), PUIS force
+   * la sauvegarde de tout <prose-mirror> — voir _flushProseMirrorFields —
+   * pour ne jamais lire/écrire une copie de this.document plus ancienne
+   * que ce qui est affiché à l'écran.
    */
   async _awaitPendingFieldSave() {
-    if (!this._lastFieldSave) return;
-    try { await this._lastFieldSave; } catch { /* déjà loggé dans _bindLiveSave */ }
+    if (this._lastFieldSave) {
+      try { await this._lastFieldSave; } catch { /* déjà loggé dans _commitField */ }
+    }
+    await this._flushProseMirrorFields();
+  }
+
+  /** Sauvegarde tout <prose-mirror> avant fermeture — sinon du texte tapé
+   *  mais jamais committé (voir _flushProseMirrorFields) disparaissait
+   *  silencieusement en fermant la fenêtre. */
+  async close(options = {}) {
+    await this._flushProseMirrorFields();
+    return super.close(options);
   }
 
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
