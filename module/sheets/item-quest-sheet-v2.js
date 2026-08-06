@@ -93,6 +93,17 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _onRender(context, options) {
     await super._onRender(context, options);
+
+    // ✅ Le libellé de la barre de titre (fenêtre) n'est pas systématiquement
+    // rafraîchi par le rendu "léger" déclenché par document.update({render:true})
+    // — seul le contenu des PARTS l'est de façon fiable. Renommer la quête se
+    // reflétait donc bien sur le champ <input name="name"> (relu depuis
+    // item.name à chaque rendu) mais jamais sur la barre de titre elle-même
+    // tant que la fiche n'était pas fermée puis rouverte. this.title est un
+    // getter qui lit déjà this.document.name en direct : il suffit de le
+    // réappliquer nous-mêmes à chaque rendu.
+    if (this.window?.title) this.window.title.textContent = this.title;
+
     applyUiTheme(this.element);
     applySheetViewMode(this.element, { isGM: game.user.isGM });
     bindImageEditors(this.element, this.document);
@@ -181,7 +192,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   /** Ajoute une entrée de récompense à partir d'un Item glissé-déposé. */
   async _addRewardItemFromDrop(item) {
     if (!game.user.isGM || !item?.uuid) return;
-    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
+    const list = this._readRewardItemsFromForm();
     list.push({ uuid: item.uuid, qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
@@ -332,9 +343,63 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this.document.update(expanded, { render: true });
   }
 
+  /**
+   * Reconstruit system.etapes depuis le DOM actuel du formulaire (mêmes
+   * règles de normalisation que _onFormSubmitV2) plutôt que depuis
+   * this.document. Un clic sur un bouton d'action (+Objectif, +Étape, ✕...)
+   * déclenche d'abord un blur+change sur le champ en cours d'édition — sa
+   * soumission passe par le listener "change" du formulaire, asynchrone,
+   * pas encore appliquée à this.document au moment où l'action elle-même
+   * s'exécute juste après (avant même le premier await de son propre
+   * document.update()). Lire this.document ici récupérait donc une copie
+   * plus ancienne des étapes/objectifs, sur laquelle l'action écrivait
+   * ensuite — écrasant au passage tout ce qui venait d'être saisi mais pas
+   * encore persisté (rapporté : "+ Objectif efface les objectifs déjà
+   * renseignés"). Toutes les pages d'étapes sont présentes simultanément
+   * dans le DOM (seule leur visibilité bascule via Tabs), donc lire le
+   * formulaire entier capture bien l'état de TOUTES les étapes, pas
+   * seulement celle actuellement affichée.
+   */
+  _readEtapesFromForm() {
+    const root = this.element;
+    const formEl = root?.tagName === "FORM" ? root : root?.querySelector("form");
+    if (!formEl) return foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+
+    const formData = new foundry.applications.ux.FormDataExtended(formEl);
+    const expanded = foundry.utils.expandObject(formData.object);
+    const etapes = asEtapesArray(expanded?.system?.etapes);
+
+    return etapes.map(e => {
+      if (!e) return e;
+      const etape = foundry.utils.deepClone(e);
+      etape.label = String(etape.label ?? "").trim();
+      etape.description = String(etape.description ?? "");
+      etape.notesMJ = String(etape.notesMJ ?? "");
+      etape.objectifs = asEtapesArray(etape.objectifs)
+        .map(o => o ? { text: String(o.text ?? "").trim(), fait: !!o.fait } : o);
+      return etape;
+    });
+  }
+
+  /** Même principe que _readEtapesFromForm, pour system.recompense.items. */
+  _readRewardItemsFromForm() {
+    const root = this.element;
+    const formEl = root?.tagName === "FORM" ? root : root?.querySelector("form");
+    if (!formEl) return foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
+
+    const formData = new foundry.applications.ux.FormDataExtended(formEl);
+    const expanded = foundry.utils.expandObject(formData.object);
+    const items = asEtapesArray(expanded?.system?.recompense?.items);
+
+    return items.map(ri => ri ? {
+      uuid: String(ri.uuid ?? "").trim(),
+      qty:  Math.max(1, Number(ri.qty ?? 1) || 1)
+    } : ri);
+  }
+
   async _actionAddEtape(event) {
     event?.preventDefault?.();
-    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+    const list = this._readEtapesFromForm();
     list.push({ label: "", description: "", notesMJ: "", objectifs: [] });
     // Amène directement le MJ sur la page de la nouvelle étape plutôt que
     // de le laisser sur "Aperçu" en devinant où elle a atterri.
@@ -346,8 +411,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(idx)) return;
-    const oldEtapes = asEtapesArray(this.document.system?.etapes);
-    const list = foundry.utils.deepClone(oldEtapes);
+    const oldEtapes = this._readEtapesFromForm();
+    const list = oldEtapes.slice();
     list.splice(idx, 1);
 
     let etapeActuelle = Number(this.document.system?.etapeActuelle ?? 0) || 0;
@@ -381,7 +446,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const etapeIdx = Number(event?.target?.closest("[data-etape-idx]")?.dataset?.etapeIdx);
     if (!Number.isFinite(etapeIdx)) return;
-    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+    const list = this._readEtapesFromForm();
     if (!list[etapeIdx]) return;
     list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
     list[etapeIdx].objectifs.push({ text: "", fait: false });
@@ -394,7 +459,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const etapeIdx = Number(btn?.dataset?.etapeIdx);
     const objIdx   = Number(btn?.dataset?.objIdx);
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
-    const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+    const list = this._readEtapesFromForm();
     if (!list[etapeIdx]?.objectifs) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
@@ -402,7 +467,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _actionAddRewardItem(event) {
     event?.preventDefault?.();
-    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
+    const list = this._readRewardItemsFromForm();
     list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
@@ -411,7 +476,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     event?.preventDefault?.();
     const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
     if (!Number.isFinite(idx)) return;
-    const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
+    const list = this._readRewardItemsFromForm();
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
   }
