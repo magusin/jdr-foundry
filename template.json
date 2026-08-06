@@ -55,82 +55,52 @@
           "crochetage": {
             "label": "Crochetage",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "dexterite": 1
-            }
+            "xp": 0
           },
           "larcin": {
             "label": "Larcin",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "dexterite": 1
-            }
+            "xp": 0
           },
           "forge": {
             "label": "Forge",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "force": 1
-            }
+            "xp": 0
           },
           "survie": {
             "label": "Volonté",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "endurance": 1
-            }
+            "xp": 0
           },
           "discretion": {
             "label": "Discrétion",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "dexterite": 1
-            }
+            "xp": 0
           },
           "perception": {
             "label": "Perception",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "acuite": 1
-            }
+            "xp": 0
           },
           "detection": {
             "label": "Détection",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "acuite": 1
-            }
+            "xp": 0
           },
           "intuition": {
             "label": "Intuition",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "intelligence": 1
-            }
+            "xp": 0
           },
           "connaissance": {
             "label": "Connaissance",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "intelligence": 1
-            }
+            "xp": 0
           },
           "athletisme": {
             "label": "Athlétisme",
             "level": 0,
-            "xp": 0,
-            "grants": {
-              "endurance": 1
-            }
+            "xp": 0
           }
         },
         "butin": {

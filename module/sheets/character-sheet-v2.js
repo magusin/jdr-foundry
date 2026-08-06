@@ -271,12 +271,11 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     // ── Tableau des stats : trois couches lisibles ────────────────────
     //   base      = valeur brute saisie par le MJ
-    //   permanent = base + niveau + compétences + équipement (hors combat)
+    //   permanent = base + niveau + équipement (hors combat)
     //   total     = permanent + effets temporaires actifs (en combat)
     const effP  = actor.system?.derived?.effective?.principales ?? {};
     const permP = actor.system?.derived?.permanent?.principales ?? effP;
     const baseP = actor.system?.principales ?? {};
-    const fsb   = actor.system?.derived?.fromSkills ?? {};
     const equip = actor.system?.derived?.bonus?.principales ?? {};
     const niv   = Number(actor.system?.niveau ?? 1) || 1;
 
@@ -284,21 +283,19 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const base = Number(baseP[key] ?? 0) || 0;
       const perm = Number(permP[key] ?? 0) || 0;
       const total = Number(effP[key] ?? 0) || 0;
-      const skills = Number(fsb[key] ?? 0) || 0;
-      const gear = (Number(equip[key] ?? 0) || 0) - skills; // bonus items seuls
+      const gear = Number(equip[key] ?? 0) || 0;
       const fromEffects = total - perm;
       return {
         key, label, base, perm, total,
         fromLevel: niv,
-        fromSkills: skills,
         fromGear: gear,
         fromEffects,
         hasEffects: fromEffects !== 0,
         effectsUp: fromEffects > 0,
         // Détail affiché en infobulle sur la valeur permanente
-        permTooltip: `Base ${base} + Niveau ${niv} + Compétences ${skills >= 0 ? "+" : ""}${skills} + Équipement ${gear >= 0 ? "+" : ""}${gear}`,
+        permTooltip: `Base ${base} + Niveau ${niv} + Équipement ${gear >= 0 ? "+" : ""}${gear}`,
         // Conservé pour compatibilité avec l'ancien affichage
-        fromBonus: total - base - niv - skills
+        fromBonus: total - base - niv
       };
     };
 
@@ -436,8 +433,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         level,
         xp,
         next,
-        pct,
-        grants: s?.grants ?? {}
+        pct
       };
     });
 

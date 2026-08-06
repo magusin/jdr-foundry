@@ -1021,14 +1021,6 @@
                 <small style="opacity:.85;">XP: {{s.xp}} / {{s.next}} ({{s.pct}}%)</small>
               </div>
 
-              {{#if s.grants}}
-              <small style="opacity:.8;">
-                Bonus par niveau :
-                {{#each s.grants}}
-                <b>{{@key}}</b> +{{this}}
-                {{/each}}
-              </small>
-              {{/if}}
             </span>
 
             <span class="actions" style="display:flex; gap:8px; align-items:center;">

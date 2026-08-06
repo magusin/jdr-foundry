@@ -2,9 +2,8 @@
  * Macro "JDR — Compétences (MJ)"
  *
  * Ajoute ou retire de l'XP à n'importe quelle compétence d'un PJ sans
- * avoir à ouvrir sa fiche. Le niveau monte/descend automatiquement
- * (et le bonus de stat associé avec, via grants), exactement comme les
- * boutons +XP/-XP déjà présents sur la fiche.
+ * avoir à ouvrir sa fiche. Le niveau monte/descend automatiquement,
+ * exactement comme les boutons +XP/-XP déjà présents sur la fiche.
  */
 (async () => {
   if (!game.user.isGM) {
@@ -38,13 +37,12 @@
     const skills = pj.system?.skills ?? {};
     return Object.entries(skills).map(([key, s]) => {
       const need = skillXpToNext(n(s.level, 0));
-      const grantsTxt = Object.entries(s.grants ?? {}).map(([stat, v]) => `+${v} ${stat}/niv`).join(", ");
       return `
         <div class="sk-row" data-skill-key="${key}" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--color-border-tertiary)">
           <div style="flex:1">
             <b>${htmlEscape(s.label ?? key)}</b>
             <div style="font-size:11px;color:var(--color-text-secondary)">
-              Niv <b>${n(s.level,0)}</b> — ${n(s.xp,0)}/${need} XP ${grantsTxt ? `— ${grantsTxt}` : ""}
+              Niv <b>${n(s.level,0)}</b> — ${n(s.xp,0)}/${need} XP
             </div>
           </div>
           <input type="number" class="sk-amount" value="25" min="0" style="width:60px" />
