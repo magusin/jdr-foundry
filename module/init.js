@@ -1801,14 +1801,25 @@ Hooks.once("init", async () => {
       requestAuraRefresh(150);
     });
 
-    // ---------- Item renommé/réimagé : rafraîchit les fiches qui le
-    // référencent par UUID (récompense de quête, butin de monstre) ----------
-    // Ces fiches résolvent nom/image EN DIRECT depuis l'objet référencé à
-    // chaque _prepareContext (voir les commentaires dans item-quest-sheet-v2.js
-    // et monster-sheet-v2.js) — mais rien ne les prévenait qu'un item déjà
-    // affiché venait de changer pendant qu'elles étaient ouvertes : une
-    // fiche Quête ou Monstre déjà ouverte restait sur l'ancien nom/image
-    // jusqu'à fermeture/réouverture.
+    // ---------- Item renommé/réimagé : rafraîchit les fenêtres qui
+    // l'affichent ailleurs que dans sa propre fiche ----------
+    // Deux cas distincts, tous deux invisibles à l'utilisateur sans ce hook :
+    //  1) Une fiche Quête (récompense) ou Monstre (butin) déjà ouverte
+    //     résout nom/image EN DIRECT depuis l'objet référencé, mais
+    //     seulement à un vrai render (voir _prepareContext dans
+    //     item-quest-sheet-v2.js / monster-sheet-v2.js) — rien ne la
+    //     prévenait qu'un item qu'elle référence par UUID venait de changer
+    //     pendant qu'elle était déjà ouverte.
+    //  2) Un répertoire ou navigateur de compendium déjà ouvert montrant la
+    //     MÊME collection que l'objet renommé (onglet Objets ancré, mais
+    //     surtout un DOSSIER détaché dans sa propre fenêtre — voir
+    //     isWorldDirectory plus haut : ce cas précis a été rapporté en
+    //     direct, capture à l'appui — le nom changeait bien sur la fiche
+    //     ouverte à droite mais restait figé dans la liste de gauche tant
+    //     que cette fenêtre-dossier n'était pas fermée/rouverte). Comparer
+    //     app.collection === item.collection couvre indifféremment le monde
+    //     (game.items) et un pack de compendium (item.collection est alors
+    //     ce pack précis), sans avoir à distinguer les deux cas.
     Hooks.on("updateItem", (item, changed) => {
       const flat = foundry.utils.flattenObject(changed ?? {});
       if (!("name" in flat) && !("img" in flat)) return;
@@ -1824,6 +1835,8 @@ Hooks.once("init", async () => {
           if (Array.isArray(entries) && entries.some(e => e?.uuid === item.uuid)) {
             app.render();
           }
+        } else if (app?.collection && app.collection === item.collection) {
+          app.render();
         }
       }
     });
