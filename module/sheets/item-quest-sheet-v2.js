@@ -305,6 +305,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
 
     await this._commitField(name, value, name);
+
+    // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
+    // sont des COPIES de ce champ affichées ailleurs dans le DOM —
+    // _commitField enregistre volontairement sans re-render (voir plus
+    // haut), donc rien ne les rafraîchit tout seul. Sans ce correctif :
+    // renommer la quête (ou une étape) sauvegardait bien la donnée
+    // (visible en fermant/rouvrant la fiche) mais semblait n'avoir aucun
+    // effet tant que la fenêtre restait ouverte.
+    if (name === "name") {
+      const titleEl = this.element?.querySelector(".window-header .window-title");
+      if (titleEl) titleEl.textContent = this.title;
+    } else {
+      const etapeMatch = name.match(/^system\.etapes\.(\d+)\.label$/);
+      if (etapeMatch) {
+        const ei = etapeMatch[1];
+        const navSpan = this.element?.querySelector(`.quest-page-item[data-tab="etape-${ei}"] span`);
+        if (navSpan) navSpan.textContent = `${Number(ei) + 1}. ${String(value).trim() || `Étape ${Number(ei) + 1}`}`;
+      }
+    }
   }
 
   /**

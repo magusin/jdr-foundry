@@ -1800,6 +1800,46 @@ Hooks.once("init", async () => {
       if (!relevant) return;
       requestAuraRefresh(150);
     });
+
+    // ---------- Item renommé/réimagé : rafraîchit les fenêtres qui
+    // l'affichent ailleurs que dans sa propre fiche ----------
+    // Deux cas distincts, tous deux invisibles à l'utilisateur sans ce hook :
+    //  1) Une fiche Quête (récompense) ou Monstre (butin) déjà ouverte
+    //     résout nom/image EN DIRECT depuis l'objet référencé, mais
+    //     seulement à un vrai render (voir _prepareContext dans
+    //     item-quest-sheet-v2.js / monster-sheet-v2.js) — rien ne la
+    //     prévenait qu'un item qu'elle référence par UUID venait de changer
+    //     pendant qu'elle était déjà ouverte.
+    //  2) Un répertoire ou navigateur de compendium déjà ouvert montrant la
+    //     MÊME collection que l'objet renommé (onglet Objets ancré, mais
+    //     surtout un DOSSIER détaché dans sa propre fenêtre — voir
+    //     isWorldDirectory plus haut : ce cas précis a été rapporté en
+    //     direct, capture à l'appui — le nom changeait bien sur la fiche
+    //     ouverte à droite mais restait figé dans la liste de gauche tant
+    //     que cette fenêtre-dossier n'était pas fermée/rouverte). Comparer
+    //     app.collection === item.collection couvre indifféremment le monde
+    //     (game.items) et un pack de compendium (item.collection est alors
+    //     ce pack précis), sans avoir à distinguer les deux cas.
+    Hooks.on("updateItem", (item, changed) => {
+      const flat = foundry.utils.flattenObject(changed ?? {});
+      if (!("name" in flat) && !("img" in flat)) return;
+
+      for (const app of Object.values(ui.windows ?? {})) {
+        if (app instanceof RPGQuestSheetV2) {
+          const items = app.document?.system?.recompense?.items;
+          if (Array.isArray(items) && items.some(ri => ri?.uuid === item.uuid)) {
+            app._awaitPendingFieldSave().then(() => app.render());
+          }
+        } else if (app instanceof RPGMonsterSheetV2) {
+          const entries = app.document?.system?.butin?.entries;
+          if (Array.isArray(entries) && entries.some(e => e?.uuid === item.uuid)) {
+            app.render();
+          }
+        } else if (app?.collection && app.collection === item.collection) {
+          app.render();
+        }
+      }
+    });
   });
 
   let _lastTurnKey = null;
