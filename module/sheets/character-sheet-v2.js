@@ -197,7 +197,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     {
       classes: ["rpg-sheet", "sheet", "actor", "character"],
       position: { width: 980, height: 820 },
-      window: { contentClasses: ["rpg-sheet-window"] },
+      window: { contentClasses: ["rpg-sheet-window"], resizable: true },
       tabs: [
         { navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "stats" }
       ],

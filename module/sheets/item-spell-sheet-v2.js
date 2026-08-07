@@ -343,7 +343,7 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     id: "rpg-spell-sheet-v2",
     classes: ["rpg", "rpg-sheet", "sheet", "item", "spell"],
     position: { width: 720, height: 920 },
-    window: { contentClasses: ["rpg-sheet-window"] },
+    window: { contentClasses: ["rpg-sheet-window"], resizable: true },
 
     /**
      * submitOnChange est VOLONTAIREMENT désactivé.

@@ -89,7 +89,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       id: "rpg-weapon-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "weapon"],
       position: { width: 700, height: 800 },
-      window: { contentClasses: ["rpg-sheet-window"] },
+      window: { contentClasses: ["rpg-sheet-window"], resizable: true },
 
       form: {
         closeOnSubmit: false,
