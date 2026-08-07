@@ -17,7 +17,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       id: "rpg-armor-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "armor"],
       position: { width: 640, height: 720 },
-      window: { contentClasses: ["rpg-sheet-window"] },
+      window: { contentClasses: ["rpg-sheet-window"], resizable: true },
 
       form: {
         closeOnSubmit: false,

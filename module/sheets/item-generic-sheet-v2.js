@@ -17,7 +17,7 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
       id: "rpg-generic-item-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "generic"],
       position: { width: 520, height: 520 },
-      window: { contentClasses: ["rpg-sheet-window"] },
+      window: { contentClasses: ["rpg-sheet-window"], resizable: true },
 
       form: {
         closeOnSubmit: false,

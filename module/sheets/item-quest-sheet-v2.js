@@ -32,7 +32,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       id: "rpg-quest-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "quest"],
       position: { width: 780, height: 660 },
-      window: { contentClasses: ["rpg-sheet-window"] },
+      window: { contentClasses: ["rpg-sheet-window"], resizable: true },
       tabs: [
         { navSelector: ".quest-page-nav", contentSelector: ".quest-page-content", initial: "apercu" }
       ],

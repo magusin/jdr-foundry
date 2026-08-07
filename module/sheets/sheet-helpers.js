@@ -42,11 +42,34 @@ export function applySheetViewMode(root, { isGM = false } = {}) {
 }
 
 /**
- * Branche le FilePicker V13 sur toutes les images .rpg-img-edit de la fiche.
- * Réservé aux MJ.
+ * Ouvre une image en grand, en lecture seule. DialogV2 est thématisée
+ * automatiquement par le hook renderDialogV2 global (voir init.js) — pas
+ * besoin d'appeler applyUiTheme() ici.
+ */
+function openImageLightbox(src, title) {
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  if (!DialogV2 || !src) return;
+  DialogV2.wait({
+    window: { title: title || "Illustration" },
+    content: `<img src="${src}" alt="" style="display:block;width:100%;max-width:min(80vw,900px);max-height:80vh;object-fit:contain;border-radius:8px;" />`,
+    buttons: [{ action: "close", label: "Fermer", default: true }],
+    rejectClose: false
+  }).catch(() => {});
+}
+
+/**
+ * Branche le FilePicker V13 sur toutes les images .rpg-img-edit de la fiche
+ * (réservé aux MJ). Pour les joueurs, clic = aperçu en grand en lecture
+ * seule, plutôt qu'aucune interaction du tout.
  */
 export function bindImageEditors(root, document) {
-  if (!game.user.isGM) return;
+  if (!game.user.isGM) {
+    root.querySelectorAll(".rpg-img-edit").forEach(img => {
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openImageLightbox(img.src, document?.name));
+    });
+    return;
+  }
   root.querySelectorAll(".rpg-img-edit").forEach(img => {
     img.style.cursor = "pointer";
     img.addEventListener("click", async () => {
