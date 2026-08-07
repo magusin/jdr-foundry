@@ -385,7 +385,15 @@ static PARTS = foundry.utils.mergeObject(
     form: {
       id: "form",
       template: "systems/rpg/templates/item/spell-sheet.hbs",
-      scrollable: [".rpg-sheet"]
+      // .rpg-sheet est un simple conteneur flex, jamais l'élément qui
+      // scrolle (voir item-sheet.css) — même correction que
+      // item-armor-sheet-v2.js. Sans effet observable ici : le seul chemin
+      // qui force un re-render (_updateAndKeepView) a déjà son propre
+      // snapshot/restore de scroll manuel (_snapshotView/_restoreView),
+      // mais ce sélecteur reste faux et inerte tant que rien d'autre ne
+      // s'appuie dessus — corrigé pour rester cohérent avec les autres
+      // fiches d'objet.
+      scrollable: [".sheet-body"]
     }
   },
   { inplace: false } // ✅ IMPORTANT

@@ -43,7 +43,17 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       form: {
         id: "form",
         template: "systems/rpg/templates/item/armor-sheet.hbs",
-        scrollable: [".rpg-sheet"]
+        // .rpg-sheet est un simple conteneur flex (voir item-sheet.css) — la
+        // zone qui scrolle VRAIMENT est son enfant .sheet-body
+        // (overflow-y:auto). scrollable pointait sur le mauvais élément :
+        // le mécanisme de préservation de scroll intégré à
+        // HandlebarsApplicationMixin n'avait donc jamais rien à restaurer,
+        // et chaque champ modifié (submitOnChange déclenche un
+        // document.update() + this.render({force:true}) à chaque frappe,
+        // voir _onFormSubmitV2) faisait remonter la fiche tout en haut.
+        // Même sélecteur que les autres fiches d'objet (arme, générique,
+        // quête, recette, personnage), qui n'ont pas ce problème.
+        scrollable: [".sheet-body"]
       }
     },
     { inplace: false }
