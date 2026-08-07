@@ -1800,6 +1800,33 @@ Hooks.once("init", async () => {
       if (!relevant) return;
       requestAuraRefresh(150);
     });
+
+    // ---------- Item renommé/réimagé : rafraîchit les fiches qui le
+    // référencent par UUID (récompense de quête, butin de monstre) ----------
+    // Ces fiches résolvent nom/image EN DIRECT depuis l'objet référencé à
+    // chaque _prepareContext (voir les commentaires dans item-quest-sheet-v2.js
+    // et monster-sheet-v2.js) — mais rien ne les prévenait qu'un item déjà
+    // affiché venait de changer pendant qu'elles étaient ouvertes : une
+    // fiche Quête ou Monstre déjà ouverte restait sur l'ancien nom/image
+    // jusqu'à fermeture/réouverture.
+    Hooks.on("updateItem", (item, changed) => {
+      const flat = foundry.utils.flattenObject(changed ?? {});
+      if (!("name" in flat) && !("img" in flat)) return;
+
+      for (const app of Object.values(ui.windows ?? {})) {
+        if (app instanceof RPGQuestSheetV2) {
+          const items = app.document?.system?.recompense?.items;
+          if (Array.isArray(items) && items.some(ri => ri?.uuid === item.uuid)) {
+            app._awaitPendingFieldSave().then(() => app.render());
+          }
+        } else if (app instanceof RPGMonsterSheetV2) {
+          const entries = app.document?.system?.butin?.entries;
+          if (Array.isArray(entries) && entries.some(e => e?.uuid === item.uuid)) {
+            app.render();
+          }
+        }
+      }
+    });
   });
 
   let _lastTurnKey = null;

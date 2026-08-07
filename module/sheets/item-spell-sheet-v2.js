@@ -812,6 +812,17 @@ static PARTS = foundry.utils.mergeObject(
         else value = el.value;
 
         await this.document.update({ [name]: value }, { render: false });
+
+        // Même limite que les autres champs enregistrés sans re-render : le
+        // titre de la fenêtre est une COPIE de system.name affichée dans le
+        // chrome de la fenêtre, jamais rafraîchie par cette écriture ciblée
+        // (voir _updateAndKeepView pour le seul chemin qui re-rend vraiment
+        // cette fiche). Sans ce patch, renommer un sort semblait n'avoir
+        // aucun effet tant que la fenêtre restait ouverte.
+        if (name === "name") {
+          const titleEl = this.element?.querySelector(".window-header .window-title");
+          if (titleEl) titleEl.textContent = this.title;
+        }
       } catch (e) {
         console.error("[RPG] enregistrement de la fiche de sort :", e);
         ui.notifications?.error?.("Impossible d'enregistrer ce champ — voir la console (F12).");
