@@ -12,11 +12,19 @@
 // sa possession » compte autant que « possède ». Au rendu d'un compendium
 // d'objets, les lignes absentes de cette liste sont retirées du DOM.
 //
-// Le MJ voit toujours tout. Les compendiums qui ne contiennent pas d'objets
-// (règles, tables de butin…) ne sont jamais filtrés.
+// Second filtre, indépendant : un dossier de compendium marqué MJ uniquement
+// (`flags.rpg.gmOnly`, posé via la macro "Dossiers Compendium (MJ)") est
+// retiré en bloc — lui et tout son contenu — quel que soit le type de
+// compendium (objets, acteurs…). Un dossier vidé par le seul filtre codex
+// resterait sinon visible dans l'arbre, ce qui peut suffire à spoiler (son
+// nom, son existence) — ex. un dossier "Sorts de Monstres" dans un
+// compendium de sorts.
+//
+// Le MJ voit toujours tout.
 
 const FLAG_SCOPE = "rpg";
 const FLAG_CODEX = "codex";
+const FLAG_GM_ONLY = "gmOnly";
 
 /** Empreinte d'un objet : sa source de compendium si connue, sinon son nom. */
 function fingerprints(item) {
@@ -82,16 +90,34 @@ function isKnown(known, { uuid, id, name }) {
 }
 
 /**
+ * Retire du DOM les dossiers marqués MJ uniquement, et tout leur contenu.
+ * Indépendant du filtre codex ci-dessous (qui ne porte que sur les objets
+ * déjà possédés) : s'applique à n'importe quel type de compendium.
+ */
+function hideGmOnlyFolders(root, pack) {
+  if (!pack?.folders?.size) return;
+  root.querySelectorAll("[data-folder-id]").forEach(el => {
+    if (!el.isConnected) return;   // déjà retiré avec un ancêtre marqué
+    const folder = pack.folders.get(el.dataset.folderId);
+    if (folder?.getFlag(FLAG_SCOPE, FLAG_GM_ONLY)) el.remove();
+  });
+}
+
+/**
  * Filtre l'affichage d'un compendium ouvert.
  * Appelé depuis le hook « renderCompendium ».
  */
 export function filterCompendium(app, html) {
   if (game.user.isGM) return;
   const pack = app?.collection ?? null;
-  if (!pack || pack.documentName !== "Item") return;   // règles, tables… intactes
+  if (!pack) return;
 
   const root = html instanceof HTMLElement ? html : html?.[0];
   if (!root) return;
+
+  hideGmOnlyFolders(root, pack);
+
+  if (pack.documentName !== "Item") return;   // règles, tables, acteurs… pas de codex
 
   const known = codexForCurrentUser();
   const packId = pack.collection ?? pack.metadata?.id ?? "";

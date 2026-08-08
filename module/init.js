@@ -1067,6 +1067,7 @@ Hooks.once("init", async () => {
         ["Auras (mètres)",                     "aura.js",               "icons/svg/aura.svg",            "gm"],
         ["Forcer Effets de Tour (MJ)",         "force-turn.js",         "icons/svg/regen.svg",           "gm"],
         ["Déverrouiller les Compendiums (MJ)", "unlock-compendiums.js", "icons/svg/book.svg",            "gm"],
+        ["Dossiers Compendium (MJ)",           "compendium-folders.js", "icons/svg/book.svg",            "gm"],
         ["Config Token Joueurs (MJ)",          "setup-player-tokens.js","icons/svg/eye.svg",             "gm"],
         ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
         ["Basculer les Repères de Carte (MJ)", "toggle-map-markers.js", "icons/svg/eye.svg",             "gm"],
