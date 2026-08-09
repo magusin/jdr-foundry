@@ -275,6 +275,13 @@
   margin-bottom: 4px;
 }
 .rpg-quest-sheet .etape-objectif-row input[type="text"] { flex: 1; }
+/* Objectif coché : texte en vert (--sage, même token que les boutons de
+   succès) — visible aussi bien côté MJ que côté joueur (la case reste un
+   vrai <input type="checkbox">, seulement "disabled" pour le joueur, donc
+   :checked s'applique dans les deux cas). */
+.rpg-quest-sheet .etape-objectif-row input[type="checkbox"]:checked ~ input[type="text"] {
+  color: var(--sage);
+}
 .rpg-quest-sheet .etape-add-objectif-btn { font-size: 11px; }
 
 .rpg-quest-sheet .quest-etapes-nav {

@@ -1,7 +1,7 @@
 // module/sheets/item-recipe-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
@@ -53,6 +53,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     applyUiTheme(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindSendToActorsButton(root, this.document);
+    bindLinkSyncCheckbox(root, this.document);
 
     // ── Clic sur bouton "Voir" (UUID) → ouvre la fiche de l'item ──────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {

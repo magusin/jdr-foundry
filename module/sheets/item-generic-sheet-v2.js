@@ -1,7 +1,7 @@
 // systems/rpg/module/sheets/item-generic-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -105,5 +105,6 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);
+    bindLinkSyncCheckbox(root, this.document);
   }
 }

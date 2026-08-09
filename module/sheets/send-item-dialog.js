@@ -168,3 +168,34 @@ export function bindSendToActorsButton(root, item, options = {}) {
     catch (e) { console.error("[RPG] Envoyer à un PJ :", e); ui.notifications?.error?.("Erreur — voir la console."); }
   });
 }
+
+/**
+ * Branche la case [data-action="toggleLinkSync"] d'une fiche d'objet (MJ
+ * uniquement) — voir item-link.js. Volontairement PAS un <input name="...">
+ * soumis par le formulaire normal de la fiche : activer la synchro a un
+ * effet de bord (rattachement rétroactif des copies déjà distribuées à des
+ * PJ) qu'une simple écriture de champ ne déclencherait jamais toute seule.
+ */
+export function bindLinkSyncCheckbox(root, item) {
+  const input = root?.querySelector('[data-action="toggleLinkSync"]');
+  if (!input || input.dataset.rpgLinkSyncBound) return;
+  input.dataset.rpgLinkSyncBound = "1";
+  input.addEventListener("change", async (ev) => {
+    ev.preventDefault();
+    if (!game.user.isGM) return;
+    const checked = !!input.checked;
+    try {
+      const { activateItemSync, deactivateItemSync } = await import("../rules/item-link.js");
+      const others = checked ? await activateItemSync(item) : await deactivateItemSync(item);
+      if (checked) {
+        ui.notifications?.info?.(others.length
+          ? `Synchro activée — relié à ${others.length} copie(s) déjà distribuée(s).`
+          : "Synchro activée pour cet objet.");
+      }
+    } catch (e) {
+      console.error("[RPG] Bascule synchro objet lié :", e);
+      ui.notifications?.error?.("Erreur — voir la console.");
+      input.checked = !checked;
+    }
+  });
+}
