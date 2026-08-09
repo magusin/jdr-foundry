@@ -363,7 +363,22 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (name === "system.partagee") {
       if (value) await activateQuestSync(this.document);
       else await deactivateQuestSync(this.document);
-    } else if (this._isSyncablePath(name)) {
+    } else if (this._isSyncablePath(name) && el.tagName !== "PROSE-MIRROR") {
+      // Récit/Notes MJ (les deux seuls <prose-mirror> de cette fiche) ne
+      // syncent PAS depuis ce chemin immédiat — leur "save" vient du
+      // bouton de la barre d'outils de l'éditeur lui-même
+      // (ProseMirrorMenu._onAction), qui restaure ensuite le focus sur
+      // son propre EditorView. Un plantage Foundry/ProseMirror pur y a
+      // été rapporté juste après ("Cannot read properties of null
+      // (reading 'setSelection')", aucune frame de ce dépôt sur la pile)
+      // — la cause exacte n'est pas confirmée (le chemin _commitField
+      // au-dessus est inchangé depuis avant cette fonctionnalité), mais
+      // ne rien ajouter d'autre sur CE chemin précis élimine par
+      // construction tout risque d'y contribuer. Ces deux champs restent
+      // synchronisés quand même : _awaitPendingFieldSave (avant +Étape,
+      // Étape suivante, Envoyer, fermeture...) relit le contenu déjà
+      // committé et le fait repartir via la resynchro de system.etapes
+      // en bloc — juste pas au moment précis du clic Sauvegarder.
       await this._syncProgress({ [name]: value });
     }
 
