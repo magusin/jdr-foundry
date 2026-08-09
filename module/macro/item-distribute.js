@@ -143,6 +143,16 @@
             return;
           }
 
+          // ✅ Synchro (armes/armures/sorts/consommables/recettes/loot) :
+          // activée automatiquement AVANT de figer itemData (item.toObject()
+          // ci-dessous) — même traitement que le bouton "Envoyer" et le
+          // glisser-déposer (send-item-dialog.js / drop-helper.js). Macro,
+          // donc pas d'import direct possible : passe par game.rpg.itemLink
+          // (exposé dans init.js), pas par "../rules/item-link.js".
+          if (item.type !== "quest" && game.rpg?.itemLink) {
+            await game.rpg.itemLink.autoActivateItemSync(item).catch(() => {});
+          }
+
           const itemData = item.toObject();
           delete itemData._id;
 

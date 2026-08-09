@@ -13,7 +13,7 @@
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
       <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;cursor:pointer"
-        title="Relie cet exemplaire aux autres copies déjà données à des PJ (même source/nom) : toute modification des champs de définition (ingrédients, résultat, difficulté...) se répercute sur tous les exemplaires liés.">
+        title="Synchronisé automatiquement avec les copies déjà données à des PJ dès l'envoi/glisser-déposer : toute modification des champs de définition (ingrédients, résultat, difficulté...) se répercute sur tous les exemplaires liés. Décoche si CET exemplaire doit cesser de suivre les autres.">
         <input type="checkbox" data-action="toggleLinkSync" {{#if item.flags.rpg.linkSync}}checked{{/if}} />
         🔗 Synchro
       </label>

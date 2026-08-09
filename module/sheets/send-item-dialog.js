@@ -101,6 +101,19 @@ export async function promptSendItemToActors(item) {
   const targets = selectedIds.map(id => game.actors.get(id)).filter(Boolean);
   if (!targets.length) return;
 
+  // ✅ Synchro (armes/armures/sorts/consommables/recettes/loot) : activée
+  // automatiquement AVANT de figer baseData (item.toObject() ci-dessous),
+  // pour que la copie envoyée hérite tout de suite de flags.rpg.linkId —
+  // le MJ n'a plus besoin de cocher la case "🔗 Synchro" à la main après
+  // coup pour que "le même objet" reste identique d'un PJ à l'autre.
+  // Résilient à un échec (ex. source en lecture seule) : l'envoi se fait
+  // quand même, juste sans lien de synchro dans ce cas précis. No-op pour
+  // les quêtes, qui ont leur propre mécanisme juste en dessous.
+  if (item.type !== "quest") {
+    const { autoActivateItemSync } = await import("../rules/item-link.js");
+    await autoActivateItemSync(item).catch(() => {});
+  }
+
   const baseData = item.toObject();
   delete baseData._id;
 

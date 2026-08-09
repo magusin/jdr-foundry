@@ -162,6 +162,22 @@ export async function activateItemSync(item) {
   return copies;
 }
 
+/**
+ * Comme activateItemSync, mais respecte un désistement explicite : si le
+ * MJ a déjà décoché "🔗 Synchro" sur CET exemplaire (flags.rpg.linkSync
+ * === false, un état distinct de "jamais posé"/undefined), ne réactive
+ * rien tout seul. Sert aux chemins de distribution AUTOMATIQUES (Envoyer,
+ * glisser-déposer, macro) : sans cette distinction, renvoyer une copie
+ * d'un objet qu'un joueur a délibérément désynchronisé (ex. une arme que
+ * le MJ a enchantée pour lui en objet unique) le rattacherait de force au
+ * groupe à la prochaine distribution — écrasant sa personnalisation dès
+ * la prochaine modification de la source.
+ */
+export async function autoActivateItemSync(item) {
+  if (item?.flags?.[FLAG_SCOPE]?.[FLAG_LINK_SYNC] === false) return [];
+  return activateItemSync(item);
+}
+
 /** Désactive la synchro pour cet item ET tous les exemplaires liés — pour
  *  que décocher arrête la synchro immédiatement, pas juste les futurs envois. */
 export async function deactivateItemSync(item) {

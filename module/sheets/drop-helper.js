@@ -93,6 +93,17 @@ async function onDropItem(sheetInstance, event) {
   // Item déjà présent sur CET acteur : pas de doublon (réordonnancement non géré ici)
   if (item.parent?.id === actor.id) return;
 
+  // ✅ Synchro (armes/armures/sorts/consommables/recettes/loot) : activée
+  // automatiquement AVANT de figer itemData (item.toObject() ci-dessous) —
+  // voir send-item-dialog.js pour le même traitement sur le bouton
+  // "Envoyer". Résilient à un échec (ex. source en lecture seule, comme un
+  // pack de compendium verrouillé) : le drop crée quand même la copie,
+  // juste sans lien de synchro dans ce cas précis.
+  if (item.type !== "quest") {
+    const { autoActivateItemSync } = await import("../rules/item-link.js");
+    await autoActivateItemSync(item).catch(() => {});
+  }
+
   const itemData = item.toObject();
   delete itemData._id;
 
