@@ -202,6 +202,18 @@
 .rpg-quest-sheet .rpg-enriched-text > *:first-child { margin-top: 0; }
 .rpg-quest-sheet .rpg-enriched-text > *:last-child { margin-bottom: 0; }
 
+/* Bouton Enregistrer posé à côté de chaque <prose-mirror> (voir
+   _actionSavePmField) — display:block volontairement, jamais flex sur ce
+   composant (voir la note juste au-dessus sur les régressions déjà
+   rencontrées deux fois avec flex/display sur <prose-mirror>). */
+.rpg-quest-sheet .rpg-pm-wrap { display: block; }
+.rpg-quest-sheet .rpg-pm-save-btn {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
 /* Groupes de champs du haut (statut, partagée, destinataires, étape
    actuelle...) : aucune règle ne les espaçait avant, d'où l'aspect tassé
    (labels et champs collés les uns aux autres). */

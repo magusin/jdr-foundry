@@ -68,7 +68,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         addObjectif:      async function (event) { await this._actionAddObjectif(event); },
         removeObjectif:   async function (event) { await this._actionRemoveObjectif(event); },
         addRewardItem:    async function (event) { await this._actionAddRewardItem(event); },
-        removeRewardItem: async function (event) { await this._actionRemoveRewardItem(event); }
+        removeRewardItem: async function (event) { await this._actionRemoveRewardItem(event); },
+        savePmField:      async function (event) { await this._actionSavePmField(event); }
       }
     },
     { inplace: false }
@@ -400,6 +401,28 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         if (navSpan) navSpan.textContent = `${Number(ei) + 1}. ${String(value).trim() || `Étape ${Number(ei) + 1}`}`;
       }
     }
+  }
+
+  /**
+   * Bouton "💾 Enregistrer" posé À CÔTÉ de chaque <prose-mirror> (Récit,
+   * Notes MJ, Description) — PAS le bouton natif de la barre d'outils de
+   * l'éditeur, retiré (voir button="true" supprimé du template). Rapporté :
+   * cliquer le bouton natif de ProseMirror faisait planter Foundry
+   * ("Cannot read properties of null (reading 'setSelection')", pile
+   * entièrement interne à vendor.mjs/foundry.mjs) ET faisait perdre le
+   * texte tout juste tapé — le champ retombait visuellement sur son
+   * ancien contenu (rendu enrichi, UUID → pastilles) sans le nouveau
+   * texte, barre d'outils disparue. Ce bouton fait exactement ce que
+   * _flushProseMirrorFields fait déjà de façon fiable (relire .value en
+   * direct puis committer via _persistField), sans jamais passer par
+   * ProseMirrorMenu._onAction — donc sans jamais déclencher ce chemin.
+   */
+  async _actionSavePmField(event) {
+    event?.preventDefault?.();
+    const pm = event?.target?.closest(".rpg-pm-wrap")?.querySelector("prose-mirror");
+    if (!pm) return;
+    await this._persistField(pm);
+    ui.notifications?.info?.("Enregistré.");
   }
 
   /**
