@@ -282,9 +282,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * d'une quête) ne touchait jamais que this.document : les copies déjà
    * distribuées aux PJ restaient bloquées sur leur ancienne progression
    * indéfiniment, quelle que soit "Quête partagée".
+   *
+   * Le travail réel est différé au tick suivant (setTimeout 0). Ce patch
+   * peut venir du listener "save" d'un <prose-mirror> (ex. Notes MJ, via
+   * system.etapes.{i} qui matche le préfixe "system.etapes") — appelé
+   * SYNCHRONE avec le clic sur le bouton Sauvegarder de SA PROPRE barre
+   * d'outils, qui (chez Foundry, après avoir traité le clic) restaure le
+   * focus/la sélection sur son éditeur interne. Rapporté : "Cannot read
+   * properties of null (reading 'setSelection')" à ce moment précis. La
+   * course exacte n'est pas confirmée en direct (pas de session Foundry
+   * disponible ici), mais chaîner ici un travail async supplémentaire
+   * (retrouver + réécrire les copies liées) dans le même chapelet
+   * synchrone/microtâche que ce bouton est le seul changement introduit
+   * par la synchro de quêtes sur ce chemin précis — le repousser à une
+   * tâche séparée, une fois que Foundry a fini de traiter le clic,
+   * élimine ce chevauchement quelle qu'en soit la cause exacte.
    */
   async _syncProgress(patch) {
     if (!patch || !Object.keys(patch).length) return;
+    await new Promise(resolve => setTimeout(resolve, 0));
     await propagateQuestUpdate(this.document, patch);
   }
 
