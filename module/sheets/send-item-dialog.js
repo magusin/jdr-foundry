@@ -190,6 +190,17 @@ export function bindLinkSyncCheckbox(root, item) {
   input.dataset.rpgLinkSyncBound = "1";
   input.addEventListener("change", async (ev) => {
     ev.preventDefault();
+    // ⚠️ Ces fiches (arme/armure/générique/recette) tournent en
+    // submitOnChange:true : SANS stopPropagation, ce même évènement
+    // "change" continue de remonter jusqu'au listener délégué de
+    // DocumentSheetV2 sur le <form>, qui déclenche EN PARALLÈLE sa propre
+    // resoumission complète + this.render({force:true}) — deux cycles
+    // update+render concurrents sur le même document, l'un écrasant l'état
+    // DOM de l'autre en plein rendu. Symptôme rapporté : cocher la case
+    // rendait la fiche définitivement impossible à rouvrir. Le champ n'a
+    // de toute façon pas de "name" (volontairement, voir plus haut) donc
+    // rien ne serait perdu côté formulaire à stopper la propagation ici.
+    ev.stopPropagation();
     if (!game.user.isGM) return;
     const checked = !!input.checked;
     try {

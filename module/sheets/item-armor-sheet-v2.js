@@ -141,6 +141,14 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _onFormSubmitV2(event, form, formData, options) {
     if (!this.isEditable) return;
+    // La case "🔗 Synchro" (bindLinkSyncCheckbox) gère son propre
+    // update+notification et n'a pas de "name" : la laisser passer ici
+    // déclencherait une resoumission complète + render({force:true}) en
+    // parallèle de son propre appel — rapporté comme "la fiche ne s'ouvre
+    // plus après avoir coché". stopPropagation côté checkbox suffit déjà
+    // en théorie, ce garde-fou n'a de rôle que si jamais l'évènement
+    // l'atteint quand même (ex. ordre d'attache des listeners).
+    if (event?.target?.dataset?.action === "toggleLinkSync") return;
 
     const raw = formData?.object ?? {};
     const expanded = foundry.utils.expandObject(raw);
