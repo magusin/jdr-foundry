@@ -123,7 +123,7 @@
             <label class="etape-block-label" title="Visible du joueur pendant que cette étape est en cours. Glisse un PNJ, un objet ou une scène dans le texte pour créer un lien cliquable.">Récit de l'étape</label>
             {{#if ../canEdit}}
             <div class="rpg-pm-wrap">
-              <prose-mirror name="system.etapes.{{ei}}.description" value="{{etape.description}}"
+              <prose-mirror name="system.etapes.{{ei}}.description"
                 editable="true" toggled="false" class="rpg-quest-editor">{{{etape.descriptionHTML}}}</prose-mirror>
               <button type="button" class="rpg-pm-save-btn" data-action="savePmField" title="Enregistrer ce champ">💾 Enregistrer</button>
             </div>
@@ -156,7 +156,7 @@
           <div class="etape-block">
             <label class="etape-block-label etape-block-label-mj" title="PNJ, lieux, récompense de mise en scène... — jamais visible du joueur. Glisse un PNJ ou un objet dans le texte pour créer un lien cliquable.">📝 Notes MJ</label>
             <div class="rpg-pm-wrap">
-              <prose-mirror name="system.etapes.{{ei}}.notesMJ" value="{{etape.notesMJ}}"
+              <prose-mirror name="system.etapes.{{ei}}.notesMJ"
                 editable="true" toggled="false" class="rpg-quest-editor">{{{etape.notesMJHTML}}}</prose-mirror>
               <button type="button" class="rpg-pm-save-btn" data-action="savePmField" title="Enregistrer ce champ">💾 Enregistrer</button>
             </div>
@@ -212,7 +212,7 @@
         <h3 class="quest-section-title">Description</h3>
         {{#if canEdit}}
         <div class="rpg-pm-wrap">
-          <prose-mirror name="system.description" value="{{system.description}}"
+          <prose-mirror name="system.description"
             editable="true" toggled="false" class="rpg-quest-editor">{{{descriptionHTML}}}</prose-mirror>
           <button type="button" class="rpg-pm-save-btn" data-action="savePmField" title="Enregistrer ce champ">💾 Enregistrer</button>
         </div>
