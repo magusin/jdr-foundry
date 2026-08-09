@@ -23,8 +23,8 @@
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
       <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;cursor:pointer"
-        title="Synchronisé automatiquement avec les copies déjà données à des PJ dès l'envoi/glisser-déposer : toute modification des champs de définition (bonus, poids, prix...) se répercute sur tous les exemplaires liés. L'état propre à chaque copie (équipé, quantité...) reste indépendant. Décoche si CET exemplaire doit cesser de suivre les autres (ex. devenu un objet unique).">
-        <input type="checkbox" data-action="toggleLinkSync" {{#if item.flags.rpg.linkSync}}checked{{/if}} />
+        title="Synchronisé PAR DÉFAUT avec tout autre exemplaire du même nom déjà donné à un PJ, sans rien à faire : toute modification des champs de définition (bonus, poids, prix...) se répercute automatiquement. L'état propre à chaque copie (équipé, quantité...) reste indépendant. Décoche si CET exemplaire doit cesser de suivre les autres (ex. devenu un objet unique).">
+        <input type="checkbox" data-action="toggleLinkSync" {{#unless (eq item.flags.rpg.linkSync false)}}checked{{/unless}} />
         🔗 Synchro
       </label>
     </div>

@@ -1,15 +1,20 @@
 // module/rules/item-link.js
 //
-// Synchronisation OPT-IN d'objets/armes/armures/sorts/consommables/recettes
-// distribués aux PJ — contrepartie de quest-group.js pour tout ce qui n'est
-// pas une quête. Une copie embarquée reste par défaut un item Foundry
-// indépendant de sa source (comportement natif documenté dans CLAUDE.md) :
-// ce module ajoute un lien explicite, posé par le MJ via la case "Garder
-// synchronisé" sur la fiche, entre plusieurs exemplaires qu'il veut garder
-// alignés — cocher la case relie rétroactivement tous les exemplaires déjà
-// distribués qui semblent être "le même objet" (même source de compendium,
-// ou même nom), et toute édition future d'un CHAMP DE DÉFINITION (dégâts,
-// poids, prix, bonus...) sur l'un se répercute sur tous les autres.
+// Synchronisation d'objets/armes/armures/sorts/consommables/recettes/loot
+// entre PJ — contrepartie de quest-group.js pour tout ce qui n'est pas une
+// quête. PAR DÉFAUT (aucune action requise du MJ), deux items du même
+// type portant la même empreinte (même source de compendium, ou même nom)
+// sont traités comme "le même objet" : toute modification d'un champ de
+// DÉFINITION (dégâts, poids, prix, bonus...) sur l'un se répercute sur
+// tous les autres, où qu'ils soient — objet du monde, inventaire d'un PJ,
+// que la copie ait été créée avant ou après l'existence de cette
+// fonctionnalité. Il n'y a PAS d'étape "d'activation" à part : la
+// correspondance est recalculée à chaque modification, pas figée une
+// fois pour toutes au moment de la distribution (une première version de
+// ce module procédait ainsi — voir la case "🔗 Synchro" ci-dessous — mais
+// ça laissait justement les copies distribuées AVANT l'activation hors
+// synchro tant que le MJ ne rouvrait pas explicitement la fiche pour
+// cocher la case : "ça ne marche que quand je coche la case").
 //
 // Ce que ça NE synchronise JAMAIS : l'état propre à chaque copie (équipé,
 // emplacement, quantité, utilisations restantes, recharge/cooldown en
@@ -18,9 +23,14 @@
 // SYNC_FIELDS ne synchronise jamais, même par excès de prudence : mieux
 // vaut sous-synchroniser que corrompre l'état d'une copie qu'un joueur a
 // déjà équipée/personnalisée.
+//
+// Un exemplaire précis peut sortir du groupe (ex. un joueur l'a fait
+// enchanter en objet unique) en décochant "🔗 Synchro" sur SA fiche —
+// flags.rpg.linkSync passe alors explicitement à false, et cet exemplaire
+// n'est plus ni source ni cible de la synchro tant que la case reste
+// décochée, même si un autre exemplaire du même nom continue d'exister.
 
 const FLAG_SCOPE = "rpg";
-const FLAG_LINK_ID = "linkId";
 const FLAG_LINK_SYNC = "linkSync";
 
 /**
@@ -78,12 +88,11 @@ const SYNC_FIELDS = {
 
 const SYNC_TYPES = new Set(Object.keys(SYNC_FIELDS));
 
-function getLinkId(item) {
-  return String(item?.flags?.[FLAG_SCOPE]?.[FLAG_LINK_ID] ?? "").trim();
-}
-
-function isLinkSyncOn(item) {
-  return !!item?.flags?.[FLAG_SCOPE]?.[FLAG_LINK_SYNC];
+/** true seulement si le MJ a explicitement décoché "🔗 Synchro" sur CET
+ *  exemplaire — undefined/jamais posé compte comme "synchronisé" (c'est
+ *  le comportement par défaut, pas un opt-in). */
+function isOptedOut(item) {
+  return item?.flags?.[FLAG_SCOPE]?.[FLAG_LINK_SYNC] === false;
 }
 
 /** Empreinte "probablement le même objet" : source de compendium si
@@ -103,108 +112,48 @@ function* worldAndPartyItems() {
 }
 
 /**
- * Tous les exemplaires (source monde comprise) partageant ce linkId.
- * Clé exacte (pas une empreinte floue) : sert à la propagation courante,
- * une fois le groupe déjà établi par activateItemSync.
+ * Tous les exemplaires (objet du monde compris) "probablement identiques"
+ * à `item` — même type, même empreinte — hors ceux explicitement
+ * désynchronisés. Recalculé à chaque appel : pas de groupe figé à l'avance,
+ * donc pas d'étape "d'activation" à oublier de refaire pour une copie
+ * distribuée avant que le MJ n'y pense.
  */
-export function findLinkedCopies(linkId, excludeUuid = null) {
-  if (!linkId) return [];
-  const found = [];
-  for (const it of worldAndPartyItems()) {
-    if (excludeUuid && it.uuid === excludeUuid) continue;
-    if (getLinkId(it) === linkId) found.push(it);
-  }
-  return found;
-}
-
-/**
- * Exemplaires embarqués sur un PJ "probablement identiques" (même
- * empreinte) et pas déjà dans CE groupe — sert uniquement au rattachement
- * rétroactif quand le MJ active la synchro. Volontairement limité aux
- * PJ (pas aux autres items du monde) : le rattachement rétroactif répond
- * à "qui a déjà reçu cet objet", pas à "fusionner des doublons du monde".
- */
-function findFingerprintCopies(item, linkId) {
+export function findMatchingCopies(item, excludeUuid = null) {
   if (!SYNC_TYPES.has(item?.type)) return [];
+  if (isOptedOut(item)) return [];
   const fp = fingerprint(item);
   const found = [];
-  for (const actor of game.actors) {
-    if (actor.type !== "character") continue;
-    for (const it of actor.items) {
-      if (it.type !== item.type) continue;
-      if (it.uuid === item.uuid) continue;
-      if (getLinkId(it) === linkId) continue; // déjà dans le groupe
-      if (fingerprint(it) === fp) found.push(it);
-    }
+  for (const it of worldAndPartyItems()) {
+    if (it.type !== item.type) continue;
+    if (excludeUuid && it.uuid === excludeUuid) continue;
+    if (isOptedOut(it)) continue;
+    if (fingerprint(it) === fp) found.push(it);
   }
   return found;
 }
 
 /**
- * Active la synchro pour cet item : crée son linkId si besoin, et
- * rattache rétroactivement tous les exemplaires déjà distribués qui
- * partagent la même empreinte. Sans ce rattachement, cocher la case ne
- * synchroniserait que les futurs envois — pas les copies qu'un PJ a déjà
- * dans son inventaire au moment où le MJ l'active (même raison que
- * quest-group.js#activateQuestSync).
+ * Coche/décoche "🔗 Synchro" pour CET exemplaire précis : décocher pose
+ * flags.rpg.linkSync=false (l'exclut du groupe, dans les deux sens —
+ * il ne suit plus les autres ET les autres ne le suivent plus) ; cocher
+ * efface un désistement antérieur (retour au comportement par défaut).
+ * Retourne les autres exemplaires actuellement assortis, pour que
+ * l'appelant puisse informer le MJ ("relié à N copie(s)").
  */
-export async function activateItemSync(item) {
-  if (!SYNC_TYPES.has(item?.type)) return [];
-
-  let linkId = getLinkId(item);
-  if (!linkId) linkId = foundry.utils.randomID(12);
-  await item.update({ [`flags.${FLAG_SCOPE}.${FLAG_LINK_ID}`]: linkId, [`flags.${FLAG_SCOPE}.${FLAG_LINK_SYNC}`]: true });
-
-  const copies = findFingerprintCopies(item, linkId);
-  for (const copy of copies) {
-    await copy.update({ [`flags.${FLAG_SCOPE}.${FLAG_LINK_ID}`]: linkId, [`flags.${FLAG_SCOPE}.${FLAG_LINK_SYNC}`]: true }).catch(() => {});
-  }
-  return copies;
-}
-
-/**
- * Comme activateItemSync, mais respecte un désistement explicite : si le
- * MJ a déjà décoché "🔗 Synchro" sur CET exemplaire (flags.rpg.linkSync
- * === false, un état distinct de "jamais posé"/undefined), ne réactive
- * rien tout seul. Sert aux chemins de distribution AUTOMATIQUES (Envoyer,
- * glisser-déposer, macro) : sans cette distinction, renvoyer une copie
- * d'un objet qu'un joueur a délibérément désynchronisé (ex. une arme que
- * le MJ a enchantée pour lui en objet unique) le rattacherait de force au
- * groupe à la prochaine distribution — écrasant sa personnalisation dès
- * la prochaine modification de la source.
- */
-export async function autoActivateItemSync(item) {
-  if (item?.flags?.[FLAG_SCOPE]?.[FLAG_LINK_SYNC] === false) return [];
-  return activateItemSync(item);
-}
-
-/** Désactive la synchro pour cet item ET tous les exemplaires liés — pour
- *  que décocher arrête la synchro immédiatement, pas juste les futurs envois. */
-export async function deactivateItemSync(item) {
-  const linkId = getLinkId(item);
-  if (!linkId) return [];
-
-  const others = findLinkedCopies(linkId, item.uuid);
-  await item.update({ [`flags.${FLAG_SCOPE}.${FLAG_LINK_SYNC}`]: false }).catch(() => {});
-  for (const other of others) {
-    await other.update({ [`flags.${FLAG_SCOPE}.${FLAG_LINK_SYNC}`]: false }).catch(() => {});
-  }
-  return others;
+export async function setItemSyncOptOut(item, optOut) {
+  await item.update({ [`flags.${FLAG_SCOPE}.${FLAG_LINK_SYNC}`]: !optOut });
+  return findMatchingCopies(item, item.uuid);
 }
 
 /**
  * Propage les champs de définition modifiés vers tous les autres
- * exemplaires liés. Filtre `changed` (le payload brut reçu par le hook
- * updateItem, PAS juste les clés qu'on a envie de lire) par la liste
- * blanche du type — un update qui ne touche que de l'état d'instance
- * (ex. équiper une arme) ne propage donc rien du tout.
+ * exemplaires assortis. Filtre `changed` (le payload brut reçu par le
+ * hook updateItem, PAS juste les clés qu'on a envie de lire) par la
+ * liste blanche du type — un update qui ne touche que de l'état
+ * d'instance (ex. équiper une arme) ne propage donc rien du tout.
  */
 async function propagateItemUpdate(item, changed) {
-  if (!isLinkSyncOn(item)) return;
-  const linkId = getLinkId(item);
-  if (!linkId) return;
-
-  const allowed = SYNC_FIELDS[item.type];
+  const allowed = SYNC_FIELDS[item?.type];
   if (!allowed) return;
 
   const flat = foundry.utils.flattenObject(changed ?? {});
@@ -216,7 +165,7 @@ async function propagateItemUpdate(item, changed) {
   }
   if (!Object.keys(patch).length) return;
 
-  const others = findLinkedCopies(linkId, item.uuid);
+  const others = findMatchingCopies(item, item.uuid);
   for (const other of others) {
     await other.update(patch, { rpgLinkSync: true }).catch(() => {});
   }
@@ -224,14 +173,12 @@ async function propagateItemUpdate(item, changed) {
 
 /**
  * Branche la synchro sur TOUTES les écritures d'item, quel que soit le
- * chemin d'origine (fiche, macro, console) — contrairement à
- * quest-group.js (appelé explicitement depuis chaque action de la fiche
- * Quête), un hook central évite de dupliquer "filtrer les champs +
- * retrouver les copies + réécrire" dans 5 fiches différentes, et ne rate
- * aucun chemin d'écriture futur.
+ * chemin d'origine (fiche, macro, console) — un hook central évite de
+ * dupliquer "filtrer les champs + retrouver les copies + réécrire" dans
+ * 5 fiches différentes, et ne rate aucun chemin d'écriture futur.
  *
  * options.rpgLinkSync sert de garde anti-boucle : sans elle, réécrire une
- * copie liée déclencherait elle-même ce hook, qui la propagerait à
+ * copie assortie déclencherait elle-même ce hook, qui la propagerait à
  * nouveau indéfiniment. `userId !== game.userId` évite en plus que
  * chaque client connecté (pas seulement celui qui a fait la modif)
  * tente la même propagation en double.

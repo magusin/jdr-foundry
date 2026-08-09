@@ -101,18 +101,10 @@ export async function promptSendItemToActors(item) {
   const targets = selectedIds.map(id => game.actors.get(id)).filter(Boolean);
   if (!targets.length) return;
 
-  // ✅ Synchro (armes/armures/sorts/consommables/recettes/loot) : activée
-  // automatiquement AVANT de figer baseData (item.toObject() ci-dessous),
-  // pour que la copie envoyée hérite tout de suite de flags.rpg.linkId —
-  // le MJ n'a plus besoin de cocher la case "🔗 Synchro" à la main après
-  // coup pour que "le même objet" reste identique d'un PJ à l'autre.
-  // Résilient à un échec (ex. source en lecture seule) : l'envoi se fait
-  // quand même, juste sans lien de synchro dans ce cas précis. No-op pour
-  // les quêtes, qui ont leur propre mécanisme juste en dessous.
-  if (item.type !== "quest") {
-    const { autoActivateItemSync } = await import("../rules/item-link.js");
-    await autoActivateItemSync(item).catch(() => {});
-  }
+  // Pas d'étape de synchro à faire ici : item-link.js assortit les objets
+  // par empreinte (type + source de compendium/nom) à chaque modification,
+  // pas au moment de l'envoi — la copie créée plus bas sera trouvée toute
+  // seule dès la prochaine édition de la source, sans rien faire de plus.
 
   const baseData = item.toObject();
   delete baseData._id;
@@ -184,10 +176,13 @@ export function bindSendToActorsButton(root, item, options = {}) {
 
 /**
  * Branche la case [data-action="toggleLinkSync"] d'une fiche d'objet (MJ
- * uniquement) — voir item-link.js. Volontairement PAS un <input name="...">
- * soumis par le formulaire normal de la fiche : activer la synchro a un
- * effet de bord (rattachement rétroactif des copies déjà distribuées à des
- * PJ) qu'une simple écriture de champ ne déclencherait jamais toute seule.
+ * uniquement) — voir item-link.js. La synchro est active PAR DÉFAUT pour
+ * tout exemplaire du même type+empreinte (pas besoin de cocher quoi que
+ * ce soit) ; cette case ne sert donc qu'à SORTIR cet exemplaire précis du
+ * groupe (le décocher), ou à annuler un désistement antérieur (le
+ * recocher). Volontairement PAS un <input name="..."> soumis par le
+ * formulaire normal de la fiche, pour rester un geste explicite et
+ * immédiat plutôt qu'un champ parmi d'autres.
  */
 export function bindLinkSyncCheckbox(root, item) {
   const input = root?.querySelector('[data-action="toggleLinkSync"]');
@@ -198,12 +193,14 @@ export function bindLinkSyncCheckbox(root, item) {
     if (!game.user.isGM) return;
     const checked = !!input.checked;
     try {
-      const { activateItemSync, deactivateItemSync } = await import("../rules/item-link.js");
-      const others = checked ? await activateItemSync(item) : await deactivateItemSync(item);
+      const { setItemSyncOptOut } = await import("../rules/item-link.js");
+      const others = await setItemSyncOptOut(item, !checked);
       if (checked) {
         ui.notifications?.info?.(others.length
-          ? `Synchro activée — relié à ${others.length} copie(s) déjà distribuée(s).`
-          : "Synchro activée pour cet objet.");
+          ? `Synchronisé avec ${others.length} copie(s) du même objet.`
+          : "Synchronisé (aucune autre copie détectée pour l'instant).");
+      } else {
+        ui.notifications?.info?.("Cet exemplaire ne suit plus les autres copies (et elles ne le suivent plus).");
       }
     } catch (e) {
       console.error("[RPG] Bascule synchro objet lié :", e);
