@@ -2,7 +2,10 @@
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 import { bindSendToActorsButton, partyCharacters } from "./send-item-dialog.js";
 import { setupItemRefDrop } from "./drop-helper.js";
-import { ensureDistribGroupId, findDistribCopies } from "../rules/quest-group.js";
+import {
+  ensureDistribGroupId, findDistribCopies,
+  propagateQuestUpdate, activateQuestSync, deactivateQuestSync
+} from "../rules/quest-group.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -257,6 +260,34 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     });
   }
 
+  /**
+   * Chemins considérés comme "progression" d'une quête partagée — reflète
+   * exactement la portée documentée par quest-group.js ("étape, statut,
+   * récompenses") : PAS system.partagee/questGroupId/distribGroupId (le
+   * mécanisme de synchro lui-même, géré à part, voir _persistField) ni
+   * system.classeRequise (note MJ privée, jamais vue du joueur, donc sans
+   * intérêt à répliquer).
+   */
+  static QUEST_SYNC_PREFIXES = ["system.etapes", "system.etapeActuelle", "system.statut", "system.recompense", "system.description"];
+
+  _isSyncablePath(path) {
+    return RPGQuestSheetV2.QUEST_SYNC_PREFIXES.some(p => path === p || path.startsWith(`${p}.`));
+  }
+
+  /**
+   * Propage un patch de progression vers toutes les autres copies d'une
+   * quête partagée (no-op si la quête n'a pas de questGroupId, ex. pas
+   * "partagée") — voir quest-group.js. Sans cet appel, cocher un objectif
+   * ou avancer une étape depuis CETTE fiche (le principal point d'édition
+   * d'une quête) ne touchait jamais que this.document : les copies déjà
+   * distribuées aux PJ restaient bloquées sur leur ancienne progression
+   * indéfiniment, quelle que soit "Quête partagée".
+   */
+  async _syncProgress(patch) {
+    if (!patch || !Object.keys(patch).length) return;
+    await propagateQuestUpdate(this.document, patch);
+  }
+
   async _commitField(path, val, fieldLabel) {
     try {
       this._lastFieldSave = this.document.update({ [path]: val }, { render: false });
@@ -300,11 +331,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       etape.objectifs = asEtapesArray(etape.objectifs);
       if (!etape.objectifs[Number(oIdx)]) return;
       etape.objectifs[Number(oIdx)][field] = value;
-      await this._commitField(`system.etapes.${eIdx}`, etape, name);
+      const path = `system.etapes.${eIdx}`;
+      await this._commitField(path, etape, name);
+      await this._syncProgress({ [path]: etape });
       return;
     }
 
     await this._commitField(name, value, name);
+
+    // ── Case "Quête partagée" : c'est ELLE qui crée/efface questGroupId
+    // (voir quest-group.js#activateQuestSync) — sans ce branchement, cocher
+    // la case ne faisait que persister system.partagee=true sans jamais
+    // établir le groupe de synchro que propagateQuestUpdate exige, et les
+    // copies déjà données aux PJ ne rejoignaient jamais le groupe.
+    if (name === "system.partagee") {
+      if (value) await activateQuestSync(this.document);
+      else await deactivateQuestSync(this.document);
+    } else if (this._isSyncablePath(name)) {
+      await this._syncProgress({ [name]: value });
+    }
 
     // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
     // sont des COPIES de ce champ affichées ailleurs dans le DOM —
@@ -409,6 +454,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: item.uuid, qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   async _prepareContext(options) {
@@ -555,6 +601,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
 
     await this.document.update(expanded, { render: true });
+
+    const patch = {};
+    for (const key of ["etapes", "statut", "recompense", "description"]) {
+      if (key in (expanded.system ?? {})) patch[`system.${key}`] = expanded.system[key];
+    }
+    await this._syncProgress(patch);
   }
 
   async _actionAddEtape(event) {
@@ -566,6 +618,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // de le laisser sur "Aperçu" en devinant où elle a atterri.
     this._pendingTab = `etape-${list.length - 1}`;
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionRemoveEtape(event) {
@@ -588,7 +641,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // La page retirée n'existe plus : retour à "Aperçu" plutôt que de
     // laisser Tabs pointer vers un data-tab qui n'a plus de panneau.
     this._pendingTab = "apercu";
-    await this.document.update({ "system.etapes": list, "system.etapeActuelle": etapeActuelle }, { render: true });
+    const patch = { "system.etapes": list, "system.etapeActuelle": etapeActuelle };
+    await this.document.update(patch, { render: true });
+    await this._syncProgress(patch);
   }
 
   async _actionShiftEtape(event, delta) {
@@ -610,6 +665,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     etapeActuelle = Math.max(0, Math.min(etapes.length, etapeActuelle + delta));
     this._pendingTab = etapeActuelle < etapes.length ? `etape-${etapeActuelle}` : "apercu";
     await this.document.update({ "system.etapeActuelle": etapeActuelle }, { render: true });
+    await this._syncProgress({ "system.etapeActuelle": etapeActuelle });
   }
 
   async _actionAddObjectif(event) {
@@ -622,6 +678,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
     list[etapeIdx].objectifs.push({ text: "", fait: false });
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionRemoveObjectif(event) {
@@ -635,6 +692,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (!list[etapeIdx]?.objectifs) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionAddRewardItem(event) {
@@ -643,6 +701,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   async _actionRemoveRewardItem(event) {
@@ -653,6 +712,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   /**

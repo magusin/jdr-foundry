@@ -110,14 +110,22 @@ export async function promptSendItemToActors(item) {
     // fiche de la quête source relit pour afficher la liste des
     // destinataires. Persistée sur l'ITEM SOURCE (pas seulement la copie)
     // pour qu'un second envoi ultérieur retrouve le même identifiant.
-    const { ensureDistribGroupId } = await import("../rules/quest-group.js");
+    const { ensureDistribGroupId, ensureQuestGroupId } = await import("../rules/quest-group.js");
     const distribId = await ensureDistribGroupId(item);
     baseData.system = baseData.system ?? {};
     if (distribId) baseData.system.distribGroupId = distribId;
 
     if (targets.length > 1) {
+      // ensureQuestGroupId persiste questGroupId sur L'ITEM SOURCE (pas
+      // seulement baseData, la copie en cours de préparation) — même
+      // raison que distribGroupId ci-dessus : sans ça, un envoi ultérieur
+      // à un seul PJ (ou une case cochée dans la liste des destinataires)
+      // relirait un questGroupId encore vide sur la source et créerait une
+      // copie hors du groupe de synchro déjà utilisé par ce premier envoi.
+      if (!item.system?.partagee) await item.update({ "system.partagee": true });
+      const gid = await ensureQuestGroupId(item);
       baseData.system.partagee = true;
-      baseData.system.questGroupId = baseData.system.questGroupId || foundry.utils.randomID(12);
+      if (gid) baseData.system.questGroupId = gid;
     }
   }
 
