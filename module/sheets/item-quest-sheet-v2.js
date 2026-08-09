@@ -68,8 +68,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         addObjectif:      async function (event) { await this._actionAddObjectif(event); },
         removeObjectif:   async function (event) { await this._actionRemoveObjectif(event); },
         addRewardItem:    async function (event) { await this._actionAddRewardItem(event); },
-        removeRewardItem: async function (event) { await this._actionRemoveRewardItem(event); },
-        savePmField:      async function (event) { await this._actionSavePmField(event); }
+        removeRewardItem: async function (event) { await this._actionRemoveRewardItem(event); }
       }
     },
     { inplace: false }
@@ -235,15 +234,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * re-render en cours de frappe remplace le DOM sous les doigts de
    * l'utilisateur et fasse "disparaître" ce qu'il tape.
    *
-   * <prose-mirror> NE déclenche apparemment ni "change" ni "save" tant que
-   * l'utilisateur n'a pas cliqué sur le bouton Sauvegarder de SA PROPRE
-   * barre d'outils — contrairement à un <input>, qui committe sur simple
-   * blur. Ces deux listeners restent posés en filet de sécurité (au cas
-   * où l'utilisateur clique bien ce bouton), mais _flushProseMirrorFields
-   * (voir plus bas) est le vrai filet : appelé avant toute action et à la
-   * fermeture, il relit .value en direct sur chaque <prose-mirror> — qui
-   * lui reste TOUJOURS à jour même sans évènement — au lieu de dépendre
-   * d'un évènement qui ne vient pas forcément.
+   * Un <textarea> (Récit, Notes MJ, Description — anciennement des
+   * <prose-mirror>, voir _flushRichTextFields) committe sur simple blur
+   * comme un <input>, donc ce seul listener "change" suffit ; le flush
+   * avant chaque action reste le filet pour le cas "je tape puis je
+   * clique un bouton sans jamais quitter le champ".
    */
   _bindLiveSave(root) {
     if (root.dataset.rpgLiveSave) return;
@@ -251,12 +246,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     root.addEventListener("change", (ev) => {
       const el = ev.target;
-      if (!el?.matches?.("input, select, textarea, prose-mirror")) return;
-      this._persistField(el);
-    });
-    root.addEventListener("save", (ev) => {
-      const el = ev.target;
-      if (el?.tagName !== "PROSE-MIRROR") return;
+      if (!el?.matches?.("input, select, textarea")) return;
       this._persistField(el);
     });
   }
@@ -284,24 +274,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * distribuées aux PJ restaient bloquées sur leur ancienne progression
    * indéfiniment, quelle que soit "Quête partagée".
    *
-   * Le travail réel est différé au tick suivant (setTimeout 0). Ce patch
-   * peut venir du listener "save" d'un <prose-mirror> (ex. Notes MJ, via
-   * system.etapes.{i} qui matche le préfixe "system.etapes") — appelé
-   * SYNCHRONE avec le clic sur le bouton Sauvegarder de SA PROPRE barre
-   * d'outils, qui (chez Foundry, après avoir traité le clic) restaure le
-   * focus/la sélection sur son éditeur interne. Rapporté : "Cannot read
-   * properties of null (reading 'setSelection')" à ce moment précis. La
-   * course exacte n'est pas confirmée en direct (pas de session Foundry
-   * disponible ici), mais chaîner ici un travail async supplémentaire
-   * (retrouver + réécrire les copies liées) dans le même chapelet
-   * synchrone/microtâche que ce bouton est le seul changement introduit
-   * par la synchro de quêtes sur ce chemin précis — le repousser à une
-   * tâche séparée, une fois que Foundry a fini de traiter le clic,
-   * élimine ce chevauchement quelle qu'en soit la cause exacte.
    */
   async _syncProgress(patch) {
     if (!patch || !Object.keys(patch).length) return;
-    await new Promise(resolve => setTimeout(resolve, 0));
     await propagateQuestUpdate(this.document, patch);
   }
 
@@ -321,10 +296,27 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (!name) return;
 
     let value;
-    if (el.tagName === "PROSE-MIRROR") value = el.value ?? "";
-    else if (el.type === "checkbox") value = el.checked;
+    if (el.type === "checkbox") value = el.checked;
     else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
-    else value = el.value ?? "";
+    else {
+      // ⚠️ GARDE-FOU ANTI-EFFACEMENT. Un `?? ""` ici a réellement détruit
+      // le contenu de Récit/Notes MJ/Description d'une quête : les champs
+      // étaient alors des <prose-mirror>, dont la propriété .value peut
+      // valoir undefined/null selon la façon dont l'élément a été
+      // initialisé — et _flushProseMirrorFields, appelé avant CHAQUE
+      // action et à la fermeture, réécrivait donc "" par-dessus le vrai
+      // texte, en boucle. Les champs sont depuis de simples <textarea>
+      // (dont .value est toujours une string, ce qui rend ce cas
+      // théorique), mais la règle reste : ne JAMAIS écrire quand la
+      // lecture n'a pas rendu une string. Une chaîne vide légitime
+      // (l'utilisateur a vidé le champ lui-même) est bien une string et
+      // passe donc toujours.
+      if (typeof el.value !== "string") {
+        console.warn("[RPG] Fiche Quête : lecture non exploitable, écriture ignorée pour ne rien écraser —", name, el.value);
+        return;
+      }
+      value = el.value;
+    }
 
     // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
     // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
@@ -364,22 +356,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (name === "system.partagee") {
       if (value) await activateQuestSync(this.document);
       else await deactivateQuestSync(this.document);
-    } else if (this._isSyncablePath(name) && el.tagName !== "PROSE-MIRROR") {
-      // Récit/Notes MJ (les deux seuls <prose-mirror> de cette fiche) ne
-      // syncent PAS depuis ce chemin immédiat — leur "save" vient du
-      // bouton de la barre d'outils de l'éditeur lui-même
-      // (ProseMirrorMenu._onAction), qui restaure ensuite le focus sur
-      // son propre EditorView. Un plantage Foundry/ProseMirror pur y a
-      // été rapporté juste après ("Cannot read properties of null
-      // (reading 'setSelection')", aucune frame de ce dépôt sur la pile)
-      // — la cause exacte n'est pas confirmée (le chemin _commitField
-      // au-dessus est inchangé depuis avant cette fonctionnalité), mais
-      // ne rien ajouter d'autre sur CE chemin précis élimine par
-      // construction tout risque d'y contribuer. Ces deux champs restent
-      // synchronisés quand même : _awaitPendingFieldSave (avant +Étape,
-      // Étape suivante, Envoyer, fermeture...) relit le contenu déjà
-      // committé et le fait repartir via la resynchro de system.etapes
-      // en bloc — juste pas au moment précis du clic Sauvegarder.
+    } else if (this._isSyncablePath(name)) {
       await this._syncProgress({ [name]: value });
     }
 
@@ -404,44 +381,29 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   }
 
   /**
-   * Bouton "💾 Enregistrer" posé À CÔTÉ de chaque <prose-mirror> (Récit,
-   * Notes MJ, Description) — PAS le bouton natif de la barre d'outils de
-   * l'éditeur, retiré (voir button="true" supprimé du template). Rapporté :
-   * cliquer le bouton natif de ProseMirror faisait planter Foundry
-   * ("Cannot read properties of null (reading 'setSelection')", pile
-   * entièrement interne à vendor.mjs/foundry.mjs) ET faisait perdre le
-   * texte tout juste tapé — le champ retombait visuellement sur son
-   * ancien contenu (rendu enrichi, UUID → pastilles) sans le nouveau
-   * texte, barre d'outils disparue. Ce bouton fait exactement ce que
-   * _flushProseMirrorFields fait déjà de façon fiable (relire .value en
-   * direct puis committer via _persistField), sans jamais passer par
-   * ProseMirrorMenu._onAction — donc sans jamais déclencher ce chemin.
+   * Committe le contenu des grands champs texte (Récit, Notes MJ,
+   * Description) avant qu'une action ne relise this.document.
+   *
+   * Ces champs étaient des <prose-mirror> (éditeur riche de Foundry) :
+   * abandonnés au profit de simples <textarea> après une série de bugs
+   * insolubles depuis ce dépôt — plantage systématique au clic sur le
+   * bouton Sauvegarder de l'éditeur ("Cannot read properties of null
+   * (reading 'setSelection')", pile 100% interne à
+   * vendor.mjs/foundry.mjs), texte tapé qui disparaissait au profit de
+   * l'ancien rendu, puis effacement pur et simple des trois champs. Un
+   * <textarea> n'a aucune de ces mécaniques internes : .value est une
+   * propriété DOM native, toujours une string, toujours à jour, sans
+   * évènement à intercepter ni focus à restaurer.
+   *
+   * Le rendu enrichi (@UUID[...] → lien cliquable) n'est PAS perdu : il
+   * n'a jamais dépendu de l'éditeur, seulement de enrichHTML() dans
+   * _prepareContext — c'est toujours ce que voit le joueur (branche
+   * .rpg-enriched-text). Seul le MJ édite désormais le texte brut.
    */
-  async _actionSavePmField(event) {
-    event?.preventDefault?.();
-    const pm = event?.target?.closest(".rpg-pm-wrap")?.querySelector("prose-mirror");
-    if (!pm) return;
-    await this._persistField(pm);
-    ui.notifications?.info?.("Enregistré.");
-  }
-
-  /**
-   * Relit .value en direct sur CHAQUE <prose-mirror> du DOM et le
-   * committe nous-mêmes — voir _bindLiveSave plus haut pour le pourquoi
-   * (cet élément ne committe apparemment que sur clic explicite de son
-   * propre bouton Sauvegarder, jamais sur simple blur/changement de
-   * focus). Sans ça : un bouton d'action (+Objectif...) qui déclenche un
-   * document.update() réécrivant system.etapes lisait this.document AVANT
-   * que le récit/les notes MJ tapés n'aient jamais été committés nulle
-   * part — l'update repartait donc de l'ANCIENNE valeur (rapporté :
-   * "+Objectif efface le récit de l'étape et notes MJ"). Même chose à la
-   * fermeture de la fenêtre (voir close() plus bas) — rapporté aussi :
-   * "notes MJ et récit disparaissent parfois à la fermeture".
-   */
-  async _flushProseMirrorFields() {
+  async _flushRichTextFields() {
     const root = this.element;
     if (!root) return;
-    for (const el of root.querySelectorAll("prose-mirror[name]")) {
+    for (const el of root.querySelectorAll("textarea.rpg-quest-editor[name]")) {
       await this._persistField(el);
     }
   }
@@ -450,7 +412,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * À appeler avant qu'une action (+Objectif, +Étape, ✕...) ne lise
    * this.document : attend que la dernière sauvegarde de champ démarrée
    * par _bindLiveSave soit bien appliquée (course de lecture), PUIS force
-   * la sauvegarde de tout <prose-mirror> — voir _flushProseMirrorFields —
+   * la sauvegarde des grands champs texte — voir _flushRichTextFields —
    * pour ne jamais lire/écrire une copie de this.document plus ancienne
    * que ce qui est affiché à l'écran.
    */
@@ -458,15 +420,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (this._lastFieldSave) {
       try { await this._lastFieldSave; } catch { /* déjà loggé dans _commitField */ }
     }
-    await this._flushProseMirrorFields();
+    await this._flushRichTextFields();
   }
 
-  /** Sauvegarde tout <prose-mirror> avant fermeture — sinon du texte tapé
-   *  mais jamais committé (voir _flushProseMirrorFields) disparaissait
+  /** Sauvegarde les grands champs texte avant fermeture — sinon du texte
+   *  tapé sans jamais quitter le champ (donc sans "change") disparaissait
    *  silencieusement en fermant la fenêtre. */
   async close(options = {}) {
     this._sizeRO?.disconnect();
-    await this._flushProseMirrorFields();
+    await this._flushRichTextFields();
     return super.close(options);
   }
 
@@ -474,14 +436,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * Étire le champ Description jusqu'en bas de la fenêtre — seulement sur
    * cette page (un seul champ, rien d'autre à partager l'espace avec,
    * contrairement aux pages d'étape où Récit/Objectifs/Notes MJ
-   * coexistent). Les deux tentatives précédentes de faire ça en CSS pur
-   * (flex + min-height:0 posés directement, puis en cascade depuis les
-   * parents, sur <prose-mirror>) ont cassé son agencement interne à
-   * chaque fois — voir l'historique dans item-sheet.css. On mesure donc
-   * l'espace RÉELLEMENT disponible en JS et on fixe min-height/max-height
-   * (les deux seules propriétés déjà confirmées sans risque sur ce
-   * composant) à cette valeur calculée, sans jamais toucher flex/display/
-   * overflow de l'élément lui-même au-delà de ce qui marche déjà.
+   * coexistent). On mesure l'espace RÉELLEMENT disponible en JS et on fixe
+   * min-height/max-height à cette valeur calculée.
    */
   _sizeDescriptionEditor() {
     const root = this.element;
@@ -489,7 +445,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const scroller = root.querySelector(".quest-page-content");
     const tab = root.querySelector('.tab[data-tab="description"]');
     if (!scroller || !tab?.classList.contains("active")) return;
-    const target = tab.querySelector("prose-mirror.rpg-quest-editor, .rpg-enriched-text");
+    const target = tab.querySelector("textarea.rpg-quest-editor, .rpg-enriched-text");
     if (!target) return;
 
     const bottom = scroller.getBoundingClientRect().bottom;
