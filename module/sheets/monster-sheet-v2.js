@@ -3,7 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
-import { applyUiTheme } from "./sheet-helpers.js";
+import { applyUiTheme, openImageLightbox } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -235,6 +235,15 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const root = this.element;
     if (!root) return;
     applyUiTheme(root);
+
+    // Côté joueur, l'illustration s'affiche en grand dans le corps de la fiche
+    // (vue PNJ) : un clic l'ouvre en plein écran, comme sur la fiche PNJ d'un
+    // personnage.
+    root.querySelectorAll(".rpg-npc-illu").forEach(img => {
+      if (img.dataset.rpgZoomBound) return;
+      img.dataset.rpgZoomBound = "1";
+      img.addEventListener("click", () => openImageLightbox(img.src, this.document.name));
+    });
 
     // ✅ Clic images (illustration + token) — MJ only, portrait ne sync pas token
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

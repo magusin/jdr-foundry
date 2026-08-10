@@ -1,3 +1,52 @@
+{{!-- =========================
+VUE PNJ — ce qu'un joueur voit d'un personnage qui n'est pas le sien
+(lien @UUID d'une quête, d'un journal, du chat…). Illustration en grand,
+nom, description, et les états qui l'affectent. AUCUNE caractéristique :
+elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext).
+========================== --}}
+{{#if flags.npcView}}
+<div class="{{cssClass}} rpg-sheet rpg-npc-card" autocomplete="off">
+
+  <div class="npc-illu-wrap">
+    <img class="rpg-npc-illu" src="{{npc.img}}" alt="{{npc.name}}"
+      title="Cliquer pour agrandir" />
+  </div>
+
+  <h1 class="npc-name">{{npc.name}}</h1>
+
+  <section class="card npc-block">
+    <h2>Description</h2>
+    {{#if npc.hasDescription}}
+    <div class="rp-text">{{{npc.descriptionHTML}}}</div>
+    {{else}}
+    <div class="npc-empty">Rien de particulier à en dire pour l'instant.</div>
+    {{/if}}
+  </section>
+
+  {{#if npc.states.length}}
+  <section class="card npc-block">
+    <h2>États</h2>
+    <ul class="state-list">
+      {{#each npc.states as |e|}}
+      <li class="state-row">
+        <div class="state-main">
+          <b>{{e.label}}</b>
+          {{#if e.isAura}}<span class="muted" style="margin-left:6px">[AURA]</span>{{/if}}
+          {{#if e.isBeneficial}}<span class="muted" style="margin-left:6px">[BUFF]</span>{{/if}}
+          {{#if e.isHarmful}}<span class="muted" style="margin-left:6px">[AFFLICTION]</span>{{/if}}
+          <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+          {{#if e.summary}}
+          <div class="muted" style="margin-top:4px">{{e.summary}}</div>
+          {{/if}}
+        </div>
+      </li>
+      {{/each}}
+    </ul>
+  </section>
+  {{/if}}
+
+</div>
+{{else}}
 <div class="{{cssClass}} rpg-sheet" autocomplete="off">
 
   {{!-- =========================
@@ -334,6 +383,9 @@
     <a class="item" data-tab="blessures" style="{{#if hasBlessures}}color:#c0392b;font-weight:700{{/if}}">
       {{#if hasBlessures}}🩸{{/if}} Blessures
     </a>
+    {{#if flags.isGM}}
+    <a class="item" data-tab="pnj">🎭 PNJ / RP</a>
+    {{/if}}
     {{/unless}}
   </nav>
 
@@ -1216,7 +1268,74 @@
       </section>
 
     </div>
+
+    {{!-- =========================
+    TAB: PNJ / RP (MJ uniquement)
+    Description lue par les joueurs sur la carte PNJ + tout ce que le MJ
+    garde pour lui (caractère, dialogues, secrets).
+    ========================== --}}
+    {{#if flags.isGM}}
+    <div class="tab" data-group="primary" data-tab="pnj">
+
+      <section class="card">
+        <h2>🎭 Vue joueur</h2>
+        <div style="font-size:11px;opacity:.7;margin-bottom:8px">
+          Un joueur qui ouvre cette fiche sans posséder le personnage (lien
+          @UUID d'une quête, d'un journal, du chat…) ne voit qu'une carte :
+          l'illustration en grand, le nom, la description ci-dessous et les
+          états actifs. Jamais les caractéristiques, l'inventaire ni les sorts.
+        </div>
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Carte PNJ pour les joueurs</label>
+        <select name="system.pnjView" style="width:100%">
+          <option value="auto" {{#if (eq system.pnjView "auto")}}selected{{/if}}>
+            Automatique — carte PNJ si aucun joueur ne possède ce personnage
+          </option>
+          <option value="always" {{#if (eq system.pnjView "always")}}selected{{/if}}>
+            Toujours — carte PNJ même pour les autres joueurs qui le possèdent
+          </option>
+          <option value="never" {{#if (eq system.pnjView "never")}}selected{{/if}}>
+            Jamais — fiche complète visible (personnage joueur)
+          </option>
+        </select>
+        <small style="display:block;font-size:11px;opacity:.6;margin-top:6px">
+          Le MJ et le propriétaire du personnage gardent toujours la fiche complète.
+        </small>
+      </section>
+
+      <section class="card" style="margin-top:10px">
+        <h2>📖 Description — visible par les joueurs</h2>
+        <div style="font-size:11px;opacity:.6;margin-bottom:6px">
+          Apparence, réputation, ce que le personnage laisse voir. Glisse un
+          PNJ, un lieu ou un objet dans le champ pour y insérer un lien cliquable.
+        </div>
+        <textarea class="rpg-uuid-drop" name="system.description" rows="6"
+          placeholder="Ex: Un vieil homme sec, la barbe tressée de fils de cuivre. Forgeron de @UUID[...] depuis quarante ans, il parle peu et regarde les mains avant les visages."
+          style="width:100%;resize:vertical;font-size:12px">{{system.description}}</textarea>
+      </section>
+
+      <section class="card" style="margin-top:10px">
+        <h2>🔒 Notes du MJ — jamais visibles par les joueurs</h2>
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:8px 0 4px">Caractère / attitude</label>
+        <textarea class="rpg-uuid-drop" name="system.mj.caractere" rows="4"
+          placeholder="Ex: Méfiant envers les étrangers, s'adoucit si on parle métier. Ment mal. Déteste les nobles."
+          style="width:100%;resize:vertical;font-size:12px">{{system.mj.caractere}}</textarea>
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:8px 0 4px">Dialogues / répliques</label>
+        <textarea class="rpg-uuid-drop" name="system.mj.dialogues" rows="6"
+          placeholder="Ex: « La route ? Personne ne la quitte deux fois. »&#10;Si on l'interroge sur le Conseil : ..."
+          style="width:100%;resize:vertical;font-size:12px">{{system.mj.dialogues}}</textarea>
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:8px 0 4px">Secrets / informations à révéler</label>
+        <textarea class="rpg-uuid-drop" name="system.mj.secrets" rows="5"
+          placeholder="Ex: C'est lui qui a détourné la cargaison. Ne l'avouera que sous la menace ou contre 50 pièces d'or."
+          style="width:100%;resize:vertical;font-size:12px">{{system.mj.secrets}}</textarea>
+      </section>
+
+    </div>
+    {{/if}}
     {{/unless}}
 
   </section>
 </div>
+{{/if}}

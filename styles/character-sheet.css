@@ -1158,3 +1158,85 @@
 .rpg-sheet .rpg-draggable:hover .name::before {
   opacity: 0.7;
 }
+
+/* ==========================================================================
+   CARTE PNJ — ce qu'un joueur voit d'un personnage qui n'est pas le sien.
+   Aucune grille de stats à caser : on privilégie l'illustration, en grand,
+   comme sur une fiche de rencontre plutôt que comme un bloc technique.
+   ========================================================================== */
+.rpg-sheet.rpg-npc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 18px;
+  color: var(--ink-text);
+}
+
+.rpg-npc-card .npc-illu-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.rpg-npc-card .rpg-npc-illu {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  /* Assez grand pour porter la scène, sans jamais chasser la description
+     hors de la fenêtre — d'où une hauteur relative à la fiche, pas fixe. */
+  max-height: 46vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 2px solid var(--brass, rgba(155, 89, 182, 0.4));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  cursor: zoom-in;
+  background: var(--surface-2, rgba(0, 0, 0, 0.2));
+}
+
+.rpg-npc-card .npc-name {
+  margin: 0;
+  text-align: center;
+  font-size: 26px;
+  line-height: 1.2;
+  border: none;
+  color: var(--ink-text);
+}
+
+.rpg-npc-card .npc-block {
+  margin: 0;
+}
+
+.rpg-npc-card .npc-empty {
+  opacity: 0.45;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.rpg-npc-card .rp-text {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.rpg-npc-card .state-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rpg-npc-card .state-row {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 8px;
+}
+
+.rpg-npc-card .state-main {
+  font-size: 13px;
+  color: var(--ink-text);
+}
+
+.rpg-npc-card .state-main .muted {
+  color: var(--ink-text-faint);
+  font-size: 12px;
+}

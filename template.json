@@ -137,6 +137,12 @@
           "valeur": 0,
           "max": 10
         }
+      },
+      "pnjView": "auto",
+      "mj": {
+        "caractere": "",
+        "dialogues": "",
+        "secrets": ""
       }
     },
     "monster": {
