@@ -1,7 +1,7 @@
 // module/sheets/item-recipe-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
@@ -53,6 +53,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     applyUiTheme(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindSendToActorsButton(root, this.document);
+    bindLinkSyncCheckbox(root, this.document);
 
     // ── Clic sur bouton "Voir" (UUID) → ouvre la fiche de l'item ──────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
@@ -127,6 +128,14 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
   async _onFormSubmitV2(event, form, formData, options) {
     if (!this.isEditable) return;
+    // La case "🔗 Synchro" (bindLinkSyncCheckbox) gère son propre
+    // update+notification et n'a pas de "name" : la laisser passer ici
+    // déclencherait une resoumission complète + render({force:true}) en
+    // parallèle de son propre appel — rapporté comme "la fiche ne s'ouvre
+    // plus après avoir coché". stopPropagation côté checkbox suffit déjà
+    // en théorie, ce garde-fou n'a de rôle que si jamais l'évènement
+    // l'atteint quand même (ex. ordre d'attache des listeners).
+    if (event?.target?.dataset?.action === "toggleLinkSync") return;
     const expanded = foundry.utils.expandObject(formData.object);
     const ingRaw = expanded?.system?.ingredients;
     if (ingRaw && !Array.isArray(ingRaw)) expanded.system.ingredients = Object.values(ingRaw);

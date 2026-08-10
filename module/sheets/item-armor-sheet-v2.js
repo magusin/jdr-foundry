@@ -1,7 +1,7 @@
 // systems/rpg/module/sheets/item-armor-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -141,6 +141,14 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
   async _onFormSubmitV2(event, form, formData, options) {
     if (!this.isEditable) return;
+    // La case "🔗 Synchro" (bindLinkSyncCheckbox) gère son propre
+    // update+notification et n'a pas de "name" : la laisser passer ici
+    // déclencherait une resoumission complète + render({force:true}) en
+    // parallèle de son propre appel — rapporté comme "la fiche ne s'ouvre
+    // plus après avoir coché". stopPropagation côté checkbox suffit déjà
+    // en théorie, ce garde-fou n'a de rôle que si jamais l'évènement
+    // l'atteint quand même (ex. ordre d'attache des listeners).
+    if (event?.target?.dataset?.action === "toggleLinkSync") return;
 
     const raw = formData?.object ?? {};
     const expanded = foundry.utils.expandObject(raw);
@@ -218,6 +226,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);
+    bindLinkSyncCheckbox(root, this.document);
     // ── UUID cliquable → ouvre la fiche de l'item associé ─────────────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
       btn.addEventListener("click", async (ev) => {

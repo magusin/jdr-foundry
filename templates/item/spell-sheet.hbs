@@ -11,8 +11,13 @@
       {{#if isGM}}<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(180,120,0,0.2);color:#c8960a">MJ</span>{{/if}}
     </div>
     {{#if isGM}}
-    <div style="display:flex;align-items:flex-start;justify-content:flex-end">
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
       <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ">📤 Envoyer</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;cursor:pointer"
+        title="Synchronisé PAR DÉFAUT avec tout autre exemplaire du même nom déjà donné à un PJ, sans rien à faire : toute modification des champs de définition (dégâts, coûts, effets...) se répercute automatiquement. La recharge en cours et l'état actif/aura de chaque copie restent indépendants. Décoche si CET exemplaire doit cesser de suivre les autres.">
+        <input type="checkbox" data-action="toggleLinkSync" {{#unless (eq item.flags.rpg.linkSync false)}}checked{{/unless}} />
+        🔗 Synchro
+      </label>
     </div>
     {{/if}}
   </header>

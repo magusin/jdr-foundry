@@ -98,3 +98,50 @@ export async function propagateQuestUpdate(quest, updates) {
   }
   return others;
 }
+
+/**
+ * À appeler quand le MJ coche "Quête partagée" sur la fiche (system.partagee
+ * vient de passer à true) : crée le questGroupId si besoin, ET rattache
+ * RÉTROACTIVEMENT toutes les copies déjà distribuées (repérées via
+ * distribGroupId, la traçabilité "qui a cette quête" posée dès le premier
+ * envoi, indépendamment de "partagee") à ce même groupe.
+ *
+ * Sans ce rattachement rétroactif, cocher la case ne synchroniserait que
+ * les PROCHAINS envois — pas les copies qu'un PJ a déjà dans son
+ * inventaire au moment où le MJ coche la case, ce qui est exactement le
+ * symptôme rapporté ("les joueurs qui avaient déjà la quête dans leur
+ * inventaire" ne voient jamais la mise à jour).
+ */
+export async function activateQuestSync(item) {
+  const gid = await ensureQuestGroupId(item);
+  if (!gid) return [];
+
+  const distribId = String(item.system?.distribGroupId ?? "").trim();
+  const copies = distribId ? findDistribCopies(distribId, item.uuid) : [];
+  for (const copy of copies) {
+    const patch = {};
+    if (String(copy.system?.questGroupId ?? "").trim() !== gid) patch["system.questGroupId"] = gid;
+    if (!copy.system?.partagee) patch["system.partagee"] = true;
+    if (Object.keys(patch).length) await copy.update(patch).catch(() => {});
+  }
+  return copies;
+}
+
+/**
+ * À appeler quand le MJ décoche "Quête partagée" : efface questGroupId sur
+ * CETTE copie et sur toutes les autres du même groupe, pour que décocher
+ * arrête la synchro immédiatement (pas seulement pour les futurs envois).
+ * Lit le groupId AVANT de l'effacer sur item — sinon les autres copies du
+ * groupe ne seraient plus retrouvables.
+ */
+export async function deactivateQuestSync(item) {
+  const gid = String(item?.system?.questGroupId ?? "").trim();
+  if (!gid) return [];
+
+  const others = findGroupQuestItems(gid, item.uuid);
+  await item.update({ "system.questGroupId": "" }).catch(() => {});
+  for (const other of others) {
+    await other.update({ "system.questGroupId": "", "system.partagee": false }).catch(() => {});
+  }
+  return others;
+}

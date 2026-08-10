@@ -148,56 +148,54 @@
   padding: 14px;
 }
 
-/* ── Éditeurs ProseMirror (récit, notes MJ, description) ───────────────
-   La couleur/fond du texte tapé vient de la règle globale
-   ".rpg-sheet .window-content .editor-content" (theme.css) — sans elle
-   le champ hérite du rendu "page blanche" par défaut de Foundry, ce qui
-   avec notre encre claire (--ink-text) donnait un texte quasi invisible
-   dès qu'on tapait dedans.
+/* ── Grands champs texte (récit, notes MJ, description) ───────────────
+   Ces champs étaient des <prose-mirror> (éditeur riche de Foundry). Ils
+   ont été remplacés par de simples <textarea> après une longue série de
+   bugs impossibles à corriger depuis ce dépôt (plantage systématique
+   "Cannot read properties of null (reading 'setSelection')" avec une pile
+   100% interne à vendor.mjs/foundry.mjs, texte tapé remplacé par
+   l'ancien rendu, puis effacement pur et simple des trois champs). Tout
+   l'historique CSS qui vivait ici — display/flex/overflow forçant la mise
+   en page interne du composant, et les deux régressions "champ minuscule"
+   / "zone de saisie invisible" qui en découlaient — ne s'applique plus :
+   un <textarea> n'a pas de mise en page interne à casser.
 
-   Un forçage `display: block` ici écrasait la mise en page interne de
-   Foundry pour ce composant (menu + zone de saisie +, quand on bascule
-   sur "éditer la source", un textarea superposé) — Foundry empile
-   vraisemblablement ces éléments via flexbox en interne, et notre
-   sélecteur (plus spécifique que le sien) gagnait la bataille de
-   spécificité et cassait cet empilement : la zone de saisie retombait à
-   une hauteur quasi nulle (rapporté : champ minuscule, quasi impossible
-   à cliquer dedans) et le panneau "source" se dessinait par-dessus le
-   reste de la barre d'outils au lieu de prendre sa propre place (boutons
-   de la barre — dont Sauvegarder — masqués derrière). On ne force plus
-   `display` du tout : seule une hauteur minimale généreuse est imposée,
-   en `!important` pour gagner face à un éventuel style inline posé par
-   le composant lui-même, sans toucher à la propriété qui gérait
-   l'agencement interne.
-
-   ⚠️ Retentative avec flex/overflow (pour étirer le champ jusqu'en bas de
-   la fenêtre) : `flex: 1; min-height: 0; overflow-y: auto` posés
-   directement sur <prose-mirror> ont reproduit EXACTEMENT ce même
-   symptôme historique — zone de saisie invisible (seule la barre
-   d'outils restait visible), et en plus les boutons ✕ des objectifs
-   juste en dessous ne répondaient plus au clic (probablement
-   interceptés par une zone du composant devenue plus grande que sa
-   partie visible). Retiré : flex/display de ce composant ne sont plus
-   jamais touchés.
-
-   Suite (demande : que le champ s'adapte au texte tapé, jusqu'au maximum
-   actuel) : min-height ramené à une valeur modeste (le plancher qui
-   évitait la régression historique "champ minuscule") et un max-height +
-   overflow-y ajoutés — SANS toucher flex/display, donc sans le risque
-   déjà rencontré deux fois avec ces deux propriétés-là sur ce composant.
-   L'ancien plafond (360px/320px) devient le nouveau max-height. */
-.rpg-quest-sheet prose-mirror.rpg-quest-editor {
-  min-height: 150px !important;
-  max-height: 360px !important;
+   Le rendu enrichi (@UUID[...] → lien cliquable) n'a jamais dépendu de
+   l'éditeur : il vient de enrichHTML() côté _prepareContext. Le joueur le
+   voit via .rpg-enriched-text ; le MJ, qui édite du texte brut, retrouve
+   ses liens via .rpg-link-row juste sous le champ (rafraîchie en place par
+   _refreshLinkRow, sans re-render). */
+.rpg-quest-sheet textarea.rpg-quest-editor {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  max-height: 360px;
   overflow-y: auto;
   font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
 }
-.rpg-quest-sheet prose-mirror.rpg-quest-editor .editor-content {
-  min-height: 110px !important;
+
+/* Barre de liens sous le champ brut (MJ) : uniquement les @UUID détectés,
+   PAS le texte enrichi complet — le champ juste au-dessus l'affiche déjà,
+   et le dupliquer avait été rapporté comme "double texte". :empty →
+   totalement invisible quand le champ ne contient aucun lien. */
+.rpg-quest-sheet .rpg-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
 }
+.rpg-quest-sheet .rpg-link-row:empty { display: none; }
+
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
   line-height: 1.5;
+  /* Le MJ saisit du texte brut (retours à la ligne compris) et enrichHTML
+     ne convertit pas les \n en <br> — sans pre-wrap, tout le récit
+     s'affichait au joueur en un seul bloc compact. pre-wrap préserve les
+     sauts de ligne ET laisse les liens/HTML s'afficher normalement. */
+  white-space: pre-wrap;
 }
 .rpg-quest-sheet .rpg-enriched-text > *:first-child { margin-top: 0; }
 .rpg-quest-sheet .rpg-enriched-text > *:last-child { margin-bottom: 0; }
@@ -275,6 +273,13 @@
   margin-bottom: 4px;
 }
 .rpg-quest-sheet .etape-objectif-row input[type="text"] { flex: 1; }
+/* Objectif coché : texte en vert (--sage, même token que les boutons de
+   succès) — visible aussi bien côté MJ que côté joueur (la case reste un
+   vrai <input type="checkbox">, seulement "disabled" pour le joueur, donc
+   :checked s'applique dans les deux cas). */
+.rpg-quest-sheet .etape-objectif-row input[type="checkbox"]:checked ~ input[type="text"] {
+  color: var(--sage);
+}
 .rpg-quest-sheet .etape-add-objectif-btn { font-size: 11px; }
 
 .rpg-quest-sheet .quest-etapes-nav {

@@ -2,7 +2,10 @@
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
 import { bindSendToActorsButton, partyCharacters } from "./send-item-dialog.js";
 import { setupItemRefDrop } from "./drop-helper.js";
-import { ensureDistribGroupId, findDistribCopies } from "../rules/quest-group.js";
+import {
+  ensureDistribGroupId, findDistribCopies,
+  propagateQuestUpdate, activateQuestSync, deactivateQuestSync
+} from "../rules/quest-group.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -21,6 +24,27 @@ function asEtapesArray(raw) {
   if (Array.isArray(raw)) return raw;
   if (raw && typeof raw === "object") return Object.values(raw);
   return [];
+}
+
+/**
+ * Extrait les SEULS liens (@UUID[...] déjà transformés en <a.content-link>
+ * par enrichHTML) d'un texte enrichi. Le MJ édite du texte brut dans un
+ * <textarea> : réafficher tout le texte enrichi en dessous ferait doublon
+ * (rapporté : "ça fait double texte"). On ne montre donc qu'une barre
+ * compacte de liens cliquables — la seule chose que le champ brut ne sait
+ * pas rendre.
+ */
+function contentLinksFrom(enrichedHTML) {
+  const html = String(enrichedHTML ?? "").trim();
+  if (!html) return [];
+  try {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html;
+    return Array.from(tpl.content.querySelectorAll("a.content-link")).map(a => a.outerHTML);
+  } catch (e) {
+    console.warn("[RPG] Extraction des liens (quête) :", e);
+    return [];
+  }
 }
 
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -219,6 +243,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     });
 
     this._bindLiveSave(root);
+    if (game.user.isGM) this._bindUuidDropTargets(root);
   }
 
   /**
@@ -231,15 +256,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * re-render en cours de frappe remplace le DOM sous les doigts de
    * l'utilisateur et fasse "disparaître" ce qu'il tape.
    *
-   * <prose-mirror> NE déclenche apparemment ni "change" ni "save" tant que
-   * l'utilisateur n'a pas cliqué sur le bouton Sauvegarder de SA PROPRE
-   * barre d'outils — contrairement à un <input>, qui committe sur simple
-   * blur. Ces deux listeners restent posés en filet de sécurité (au cas
-   * où l'utilisateur clique bien ce bouton), mais _flushProseMirrorFields
-   * (voir plus bas) est le vrai filet : appelé avant toute action et à la
-   * fermeture, il relit .value en direct sur chaque <prose-mirror> — qui
-   * lui reste TOUJOURS à jour même sans évènement — au lieu de dépendre
-   * d'un évènement qui ne vient pas forcément.
+   * Un <textarea> (Récit, Notes MJ, Description — anciennement des
+   * <prose-mirror>, voir _flushRichTextFields) committe sur simple blur
+   * comme un <input>, donc ce seul listener "change" suffit ; le flush
+   * avant chaque action reste le filet pour le cas "je tape puis je
+   * clique un bouton sans jamais quitter le champ".
    */
   _bindLiveSave(root) {
     if (root.dataset.rpgLiveSave) return;
@@ -247,14 +268,38 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     root.addEventListener("change", (ev) => {
       const el = ev.target;
-      if (!el?.matches?.("input, select, textarea, prose-mirror")) return;
+      if (!el?.matches?.("input, select, textarea")) return;
       this._persistField(el);
     });
-    root.addEventListener("save", (ev) => {
-      const el = ev.target;
-      if (el?.tagName !== "PROSE-MIRROR") return;
-      this._persistField(el);
-    });
+  }
+
+  /**
+   * Chemins considérés comme "progression" d'une quête partagée — reflète
+   * exactement la portée documentée par quest-group.js ("étape, statut,
+   * récompenses") : PAS system.partagee/questGroupId/distribGroupId (le
+   * mécanisme de synchro lui-même, géré à part, voir _persistField) ni
+   * system.classeRequise (note MJ privée, jamais vue du joueur, donc sans
+   * intérêt à répliquer).
+   */
+  static QUEST_SYNC_PREFIXES = ["system.etapes", "system.etapeActuelle", "system.statut", "system.recompense", "system.description"];
+
+  _isSyncablePath(path) {
+    return RPGQuestSheetV2.QUEST_SYNC_PREFIXES.some(p => path === p || path.startsWith(`${p}.`));
+  }
+
+  /**
+   * Propage un patch de progression vers toutes les autres copies d'une
+   * quête partagée (no-op si la quête n'a pas de questGroupId, ex. pas
+   * "partagée") — voir quest-group.js. Sans cet appel, cocher un objectif
+   * ou avancer une étape depuis CETTE fiche (le principal point d'édition
+   * d'une quête) ne touchait jamais que this.document : les copies déjà
+   * distribuées aux PJ restaient bloquées sur leur ancienne progression
+   * indéfiniment, quelle que soit "Quête partagée".
+   *
+   */
+  async _syncProgress(patch) {
+    if (!patch || !Object.keys(patch).length) return;
+    await propagateQuestUpdate(this.document, patch);
   }
 
   async _commitField(path, val, fieldLabel) {
@@ -267,44 +312,196 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
   }
 
+  /**
+   * Applique une modification portant sur system.etapes[] en réécrivant le
+   * tableau COMPLET (jamais un chemin pointé indexé — voir la règle
+   * absolue dans _persistField). Couvre aussi bien "…{i}.label" que
+   * "…{i}.objectifs.{j}.text", le tableau imbriqué.
+   */
+  async _persistEtapesField(name, value) {
+    const m = name.match(/^system\.etapes\.(\d+)\.(.+)$/);
+    if (!m) return;
+    const [, idxStr, rest] = m;
+    const idx = Number(idxStr);
+
+    const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+    if (!etapes[idx]) return;
+
+    const objM = rest.match(/^objectifs\.(\d+)\.(text|fait)$/);
+    if (objM) {
+      const [, oIdxStr, field] = objM;
+      const oIdx = Number(oIdxStr);
+      etapes[idx].objectifs = asEtapesArray(etapes[idx].objectifs);
+      if (!etapes[idx].objectifs[oIdx]) return;
+      etapes[idx].objectifs[oIdx][field] = value;
+    } else {
+      etapes[idx][rest] = value;
+    }
+
+    await this._commitField("system.etapes", etapes, name);
+    await this._syncProgress({ "system.etapes": etapes });
+  }
+
+  /** Même règle que _persistEtapesField, pour system.recompense.items[]. */
+  async _persistRewardField(name, value) {
+    const m = name.match(/^system\.recompense\.items\.(\d+)\.(uuid|qty)$/);
+    if (!m) return;
+    const [, idxStr, field] = m;
+    const idx = Number(idxStr);
+
+    const raw = this.document.system?.recompense?.items;
+    const items = foundry.utils.deepClone(Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []));
+    if (!items[idx]) return;
+    items[idx][field] = field === "qty" ? Math.max(1, Number(value ?? 1) || 1) : String(value ?? "").trim();
+
+    await this._commitField("system.recompense.items", items, name);
+    await this._syncProgress({ "system.recompense.items": items });
+  }
+
+  /**
+   * Permet de glisser un PNJ / objet / scène / journal DANS un des grands
+   * champs texte pour y insérer un @UUID[...] au curseur — ce que faisait
+   * l'ancien éditeur riche, et que le placeholder de ces champs promet.
+   *
+   * stopPropagation est indispensable : setupItemRefDrop (plus haut dans
+   * _onRender) pose un drop sur TOUTE la fiche pour ajouter une
+   * récompense. Sans ça, lâcher un objet dans le Récit insérerait le lien
+   * ET l'ajouterait en récompense.
+   */
+  _bindUuidDropTargets(root) {
+    root.querySelectorAll("textarea.rpg-quest-editor").forEach(ta => {
+      if (ta.dataset.rpgUuidDrop) return;
+      ta.dataset.rpgUuidDrop = "1";
+
+      ta.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+      ta.addEventListener("drop", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!game.user.isGM) return;
+
+        let data;
+        try {
+          data = foundry.applications.ux.TextEditor?.implementation?.getDragEventData?.(ev)
+              ?? TextEditor.getDragEventData(ev);
+        } catch (e) {
+          console.warn("[RPG] Insertion @UUID (quête) :", e);
+          return;
+        }
+        const uuid = String(data?.uuid ?? "").trim();
+        if (!uuid) return;
+
+        // Pas de libellé entre accolades : Foundry affiche alors le nom
+        // ACTUEL du document, qui suit automatiquement un renommage.
+        const snippet = `@UUID[${uuid}]`;
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        ta.value = `${ta.value.slice(0, start)}${snippet}${ta.value.slice(end)}`;
+        const caret = start + snippet.length;
+        ta.setSelectionRange?.(caret, caret);
+
+        await this._persistField(ta);
+      });
+    });
+  }
+
+  /**
+   * Rafraîchit la barre de liens sous un <textarea> (Récit, Notes MJ,
+   * Description) : le MJ édite du texte brut depuis l'abandon de l'éditeur
+   * riche, donc ses @UUID[...] ne sont pas cliquables dans le champ. On
+   * n'affiche QUE les liens extraits, pas le texte enrichi complet — le
+   * réafficher intégralement faisait doublon avec le champ juste au-dessus
+   * (rapporté : "ça fait double texte pour le MJ").
+   *
+   * Mis à jour EN PLACE plutôt qu'en re-rendant la fiche — un re-render
+   * pendant l'édition est précisément ce qui a causé les pertes de contenu
+   * historiques de cette fiche. Les liens (a.content-link) n'ont besoin
+   * d'aucun listener de notre part : Foundry en pose un global sur le body.
+   */
+  async _refreshLinkRow(el) {
+    const row = el.closest?.(".rpg-field-wrap")?.querySelector(".rpg-link-row");
+    if (!row) return;
+    const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation ?? foundry.applications.ux.TextEditor;
+    try {
+      const enriched = await TextEditorImpl.enrichHTML(el.value ?? "", { secrets: true, relativeTo: this.document });
+      row.innerHTML = contentLinksFrom(enriched).join(" ");
+    } catch (e) {
+      console.warn("[RPG] Barre de liens (quête) :", e);
+    }
+  }
+
   async _persistField(el) {
     if (!(game.user.isGM || this.isEditable)) return;
     const name = el.getAttribute?.("name");
     if (!name) return;
 
     let value;
-    if (el.tagName === "PROSE-MIRROR") value = el.value ?? "";
-    else if (el.type === "checkbox") value = el.checked;
+    if (el.type === "checkbox") value = el.checked;
     else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
-    else value = el.value ?? "";
+    else {
+      // ⚠️ GARDE-FOU ANTI-EFFACEMENT. Un `?? ""` ici a réellement détruit
+      // le contenu de Récit/Notes MJ/Description d'une quête : les champs
+      // étaient alors des <prose-mirror>, dont la propriété .value peut
+      // valoir undefined/null selon la façon dont l'élément a été
+      // initialisé — et _flushProseMirrorFields, appelé avant CHAQUE
+      // action et à la fermeture, réécrivait donc "" par-dessus le vrai
+      // texte, en boucle. Les champs sont depuis de simples <textarea>
+      // (dont .value est toujours une string, ce qui rend ce cas
+      // théorique), mais la règle reste : ne JAMAIS écrire quand la
+      // lecture n'a pas rendu une string. Une chaîne vide légitime
+      // (l'utilisateur a vidé le champ lui-même) est bien une string et
+      // passe donc toujours.
+      if (typeof el.value !== "string") {
+        console.warn("[RPG] Fiche Quête : lecture non exploitable, écriture ignorée pour ne rien écraser —", name, el.value);
+        return;
+      }
+      value = el.value;
+    }
 
-    // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
-    // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
-    // pour system.etapes.{i}.label qui, lui, persiste correctement) —
-    // Foundry ne fusionne pas ce chemin pointé proprement à cette
-    // profondeur : chaque frappe réduisait le tableau objectifs de
-    // l'étape aux seuls index explicitement écrits, supprimant les
-    // autres objectifs déjà remplis en silence. Symptôme : "+Objectif
-    // efface les objectifs déjà renseignés" persistait même après avoir
-    // éliminé la course de lecture (_awaitPendingFieldSave) — le bug
-    // était dans l'ÉCRITURE elle-même, pas dans l'ordre lecture/écriture.
-    // Fixé en remontant d'un cran : on réécrit l'étape ENTIÈRE
-    // (system.etapes.{i}, un objet complet) — structurellement
-    // identique au cas label, qui fonctionne déjà.
-    const objMatch = name.match(/^system\.etapes\.(\d+)\.objectifs\.(\d+)\.(text|fait)$/);
-    if (objMatch) {
-      const [, eIdx, oIdx, field] = objMatch;
-      const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-      const etape = etapes[Number(eIdx)];
-      if (!etape) return;
-      etape.objectifs = asEtapesArray(etape.objectifs);
-      if (!etape.objectifs[Number(oIdx)]) return;
-      etape.objectifs[Number(oIdx)][field] = value;
-      await this._commitField(`system.etapes.${eIdx}`, etape, name);
+    // ⚠️ RÈGLE ABSOLUE : ne JAMAIS écrire un chemin pointé qui TRAVERSE un
+    // index de tableau ("system.etapes.0.description",
+    // "system.recompense.items.1.qty"...). Foundry développe ce chemin en
+    // {etapes: {0: {...}}} puis fusionne — et mergeObject ne fusionne pas
+    // les tableaux élément par élément, il les REMPLACE en bloc. Résultat
+    // vérifié numériquement : écrire system.etapes.0.description réduit
+    // etapes à {0: {description}} — label, objectifs, notesMJ et TOUTES
+    // les autres étapes sont détruits d'un coup.
+    //
+    // C'est la cause commune de toute la série de pertes de données de
+    // cette fiche (objectifs qui disparaissent, récit/titre vidés, croix
+    // ✕ qui "ne fait rien" — voir _actionRemoveObjectif : elle sortait en
+    // silence sur un objectifs devenu undefined). asEtapesArray() ne
+    // rattrapait que la FORME ({0:...} relu comme tableau), jamais les
+    // clés voisines déjà perdues. Les correctifs précédents (réécrire
+    // l'étape entière à system.etapes.{i}) traversaient encore un index
+    // de tableau : ils sauvaient l'étape écrite et détruisaient les
+    // autres.
+    //
+    // Seule écriture sûre : le tableau ENTIER, en une seule valeur.
+    if (name.startsWith("system.etapes.")) {
+      await this._persistEtapesField(name, value);
+      await this._refreshLinkRow(el);
+      return;
+    }
+    if (name.startsWith("system.recompense.items.")) {
+      await this._persistRewardField(name, value);
       return;
     }
 
     await this._commitField(name, value, name);
+
+    // ── Case "Quête partagée" : c'est ELLE qui crée/efface questGroupId
+    // (voir quest-group.js#activateQuestSync) — sans ce branchement, cocher
+    // la case ne faisait que persister system.partagee=true sans jamais
+    // établir le groupe de synchro que propagateQuestUpdate exige, et les
+    // copies déjà données aux PJ ne rejoignaient jamais le groupe.
+    if (name === "system.partagee") {
+      if (value) await activateQuestSync(this.document);
+      else await deactivateQuestSync(this.document);
+    } else if (this._isSyncablePath(name)) {
+      await this._syncProgress({ [name]: value });
+    }
+
+    if (name === "system.description") await this._refreshLinkRow(el);
 
     // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
     // sont des COPIES de ce champ affichées ailleurs dans le DOM —
@@ -327,22 +524,37 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   }
 
   /**
-   * Relit .value en direct sur CHAQUE <prose-mirror> du DOM et le
-   * committe nous-mêmes — voir _bindLiveSave plus haut pour le pourquoi
-   * (cet élément ne committe apparemment que sur clic explicite de son
-   * propre bouton Sauvegarder, jamais sur simple blur/changement de
-   * focus). Sans ça : un bouton d'action (+Objectif...) qui déclenche un
-   * document.update() réécrivant system.etapes lisait this.document AVANT
-   * que le récit/les notes MJ tapés n'aient jamais été committés nulle
-   * part — l'update repartait donc de l'ANCIENNE valeur (rapporté :
-   * "+Objectif efface le récit de l'étape et notes MJ"). Même chose à la
-   * fermeture de la fenêtre (voir close() plus bas) — rapporté aussi :
-   * "notes MJ et récit disparaissent parfois à la fermeture".
+   * Committe le contenu des grands champs texte (Récit, Notes MJ,
+   * Description) avant qu'une action ne relise this.document.
+   *
+   * Ces champs étaient des <prose-mirror> (éditeur riche de Foundry) :
+   * abandonnés au profit de simples <textarea> après une série de bugs
+   * insolubles depuis ce dépôt — plantage systématique au clic sur le
+   * bouton Sauvegarder de l'éditeur ("Cannot read properties of null
+   * (reading 'setSelection')", pile 100% interne à
+   * vendor.mjs/foundry.mjs), texte tapé qui disparaissait au profit de
+   * l'ancien rendu, puis effacement pur et simple des trois champs. Un
+   * <textarea> n'a aucune de ces mécaniques internes : .value est une
+   * propriété DOM native, toujours une string, toujours à jour, sans
+   * évènement à intercepter ni focus à restaurer.
+   *
+   * Le rendu enrichi (@UUID[...] → lien cliquable) n'est PAS perdu : il
+   * n'a jamais dépendu de l'éditeur, seulement de enrichHTML() dans
+   * _prepareContext — c'est toujours ce que voit le joueur (branche
+   * .rpg-enriched-text). Seul le MJ édite désormais le texte brut.
    */
-  async _flushProseMirrorFields() {
+  async _flushRichTextFields() {
     const root = this.element;
     if (!root) return;
-    for (const el of root.querySelectorAll("prose-mirror[name]")) {
+    for (const el of root.querySelectorAll("textarea.rpg-quest-editor[name]")) {
+      const name = el.getAttribute("name");
+      // N'écrit QUE si la valeur affichée diffère de celle déjà stockée.
+      // Ce flush tourne avant chaque action et à la fermeture, y compris
+      // quand le MJ n'a rien touché : une écriture inutile est au mieux du
+      // bruit, au pire (cf. l'historique de pertes de données de cette
+      // fiche) une occasion de réécrire du vide par-dessus du contenu.
+      const current = foundry.utils.getProperty(this.document, name);
+      if (typeof el.value === "string" && el.value === (current ?? "")) continue;
       await this._persistField(el);
     }
   }
@@ -351,7 +563,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * À appeler avant qu'une action (+Objectif, +Étape, ✕...) ne lise
    * this.document : attend que la dernière sauvegarde de champ démarrée
    * par _bindLiveSave soit bien appliquée (course de lecture), PUIS force
-   * la sauvegarde de tout <prose-mirror> — voir _flushProseMirrorFields —
+   * la sauvegarde des grands champs texte — voir _flushRichTextFields —
    * pour ne jamais lire/écrire une copie de this.document plus ancienne
    * que ce qui est affiché à l'écran.
    */
@@ -359,15 +571,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (this._lastFieldSave) {
       try { await this._lastFieldSave; } catch { /* déjà loggé dans _commitField */ }
     }
-    await this._flushProseMirrorFields();
+    await this._flushRichTextFields();
   }
 
-  /** Sauvegarde tout <prose-mirror> avant fermeture — sinon du texte tapé
-   *  mais jamais committé (voir _flushProseMirrorFields) disparaissait
+  /** Sauvegarde les grands champs texte avant fermeture — sinon du texte
+   *  tapé sans jamais quitter le champ (donc sans "change") disparaissait
    *  silencieusement en fermant la fenêtre. */
   async close(options = {}) {
     this._sizeRO?.disconnect();
-    await this._flushProseMirrorFields();
+    await this._flushRichTextFields();
     return super.close(options);
   }
 
@@ -375,14 +587,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * Étire le champ Description jusqu'en bas de la fenêtre — seulement sur
    * cette page (un seul champ, rien d'autre à partager l'espace avec,
    * contrairement aux pages d'étape où Récit/Objectifs/Notes MJ
-   * coexistent). Les deux tentatives précédentes de faire ça en CSS pur
-   * (flex + min-height:0 posés directement, puis en cascade depuis les
-   * parents, sur <prose-mirror>) ont cassé son agencement interne à
-   * chaque fois — voir l'historique dans item-sheet.css. On mesure donc
-   * l'espace RÉELLEMENT disponible en JS et on fixe min-height/max-height
-   * (les deux seules propriétés déjà confirmées sans risque sur ce
-   * composant) à cette valeur calculée, sans jamais toucher flex/display/
-   * overflow de l'élément lui-même au-delà de ce qui marche déjà.
+   * coexistent). On mesure l'espace RÉELLEMENT disponible en JS et on fixe
+   * min-height/max-height à cette valeur calculée.
    */
   _sizeDescriptionEditor() {
     const root = this.element;
@@ -390,12 +596,16 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const scroller = root.querySelector(".quest-page-content");
     const tab = root.querySelector('.tab[data-tab="description"]');
     if (!scroller || !tab?.classList.contains("active")) return;
-    const target = tab.querySelector("prose-mirror.rpg-quest-editor, .rpg-enriched-text");
+    const target = tab.querySelector("textarea.rpg-quest-editor, .rpg-enriched-text");
     if (!target) return;
 
     const bottom = scroller.getBoundingClientRect().bottom;
     const top = target.getBoundingClientRect().top;
-    const available = bottom - top - 14; // 14px = marge basse de .quest-page-content
+    // La barre de liens (@UUID cliquables) vit sous le champ : lui laisser
+    // sa place, sinon le champ prend toute la hauteur et la pousse hors vue.
+    const preview = tab.querySelector(".rpg-link-row");
+    const previewH = preview && preview.offsetHeight ? preview.offsetHeight + 6 : 0;
+    const available = bottom - top - previewH - 14; // 14px = marge basse de .quest-page-content
     const h = Math.max(150, Math.floor(available));
     target.style.setProperty("min-height", `${h}px`, "important");
     target.style.setProperty("max-height", `${h}px`, "important");
@@ -409,6 +619,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: item.uuid, qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   async _prepareContext(options) {
@@ -428,16 +639,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.etapes = await Promise.all(ctx.system.etapes.map(async (e, i) => {
       const description = e?.description ?? "";
       const notesMJ = e?.notesMJ ?? "";
+      const descriptionHTML = await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item });
+      const notesMJHTML = await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item });
       return {
         label: e?.label ?? "",
         // Titre de secours pour la liste de pages seulement — ne remplace
         // jamais la vraie valeur (vide) de l'input éditable.
         navLabel: (e?.label ?? "").trim() || `Étape ${i + 1}`,
         description,
-        descriptionHTML: await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item }),
+        descriptionHTML,
+        // Vue MJ : seulement les liens, pas le texte enrichi complet (le
+        // champ brut juste au-dessus l'affiche déjà — voir contentLinksFrom).
+        descriptionLinks: contentLinksFrom(descriptionHTML),
         notesMJ,
-        notesMJHTML: await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item }),
-        objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
+        notesMJHTML,
+        notesMJLinks: contentLinksFrom(notesMJHTML),
+        // asEtapesArray (et pas Array.isArray) : réaffiche les objectifs
+        // d'une quête déjà abîmée, dont objectifs a pu être stocké sous la
+        // forme {0:…,1:…} par une écriture pointée (voir _persistField).
+        objectifs: asEtapesArray(e?.objectifs),
         etapeNum: i + 1
       };
     }));
@@ -451,7 +671,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       ctx.system.etapes.length
     ));
     ctx.system.recompense = ctx.system.recompense ?? { xp: 0, items: [] };
-    ctx.system.recompense.items = Array.isArray(ctx.system.recompense.items) ? ctx.system.recompense.items : [];
+    ctx.system.recompense.items = asEtapesArray(ctx.system.recompense.items);
 
     // Nom et image toujours résolus depuis l'objet lui-même (jamais un
     // instantané figé) : si le MJ renomme l'objet, la récompense suit sans
@@ -474,6 +694,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.statut = String(ctx.system.statut ?? "active");
     ctx.system.description = String(ctx.system.description ?? "");
     ctx.descriptionHTML = await TextEditorImpl.enrichHTML(ctx.system.description, { secrets: game.user.isGM, relativeTo: item });
+    ctx.descriptionLinks = contentLinksFrom(ctx.descriptionHTML);
 
     ctx.calc = {
       etapeActuelleNum: ctx.system.etapes.length ? ctx.system.etapeActuelle + 1 : 0,
@@ -555,6 +776,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
 
     await this.document.update(expanded, { render: true });
+
+    const patch = {};
+    for (const key of ["etapes", "statut", "recompense", "description"]) {
+      if (key in (expanded.system ?? {})) patch[`system.${key}`] = expanded.system[key];
+    }
+    await this._syncProgress(patch);
   }
 
   async _actionAddEtape(event) {
@@ -566,6 +793,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // de le laisser sur "Aperçu" en devinant où elle a atterri.
     this._pendingTab = `etape-${list.length - 1}`;
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionRemoveEtape(event) {
@@ -588,7 +816,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // La page retirée n'existe plus : retour à "Aperçu" plutôt que de
     // laisser Tabs pointer vers un data-tab qui n'a plus de panneau.
     this._pendingTab = "apercu";
-    await this.document.update({ "system.etapes": list, "system.etapeActuelle": etapeActuelle }, { render: true });
+    const patch = { "system.etapes": list, "system.etapeActuelle": etapeActuelle };
+    await this.document.update(patch, { render: true });
+    await this._syncProgress(patch);
   }
 
   async _actionShiftEtape(event, delta) {
@@ -610,6 +840,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     etapeActuelle = Math.max(0, Math.min(etapes.length, etapeActuelle + delta));
     this._pendingTab = etapeActuelle < etapes.length ? `etape-${etapeActuelle}` : "apercu";
     await this.document.update({ "system.etapeActuelle": etapeActuelle }, { render: true });
+    await this._syncProgress({ "system.etapeActuelle": etapeActuelle });
   }
 
   async _actionAddObjectif(event) {
@@ -619,9 +850,13 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]) return;
-    list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
+    // asEtapesArray et pas Array.isArray : un objectifs déjà stocké sous la
+    // forme {0:…,1:…} (séquelle des écritures pointées, voir _persistField)
+    // serait sinon jeté et remplacé par [], perdant les objectifs existants.
+    list[etapeIdx].objectifs = asEtapesArray(list[etapeIdx].objectifs);
     list[etapeIdx].objectifs.push({ text: "", fait: false });
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionRemoveObjectif(event) {
@@ -632,9 +867,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
     await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-    if (!list[etapeIdx]?.objectifs) return;
+    if (!list[etapeIdx]) return;
+    // Ne sort PLUS en silence quand objectifs est absent/mal formé : c'est
+    // exactement ce qui faisait que la croix ✕ "ne faisait rien" une fois
+    // le tableau abîmé par une écriture pointée (voir _persistField).
+    list[etapeIdx].objectifs = asEtapesArray(list[etapeIdx].objectifs);
+    if (!list[etapeIdx].objectifs.length) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
+    await this._syncProgress({ "system.etapes": list });
   }
 
   async _actionAddRewardItem(event) {
@@ -643,6 +884,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.push({ uuid: "", qty: 1 });
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   async _actionRemoveRewardItem(event) {
@@ -653,6 +895,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const list = foundry.utils.deepClone(this.document.system?.recompense?.items ?? []);
     list.splice(idx, 1);
     await this.document.update({ "system.recompense.items": list }, { render: true });
+    await this._syncProgress({ "system.recompense.items": list });
   }
 
   /**

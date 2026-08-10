@@ -101,6 +101,11 @@ export async function promptSendItemToActors(item) {
   const targets = selectedIds.map(id => game.actors.get(id)).filter(Boolean);
   if (!targets.length) return;
 
+  // Pas d'étape de synchro à faire ici : item-link.js assortit les objets
+  // par empreinte (type + source de compendium/nom) à chaque modification,
+  // pas au moment de l'envoi — la copie créée plus bas sera trouvée toute
+  // seule dès la prochaine édition de la source, sans rien faire de plus.
+
   const baseData = item.toObject();
   delete baseData._id;
 
@@ -110,14 +115,22 @@ export async function promptSendItemToActors(item) {
     // fiche de la quête source relit pour afficher la liste des
     // destinataires. Persistée sur l'ITEM SOURCE (pas seulement la copie)
     // pour qu'un second envoi ultérieur retrouve le même identifiant.
-    const { ensureDistribGroupId } = await import("../rules/quest-group.js");
+    const { ensureDistribGroupId, ensureQuestGroupId } = await import("../rules/quest-group.js");
     const distribId = await ensureDistribGroupId(item);
     baseData.system = baseData.system ?? {};
     if (distribId) baseData.system.distribGroupId = distribId;
 
     if (targets.length > 1) {
+      // ensureQuestGroupId persiste questGroupId sur L'ITEM SOURCE (pas
+      // seulement baseData, la copie en cours de préparation) — même
+      // raison que distribGroupId ci-dessus : sans ça, un envoi ultérieur
+      // à un seul PJ (ou une case cochée dans la liste des destinataires)
+      // relirait un questGroupId encore vide sur la source et créerait une
+      // copie hors du groupe de synchro déjà utilisé par ce premier envoi.
+      if (!item.system?.partagee) await item.update({ "system.partagee": true });
+      const gid = await ensureQuestGroupId(item);
       baseData.system.partagee = true;
-      baseData.system.questGroupId = baseData.system.questGroupId || foundry.utils.randomID(12);
+      if (gid) baseData.system.questGroupId = gid;
     }
   }
 
@@ -158,5 +171,52 @@ export function bindSendToActorsButton(root, item, options = {}) {
       await promptSendItemToActors(item);
     }
     catch (e) { console.error("[RPG] Envoyer à un PJ :", e); ui.notifications?.error?.("Erreur — voir la console."); }
+  });
+}
+
+/**
+ * Branche la case [data-action="toggleLinkSync"] d'une fiche d'objet (MJ
+ * uniquement) — voir item-link.js. La synchro est active PAR DÉFAUT pour
+ * tout exemplaire du même type+empreinte (pas besoin de cocher quoi que
+ * ce soit) ; cette case ne sert donc qu'à SORTIR cet exemplaire précis du
+ * groupe (le décocher), ou à annuler un désistement antérieur (le
+ * recocher). Volontairement PAS un <input name="..."> soumis par le
+ * formulaire normal de la fiche, pour rester un geste explicite et
+ * immédiat plutôt qu'un champ parmi d'autres.
+ */
+export function bindLinkSyncCheckbox(root, item) {
+  const input = root?.querySelector('[data-action="toggleLinkSync"]');
+  if (!input || input.dataset.rpgLinkSyncBound) return;
+  input.dataset.rpgLinkSyncBound = "1";
+  input.addEventListener("change", async (ev) => {
+    ev.preventDefault();
+    // ⚠️ Ces fiches (arme/armure/générique/recette) tournent en
+    // submitOnChange:true : SANS stopPropagation, ce même évènement
+    // "change" continue de remonter jusqu'au listener délégué de
+    // DocumentSheetV2 sur le <form>, qui déclenche EN PARALLÈLE sa propre
+    // resoumission complète + this.render({force:true}) — deux cycles
+    // update+render concurrents sur le même document, l'un écrasant l'état
+    // DOM de l'autre en plein rendu. Symptôme rapporté : cocher la case
+    // rendait la fiche définitivement impossible à rouvrir. Le champ n'a
+    // de toute façon pas de "name" (volontairement, voir plus haut) donc
+    // rien ne serait perdu côté formulaire à stopper la propagation ici.
+    ev.stopPropagation();
+    if (!game.user.isGM) return;
+    const checked = !!input.checked;
+    try {
+      const { setItemSyncOptOut } = await import("../rules/item-link.js");
+      const others = await setItemSyncOptOut(item, !checked);
+      if (checked) {
+        ui.notifications?.info?.(others.length
+          ? `Synchronisé avec ${others.length} copie(s) du même objet.`
+          : "Synchronisé (aucune autre copie détectée pour l'instant).");
+      } else {
+        ui.notifications?.info?.("Cet exemplaire ne suit plus les autres copies (et elles ne le suivent plus).");
+      }
+    } catch (e) {
+      console.error("[RPG] Bascule synchro objet lié :", e);
+      ui.notifications?.error?.("Erreur — voir la console.");
+      input.checked = !checked;
+    }
   });
 }

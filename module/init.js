@@ -66,6 +66,7 @@ import { initWeatherHUD, initBiomeHUD } from "./rules/weather-library.js";
 import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
+import * as ItemLink from "./rules/item-link.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
 import * as Skills from "./rules/skills.js";
@@ -1006,6 +1007,10 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.questGroup : synchronisation des quêtes partagées
     game.rpg.questGroup = QuestGroup;
+
+    // ✅ game.rpg.itemLink : synchronisation opt-in armes/armures/sorts/
+    // consommables/recettes/loot déjà distribués (contrepartie de questGroup)
+    game.rpg.itemLink = ItemLink;
 
     // ✅ game.rpg.combatState : K.O., fuite, fin de combat
     game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };
@@ -1972,6 +1977,12 @@ Hooks.once("init", async () => {
 
   // Codex : les joueurs ne voient dans les compendiums que ce qu'ils ont eu
   try { installCodex(); } catch (e) { console.warn("[RPG] codex:", e); }
+
+  // Synchro d'objets liés (armes/armures/sorts/consommables/recettes/loot) :
+  // voir rules/item-link.js. Opt-in par objet (case "🔗 Synchro" sur la
+  // fiche), contrepartie de quest-group.js pour tout ce qui n'est pas une
+  // quête.
+  try { ItemLink.installItemLinkSync(); } catch (e) { console.warn("[RPG] synchro objets liés:", e); }
 
   // ---------------------------
   // Génération automatique : token monstre
