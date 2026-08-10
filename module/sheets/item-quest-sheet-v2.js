@@ -222,6 +222,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     });
 
     this._bindLiveSave(root);
+    if (game.user.isGM) this._bindUuidDropTargets(root);
   }
 
   /**
@@ -336,6 +337,74 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this._syncProgress({ "system.recompense.items": items });
   }
 
+  /**
+   * Permet de glisser un PNJ / objet / scène / journal DANS un des grands
+   * champs texte pour y insérer un @UUID[...] au curseur — ce que faisait
+   * l'ancien éditeur riche, et que le placeholder de ces champs promet.
+   *
+   * stopPropagation est indispensable : setupItemRefDrop (plus haut dans
+   * _onRender) pose un drop sur TOUTE la fiche pour ajouter une
+   * récompense. Sans ça, lâcher un objet dans le Récit insérerait le lien
+   * ET l'ajouterait en récompense.
+   */
+  _bindUuidDropTargets(root) {
+    root.querySelectorAll("textarea.rpg-quest-editor").forEach(ta => {
+      if (ta.dataset.rpgUuidDrop) return;
+      ta.dataset.rpgUuidDrop = "1";
+
+      ta.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+      ta.addEventListener("drop", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!game.user.isGM) return;
+
+        let data;
+        try {
+          data = foundry.applications.ux.TextEditor?.implementation?.getDragEventData?.(ev)
+              ?? TextEditor.getDragEventData(ev);
+        } catch (e) {
+          console.warn("[RPG] Insertion @UUID (quête) :", e);
+          return;
+        }
+        const uuid = String(data?.uuid ?? "").trim();
+        if (!uuid) return;
+
+        // Pas de libellé entre accolades : Foundry affiche alors le nom
+        // ACTUEL du document, qui suit automatiquement un renommage.
+        const snippet = `@UUID[${uuid}]`;
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        ta.value = `${ta.value.slice(0, start)}${snippet}${ta.value.slice(end)}`;
+        const caret = start + snippet.length;
+        ta.setSelectionRange?.(caret, caret);
+
+        await this._persistField(ta);
+      });
+    });
+  }
+
+  /**
+   * Rafraîchit l'aperçu enrichi placé sous un <textarea> (Récit, Notes MJ,
+   * Description) : c'est lui qui rend les @UUID[...] cliquables pour le MJ,
+   * qui n'édite plus que du texte brut depuis l'abandon de l'éditeur riche
+   * (voir _flushRichTextFields). Mis à jour EN PLACE plutôt qu'en
+   * re-rendant la fiche — un re-render pendant l'édition est précisément
+   * ce qui a causé les pertes de contenu historiques de cette fiche.
+   *
+   * Les liens produits (a.content-link) n'ont besoin d'aucun listener de
+   * notre part : Foundry en pose un global, délégué au body.
+   */
+  async _refreshEnrichedPreview(el) {
+    const preview = el.closest?.(".rpg-field-wrap")?.querySelector(".rpg-enriched-preview");
+    if (!preview) return;
+    const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation ?? foundry.applications.ux.TextEditor;
+    try {
+      preview.innerHTML = await TextEditorImpl.enrichHTML(el.value ?? "", { secrets: true, relativeTo: this.document });
+    } catch (e) {
+      console.warn("[RPG] Aperçu enrichi (quête) :", e);
+    }
+  }
+
   async _persistField(el) {
     if (!(game.user.isGM || this.isEditable)) return;
     const name = el.getAttribute?.("name");
@@ -386,6 +455,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // Seule écriture sûre : le tableau ENTIER, en une seule valeur.
     if (name.startsWith("system.etapes.")) {
       await this._persistEtapesField(name, value);
+      await this._refreshEnrichedPreview(el);
       return;
     }
     if (name.startsWith("system.recompense.items.")) {
@@ -406,6 +476,8 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     } else if (this._isSyncablePath(name)) {
       await this._syncProgress({ [name]: value });
     }
+
+    if (name === "system.description") await this._refreshEnrichedPreview(el);
 
     // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
     // sont des COPIES de ce champ affichées ailleurs dans le DOM —
@@ -505,7 +577,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     const bottom = scroller.getBoundingClientRect().bottom;
     const top = target.getBoundingClientRect().top;
-    const available = bottom - top - 14; // 14px = marge basse de .quest-page-content
+    // L'aperçu enrichi (@UUID cliquables) vit sous le champ : lui laisser
+    // sa place, sinon le champ prend toute la hauteur et le pousse hors vue.
+    const preview = tab.querySelector(".rpg-enriched-preview");
+    const previewH = preview && preview.offsetHeight ? preview.offsetHeight + 6 : 0;
+    const available = bottom - top - previewH - 14; // 14px = marge basse de .quest-page-content
     const h = Math.max(150, Math.floor(available));
     target.style.setProperty("min-height", `${h}px`, "important");
     target.style.setProperty("max-height", `${h}px`, "important");

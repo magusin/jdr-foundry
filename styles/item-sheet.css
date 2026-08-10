@@ -161,8 +161,10 @@
    un <textarea> n'a pas de mise en page interne à casser.
 
    Le rendu enrichi (@UUID[...] → lien cliquable) n'a jamais dépendu de
-   l'éditeur : il vient de enrichHTML() côté _prepareContext et reste ce
-   que voit le joueur (.rpg-enriched-text ci-dessous). */
+   l'éditeur : il vient de enrichHTML() côté _prepareContext. Le joueur le
+   voit via .rpg-enriched-text ; le MJ, qui édite du texte brut, le voit
+   via .rpg-enriched-preview juste sous le champ (rafraîchi en place par
+   _refreshEnrichedPreview, sans re-render). */
 .rpg-quest-sheet textarea.rpg-quest-editor {
   display: block;
   width: 100%;
@@ -173,6 +175,23 @@
   line-height: 1.5;
   resize: vertical;
 }
+
+/* Aperçu cliquable sous le champ brut (MJ). :empty → invisible tant que le
+   champ est vide, y compris après une mise à jour en place. */
+.rpg-quest-sheet .rpg-enriched-preview {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--brass);
+  border-radius: 0 4px 4px 0;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.rpg-quest-sheet .rpg-enriched-preview:empty { display: none; }
+.rpg-quest-sheet .rpg-enriched-preview > *:first-child { margin-top: 0; }
+.rpg-quest-sheet .rpg-enriched-preview > *:last-child { margin-bottom: 0; }
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
   line-height: 1.5;
