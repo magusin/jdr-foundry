@@ -290,6 +290,52 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
   }
 
+  /**
+   * Applique une modification portant sur system.etapes[] en réécrivant le
+   * tableau COMPLET (jamais un chemin pointé indexé — voir la règle
+   * absolue dans _persistField). Couvre aussi bien "…{i}.label" que
+   * "…{i}.objectifs.{j}.text", le tableau imbriqué.
+   */
+  async _persistEtapesField(name, value) {
+    const m = name.match(/^system\.etapes\.(\d+)\.(.+)$/);
+    if (!m) return;
+    const [, idxStr, rest] = m;
+    const idx = Number(idxStr);
+
+    const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
+    if (!etapes[idx]) return;
+
+    const objM = rest.match(/^objectifs\.(\d+)\.(text|fait)$/);
+    if (objM) {
+      const [, oIdxStr, field] = objM;
+      const oIdx = Number(oIdxStr);
+      etapes[idx].objectifs = asEtapesArray(etapes[idx].objectifs);
+      if (!etapes[idx].objectifs[oIdx]) return;
+      etapes[idx].objectifs[oIdx][field] = value;
+    } else {
+      etapes[idx][rest] = value;
+    }
+
+    await this._commitField("system.etapes", etapes, name);
+    await this._syncProgress({ "system.etapes": etapes });
+  }
+
+  /** Même règle que _persistEtapesField, pour system.recompense.items[]. */
+  async _persistRewardField(name, value) {
+    const m = name.match(/^system\.recompense\.items\.(\d+)\.(uuid|qty)$/);
+    if (!m) return;
+    const [, idxStr, field] = m;
+    const idx = Number(idxStr);
+
+    const raw = this.document.system?.recompense?.items;
+    const items = foundry.utils.deepClone(Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []));
+    if (!items[idx]) return;
+    items[idx][field] = field === "qty" ? Math.max(1, Number(value ?? 1) || 1) : String(value ?? "").trim();
+
+    await this._commitField("system.recompense.items", items, name);
+    await this._syncProgress({ "system.recompense.items": items });
+  }
+
   async _persistField(el) {
     if (!(game.user.isGM || this.isEditable)) return;
     const name = el.getAttribute?.("name");
@@ -318,31 +364,32 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       value = el.value;
     }
 
-    // system.etapes.{i}.objectifs.{j}.(text|fait) est un DEUXIÈME niveau
-    // de tableau imbriqué (etapes[i].objectifs[j], contre un seul niveau
-    // pour system.etapes.{i}.label qui, lui, persiste correctement) —
-    // Foundry ne fusionne pas ce chemin pointé proprement à cette
-    // profondeur : chaque frappe réduisait le tableau objectifs de
-    // l'étape aux seuls index explicitement écrits, supprimant les
-    // autres objectifs déjà remplis en silence. Symptôme : "+Objectif
-    // efface les objectifs déjà renseignés" persistait même après avoir
-    // éliminé la course de lecture (_awaitPendingFieldSave) — le bug
-    // était dans l'ÉCRITURE elle-même, pas dans l'ordre lecture/écriture.
-    // Fixé en remontant d'un cran : on réécrit l'étape ENTIÈRE
-    // (system.etapes.{i}, un objet complet) — structurellement
-    // identique au cas label, qui fonctionne déjà.
-    const objMatch = name.match(/^system\.etapes\.(\d+)\.objectifs\.(\d+)\.(text|fait)$/);
-    if (objMatch) {
-      const [, eIdx, oIdx, field] = objMatch;
-      const etapes = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-      const etape = etapes[Number(eIdx)];
-      if (!etape) return;
-      etape.objectifs = asEtapesArray(etape.objectifs);
-      if (!etape.objectifs[Number(oIdx)]) return;
-      etape.objectifs[Number(oIdx)][field] = value;
-      const path = `system.etapes.${eIdx}`;
-      await this._commitField(path, etape, name);
-      await this._syncProgress({ [path]: etape });
+    // ⚠️ RÈGLE ABSOLUE : ne JAMAIS écrire un chemin pointé qui TRAVERSE un
+    // index de tableau ("system.etapes.0.description",
+    // "system.recompense.items.1.qty"...). Foundry développe ce chemin en
+    // {etapes: {0: {...}}} puis fusionne — et mergeObject ne fusionne pas
+    // les tableaux élément par élément, il les REMPLACE en bloc. Résultat
+    // vérifié numériquement : écrire system.etapes.0.description réduit
+    // etapes à {0: {description}} — label, objectifs, notesMJ et TOUTES
+    // les autres étapes sont détruits d'un coup.
+    //
+    // C'est la cause commune de toute la série de pertes de données de
+    // cette fiche (objectifs qui disparaissent, récit/titre vidés, croix
+    // ✕ qui "ne fait rien" — voir _actionRemoveObjectif : elle sortait en
+    // silence sur un objectifs devenu undefined). asEtapesArray() ne
+    // rattrapait que la FORME ({0:...} relu comme tableau), jamais les
+    // clés voisines déjà perdues. Les correctifs précédents (réécrire
+    // l'étape entière à system.etapes.{i}) traversaient encore un index
+    // de tableau : ils sauvaient l'étape écrite et détruisaient les
+    // autres.
+    //
+    // Seule écriture sûre : le tableau ENTIER, en une seule valeur.
+    if (name.startsWith("system.etapes.")) {
+      await this._persistEtapesField(name, value);
+      return;
+    }
+    if (name.startsWith("system.recompense.items.")) {
+      await this._persistRewardField(name, value);
       return;
     }
 
@@ -404,6 +451,14 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     const root = this.element;
     if (!root) return;
     for (const el of root.querySelectorAll("textarea.rpg-quest-editor[name]")) {
+      const name = el.getAttribute("name");
+      // N'écrit QUE si la valeur affichée diffère de celle déjà stockée.
+      // Ce flush tourne avant chaque action et à la fermeture, y compris
+      // quand le MJ n'a rien touché : une écriture inutile est au mieux du
+      // bruit, au pire (cf. l'historique de pertes de données de cette
+      // fiche) une occasion de réécrire du vide par-dessus du contenu.
+      const current = foundry.utils.getProperty(this.document, name);
+      if (typeof el.value === "string" && el.value === (current ?? "")) continue;
       await this._persistField(el);
     }
   }
@@ -493,7 +548,10 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         descriptionHTML: await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item }),
         notesMJ,
         notesMJHTML: await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item }),
-        objectifs: Array.isArray(e?.objectifs) ? e.objectifs : [],
+        // asEtapesArray (et pas Array.isArray) : réaffiche les objectifs
+        // d'une quête déjà abîmée, dont objectifs a pu être stocké sous la
+        // forme {0:…,1:…} par une écriture pointée (voir _persistField).
+        objectifs: asEtapesArray(e?.objectifs),
         etapeNum: i + 1
       };
     }));
@@ -507,7 +565,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       ctx.system.etapes.length
     ));
     ctx.system.recompense = ctx.system.recompense ?? { xp: 0, items: [] };
-    ctx.system.recompense.items = Array.isArray(ctx.system.recompense.items) ? ctx.system.recompense.items : [];
+    ctx.system.recompense.items = asEtapesArray(ctx.system.recompense.items);
 
     // Nom et image toujours résolus depuis l'objet lui-même (jamais un
     // instantané figé) : si le MJ renomme l'objet, la récompense suit sans
@@ -685,7 +743,10 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
     if (!list[etapeIdx]) return;
-    list[etapeIdx].objectifs = Array.isArray(list[etapeIdx].objectifs) ? list[etapeIdx].objectifs : [];
+    // asEtapesArray et pas Array.isArray : un objectifs déjà stocké sous la
+    // forme {0:…,1:…} (séquelle des écritures pointées, voir _persistField)
+    // serait sinon jeté et remplacé par [], perdant les objectifs existants.
+    list[etapeIdx].objectifs = asEtapesArray(list[etapeIdx].objectifs);
     list[etapeIdx].objectifs.push({ text: "", fait: false });
     await this.document.update({ "system.etapes": list }, { render: true });
     await this._syncProgress({ "system.etapes": list });
@@ -699,7 +760,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (!Number.isFinite(etapeIdx) || !Number.isFinite(objIdx)) return;
     await this._awaitPendingFieldSave();
     const list = foundry.utils.deepClone(asEtapesArray(this.document.system?.etapes));
-    if (!list[etapeIdx]?.objectifs) return;
+    if (!list[etapeIdx]) return;
+    // Ne sort PLUS en silence quand objectifs est absent/mal formé : c'est
+    // exactement ce qui faisait que la croix ✕ "ne faisait rien" une fois
+    // le tableau abîmé par une écriture pointée (voir _persistField).
+    list[etapeIdx].objectifs = asEtapesArray(list[etapeIdx].objectifs);
+    if (!list[etapeIdx].objectifs.length) return;
     list[etapeIdx].objectifs.splice(objIdx, 1);
     await this.document.update({ "system.etapes": list }, { render: true });
     await this._syncProgress({ "system.etapes": list });
