@@ -46,7 +46,7 @@ export function applySheetViewMode(root, { isGM = false } = {}) {
  * automatiquement par le hook renderDialogV2 global (voir init.js) — pas
  * besoin d'appeler applyUiTheme() ici.
  */
-function openImageLightbox(src, title) {
+export function openImageLightbox(src, title) {
   const DialogV2 = foundry.applications?.api?.DialogV2;
   if (!DialogV2 || !src) return;
   DialogV2.wait({

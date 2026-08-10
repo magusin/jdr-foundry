@@ -59,6 +59,58 @@ export function normalizeState(st) {
   return out;
 }
 
+/**
+ * Complète chaque état actif avec son résumé lisible (« Force -2 • Dégâts/tour 3 »)
+ * et ses drapeaux buff/affliction. Muté sur place, comme l'attend le template.
+ *
+ * Extrait de _prepareContext pour être réutilisable par la vue PNJ, qui
+ * n'expose QUE les états (aucune caractéristique) et doit néanmoins les
+ * décrire exactement comme la fiche complète.
+ */
+export function decorateStates(states) {
+  for (const e of states ?? []) {
+    const parts = [];
+
+    const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
+    if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
+    else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
+
+    const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
+    if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
+    else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
+
+    const mods = e?.mods ?? {};
+    const modsTxt = Object.entries(mods)
+      .map(([k, v]) => {
+        const name = LABELS[k] ?? k;
+        const flat = Number(v?.flat ?? 0) || 0;
+        const pct = Number(v?.pct ?? 0) || 0;
+        const a = flat ? `${flat > 0 ? "+" : ""}${flat}` : "";
+        const b = pct ? `${pct > 0 ? "+" : ""}${pct}%` : "";
+        const t = [a, b].filter(Boolean).join(" ");
+        return t ? `${name} ${t}` : "";
+      })
+      .filter(Boolean)
+      .join(" • ");
+
+    if (modsTxt) parts.push(modsTxt);
+
+    e.summary = parts.join(" • ");
+
+    // tags buff/debuff
+    let hasPlus = false, hasMinus = false;
+    for (const v of Object.values(mods)) {
+      const flat = Number(v?.flat ?? 0) || 0;
+      const pct = Number(v?.pct ?? 0) || 0;
+      if (flat > 0 || pct > 0) hasPlus = true;
+      if (flat < 0 || pct < 0) hasMinus = true;
+    }
+    e.isBeneficial = hasPlus && !hasMinus;
+    e.isHarmful = hasMinus && !hasPlus;
+  }
+  return states;
+}
+
 export function ensureStateDialogCSS() {
   if (document.getElementById("rpg-state-dialog-css")) return;
 
@@ -170,7 +222,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -223,11 +275,109 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   /* -------------------------------------------- */
+  /* Vue PNJ                                      */
+  /* -------------------------------------------- */
+
+  /**
+   * Un joueur qui ouvre la fiche d'un personnage qui n'est pas le sien (lien
+   * @UUID dans une quête, un journal, le chat…) ne doit voir qu'une « carte de
+   * PNJ » : illustration en grand, nom, description et états qui l'affectent —
+   * jamais ses caractéristiques, son inventaire ni ses sorts.
+   *
+   * `system.pnjView` laisse le MJ trancher au cas par cas :
+   *   - "auto"    (défaut) : c'est un PNJ si aucun joueur ne le possède
+   *                          (`hasPlayerOwner`), ce qui est vrai de tous les
+   *                          PNJ et faux de tous les personnages joueurs, sans
+   *                          que le MJ ait à cocher quoi que ce soit ;
+   *   - "always"  : carte PNJ même si un joueur le possède (familier, mercenaire
+   *                 confié à un joueur dont on veut cacher la fiche aux autres) ;
+   *   - "never"   : fiche complète comme avant (PJ pas encore attribué,
+   *                 groupe qui partage ses feuilles).
+   * Le MJ et le propriétaire gardent TOUJOURS la fiche complète.
+   */
+  static isNpcViewFor(doc) {
+    if (!doc || game.user.isGM || doc.isOwner) return false;
+    const mode = String(doc.system?.pnjView ?? "auto");
+    if (mode === "never") return false;
+    if (mode === "always") return true;
+    return !doc.hasPlayerOwner;
+  }
+
+  _isNpcView() {
+    return RPGCharacterSheetV2.isNpcViewFor(this.document);
+  }
+
+  /**
+   * La carte PNJ n'a pas de grille de stats à caser : la fenêtre large de la
+   * fiche complète la laisserait flotter au milieu du vide. Décidé ici plutôt
+   * que dans DEFAULT_OPTIONS, qui est statique et partagé par toutes les fiches.
+   */
+  _initializeApplicationOptions(options) {
+    const opts = super._initializeApplicationOptions(options);
+    try {
+      if (RPGCharacterSheetV2.isNpcViewFor(options?.document)) {
+        opts.position = { ...(opts.position ?? {}), width: 620, height: 780 };
+      }
+    } catch (e) {
+      console.warn("[RPG] Vue PNJ — dimensionnement de la fenêtre :", e);
+    }
+    return opts;
+  }
+
+  /**
+   * Contexte minimal de la carte PNJ. On ne se contente pas de masquer les
+   * sections dans le template : rien de sensible n'est même mis dans le
+   * contexte de rendu (même principe que la récompense d'une quête, cf.
+   * item-quest-sheet-v2.js).
+   */
+  async _prepareNpcContext(ctx) {
+    const actor = this.document;
+    const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation ?? foundry.applications.ux.TextEditor;
+
+    let descriptionHTML = "";
+    try {
+      descriptionHTML = await TextEditorImpl.enrichHTML(String(actor.system?.description ?? ""), {
+        secrets: false,
+        relativeTo: actor
+      });
+    } catch (e) {
+      console.warn("[RPG] Vue PNJ — enrichissement de la description :", e);
+    }
+
+    const states = Array.isArray(actor.system?.etatsActifs)
+      ? foundry.utils.deepClone(actor.system.etatsActifs)
+      : [];
+    decorateStates(states);
+
+    // Aucune donnée de fiche ne doit rester dans le contexte de rendu.
+    delete ctx.source;
+    delete ctx.fields;
+    ctx.system = {};
+    ctx.items = {};
+
+    ctx.actor = actor;
+    ctx.flags = {
+      isGM: false, isOwner: false, limitedView: true, readOnly: true,
+      canEditImg: false, npcView: true
+    };
+    ctx.npc = {
+      name: actor.name,
+      img: actor.img,
+      descriptionHTML,
+      hasDescription: !!String(actor.system?.description ?? "").trim(),
+      states
+    };
+    return ctx;
+  }
+
+  /* -------------------------------------------- */
   /* Context                                     */
   /* -------------------------------------------- */
 
   async _prepareContext(options) {
     const ctx = await super._prepareContext(options);
+
+    if (this._isNpcView()) return this._prepareNpcContext(ctx);
 
     const actor = this.document;
     const isGM = game.user.isGM;
@@ -377,46 +527,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     }
 
-    for (const e of states) {
-      const parts = [];
-
-      const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-      if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
-      else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
-
-      const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
-      if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
-      else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
-
-      const mods = e?.mods ?? {};
-      const modsTxt = Object.entries(mods)
-        .map(([k, v]) => {
-          const name = LABELS[k] ?? k;
-          const flat = Number(v?.flat ?? 0) || 0;
-          const pct = Number(v?.pct ?? 0) || 0;
-          const a = flat ? `${flat > 0 ? "+" : ""}${flat}` : "";
-          const b = pct ? `${pct > 0 ? "+" : ""}${pct}%` : "";
-          const t = [a, b].filter(Boolean).join(" ");
-          return t ? `${name} ${t}` : "";
-        })
-        .filter(Boolean)
-        .join(" • ");
-
-      if (modsTxt) parts.push(modsTxt);
-
-      e.summary = parts.join(" • ");
-
-      // tags buff/debuff
-      let hasPlus = false, hasMinus = false;
-      for (const v of Object.values(mods)) {
-        const flat = Number(v?.flat ?? 0) || 0;
-        const pct = Number(v?.pct ?? 0) || 0;
-        if (flat > 0 || pct > 0) hasPlus = true;
-        if (flat < 0 || pct < 0) hasMinus = true;
-      }
-      e.isBeneficial = hasPlus && !hasMinus;
-      e.isHarmful = hasMinus && !hasPlus;
-    }
+    decorateStates(states);
 
     ctx.system.etatsActifs = [...autoStates, ...states];
     // skills
@@ -653,6 +764,52 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
    * barre d'actions. Foundry lit le JSON déposé et déclenche le hook
    * « hotbarDrop », que le système intercepte pour créer la macro d'usage.
    */
+  /**
+   * Permet au MJ de glisser un PNJ / lieu / objet / journal DANS les champs
+   * texte de l'onglet PNJ pour y insérer un @UUID[...] au curseur — même
+   * confort que sur la fiche de quête (cf. item-quest-sheet-v2.js), qui est
+   * précisément d'où viennent les liens cliquables vers les PNJ.
+   *
+   * stopPropagation est indispensable : setupActorItemDrop pose un drop sur
+   * TOUTE la fiche pour ajouter un objet à l'acteur.
+   */
+  _bindUuidDropTargets(root) {
+    if (!game.user.isGM) return;
+    root?.querySelectorAll?.("textarea.rpg-uuid-drop").forEach(ta => {
+      if (ta.dataset.rpgUuidDrop) return;
+      ta.dataset.rpgUuidDrop = "1";
+
+      ta.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+      ta.addEventListener("drop", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        let data;
+        try {
+          data = foundry.applications.ux.TextEditor?.implementation?.getDragEventData?.(ev)
+              ?? foundry.applications.ux.TextEditor?.getDragEventData?.(ev);
+        } catch (e) {
+          console.warn("[RPG] Insertion @UUID (fiche personnage) :", e);
+          return;
+        }
+        const uuid = String(data?.uuid ?? "").trim();
+        if (!uuid) return;
+
+        // Pas de libellé entre accolades : Foundry affiche alors le nom ACTUEL
+        // du document, qui suit automatiquement un renommage.
+        const snippet = `@UUID[${uuid}]`;
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        ta.value = `${ta.value.slice(0, start)}${snippet}${ta.value.slice(end)}`;
+        const caret = start + snippet.length;
+        ta.setSelectionRange?.(caret, caret);
+
+        const name = ta.getAttribute("name");
+        if (name) await this.document.update({ [name]: ta.value });
+      });
+    });
+  }
+
   _bindItemDragOut(root) {
     if (!root || root.dataset.rpgItemDrag) return;
     root.dataset.rpgItemDrag = "1";
@@ -690,6 +847,18 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const root = this.element;
     applyUiTheme(root);
 
+    // ── Vue PNJ (joueur, personnage qui n'est pas le sien) ────────────────
+    // Rien à brancher hormis l'agrandissement de l'illustration : la carte ne
+    // contient ni champ, ni bouton, ni onglet.
+    if (this._isNpcView()) {
+      root.querySelectorAll(".rpg-npc-illu").forEach(img => {
+        if (img.dataset.rpgZoomBound) return;
+        img.dataset.rpgZoomBound = "1";
+        img.addEventListener("click", () => openImageLightbox(img.src, this.document.name));
+      });
+      return;
+    }
+
     // ⚠️ _onRender est rappelé à CHAQUE rendu, mais `root` (l'élément de la
     // fenêtre) survit aux rendus : réenregistrer les écouteurs délégués les
     // empilait, si bien qu'un clic déclenchait l'action autant de fois qu'il y
@@ -707,6 +876,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     this._bindSimpleNameFilters(root);
     this._bindRangePreview(root);
     this._bindItemDragOut(root);
+    this._bindUuidDropTargets(root);
 
     // ✅ Clic sur les images (portrait + token) → sélecteur de fichier Foundry V13
     root.querySelectorAll(".rpg-img-edit").forEach(img => {

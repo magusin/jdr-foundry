@@ -17,9 +17,9 @@
           style="cursor:pointer;border-radius:6px;border:1px solid var(--color-border-light-2);object-fit:cover" />
         <small style="font-size:9px;opacity:.7">Token</small>
       </div>
-      {{else}}
-      <img class="profile" src="{{actor.img}}" height="64" width="64" style="border-radius:8px;object-fit:cover" />
       {{/if}}
+      {{!-- Côté joueur, l'illustration n'est pas une vignette d'en-tête :
+           elle est affichée en grand dans le corps de la fiche (vue PNJ). --}}
       <h1 style="flex:1">
         <input name="name" type="text" value="{{actor.name}}" {{#unless canSeeStats}}disabled{{/unless}} />
       </h1>
@@ -42,6 +42,12 @@
     <div class="tab" data-tab="main" style="display:block;">
 
       {{#unless canSeeStats}}
+      <div class="rpg-npc-card" style="padding:0 0 12px">
+        <div class="npc-illu-wrap">
+          <img class="rpg-npc-illu" src="{{actor.img}}" alt="{{actor.name}}"
+            title="Cliquer pour agrandir" />
+        </div>
+      </div>
       {{#if pvReveal.show}}
       <section class="card">
         <h2>État</h2>
@@ -59,6 +65,27 @@
         <div style="opacity:.5;font-size:12px">Aucune description connue.</div>
         {{/if}}
       </section>
+      {{#if system.etatsActifs.length}}
+      <section class="card rpg-npc-card" style="padding:12px">
+        <h2>États</h2>
+        <ul class="state-list">
+          {{#each system.etatsActifs as |e|}}
+          <li class="state-row">
+            <div class="state-main">
+              <b>{{e.label}}</b>
+              {{#if e.isAura}}<span class="muted" style="margin-left:6px">[AURA]</span>{{/if}}
+              {{#if e.isBeneficial}}<span class="muted" style="margin-left:6px">[BUFF]</span>{{/if}}
+              {{#if e.isHarmful}}<span class="muted" style="margin-left:6px">[AFFLICTION]</span>{{/if}}
+              <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+              {{#if e.summary}}
+              <div class="muted" style="margin-top:4px">{{e.summary}}</div>
+              {{/if}}
+            </div>
+          </li>
+          {{/each}}
+        </ul>
+      </section>
+      {{/if}}
       {{/unless}}
 
       {{#if canSeeStats}}
