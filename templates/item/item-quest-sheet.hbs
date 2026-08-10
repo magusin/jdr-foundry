@@ -125,7 +125,7 @@
             <div class="rpg-field-wrap">
               <textarea name="system.etapes.{{ei}}.description" rows="8"
                 class="rpg-quest-editor" placeholder="Ce qui se passe à cette étape. Glisse un PNJ/objet/scène ici pour insérer un @UUID[...].">{{etape.description}}</textarea>
-              <div class="rpg-enriched-preview">{{{etape.descriptionHTML}}}</div>
+              <div class="rpg-link-row" title="Liens détectés dans ce champ — cliquables">{{#each etape.descriptionLinks}}{{{this}}}{{/each}}</div>
             </div>
             {{else}}
             <div class="rpg-enriched-text">{{{etape.descriptionHTML}}}</div>
@@ -158,7 +158,7 @@
             <div class="rpg-field-wrap">
               <textarea name="system.etapes.{{ei}}.notesMJ" rows="6"
                 class="rpg-quest-editor" placeholder="PNJ, lieux, pièges... jamais visible du joueur.">{{etape.notesMJ}}</textarea>
-              <div class="rpg-enriched-preview">{{{etape.notesMJHTML}}}</div>
+              <div class="rpg-link-row" title="Liens détectés dans ce champ — cliquables">{{#each etape.notesMJLinks}}{{{this}}}{{/each}}</div>
             </div>
           </div>
           {{/if}}
@@ -214,7 +214,7 @@
         <div class="rpg-field-wrap">
           <textarea name="system.description" rows="14"
             class="rpg-quest-editor" placeholder="Description générale de la quête, visible du joueur.">{{system.description}}</textarea>
-          <div class="rpg-enriched-preview">{{{descriptionHTML}}}</div>
+          <div class="rpg-link-row" title="Liens détectés dans ce champ — cliquables">{{#each descriptionLinks}}{{{this}}}{{/each}}</div>
         </div>
         {{else}}
         <div class="rpg-enriched-text">{{{descriptionHTML}}}</div>

@@ -162,9 +162,9 @@
 
    Le rendu enrichi (@UUID[...] → lien cliquable) n'a jamais dépendu de
    l'éditeur : il vient de enrichHTML() côté _prepareContext. Le joueur le
-   voit via .rpg-enriched-text ; le MJ, qui édite du texte brut, le voit
-   via .rpg-enriched-preview juste sous le champ (rafraîchi en place par
-   _refreshEnrichedPreview, sans re-render). */
+   voit via .rpg-enriched-text ; le MJ, qui édite du texte brut, retrouve
+   ses liens via .rpg-link-row juste sous le champ (rafraîchie en place par
+   _refreshLinkRow, sans re-render). */
 .rpg-quest-sheet textarea.rpg-quest-editor {
   display: block;
   width: 100%;
@@ -176,25 +176,26 @@
   resize: vertical;
 }
 
-/* Aperçu cliquable sous le champ brut (MJ). :empty → invisible tant que le
-   champ est vide, y compris après une mise à jour en place. */
-.rpg-quest-sheet .rpg-enriched-preview {
-  margin-top: 6px;
-  padding: 6px 8px;
-  border-left: 2px solid var(--brass);
-  border-radius: 0 4px 4px 0;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
-  line-height: 1.5;
-  max-height: 180px;
-  overflow-y: auto;
+/* Barre de liens sous le champ brut (MJ) : uniquement les @UUID détectés,
+   PAS le texte enrichi complet — le champ juste au-dessus l'affiche déjà,
+   et le dupliquer avait été rapporté comme "double texte". :empty →
+   totalement invisible quand le champ ne contient aucun lien. */
+.rpg-quest-sheet .rpg-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
 }
-.rpg-quest-sheet .rpg-enriched-preview:empty { display: none; }
-.rpg-quest-sheet .rpg-enriched-preview > *:first-child { margin-top: 0; }
-.rpg-quest-sheet .rpg-enriched-preview > *:last-child { margin-bottom: 0; }
+.rpg-quest-sheet .rpg-link-row:empty { display: none; }
+
 .rpg-quest-sheet .rpg-enriched-text {
   font-size: 12px;
   line-height: 1.5;
+  /* Le MJ saisit du texte brut (retours à la ligne compris) et enrichHTML
+     ne convertit pas les \n en <br> — sans pre-wrap, tout le récit
+     s'affichait au joueur en un seul bloc compact. pre-wrap préserve les
+     sauts de ligne ET laisse les liens/HTML s'afficher normalement. */
+  white-space: pre-wrap;
 }
 .rpg-quest-sheet .rpg-enriched-text > *:first-child { margin-top: 0; }
 .rpg-quest-sheet .rpg-enriched-text > *:last-child { margin-bottom: 0; }

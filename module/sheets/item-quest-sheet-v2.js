@@ -26,6 +26,27 @@ function asEtapesArray(raw) {
   return [];
 }
 
+/**
+ * Extrait les SEULS liens (@UUID[...] déjà transformés en <a.content-link>
+ * par enrichHTML) d'un texte enrichi. Le MJ édite du texte brut dans un
+ * <textarea> : réafficher tout le texte enrichi en dessous ferait doublon
+ * (rapporté : "ça fait double texte"). On ne montre donc qu'une barre
+ * compacte de liens cliquables — la seule chose que le champ brut ne sait
+ * pas rendre.
+ */
+function contentLinksFrom(enrichedHTML) {
+  const html = String(enrichedHTML ?? "").trim();
+  if (!html) return [];
+  try {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html;
+    return Array.from(tpl.content.querySelectorAll("a.content-link")).map(a => a.outerHTML);
+  } catch (e) {
+    console.warn("[RPG] Extraction des liens (quête) :", e);
+    return [];
+  }
+}
+
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
@@ -384,24 +405,27 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   }
 
   /**
-   * Rafraîchit l'aperçu enrichi placé sous un <textarea> (Récit, Notes MJ,
-   * Description) : c'est lui qui rend les @UUID[...] cliquables pour le MJ,
-   * qui n'édite plus que du texte brut depuis l'abandon de l'éditeur riche
-   * (voir _flushRichTextFields). Mis à jour EN PLACE plutôt qu'en
-   * re-rendant la fiche — un re-render pendant l'édition est précisément
-   * ce qui a causé les pertes de contenu historiques de cette fiche.
+   * Rafraîchit la barre de liens sous un <textarea> (Récit, Notes MJ,
+   * Description) : le MJ édite du texte brut depuis l'abandon de l'éditeur
+   * riche, donc ses @UUID[...] ne sont pas cliquables dans le champ. On
+   * n'affiche QUE les liens extraits, pas le texte enrichi complet — le
+   * réafficher intégralement faisait doublon avec le champ juste au-dessus
+   * (rapporté : "ça fait double texte pour le MJ").
    *
-   * Les liens produits (a.content-link) n'ont besoin d'aucun listener de
-   * notre part : Foundry en pose un global, délégué au body.
+   * Mis à jour EN PLACE plutôt qu'en re-rendant la fiche — un re-render
+   * pendant l'édition est précisément ce qui a causé les pertes de contenu
+   * historiques de cette fiche. Les liens (a.content-link) n'ont besoin
+   * d'aucun listener de notre part : Foundry en pose un global sur le body.
    */
-  async _refreshEnrichedPreview(el) {
-    const preview = el.closest?.(".rpg-field-wrap")?.querySelector(".rpg-enriched-preview");
-    if (!preview) return;
+  async _refreshLinkRow(el) {
+    const row = el.closest?.(".rpg-field-wrap")?.querySelector(".rpg-link-row");
+    if (!row) return;
     const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation ?? foundry.applications.ux.TextEditor;
     try {
-      preview.innerHTML = await TextEditorImpl.enrichHTML(el.value ?? "", { secrets: true, relativeTo: this.document });
+      const enriched = await TextEditorImpl.enrichHTML(el.value ?? "", { secrets: true, relativeTo: this.document });
+      row.innerHTML = contentLinksFrom(enriched).join(" ");
     } catch (e) {
-      console.warn("[RPG] Aperçu enrichi (quête) :", e);
+      console.warn("[RPG] Barre de liens (quête) :", e);
     }
   }
 
@@ -455,7 +479,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // Seule écriture sûre : le tableau ENTIER, en une seule valeur.
     if (name.startsWith("system.etapes.")) {
       await this._persistEtapesField(name, value);
-      await this._refreshEnrichedPreview(el);
+      await this._refreshLinkRow(el);
       return;
     }
     if (name.startsWith("system.recompense.items.")) {
@@ -477,7 +501,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       await this._syncProgress({ [name]: value });
     }
 
-    if (name === "system.description") await this._refreshEnrichedPreview(el);
+    if (name === "system.description") await this._refreshLinkRow(el);
 
     // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
     // sont des COPIES de ce champ affichées ailleurs dans le DOM —
@@ -577,9 +601,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     const bottom = scroller.getBoundingClientRect().bottom;
     const top = target.getBoundingClientRect().top;
-    // L'aperçu enrichi (@UUID cliquables) vit sous le champ : lui laisser
-    // sa place, sinon le champ prend toute la hauteur et le pousse hors vue.
-    const preview = tab.querySelector(".rpg-enriched-preview");
+    // La barre de liens (@UUID cliquables) vit sous le champ : lui laisser
+    // sa place, sinon le champ prend toute la hauteur et la pousse hors vue.
+    const preview = tab.querySelector(".rpg-link-row");
     const previewH = preview && preview.offsetHeight ? preview.offsetHeight + 6 : 0;
     const available = bottom - top - previewH - 14; // 14px = marge basse de .quest-page-content
     const h = Math.max(150, Math.floor(available));
@@ -615,15 +639,21 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.etapes = await Promise.all(ctx.system.etapes.map(async (e, i) => {
       const description = e?.description ?? "";
       const notesMJ = e?.notesMJ ?? "";
+      const descriptionHTML = await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item });
+      const notesMJHTML = await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item });
       return {
         label: e?.label ?? "",
         // Titre de secours pour la liste de pages seulement — ne remplace
         // jamais la vraie valeur (vide) de l'input éditable.
         navLabel: (e?.label ?? "").trim() || `Étape ${i + 1}`,
         description,
-        descriptionHTML: await TextEditorImpl.enrichHTML(description, { secrets: game.user.isGM, relativeTo: item }),
+        descriptionHTML,
+        // Vue MJ : seulement les liens, pas le texte enrichi complet (le
+        // champ brut juste au-dessus l'affiche déjà — voir contentLinksFrom).
+        descriptionLinks: contentLinksFrom(descriptionHTML),
         notesMJ,
-        notesMJHTML: await TextEditorImpl.enrichHTML(notesMJ, { secrets: true, relativeTo: item }),
+        notesMJHTML,
+        notesMJLinks: contentLinksFrom(notesMJHTML),
         // asEtapesArray (et pas Array.isArray) : réaffiche les objectifs
         // d'une quête déjà abîmée, dont objectifs a pu être stocké sous la
         // forme {0:…,1:…} par une écriture pointée (voir _persistField).
@@ -664,6 +694,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.statut = String(ctx.system.statut ?? "active");
     ctx.system.description = String(ctx.system.description ?? "");
     ctx.descriptionHTML = await TextEditorImpl.enrichHTML(ctx.system.description, { secrets: game.user.isGM, relativeTo: item });
+    ctx.descriptionLinks = contentLinksFrom(ctx.descriptionHTML);
 
     ctx.calc = {
       etapeActuelleNum: ctx.system.etapes.length ? ctx.system.etapeActuelle + 1 : 0,
