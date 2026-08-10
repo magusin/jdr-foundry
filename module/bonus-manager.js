@@ -162,8 +162,8 @@ export function getAppliedDelta(actor, itemId) {
 export function isBonusActive(item) {
     if (!item?.parent || item.parent.documentName !== "Actor") return false;
   
-    // Armes/armures : bonus appliqué seulement si équipé
-    if (item.type === "weapon" || item.type === "armor") return item.system?.equipe === true;
+    // Armes/armures/reliques : bonus appliqué seulement si équipé
+    if (item.type === "weapon" || item.type === "armor" || item.type === "relic") return item.system?.equipe === true;
   
     // Sorts passifs : bonus appliqué seulement si mode=passif et actif=true
     if (item.type === "spell") return item.system?.mode === "passif" && item.system?.actif === true;

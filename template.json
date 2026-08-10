@@ -181,6 +181,7 @@
       "loot",
       "weapon",
       "armor",
+      "relic",
       "consumable",
       "spell",
       "recipe",
@@ -283,6 +284,15 @@
       ],
       "poids": 2,
       "emplacement": "torse"
+    },
+    "relic": {
+      "templates": [
+        "baseItem",
+        "equipBonus",
+        "details"
+      ],
+      "poids": 0.5,
+      "emplacement": "artefact"
     },
     "consumable": {
       "templates": [

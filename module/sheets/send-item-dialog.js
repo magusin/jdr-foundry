@@ -134,11 +134,16 @@ export async function promptSendItemToActors(item) {
     }
   }
 
+  // Empilement des Objets (type loot) : un PJ qui possède déjà celui-ci
+  // voit sa quantité augmenter au lieu de recevoir une seconde ligne —
+  // voir rules/inventory.js.
+  const { addItemToActor } = await import("../rules/inventory.js");
+
   const sentTo = [];
   for (const actor of targets) {
     try {
-      const [created] = await actor.createEmbeddedDocuments("Item", [foundry.utils.deepClone(baseData)]);
-      if (created) sentTo.push(actor.name);
+      const res = await addItemToActor(actor, foundry.utils.deepClone(baseData));
+      if (res.item) sentTo.push(res.stacked ? `${actor.name} (×${res.total})` : actor.name);
     } catch (e) {
       console.error(`[RPG] Envoi de "${item.name}" à ${actor.name} :`, e);
       ui.notifications?.error?.(`Échec de l'envoi à ${actor.name} — voir la console.`);

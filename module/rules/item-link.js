@@ -60,7 +60,17 @@ const SYNC_FIELDS = {
   ],
   armor: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.effects", "system.resistances", "system.recetteAssociee", "system.bonus",
+    "system.effects", "system.resistances", "system.amplifications",
+    "system.recetteAssociee", "system.bonus",
+    "system.lore", "system.description"
+  ],
+  // Relique : mêmes champs de définition qu'une armure (elles partagent la
+  // fiche) — system.emplacement reste exclu comme partout ailleurs, c'est
+  // de l'état d'équipement, pas de la définition.
+  relic: [
+    "system.poids", "system.prix", "system.vendeurAssocie",
+    "system.effects", "system.resistances", "system.amplifications",
+    "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description"
   ],
   consumable: [
