@@ -37,10 +37,19 @@
     return;
   }
 
+  // PJ, puis PNJ, puis monstres — un PNJ est un acteur `character` comme un
+  // PJ, seul rules/actor-roles.js (exposé sur game.rpg.actorRoles, une macro
+  // ne pouvant pas importer) sait les distinguer. Sans ce tri, les PNJ du
+  // monde se mélangeaient aux PJ dans la liste des cibles.
+  const roles = game.rpg?.actorRoles ?? null;
+  const isNpc = (a) => !!roles?.isNpcActor?.(a);
+  const roleOf = (a) => roles?.roleLabel?.(a) ?? (a.type === "character" ? "PJ" : "Monstre");
+  const rank = (a) => (a.type === "monster" ? 2 : (isNpc(a) ? 1 : 0));
+
   const actors = game.actors
     .filter(a => a.type === "character" || a.type === "monster")
     .sort((a, b) => {
-      if (a.type !== b.type) return a.type === "character" ? -1 : 1;
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
       return (a.name ?? "").localeCompare(b.name ?? "", "fr");
     });
 
@@ -77,11 +86,25 @@
     allItems.filter(i => i.type === type)
       .map(i => `<option value="${i.id}">${htmlEscape(i.name)}</option>`).join("");
 
+  const GROUP_TITLES = ["👤 Personnages joueurs", "🎭 PNJ", "👹 Monstres"];
+
   const buildActorBlocks = () => allItems.map(it => {
     const stackable = isStackable(it.type);
+    let lastRank = -1;
     const rows = actors.map(actor => {
       const has = hasItem(actor, it.name, it.type);
-      const typeTag = actor.type === "character" ? "PJ" : "Monstre";
+      const r = rank(actor);
+      // En-tête de groupe dès que la catégorie change : les PJ ne se
+      // confondent plus avec les PNJ, et « tout cocher » agit sur un seul
+      // groupe (donner à tous les PJ sans arroser les PNJ au passage).
+      const header = r === lastRank ? "" : `
+        <label style="display:flex;align-items:center;gap:6px;margin:8px 0 2px;font-size:11px;
+                       font-weight:600;opacity:.75;text-transform:uppercase;letter-spacing:.04em">
+          <input type="checkbox" class="id-group-all" data-rank="${r}" title="Tout cocher dans ce groupe" />
+          ${GROUP_TITLES[r]}
+        </label>`;
+      lastRank = r;
+
       // Objet empilable déjà possédé : cible toujours sélectionnable (on
       // ajoutera +1 à sa pile). Les autres types restent grisés — un 2e
       // exemplaire d'arme/armure/sort n'a pas de sens ici.
@@ -89,11 +112,11 @@
       const statut = has
         ? (stackable ? `✔ Possédé ×${ownedQty(actor, it.name, it.type)}` : "✔ Déjà possédé")
         : "N'a pas";
-      return `
+      return `${header}
         <label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;
                        background:${has ? "rgba(29,158,117,0.1)" : "transparent"}">
-          <input type="checkbox" class="id-actor-check" value="${actor.id}" ${lock ? "disabled checked" : ""} />
-          <span style="flex:1">${htmlEscape(actor.name)} <small style="opacity:0.6">(${typeTag})</small></span>
+          <input type="checkbox" class="id-actor-check" data-rank="${r}" value="${actor.id}" ${lock ? "disabled checked" : ""} />
+          <span style="flex:1">${htmlEscape(actor.name)} <small style="opacity:0.6">(${roleOf(actor)})</small></span>
           <span style="font-size:11px;color:${has ? "#1d9e75" : "var(--color-text-secondary)"}">
             ${statut}
           </span>
@@ -150,6 +173,16 @@
       });
 
       itemSel.addEventListener("change", () => showBlockFor(root, itemSel.value));
+
+      // « Tout cocher » d'un groupe (PJ / PNJ / Monstres) — délégué, car
+      // chaque objet a son propre bloc de cases régénéré à la volée.
+      root.addEventListener("change", (ev) => {
+        const toggle = ev.target?.closest?.(".id-group-all");
+        if (!toggle) return;
+        const block = toggle.closest(".id-actor-block");
+        block?.querySelectorAll(`.id-actor-check[data-rank="${toggle.dataset.rank}"]`)
+          .forEach(cb => { if (!cb.disabled) cb.checked = toggle.checked; });
+      });
     },
     buttons: {
       give: {

@@ -68,6 +68,7 @@ import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
+import * as ActorRoles from "./rules/actor-roles.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
 import * as Skills from "./rules/skills.js";
@@ -1020,6 +1021,12 @@ Hooks.once("init", async () => {
     // pas des modules ES et ne peuvent pas importer rules/inventory.js
     // (cf. macro/item-distribute.js).
     game.rpg.inventory = Inventory;
+
+    // ✅ game.rpg.actorRoles : qui est un PJ, qui est un PNJ (les deux sont
+    // des acteurs `character`). Même critère que la « carte PNJ » des
+    // fiches, réutilisé par les macros de distribution pour séparer les
+    // deux catégories dans leurs listes de cibles.
+    game.rpg.actorRoles = ActorRoles;
 
     // ✅ game.rpg.combatState : K.O., fuite, fin de combat
     game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };

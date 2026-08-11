@@ -3,6 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
+import { isNpcActor } from "../rules/actor-roles.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -324,13 +325,15 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
    *   - "never"   : fiche complète comme avant (PJ pas encore attribué,
    *                 groupe qui partage ses feuilles).
    * Le MJ et le propriétaire gardent TOUJOURS la fiche complète.
+   *
+   * Le critère lui-même vit dans rules/actor-roles.js : les listes de
+   * distribution (Envoyer, destinataires d'une quête, macro Distribuer)
+   * séparent PJ et PNJ avec EXACTEMENT la même règle, elles ne doivent pas
+   * en réinventer une seconde qui finirait par diverger.
    */
   static isNpcViewFor(doc) {
     if (!doc || game.user.isGM || doc.isOwner) return false;
-    const mode = String(doc.system?.pnjView ?? "auto");
-    if (mode === "never") return false;
-    if (mode === "always") return true;
-    return !doc.hasPlayerOwner;
+    return isNpcActor(doc);
   }
 
   _isNpcView() {

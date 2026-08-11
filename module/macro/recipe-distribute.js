@@ -26,9 +26,20 @@
     return;
   }
 
+  // PJ d'abord, PNJ ensuite et étiquetés : les deux sont des acteurs
+  // `character`, seul rules/actor-roles.js les distingue (exposé sur
+  // game.rpg.actorRoles — une macro ne peut pas importer). Les PNJ restent
+  // sélectionnables (un PNJ forgeron peut connaître une recette), ils ne
+  // se confondent simplement plus avec les joueurs.
+  const roles = game.rpg?.actorRoles ?? null;
+  const isNpc = (a) => !!roles?.isNpcActor?.(a);
+
   const pjs = game.actors
     .filter(a => a.type === "character")
-    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"));
+    .sort((a, b) => {
+      if (isNpc(a) !== isNpc(b)) return isNpc(a) ? 1 : -1;
+      return (a.name ?? "").localeCompare(b.name ?? "", "fr");
+    });
 
   if (!pjs.length) {
     ui.notifications.warn("Aucun personnage (character) trouvé dans le monde.");
@@ -47,7 +58,7 @@
         <label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;
                        background:${has ? "rgba(29,158,117,0.1)" : "transparent"}">
           <input type="checkbox" class="rd-pj-check" value="${pj.id}" ${has ? "disabled checked" : ""} />
-          <span style="flex:1">${htmlEscape(pj.name)}</span>
+          <span style="flex:1">${htmlEscape(pj.name)}${isNpc(pj) ? ` <small style="opacity:0.6">(PNJ)</small>` : ""}</span>
           <span style="font-size:11px;color:${has ? "#1d9e75" : "var(--color-text-secondary)"}">
             ${has ? "✔ Déjà apprise" : "Ne connaît pas"}
           </span>

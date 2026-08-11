@@ -1286,7 +1286,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           l'illustration en grand, le nom, la description ci-dessous et les
           états actifs. Jamais les caractéristiques, l'inventaire ni les sorts.
         </div>
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Carte PNJ pour les joueurs</label>
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">PJ ou PNJ ?</label>
         <select name="system.pnjView" style="width:100%">
           <option value="auto" {{#if (eq system.pnjView "auto")}}selected{{/if}}>
             Automatique — carte PNJ si aucun joueur ne possède ce personnage
@@ -1299,7 +1299,10 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           </option>
         </select>
         <small style="display:block;font-size:11px;opacity:.6;margin-top:6px">
-          Le MJ et le propriétaire du personnage gardent toujours la fiche complète.
+          Le MJ et le propriétaire du personnage gardent toujours la fiche complète.<br>
+          Ce réglage décide aussi de quel côté ce personnage apparaît dans les
+          listes « PJ / PNJ » quand tu distribues une quête, un objet ou un
+          équipement.
         </small>
       </section>
 
