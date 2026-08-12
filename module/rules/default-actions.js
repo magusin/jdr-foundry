@@ -391,6 +391,19 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     const { weapon, hand, offhand } = await pickAttackWeapon(actor);
     if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
 
+    // Portée : l'action de base ne la vérifiait pas du tout, alors que le menu
+    // de combat grise son bouton « Attaquer » pour la même arme et la même
+    // cible — on pouvait donc frapper à n'importe quelle distance en passant
+    // par la fiche ou la barre d'actions. Même calcul des deux côtés
+    // (weapon-range.js), sinon les deux chemins se contrediraient à nouveau.
+    const { checkWeaponRange } = await import("./weapon-range.js");
+    const attackerToken = actor.getActiveTokens?.()?.[0] ?? null;
+    const reach = checkWeaponRange(attackerToken, target, weapon);
+    if (!reach.ok) {
+      return { handled: true, ok: false,
+               reason: `${target.actor.name} : ${reach.reason?.toLowerCase() ?? "hors portée"}.` };
+    }
+
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
     // dire laquelle a servi.
     const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")
@@ -408,8 +421,46 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
       ? diffOf(weapon) + diffOf(offhand) + dualWieldDifficulty()
       : undefined;
 
+    // Budget d'action : réserve le slot « attaque », exactement comme le menu
+    // de combat le fait pour une attaque d'arme. Sans ça l'action de base
+    // était gratuite (rien n'était réservé depuis la fiche ni la barre
+    // d'actions) et confirmBudgetSlot(), à la résolution, ne trouvait aucune
+    // entrée à confirmer.
+    let actionId = null;
+    try {
+      const { getBudget, canUseSlot, reserveSlot, saveBudget, addLogEntry } =
+        await import("./action-budget.js");
+      const combat = game.combat;
+      const cbt = combat?.active ? combatantFor(actor, combat) : null;
+      if (cbt) {
+        const budget = getBudget(combat, cbt.id);
+        if (!canUseSlot(budget, "attaque")) {
+          return { handled: true, ok: false, reason: "Slot Attaque épuisé pour ce tour." };
+        }
+        actionId = foundry.utils.randomID();
+        await saveBudget(combat, cbt.id, reserveSlot(budget, "attaque"));
+        await addLogEntry(combat, cbt.id, {
+          id: actionId, slot: "attaque", status: "pending",
+          label: `Attaque ${weapon.name} → ${target.actor.name}`,
+          actorId: actor.id,
+          snapshot: {
+            casterId: actor.id, targetId: target.actor.id,
+            targetPv: Number(target.actor.system?.ressources?.pv?.valeur ?? 0) || 0,
+            addedStateIds: [], cooldown: null
+          },
+          timestamp: Date.now()
+        });
+      }
+    } catch (e) {
+      // Un joueur ne peut pas écrire sur le document Combat (même raison que
+      // « Changer d'arme » plus bas) : on déclare quand même — le MJ voit la
+      // demande et la valide — plutôt que de bloquer l'attaque.
+      console.warn("[RPG] budget d'attaque non réservé :", e);
+      actionId = null;
+    }
+
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor, { title, offhand, difficulte });
+    await declareAttack(actor, weapon, target.actor, { title, offhand, difficulte, actionId });
     return { handled: true, ok: true };
   }
 

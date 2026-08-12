@@ -59,6 +59,29 @@
 
   const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
+  /** Mètres, au dixième, sans décimale inutile (1 / 1,5 / 12,3). */
+  const fmtMeters = (m) => (Math.round(n(m, 0) * 10) / 10).toString().replace(".", ",");
+
+  // ── Écritures du budget d'actions ────────────────────────────────────────
+  // Le document Combat n'est modifiable QUE par le MJ : Foundry n'autorise un
+  // joueur qu'à en changer le tour/round, jamais les flags — et le budget y
+  // vit (action-budget.js écrit flags.rpg.budget). Côté joueur ces écritures
+  // échouent donc, et comme elles précédaient la déclaration, une seule
+  // exception suffisait à empêcher TOUTE action depuis ce menu : le clic sur
+  // Attaquer / Déclarer / Récupération / Déplacement ne produisait qu'un
+  // « Erreur … » et rien n'était jamais déclaré. Elles deviennent non
+  // bloquantes : la déclaration part quand même, le MJ la voit et la valide,
+  // et c'est son client qui tient le budget à jour — même principe que
+  // movement-tracker.js, qui ne décompte le déplacement que côté MJ.
+  const budgetWrite = async (what, fn) => {
+    try { await fn(); return true; }
+    catch (e) {
+      console.warn(`[RPG][Menu] budget « ${what} » non enregistré `
+                 + `(le joueur n'a pas les droits d'écriture sur le combat) :`, e);
+      return false;
+    }
+  };
+
   const htmlEscape = (s) =>
     String(s ?? "")
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -242,18 +265,20 @@
       const hasAtkSlot = canUseSlot(actor, "attaque");
       const atkBlocked = !hasAtkSlot;
 
-      // Vérification de portée (distance case caster -> cible)
-      // Portée min ET max : un arc ne tire pas à bout portant.
-      const porteeMax = n(w.system?.range?.max ?? w.system?.portee, 1);
-      const porteeMin = n(w.system?.range?.min, 0);
-      let distCases = null;
-      let outOfRange = false;
-      let tooClose = false;
-      if (token && targetToken && game.rpg?.measureDistance) {
-        distCases = game.rpg.measureDistance(token.center, targetToken.center);
-        tooClose = distCases < porteeMin;
-        outOfRange = distCases > porteeMax || tooClose;
-      }
+      // Vérification de portée — même mesure que les cercles du canevas
+      // (mètres, bord à bord) et même portée effective que l'action de base
+      // « Attaquer » : allonge de mêlée OU portée de jet, la plus grande des
+      // deux. Une épée dont le champ « Portée max » est resté à 0,5 m reste
+      // donc utilisable sur une cible adjacente, via son allonge.
+      const rangeAPI = game.rpg?.weaponRange;
+      const rangeCheck = rangeAPI?.check
+        ? rangeAPI.check(token, targetToken, w)
+        : { ok: true, dist: null, min: 0, max: 0, tooClose: false, reason: null };
+      const porteeMax = rangeCheck.max;
+      const porteeMin = rangeCheck.min;
+      const dist       = rangeCheck.dist;
+      const outOfRange = !!targetToken && !rangeCheck.ok;
+      const tooClose   = rangeCheck.tooClose;
 
       const targets = Array.from(game.user.targets ?? []);
       const tooManyTargets = targets.length > 1;
@@ -261,9 +286,7 @@
       const reasons = [];
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
-      if (outOfRange) reasons.push(tooClose
-        ? `Trop près (${distCases?.toFixed?.(1) ?? distCases}m, portée mini ${porteeMin}m)`
-        : `Hors portée (${distCases?.toFixed?.(1) ?? distCases}m, portée max ${porteeMax}m)`);
+      if (outOfRange) reasons.push(rangeCheck.reason ?? "Hors portée");
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
@@ -291,7 +314,7 @@
             <div class="rpg-stats">
               <span>⚔️ Dégâts <b>${dmgTxt}</b></span>
               <span>${tnTxt}</span>
-              <span>📏 Portée <b>${porteeMax}m</b>${distCases !== null ? ` (cible à ${distCases?.toFixed?.(1) ?? distCases}m)` : ""}</span>
+              <span>📏 Portée <b>${fmtMeters(porteeMax)} m</b>${dist !== null ? ` (cible à ${fmtMeters(dist)} m)` : ""}</span>
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>
@@ -349,14 +372,19 @@
       }
 
       // ── Portée : vérifie chaque cible sélectionnée ───────────────────
+      // Mesurée en mètres, bord à bord (game.rpg.weaponRange), comme le cercle
+      // de portée affiché au survol du sort — et non plus en cases Manhattan,
+      // qui comptait 2 pour une simple diagonale.
       let okRange = true;
       let rangeMsg = "";
-      if (needTgt && token && targets.length && game.rpg?.measureDistance) {
+      const distAPI = game.rpg?.weaponRange?.tokenDistance;
+      if (needTgt && token && targets.length && distAPI) {
         for (const t of targets) {
-          const dist = game.rpg.measureDistance(token.center, t.center);
+          const dist = distAPI(token, t);
+          if (dist === null) continue;
           if (dist < r.min || dist > r.max) {
             okRange = false;
-            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${dist?.toFixed?.(1) ?? dist}m, portée ${r.max}m)`;
+            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${fmtMeters(dist)} m, portée ${fmtMeters(r.max)} m)`;
             break;
           }
         }
@@ -706,21 +734,11 @@
       rerenderAll();
     };
 
-    // ── Portée de sort : afficher au survol ────────────────────────────────
-    $root.on("mouseenter.rpgMenu", ".rpg-spell-row[data-item-type='spell']", (ev) => {
-      const row    = ev.currentTarget;
-      const item   = actor.items.get(row?.dataset?.itemId);
-      const rangeM = Number(item?.system?.range?.max ?? 0) || 0;
-      if (token && rangeM > 0 && game.rpg?.spellRange?.showSpellRange) {
-        game.rpg.spellRange.showSpellRange(token, rangeM, item.name).catch(() => {});
-      }
-    });
-    $root.on("mouseleave.rpgMenu", ".rpg-spell-row[data-item-type='spell']", () => {
-      if (token && game.rpg?.spellRange?.clearSpellRange) {
-        game.rpg.spellRange.clearSpellRange(token.id).catch(() => {});
-      }
-    });
-
+    // Purge des écouteurs d'un rendu précédent. DOIT rester avant le premier
+    // .on() : placé au milieu, il effaçait les deux gestionnaires de survol
+    // enregistrés juste au-dessus (aperçu de portée du sort), qui n'ont donc
+    // jamais rien fait — c'est celui de « .rpg-list [data-item-id] », plus bas,
+    // qui rend ce service pour les sorts ET les armes.
     $root.off(".rpgMenu");
 
     // Section tabs
@@ -839,13 +857,15 @@
         // 2. Réserve le slot (pending)
         const actionId = foundry.utils.randomID();
         if (budgetAPI && combat && cbt) {
-          const budget    = budgetAPI.getBudget(combat, cbt.id);
-          const newBudget = budgetAPI.reserveSlot(budget, "attaque");
-          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
-          await budgetAPI.addLogEntry(combat, cbt.id, {
-            id: actionId, slot: "attaque", status: "pending",
-            label: `Attaque ${weapon.name} → ${targetToken.actor.name}`,
-            actorId: actor.id, snapshot, timestamp: Date.now()
+          await budgetWrite("réservation attaque", async () => {
+            const budget    = budgetAPI.getBudget(combat, cbt.id);
+            const newBudget = budgetAPI.reserveSlot(budget, "attaque");
+            await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+            await budgetAPI.addLogEntry(combat, cbt.id, {
+              id: actionId, slot: "attaque", status: "pending",
+              label: `Attaque ${weapon.name} → ${targetToken.actor.name}`,
+              actorId: actor.id, snapshot, timestamp: Date.now()
+            });
           });
         }
 
@@ -859,7 +879,8 @@
 
         // Enregistre l'id du message dans le log
         if (budgetAPI && combat && cbt && msg) {
-          await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+          await budgetWrite("journal attaque", () =>
+            budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id }));
         }
 
         rerenderWeapons();
@@ -869,8 +890,10 @@
         console.error("[RPG][Menu] Erreur attaque :", e);
         // Libère le slot en cas d'erreur
         if (budgetAPI && combat && cbt) {
-          const b = budgetAPI.getBudget(combat, cbt.id);
-          await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, "attaque", false));
+          await budgetWrite("libération attaque", () => {
+            const b = budgetAPI.getBudget(combat, cbt.id);
+            return budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, "attaque", false));
+          });
         }
         notify("error", `Erreur attaque : ${e?.message ?? e}`);
       } finally {
@@ -896,6 +919,30 @@
 
       const targets      = Array.from(game.user.targets ?? []);
       const targetToken  = targets[0] ?? null; // rétrocompat affichage label
+
+      // ── Actions de base : « Attaquer », « Changer d'arme », « Retirer un
+      // état » sont des items de type spell, mais ne portent AUCUNE donnée de
+      // sort (ni dégâts, ni portée, ni effet) : toute leur logique vit dans
+      // runDefaultAction — le dispatcher que la fiche de personnage et la
+      // barre d'actions appellent déjà. Ce menu, lui, envoyait directement
+      // declareSpell : cliquer « Attaquer » ici déclarait donc un sort vide,
+      // sans arme, sans cible et sans dégâts, au lieu de lancer l'attaque.
+      const defAPI = game.rpg?.defaultActions;
+      if (defAPI?.runDefaultAction) {
+        try {
+          const special = await defAPI.runDefaultAction(actor, item, { targetToken });
+          if (special?.handled) {
+            if (special.ok === false) notify("warn", special.reason ?? "Action impossible.");
+            else { rerenderAll(); }
+            btn.disabled = false;
+            return;
+          }
+        } catch (e) {
+          console.error("[RPG][Menu] action de base :", e);
+          btn.disabled = false;
+          return notify("error", `Erreur action : ${e?.message ?? e}`);
+        }
+      }
       const sys          = item.system ?? {};
       const speed        = String(sys.speed ?? "normal");
       const slot         = (speed === "rapide" || speed === "quick") ? "sortRapide" : "sortNormal";
@@ -933,6 +980,7 @@
         // 2. Réserve slot pending
         const actionId = foundry.utils.randomID();
         if (budgetAPI && combat && cbt) {
+          await budgetWrite("réservation sort", async () => {
           const budget    = budgetAPI.getBudget(combat, cbt.id);
           const newBudget = budgetAPI.reserveSlot(budget, slot);
           await budgetAPI.saveBudget(combat, cbt.id, newBudget);
@@ -940,6 +988,7 @@
             id: actionId, slot, status: "pending",
             label: `${item.name}${targets.length ? " → " + targets.map(t => t.actor?.name ?? t.name).join(", ") : ""}`,
             actorId: actor.id, snapshot, timestamp: Date.now()
+          });
           });
         }
 
@@ -961,9 +1010,11 @@
         if (!res?.ok) {
           // Libère le slot en cas d'échec de déclaration
           if (budgetAPI && combat && cbt) {
-            const b = budgetAPI.getBudget(combat, cbt.id);
-            await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
-            await budgetAPI.updateLogEntry(combat, actionId, { status: "rejected" });
+            await budgetWrite("libération sort", async () => {
+              const b = budgetAPI.getBudget(combat, cbt.id);
+              await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
+              await budgetAPI.updateLogEntry(combat, actionId, { status: "rejected" });
+            });
           }
           btn.disabled = false;
           return notify("warn", res?.reason ?? "Déclaration impossible.");
@@ -976,8 +1027,10 @@
       } catch (e) {
         console.error(e);
         if (budgetAPI && combat && cbt) {
-          const b = budgetAPI.getBudget(combat, cbt.id);
-          await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
+          await budgetWrite("libération sort", () => {
+            const b = budgetAPI.getBudget(combat, cbt.id);
+            return budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, slot, false));
+          });
         }
         notify("error", `Erreur déclaration : ${e?.message ?? e}`);
       } finally {
@@ -1032,6 +1085,7 @@
         const actionId = foundry.utils.randomID();
 
         if (inCombat) {
+          await budgetWrite("réservation récupération", async () => {
           const budget    = budgetAPI.getBudget(combat, cbt.id);
           const newBudget = budgetAPI.reserveSlot(budget, "recuperation");
           await budgetAPI.saveBudget(combat, cbt.id, newBudget);
@@ -1041,6 +1095,7 @@
             actorId: actor.id,
             snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
             timestamp: Date.now()
+          });
           });
         }
 
@@ -1073,7 +1128,8 @@
           flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id, recuperationAmount: totalReduction } }
         });
 
-        if (inCombat) await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+        if (inCombat) await budgetWrite("journal récupération", () =>
+          budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id }));
 
         rerenderAll();
         notify("info", "Récupération déclarée — en attente du MJ.");
@@ -1113,15 +1169,17 @@
 
       try {
         const actionId = foundry.utils.randomID();
-        const budget    = budgetAPI.getBudget(combat, cbt.id);
-        const newBudget = budgetAPI.reserveSlot(budget, "deplacement");
-        await budgetAPI.saveBudget(combat, cbt.id, newBudget);
-        await budgetAPI.addLogEntry(combat, cbt.id, {
-          id: actionId, slot: "deplacement", status: "pending",
-          label: `Déplacement — ${actor.name}`,
-          actorId: actor.id,
-          snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
-          timestamp: Date.now()
+        await budgetWrite("réservation déplacement", async () => {
+          const budget    = budgetAPI.getBudget(combat, cbt.id);
+          const newBudget = budgetAPI.reserveSlot(budget, "deplacement");
+          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
+          await budgetAPI.addLogEntry(combat, cbt.id, {
+            id: actionId, slot: "deplacement", status: "pending",
+            label: `Déplacement — ${actor.name}`,
+            actorId: actor.id,
+            snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
+            timestamp: Date.now()
+          });
         });
 
         const confirmAPI = getConfirmAPI();
@@ -1139,7 +1197,8 @@
           content: msgContent,
           flags: { rpg: { pendingAction: { type: "move", actionId, outcome: "confirm" } } }
         });
-        await budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id });
+        await budgetWrite("journal déplacement", () =>
+          budgetAPI.updateLogEntry(combat, actionId, { chatMessageId: msg.id }));
 
         rerenderAll();
         notify("info", "Déplacement déclaré — en attente du MJ.");
@@ -1173,7 +1232,8 @@
         const budgetAPI = getBudgetAPI();
 
         if (budgetAPI && combat && cbt) {
-          await budgetAPI.addLogEntry(combat, cbt.id, {
+          await budgetWrite("journal passif", () =>
+            budgetAPI.addLogEntry(combat, cbt.id, {
             id: actionId, slot: "sortPassif", status: "confirmed",
             label: `Passif ${newState ? "activé" : "désactivé"} : ${item.name}`,
             actorId: actor.id,
@@ -1183,7 +1243,7 @@
               oldAuraActive: waToggled
             },
             timestamp: Date.now()
-          });
+          }));
         }
 
         // Toggle l'état

@@ -576,7 +576,19 @@ Hooks.once("init", async () => {
     };
   }
   game[MODULE_ID] = game[MODULE_ID] || {};
+  // ⚠️ Distance de MANHATTAN, en CASES — pas en mètres. Conservée pour les
+  // usages qui raisonnent vraiment en cases ; pour tester une portée d'arme
+  // ou de sort, passer par game.rpg.weaponRange (mètres, bord à bord, même
+  // mesure que les cercles du canevas).
   game.rpg.measureDistance = measureDistanceManhattan;
+  const _weaponRange = await import("./rules/weapon-range.js");
+  game.rpg.weaponRange = {
+    check:            _weaponRange.checkWeaponRange,
+    checkForActors:   _weaponRange.checkWeaponRangeForActors,
+    weaponRangeMeters: _weaponRange.weaponRangeMeters,
+    tokenDistance:    _weaponRange.tokenDistanceMeters,
+    metersBetween:    _weaponRange.metersBetweenPoints
+  };
   // API terrain (types de terrain, coût de mouvement)
   const _terrainModule = await import("./rules/region-behaviors.js");
   game.rpg.terrain = {
@@ -621,7 +633,15 @@ Hooks.once("init", async () => {
   game.rpg.chat = { gmOnly, hpSecret };
 
   // Actions de base (Repos…) — exposées pour un rattrapage manuel du MJ
-  game.rpg.defaultActions = { grantDefaultActions, backfillDefaultActions };
+  // runDefaultAction/defaultActionKey sont exposés pour le menu de combat
+  // (macro, donc sans import possible) : sans eux il déclarait « Attaquer »
+  // comme un sort ordinaire — c'est-à-dire un sort vide.
+  const _defaultActions = await import("./rules/default-actions.js");
+  game.rpg.defaultActions = {
+    grantDefaultActions, backfillDefaultActions,
+    runDefaultAction:  _defaultActions.runDefaultAction,
+    defaultActionKey:  _defaultActions.defaultActionKey
+  };
 
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
