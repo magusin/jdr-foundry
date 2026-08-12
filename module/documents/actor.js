@@ -39,8 +39,8 @@ function sumBonuses(actor) {
     const t = item.type;
     const sys = item.system ?? {};
 
-    // ✅ Monstres: pas d'équipement weapon/armor (on ignore)
-    const isEquip = !isMonster && (t === "weapon" || t === "armor") && !!sys.equipe;
+    // ✅ Monstres: pas d'équipement weapon/armor/relic (on ignore)
+    const isEquip = !isMonster && (t === "weapon" || t === "armor" || t === "relic") && !!sys.equipe;
 
     // ✅ PJ + Monstres: sorts passifs (buff/aura) actifs => pris en compte
     // Sort passif : speed="passif" OU aura.active (rétrocompat)

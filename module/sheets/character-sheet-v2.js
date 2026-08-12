@@ -3,6 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
+import { isNpcActor } from "../rules/actor-roles.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -31,6 +32,36 @@ export const LABELS = {
   fatigueMax: "Fatigue max",
   podsMax: "Pods max"
 };
+
+/** Clé technique du seul emplacement où une relique peut aller. */
+export const RELIC_SLOT = "artefact";
+
+/** Libellés des emplacements — source unique pour les slots et les listes. */
+export const SLOT_LABELS = {
+  tete: "Tête",
+  torse: "Torse",
+  taille: "Taille",
+  bras: "Bras",
+  mains: "Mains",
+  jambes: "Jambes",
+  pieds: "Pieds",
+  mainDroite: "Main droite",
+  mainGauche: "Main gauche",
+  [RELIC_SLOT]: "Relique"
+};
+
+/**
+ * Emplacement effectif d'un item porté. Identique à `system.emplacement`,
+ * SAUF pour une relique : son emplacement est imposé par son type, jamais
+ * choisi. Sans ça une relique dont le champ est resté vide (import, copie
+ * console, objet créé avant l'existence du type) s'équipe sans jamais
+ * apparaître dans aucun slot — le symptôme classique « je l'équipe et il ne
+ * se passe rien ».
+ */
+export function slotOfItem(item) {
+  if (item?.type === "relic") return RELIC_SLOT;
+  return item?.system?.emplacement ?? "";
+}
 
 // ⚠️ soit tu recopies ta fonction normalizeState complète depuis le V1,
 // soit tu l'importes si tu l'as mise dans un fichier util.
@@ -294,13 +325,15 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
    *   - "never"   : fiche complète comme avant (PJ pas encore attribué,
    *                 groupe qui partage ses feuilles).
    * Le MJ et le propriétaire gardent TOUJOURS la fiche complète.
+   *
+   * Le critère lui-même vit dans rules/actor-roles.js : les listes de
+   * distribution (Envoyer, destinataires d'une quête, macro Distribuer)
+   * séparent PJ et PNJ avec EXACTEMENT la même règle, elles ne doivent pas
+   * en réinventer une seconde qui finirait par diverger.
    */
   static isNpcViewFor(doc) {
     if (!doc || game.user.isGM || doc.isOwner) return false;
-    const mode = String(doc.system?.pnjView ?? "auto");
-    if (mode === "never") return false;
-    if (mode === "always") return true;
-    return !doc.hasPlayerOwner;
+    return isNpcActor(doc);
   }
 
   _isNpcView() {
@@ -1341,9 +1374,14 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       it._derived = it._derived ?? {};
       it._derived.poidsTotal = Number((qte * poids).toFixed(2));
+      // Libellé lisible de l'emplacement : les listes « Porté »/« Dans le
+      // sac » affichaient la clé technique brute, ce qui donnait
+      // « artefact » pour une relique alors que le slot s'appelle
+      // « Relique » deux centimètres plus haut.
+      it._derived.emplacementLabel = SLOT_LABELS[slotOfItem(it)] ?? slotOfItem(it);
 
       const t = it.type;
-      const estEquip = (t === "weapon" || t === "armor");
+      const estEquip = (t === "weapon" || t === "armor" || t === "relic");
       const equipe = !!it.system.equipe;
 
       if (t === "consumable") out.consommables.push(it);
@@ -1457,7 +1495,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   async _toggleEquipItem(item) {
     const equipe = !!item.system.equipe;
     const type = item.type;
-    const slot = item.system?.emplacement;
+    const slot = slotOfItem(item);
 
     const HAND_SLOTS = new Set(["mainDroite", "mainGauche"]);
 
@@ -1506,34 +1544,45 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       return;
     }
 
-    const conflicts = equipped.filter(i => i.id !== item.id && i.system?.emplacement === slot);
+    const conflicts = equipped.filter(i => i.id !== item.id && slotOfItem(i) === slot);
     await unequipItems(conflicts);
 
-    await item.update({ "system.equipe": true });
+    // Relique équipée depuis le sac : on fige aussi son emplacement, pour
+    // qu'elle apparaisse bien dans le slot Relique même si le champ était
+    // resté vide (cf. slotOfItem).
+    const patch = { "system.equipe": true };
+    if (item.type === "relic" && item.system?.emplacement !== RELIC_SLOT) {
+      patch["system.emplacement"] = RELIC_SLOT;
+    }
+    await item.update(patch);
   }
 
 
   _buildEquipSlotsUI(items) {
     const HAND_SLOT_KEYS = new Set(["mainDroite", "mainGauche"]);
+    const L = SLOT_LABELS;
     const SLOT_DEFS = [
-      { key: "tete", label: "Tête", kind: "gear" },
-      { key: "torse", label: "Torse", kind: "gear" },
-      { key: "taille", label: "Taille", kind: "gear" },
-      { key: "bras", label: "Bras", kind: "gear" },
-      { key: "mains", label: "Mains", kind: "gear" },
-      { key: "jambes", label: "Jambes", kind: "gear" },
-      { key: "pieds", label: "Pieds", kind: "gear" },
-      { key: "mainDroite", label: "Main droite", kind: "hand" },
-      { key: "mainGauche", label: "Main gauche", kind: "hand" },
-      { key: "artefact", label: "Artefact", kind: "gear" }
+      { key: "tete", label: L.tete, kind: "gear" },
+      { key: "torse", label: L.torse, kind: "gear" },
+      { key: "taille", label: L.taille, kind: "gear" },
+      { key: "bras", label: L.bras, kind: "gear" },
+      { key: "mains", label: L.mains, kind: "gear" },
+      { key: "jambes", label: L.jambes, kind: "gear" },
+      { key: "pieds", label: L.pieds, kind: "gear" },
+      { key: "mainDroite", label: L.mainDroite, kind: "hand" },
+      { key: "mainGauche", label: L.mainGauche, kind: "hand" },
+      // Emplacement réservé aux items de type `relic`. La clé technique
+      // reste "artefact" (elle existait déjà avant que le type n'existe :
+      // le slot était affiché mais aucun objet ne pouvait y entrer).
+      { key: RELIC_SLOT, label: L[RELIC_SLOT], kind: "relic" }
     ];
 
-    const allEquipItems = items.filter(it => it.type === "weapon" || it.type === "armor");
+    const allEquipItems = items.filter(it => it.type === "weapon" || it.type === "armor" || it.type === "relic");
     const equipped = allEquipItems.filter(it => !!it.system?.equipe);
 
     const bySlot = new Map();
     for (const it of equipped) {
-      const slot = it.system?.emplacement;
+      const slot = slotOfItem(it);
       if (!slot) continue;
 
       bySlot.set(slot, it);
@@ -1563,6 +1612,14 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         options = allEquipItems
           .filter(i => i.type === "weapon" || HAND_SLOT_KEYS.has(i.system?.emplacement))
           .map(i => ({ ...i, selected: equippedItem?._id === i._id }));
+      } else if (s.kind === "relic") {
+        // Le slot relique liste TOUTES les reliques possédées, sans filtrer
+        // sur system.emplacement : c'est leur unique destination possible,
+        // et une relique importée avec un emplacement vide resterait sinon
+        // introuvable ici (donc inéquipable) sans que rien ne l'explique.
+        options = allEquipItems
+          .filter(i => i.type === "relic")
+          .map(i => ({ ...i, selected: equippedItem?._id === i._id }));
       } else {
         options = allEquipItems
           .filter(i => i.type === "armor")
@@ -1585,10 +1642,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const HAND_SLOTS = new Set(["mainDroite", "mainGauche"]);
 
     return this.document.items.find(i => {
-      if (!(i.type === "weapon" || i.type === "armor")) return false;
+      if (!(i.type === "weapon" || i.type === "armor" || i.type === "relic")) return false;
       if (!i.system?.equipe) return false;
 
-      const s = i.system?.emplacement;
+      const s = slotOfItem(i);
       if (s === slot) return true;
 
       if (i.type === "weapon" && i.system?.twoHands && HAND_SLOTS.has(slot)) {
@@ -1695,6 +1752,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       loot: { name: "Nouvel objet", type: "loot", system: { qte: 1, poids: 0 } },
       weapon: { name: "Nouvelle arme", type: "weapon", system: { equipe: false, emplacement: "mainDroite", qte: 1, poids: 1, difficulte: 0, damage: { dice: "1d6", flat: 0, scaling: { stat: "force", per: 10, perStep: 1 } }, livraison: "physique" } },
       armor: { name: "Nouvelle armure", type: "armor", system: { equipe: false, emplacement: "torse", qte: 1, poids: 2 } },
+      relic: { name: "Nouvelle relique", type: "relic", system: { equipe: false, emplacement: RELIC_SLOT, qte: 1, poids: 0.5 } },
       consumable: { name: "Nouveau consommable", type: "consumable", system: { qte: 1, poids: 0.2, utilisations: 1, effet: "" } },
 
       // ✅ spell compat: aura.active (ton template) + aura.enabled supporté

@@ -6,6 +6,7 @@
 // résolution + récompenses s'appliquent à TOUS les PJ qui ont une copie.
 
 import { propagateQuestUpdate } from "./quest-group.js";
+import { addItemToActor } from "./inventory.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -36,9 +37,11 @@ async function applyOutcomeTo(actor, questItem, success) {
         if (!src) { lines.push(`⚠️ Objet introuvable (${ri.name || uuid})`); continue; }
         const data = src.toObject();
         delete data._id;
-        if (data.system) data.system.qte = Math.max(1, n(ri.qty, 1));
-        const [created] = await actor.createEmbeddedDocuments("Item", [data]);
-        lines.push(`🎁 ${created.name} ×${Math.max(1, n(ri.qty, 1))}`);
+        const want = Math.max(1, n(ri.qty, 1));
+        // Empilement des Objets déjà possédés (rules/inventory.js) : la
+        // récompense s'ajoute à la pile existante au lieu d'en créer une 2e.
+        const res = await addItemToActor(actor, data, { qty: want });
+        lines.push(`🎁 ${res.item?.name ?? src.name} ×${want}${res.stacked ? ` (total ${res.total})` : ""}`);
       } catch (e) {
         lines.push(`⚠️ Erreur objet (${ri.name || uuid})`);
       }

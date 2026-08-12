@@ -1,6 +1,7 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
 import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
-import { bindSendToActorsButton, partyCharacters } from "./send-item-dialog.js";
+import { bindSendToActorsButton } from "./send-item-dialog.js";
+import { splitCharacters } from "../rules/actor-roles.js";
 import { setupItemRefDrop } from "./drop-helper.js";
 import {
   ensureDistribGroupId, findDistribCopies,
@@ -719,11 +720,16 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       // L'item lui-même, s'il est embarqué sur un PJ, compte comme sa propre copie.
       if (item.actor?.type === "character") actorIdsWithCopy.add(item.actor.id);
 
-      ctx.recipients = partyCharacters().map(a => ({
-        id: a.id,
-        name: a.name,
-        hasCopy: actorIdsWithCopy.has(a.id)
-      }));
+      // PJ et PNJ séparés (rules/actor-roles.js) : « qui voit cette quête »
+      // parle d'abord des joueurs. Les PNJ ne sont pas retirés — un PJ dont
+      // le compte n'est pas encore attribué atterrit avec eux, et un PNJ à
+      // qui une copie a déjà été donnée doit rester décochable — mais ils
+      // vivent dans une section repliée à part.
+      const toRow = (a) => ({ id: a.id, name: a.name, hasCopy: actorIdsWithCopy.has(a.id) });
+      const { pjs, npcs } = splitCharacters();
+      ctx.recipients = pjs.map(toRow);
+      ctx.recipientsNpc = npcs.map(toRow);
+      ctx.recipientsNpcGiven = ctx.recipientsNpc.filter(r => r.hasCopy).length;
     }
 
     // ── Vue joueur : n'expose ni les étapes à venir, ni les notes MJ ────────

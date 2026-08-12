@@ -5,12 +5,11 @@
 // passer par le glisser-déposer (qui reste possible en parallèle — les deux
 // chemins créent le même type de copie embarquée indépendante).
 
-/** Personnages joueurs du monde, triés par nom. */
-export function partyCharacters() {
-  return game.actors
-    .filter(a => a.type === "character")
-    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-}
+import { splitCharacters } from "../rules/actor-roles.js";
+
+// Réexport historique : plusieurs fiches importent partyCharacters d'ici.
+// La définition (et surtout le tri PJ / PNJ) vit dans rules/actor-roles.js.
+export { partyCharacters, npcCharacters } from "../rules/actor-roles.js";
 
 /**
  * Ouvre une popup de sélection de destinataires (cases à cocher + "Tous"),
@@ -22,40 +21,87 @@ export function partyCharacters() {
 export async function promptSendItemToActors(item) {
   if (!game.user.isGM || !item) return;
 
-  const actors = partyCharacters();
-  if (!actors.length) {
-    ui.notifications?.warn?.("Aucun personnage joueur dans le monde.");
+  // PJ et PNJ séparés : un PNJ n'est pas un destinataire ordinaire, et
+  // noyé au milieu des PJ il faisait rater la case voisine (les deux sont
+  // des acteurs `character`, seul rules/actor-roles.js les distingue).
+  // Les PNJ restent accessibles dans une section repliée plutôt que
+  // supprimés — un PJ sans compte joueur attribué est rangé avec eux, il
+  // ne doit pas devenir impossible à servir depuis cette fenêtre.
+  const { pjs, npcs } = splitCharacters();
+  if (!pjs.length && !npcs.length) {
+    ui.notifications?.warn?.("Aucun personnage dans le monde.");
     return;
   }
 
-  const rows = actors.map(a => `
+  const row = (a) => `
     <label style="display:flex;align-items:center;gap:6px;padding:2px 0">
       <input type="checkbox" data-actor-id="${a.id}" />
       ${a.name}
-    </label>`).join("");
+    </label>`;
+
+  const pjBlock = pjs.length ? `
+    <div>
+      <label style="display:flex;align-items:center;gap:6px;font-weight:600">
+        <input type="checkbox" id="send-all" /> Tous les PJ (${pjs.length})
+      </label>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:6px">
+        ${pjs.map(row).join("")}
+      </div>
+    </div>` : `
+    <div style="font-size:12px;opacity:.6">Aucun personnage joueur — voir les PNJ ci-dessous.</div>`;
+
+  const npcBlock = npcs.length ? `
+    <details style="border-top:1px solid rgba(255,255,255,0.1);padding-top:6px">
+      <summary style="cursor:pointer;font-size:12px;opacity:.75">
+        🎭 PNJ (${npcs.length})
+      </summary>
+      <label style="display:flex;align-items:center;gap:6px;font-weight:600;margin-top:6px">
+        <input type="checkbox" id="send-all-npc" /> Tous les PNJ
+      </label>
+      <div style="margin-top:4px">${npcs.map(row).join("")}</div>
+      <div style="font-size:11px;opacity:.55;margin-top:4px">
+        Un personnage est classé ici tant qu'aucun joueur ne le possède.
+        Pour le remettre parmi les PJ : onglet 🎭 PNJ / RP de sa fiche →
+        « Toujours la fiche complète (PJ) ».
+      </div>
+    </details>` : "";
 
   const content = `
     <div style="display:flex;flex-direction:column;gap:10px">
       <div style="font-size:12px;color:var(--color-text-secondary)">
         Envoyer <b>${item.name}</b> à :
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-weight:600">
-        <input type="checkbox" id="send-all" /> Tous les PJ
-      </label>
-      <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:6px">${rows}</div>
+      ${pjBlock}
+      ${npcBlock}
     </div>`;
 
   const readSelection = (root) => {
-    if (root?.querySelector("#send-all")?.checked) return actors.map(a => a.id);
-    return Array.from(root?.querySelectorAll("input[data-actor-id]") ?? [])
-      .filter(el => el.checked)
-      .map(el => el.dataset.actorId);
+    const ids = new Set(
+      Array.from(root?.querySelectorAll("input[data-actor-id]") ?? [])
+        .filter(el => el.checked && !el.disabled)
+        .map(el => el.dataset.actorId)
+    );
+    // Les cases « Tous » désactivent les cases individuelles de LEUR
+    // groupe : sans ces deux lignes, cocher « Tous les PJ » n'enverrait
+    // qu'aux PNJ éventuellement cochés à la main.
+    if (root?.querySelector("#send-all")?.checked) pjs.forEach(a => ids.add(a.id));
+    if (root?.querySelector("#send-all-npc")?.checked) npcs.forEach(a => ids.add(a.id));
+    return Array.from(ids);
   };
 
   const bindAllToggle = (root) => {
-    root?.querySelector("#send-all")?.addEventListener("change", (ev) => {
-      root.querySelectorAll("input[data-actor-id]").forEach(el => { el.disabled = ev.target.checked; });
-    });
+    const bind = (toggleId, group) => {
+      const toggle = root?.querySelector(`#${toggleId}`);
+      if (!toggle) return;
+      const ids = new Set(group.map(a => a.id));
+      toggle.addEventListener("change", (ev) => {
+        root.querySelectorAll("input[data-actor-id]").forEach(el => {
+          if (ids.has(el.dataset.actorId)) el.disabled = ev.target.checked;
+        });
+      });
+    };
+    bind("send-all", pjs);
+    bind("send-all-npc", npcs);
   };
 
   const selectedIds = await new Promise((resolve) => {
@@ -134,11 +180,16 @@ export async function promptSendItemToActors(item) {
     }
   }
 
+  // Empilement des Objets (type loot) : un PJ qui possède déjà celui-ci
+  // voit sa quantité augmenter au lieu de recevoir une seconde ligne —
+  // voir rules/inventory.js.
+  const { addItemToActor } = await import("../rules/inventory.js");
+
   const sentTo = [];
   for (const actor of targets) {
     try {
-      const [created] = await actor.createEmbeddedDocuments("Item", [foundry.utils.deepClone(baseData)]);
-      if (created) sentTo.push(actor.name);
+      const res = await addItemToActor(actor, foundry.utils.deepClone(baseData));
+      if (res.item) sentTo.push(res.stacked ? `${actor.name} (×${res.total})` : actor.name);
     } catch (e) {
       console.error(`[RPG] Envoi de "${item.name}" à ${actor.name} :`, e);
       ui.notifications?.error?.(`Échec de l'envoi à ${actor.name} — voir la console.`);

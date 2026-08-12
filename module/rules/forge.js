@@ -110,10 +110,12 @@ async function createResultItem(actor, recipe) {
 
   const itemData = sourceItem.toObject();
   delete itemData._id;
-  if (itemData.system) itemData.system.qte = 1;
 
-  const [created] = await actor.createEmbeddedDocuments("Item", [itemData]);
-  return { ok: true, item: created };
+  // Empilement des Objets déjà possédés (rules/inventory.js) : forger une
+  // deuxième corde ajoute +1 à la pile au lieu d'ouvrir une 2e ligne.
+  const { addItemToActor } = await import("./inventory.js");
+  const res = await addItemToActor(actor, itemData, { qty: 1 });
+  return { ok: true, item: res.item, stacked: res.stacked, total: res.total };
 }
 
 /**
@@ -154,7 +156,7 @@ export async function resolveCraft(actor, recipe, { success, roll = null, chance
   if (success) {
     const res = await createResultItem(actor, recipe);
     resultLine = res.ok
-      ? `<br>🛠️ <b>${res.item.name}</b> ajouté à l'inventaire.`
+      ? `<br>🛠️ <b>${res.item?.name ?? "Objet"}</b> ajouté à l'inventaire${res.stacked ? ` (×${res.total})` : ""}.`
       : `<br>⚠️ Réussite validée mais impossible de créer l'objet : ${res.reason}`;
   }
 

@@ -8,6 +8,18 @@ function n(v, d = 0) {
   return Number.isFinite(x) ? x : d;
 }
 
+/**
+ * Fiche d'équipement porté : armures ET reliques (type `relic`).
+ *
+ * Les deux types partagent exactement la même mécanique — un emplacement,
+ * des bonus permanents tant que l'objet est équipé, des résistances et des
+ * amplifications — la seule différence étant que la relique occupe un
+ * emplacement unique et dédié (`artefact`) au lieu d'une pièce d'armure.
+ * D'où une seule classe et un seul template, avec une poignée de branches
+ * `isRelic` : dupliquer 250 lignes de fiche pour un libellé et un <select>
+ * en moins ferait diverger silencieusement les deux moitiés à la première
+ * évolution des bonus.
+ */
 export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
@@ -75,8 +87,15 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
 
+    // Relique : même fiche que l'armure, mais l'emplacement n'est pas un
+    // choix — il n'existe qu'un slot Relique, imposé ici pour qu'une relique
+    // créée à la main (console, import) atterrisse toujours au bon endroit
+    // plutôt que sans emplacement, donc impossible à équiper.
+    ctx.isRelic = item.type === "relic";
+
     // defaults
     ctx.system.emplacement = String(ctx.system.emplacement ?? "");
+    if (ctx.isRelic) ctx.system.emplacement = "artefact";
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.description = String(ctx.system.description ?? "");
 
@@ -155,6 +174,15 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
     // (optionnel) normalisation types numériques
     if (expanded?.system?.poids != null) expanded.system.poids = n(expanded.system.poids, 0);
+
+    // Relique : le template n'affiche aucun <select> d'emplacement (il n'y
+    // a qu'un slot possible), donc rien ne le renverrait — on l'écrit ici
+    // pour qu'une relique importée/créée hors fiche avec un emplacement
+    // vide devienne équipable dès sa première sauvegarde.
+    if (this.document.type === "relic" && this.document.system?.emplacement !== "artefact") {
+      expanded.system = expanded.system ?? {};
+      expanded.system.emplacement = "artefact";
+    }
 
     // bonus : force les nombres
     if (expanded?.system?.bonus) {

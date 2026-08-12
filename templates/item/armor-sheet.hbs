@@ -1,5 +1,8 @@
-{{!-- systems/rpg/templates/item/item-armor-sheet.hbs --}}
-<div class="rpg-sheet armor-sheet" autocomplete="off">
+{{!-- systems/rpg/templates/item/item-armor-sheet.hbs
+     Sert aux ARMURES et aux RELIQUES (type relic) : même mécanique
+     d'équipement et de bonus, seules changent l'étiquette et le choix
+     d'emplacement (une relique n'en a qu'un). Voir item-armor-sheet-v2.js. --}}
+<div class="rpg-sheet armor-sheet{{#if isRelic}} relic-sheet{{/if}}" autocomplete="off">
 
   {{!-- HEADER --}}
   <header class="sheet-header" style="display:flex; gap:12px; align-items:center;">
@@ -17,7 +20,7 @@
       {{else}}
         <input name="name" type="text" value="{{item.name}}" style="width:100%; font-size:20px;" />
       {{/if}}
-      <small>Armure</small>
+      <small>{{#if isRelic}}Relique{{else}}Armure{{/if}}</small>
     </div>
     {{#if isGM}}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -41,7 +44,18 @@
       <h2>Équipement</h2>
       <label>Emplacement</label>
 
-      {{#if canEdit}}
+      {{#if isRelic}}
+        {{!-- Une relique n'a qu'un emplacement possible : pas de choix à
+             offrir, et surtout aucun moyen de la ranger par erreur dans un
+             emplacement d'armure où elle ne serait jamais visible. --}}
+        <div style="margin-top:4px;">
+          <b>✨ Relique</b>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">
+            Emplacement unique, indépendant des pièces d'armure : une seule relique
+            portée à la fois, ses bonus s'appliquent tant qu'elle est équipée.
+          </div>
+        </div>
+      {{else if canEdit}}
         <select name="system.emplacement" style="width:100%;">
           <option value="">— Choisir —</option>
           <option value="tete"   {{#if (eq system.emplacement "tete")}}selected{{/if}}>Tête</option>

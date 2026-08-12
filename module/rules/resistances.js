@@ -10,13 +10,13 @@ const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d
 import { getWeatherModifierFor } from "./weather-library.js";
 
 /**
- * Résistances fournies par l'équipement équipé (arme/armure).
+ * Résistances fournies par l'équipement équipé (arme/armure/relique).
  * Format attendu sur l'item : system.resistances = [{tag, durationReduction, dotReductionPct, immune}]
  */
 function getGearResistances(actor) {
   const list = [];
   for (const it of actor.items) {
-    if (it.type !== "weapon" && it.type !== "armor") continue;
+    if (it.type !== "weapon" && it.type !== "armor" && it.type !== "relic") continue;
     if (!it.system?.equipe) continue;
     const res = Array.isArray(it.system?.resistances) ? it.system.resistances : [];
     list.push(...res);

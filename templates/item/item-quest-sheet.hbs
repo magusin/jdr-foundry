@@ -66,6 +66,26 @@
           {{else}}
           <p class="quest-hint">Aucun personnage joueur dans le monde.</p>
           {{/if}}
+
+          {{!-- PNJ à part : ce ne sont pas des destinataires ordinaires,
+                mais la section reste ouvrable (un PJ sans compte joueur
+                attribué est classé ici, et une copie déjà donnée à un PNJ
+                doit rester décochable). --}}
+          {{#if recipientsNpc.length}}
+          <details class="quest-recipients-npc" {{#if recipientsNpcGiven}}open{{/if}}>
+            <summary class="quest-hint" style="cursor:pointer">
+              🎭 PNJ ({{recipientsNpc.length}}){{#if recipientsNpcGiven}} — {{recipientsNpcGiven}} avec une copie{{/if}}
+            </summary>
+            <div class="quest-recipients-list">
+              {{#each recipientsNpc as |r|}}
+              <label class="quest-checkbox-label">
+                <input type="checkbox" class="quest-recipient-check" data-actor-id="{{r.id}}" {{#if r.hasCopy}}checked{{/if}} />
+                {{r.name}}
+              </label>
+              {{/each}}
+            </div>
+          </details>
+          {{/if}}
         </div>
 
         <div class="form-group">

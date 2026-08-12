@@ -43,7 +43,7 @@ function fingerprints(item) {
 }
 
 /** Types d'objets concernés par le codex (le reste n'est pas catalogué). */
-const CODEX_TYPES = new Set(["weapon", "armor", "spell", "consumable", "loot", "recipe"]);
+const CODEX_TYPES = new Set(["weapon", "armor", "relic", "spell", "consumable", "loot", "recipe"]);
 
 /**
  * Enregistre des objets dans le codex de leur porteur.

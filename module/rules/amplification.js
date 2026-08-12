@@ -19,11 +19,11 @@
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
-/** Amplifications fournies par l'équipement équipé du lanceur. */
+/** Amplifications fournies par l'équipement équipé du lanceur (arme/armure/relique). */
 function getGearAmplifications(actor) {
   const list = [];
   for (const it of actor?.items ?? []) {
-    if (it.type !== "weapon" && it.type !== "armor") continue;
+    if (it.type !== "weapon" && it.type !== "armor" && it.type !== "relic") continue;
     if (!it.system?.equipe) continue;
     const amps = Array.isArray(it.system?.amplifications) ? it.system.amplifications : [];
     list.push(...amps);

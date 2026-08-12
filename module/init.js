@@ -67,6 +67,8 @@ import * as Reputation from "./rules/reputation.js";
 import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
+import * as Inventory from "./rules/inventory.js";
+import * as ActorRoles from "./rules/actor-roles.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
 import * as Skills from "./rules/skills.js";
@@ -657,7 +659,9 @@ Hooks.once("init", async () => {
   // Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
   Items.registerSheet("rpg", RPGWeaponSheetV2, { types: ["weapon"], makeDefault: true });
   // Items.registerSheet("rpg", RPGArmorSheet, { types: ["armor"], makeDefault: true });
-  Items.registerSheet("rpg", RPGArmorSheetV2, { types: ["armor"], makeDefault: true });
+  // Reliques : même fiche que l'armure (même mécanique d'équipement/bonus,
+  // voir item-armor-sheet-v2.js), elle s'adapte via ctx.isRelic.
+  Items.registerSheet("rpg", RPGArmorSheetV2, { types: ["armor", "relic"], makeDefault: true });
   // Items.registerSheet("rpg", RPGSpellSheet, { types: ["spell"], makeDefault: true });
   Items.registerSheet("rpg", RPGSpellSheetV2, { types: ["spell"], makeDefault: true });
   // Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
@@ -1011,6 +1015,18 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.itemLink : synchronisation opt-in armes/armures/sorts/
     // consommables/recettes/loot déjà distribués (contrepartie de questGroup)
     game.rpg.itemLink = ItemLink;
+
+    // ✅ game.rpg.inventory : ajout d'objet à un acteur AVEC empilement des
+    // Objets (loot) déjà possédés. Exposé ici parce que les macros ne sont
+    // pas des modules ES et ne peuvent pas importer rules/inventory.js
+    // (cf. macro/item-distribute.js).
+    game.rpg.inventory = Inventory;
+
+    // ✅ game.rpg.actorRoles : qui est un PJ, qui est un PNJ (les deux sont
+    // des acteurs `character`). Même critère que la « carte PNJ » des
+    // fiches, réutilisé par les macros de distribution pour séparer les
+    // deux catégories dans leurs listes de cibles.
+    game.rpg.actorRoles = ActorRoles;
 
     // ✅ game.rpg.combatState : K.O., fuite, fin de combat
     game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };
