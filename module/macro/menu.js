@@ -121,9 +121,16 @@
 
   // Attaque de base : sans arme équipée, on se bat à mains nues. Le
   // personnage n'est jamais privé d'attaque.
+  //
+  // Sauf les MONSTRES : dans ce système ils ne manient pas d'arme, leurs
+  // attaques sont leurs propres compétences (objets de type sort écrits sur
+  // leur fiche). Le repli « Mains nues » leur affichait une section Armes
+  // parasite, sans rapport avec la façon dont ils frappent. Si le MJ équipe
+  // malgré tout une vraie arme sur un monstre, elle reste listée.
+  const isMonster = actor.type === "monster";
   const weaponsEquipped = weaponsReal.length
     ? weaponsReal
-    : [game.rpg?.unarmed?.buildUnarmedWeapon?.(actor)].filter(Boolean);
+    : (isMonster ? [] : [game.rpg?.unarmed?.buildUnarmedWeapon?.(actor)].filter(Boolean));
 
   const spellsAll = actor.items
     .filter((i) => i.type === "spell")
@@ -747,7 +754,14 @@
       $root.find(".section-tab").removeClass("active");
       $(ev.currentTarget).addClass("active");
       $root.find(".rpg-section").hide();
-      $root.find(`#sec-${state.section.replace("_", "\\-")}`).show();
+      // ⚠️ Pas d'échappement ici : les id des sections contiennent un vrai
+      // souligné (#sec-spells_normal), qui n'a rien à échapper en CSS. Le
+      // `.replace("_", "\\-")` d'origine cherchait donc #sec-spells\-normal,
+      // c'est-à-dire l'id « sec-spells-normal », qui n'existe pas : cliquer sur
+      // Normaux / Rapides / Passifs masquait toutes les sections sans jamais en
+      // rouvrir aucune — panneau vide, alors que l'onglet annonce bien « (7) ».
+      // Seul « Armes », sans souligné, y échappait.
+      $root.find(`#sec-${state.section}`).show();
     });
 
     // Filtre sorts

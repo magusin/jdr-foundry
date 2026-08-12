@@ -18,9 +18,11 @@
 
 const FLAG_SCOPE = "rpg";
 const FLAG_KEY   = "defaultActions";
-// Incrémenté à chaque nouvelle action de base : le rattrapage au chargement
-// complète alors les acteurs déjà traités par une version antérieure.
-const VERSION    = 4;
+// Incrémenté à chaque nouvelle action de base — ou à chaque RETRAIT : le
+// rattrapage au chargement repasse alors sur les acteurs déjà traités par une
+// version antérieure, pour compléter ce qui manque et supprimer ce qui n'a
+// plus lieu d'être (v5 : « Attaquer » retiré des monstres).
+const VERSION    = 5;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -189,11 +191,16 @@ const DEFAULT_ACTIONS = {
 const TARGET_TYPES = new Set(["character", "monster"]);
 
 /**
- * Actions de base non pertinentes pour certains types d'acteur : un monstre
- * n'a pas besoin de déclarer un « Changer d'arme » (pas d'échange d'arme en
- * tour par tour pour un monstre dans ce système).
+ * Actions de base non pertinentes pour certains types d'acteur.
+ *
+ * Un monstre ne manie pas d'arme dans ce système : ses attaques sont ses
+ * propres compétences (des objets de type « spell » que le MJ écrit sur sa
+ * fiche). « Attaquer », qui frappe avec l'arme équipée — ou à mains nues —,
+ * et « Changer d'arme » n'ont donc aucun sens pour lui : ils encombraient sa
+ * liste de sorts d'entrées inutilisables.
  */
 const ACTION_EXCLUDED_TYPES = {
+  attaquer:    new Set(["monster"]),
   changerArme: new Set(["monster"])
 };
 
@@ -214,6 +221,23 @@ export async function grantDefaultActions(actor) {
   }
 
   if (missing.length) await actor.createEmbeddedDocuments("Item", missing);
+
+  // Retire les actions de base qui ne concernent plus ce type d'acteur.
+  // Indispensable pour un RETRAIT : la liste ci-dessus n'empêche que les
+  // nouvelles attributions, elle ne défait rien sur les monstres qui avaient
+  // déjà reçu « Attaquer » avant que l'exclusion n'existe. Ne touche qu'aux
+  // objets portant NOTRE drapeau : une compétence maison qui s'appellerait
+  // « Attaquer » n'est pas concernée.
+  const stale = actor.items.filter(i => {
+    const key = i.getFlag?.(FLAG_SCOPE, ACTION_KEY_FLAG);
+    return key && ACTION_EXCLUDED_TYPES[key]?.has(actor.type);
+  });
+  if (stale.length) {
+    await actor.deleteEmbeddedDocuments("Item", stale.map(i => i.id));
+    console.log(`[RPG] Actions de base retirées de ${actor.name} : `
+              + stale.map(i => i.name).join(", "));
+  }
+
   try { await openMonsterToPlayers(actor); }
   catch (e) { console.warn(`[RPG] ouverture de la fiche de ${actor.name} :`, e); }
   await actor.setFlag(FLAG_SCOPE, FLAG_KEY, VERSION);
@@ -234,8 +258,11 @@ export async function backfillDefaultActions() {
   let done = 0;
   for (const actor of todo) {
     try {
+      const before = actor.items.size;
       const added = await grantDefaultActions(actor);
-      if (added.length) done++;
+      // Compte aussi les acteurs nettoyés (retrait d'une action devenue
+      // non pertinente), pas seulement ceux qui ont reçu quelque chose.
+      if (added.length || actor.items.size !== before) done++;
     } catch (e) {
       console.warn(`[RPG] actions de base sur ${actor.name} :`, e);
     }
