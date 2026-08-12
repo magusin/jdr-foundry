@@ -15,6 +15,7 @@
 //   - description : explication pour le MJ
 
 import { getZoneEffectsAt } from "./zone-effects.js";
+import { restoreScrollPositions } from "../sheets/sheet-helpers.js";
 
 export const TERRAIN_TYPES = {
   terrainDifficile: {
@@ -432,6 +433,8 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
       content.style.overflowY = "auto";
       content.style.maxHeight = "80vh";
     }
+    // Un re-render (changement de champ) remettait la fenêtre tout en haut.
+    restoreScrollPositions(this.element);
   }
 }
 

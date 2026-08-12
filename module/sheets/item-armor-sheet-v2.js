@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-armor-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -251,6 +251,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     if (!root) return;
 
     applyUiTheme(root);
+    restoreScrollPositions(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);

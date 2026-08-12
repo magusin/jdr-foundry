@@ -253,7 +253,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox, restoreScrollPositions } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -879,6 +879,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     const root = this.element;
     applyUiTheme(root);
+    // Équiper un objet, cocher une case… re-rend toute la fiche : sans ceci
+    // la fenêtre remonte tout en haut à chaque clic (voir sheet-helpers.js).
+    restoreScrollPositions(root);
 
     // ── Vue PNJ (joueur, personnage qui n'est pas le sien) ────────────────
     // Rien à brancher hormis l'agrandissement de l'illustration : la carte ne

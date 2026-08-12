@@ -3,7 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
-import { applyUiTheme, openImageLightbox } from "./sheet-helpers.js";
+import { applyUiTheme, openImageLightbox, restoreScrollPositions } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -104,7 +104,6 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
   }
 
   _activeTab = "main";
-  _scrollTop = 0;
 
   async _prepareContext(options) {
     const ctx = (await super._prepareContext(options)) ?? {};
@@ -296,18 +295,11 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     // ── Préserve la position de défilement entre les re-renders ──────────
     // Chaque modification de champ déclenche un re-render de la fiche qui
     // remettait la fenêtre tout en haut (très pénible dans l'onglet
-    // Génération). On mémorise le scrollTop et on le restaure après render.
-    const scroller = root.querySelector(".window-content") ?? root;
-    if (scroller) {
-      if (this._scrollTop) {
-        scroller.scrollTop = this._scrollTop;
-        requestAnimationFrame(() => { scroller.scrollTop = this._scrollTop; });
-      }
-      if (!scroller.dataset.rpgScrollBound) {
-        scroller.dataset.rpgScrollBound = "1";
-        scroller.addEventListener("scroll", () => { this._scrollTop = scroller.scrollTop; });
-      }
-    }
+    // Génération). Mutualisé avec toutes les autres fiches, qui souffraient
+    // du même défaut — voir restoreScrollPositions() dans sheet-helpers.js.
+    // Appelé APRÈS switchTab() : c'est lui qui fixe la hauteur réelle du
+    // contenu, donc la course de défilement disponible.
+    restoreScrollPositions(root);
 
     // ── AUTO-SAVE tous les champs ─────────────────────
     // En V2 les inputs ne sont plus soumis automatiquement,

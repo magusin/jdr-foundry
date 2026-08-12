@@ -1,6 +1,6 @@
 // module/sheets/item-recipe-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -51,6 +51,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     bindImageEditors(root, this.document);
     applyUiTheme(root);
+    restoreScrollPositions(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindSendToActorsButton(root, this.document);
     bindLinkSyncCheckbox(root, this.document);

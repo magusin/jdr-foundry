@@ -1,5 +1,5 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
-import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions } from "./sheet-helpers.js";
 import { bindSendToActorsButton } from "./send-item-dialog.js";
 import { splitCharacters } from "../rules/actor-roles.js";
 import { setupItemRefDrop } from "./drop-helper.js";
@@ -166,6 +166,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
 
     applyUiTheme(this.element);
+    // Défilement de la FENÊTRE (le panneau de page, lui, est géré plus bas :
+    // il ne doit pas être restauré quand une action change de page).
+    restoreScrollPositions(this.element);
     applySheetViewMode(this.element, { isGM: game.user.isGM });
     bindImageEditors(this.element, this.document);
     bindSendToActorsButton(this.element, this.document, {

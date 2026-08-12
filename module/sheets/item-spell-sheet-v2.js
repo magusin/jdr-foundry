@@ -1,7 +1,7 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
-import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, restoreScrollPositions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -1063,6 +1063,7 @@ static PARTS = foundry.utils.mergeObject(
     const root = this.element;
     if (!root) return;
     applyUiTheme(root);
+    restoreScrollPositions(root);
 
     // ✅ Vue joueur : les champs readonly deviennent invisibles comme du texte,
     // les boutons d'action sont masqués. Le MJ voit tout et peut tout éditer.
@@ -1269,8 +1270,14 @@ static PARTS = foundry.utils.mergeObject(
   }
 
   /**
-   * Mémorise accordéons ouverts + défilement avant un re-render structurel
+   * Mémorise les accordéons ouverts avant un re-render structurel
    * (ajout/suppression), et les restaure juste après.
+   *
+   * Le défilement, lui, n'est plus géré ici : restoreScrollPositions()
+   * (sheet-helpers.js, appelé depuis _onRender) le fait pour TOUS les rendus
+   * de TOUTES les fiches, et surtout sur le bon conteneur — l'instantané pris
+   * ici lisait `.sheet-body` en priorité, qui existe mais ne défile pas (c'est
+   * `.window-content` qui porte l'ascenseur), donc il valait toujours 0.
    */
   _snapshotView() {
     const root = this.element;
@@ -1278,8 +1285,7 @@ static PARTS = foundry.utils.mergeObject(
     root?.querySelectorAll("details[data-fx-index]").forEach(d => {
       if (d.open) open.add(d.dataset.fxIndex);
     });
-    const scroller = root?.querySelector(".sheet-body") ?? root?.querySelector(".window-content");
-    return { open, scrollTop: scroller?.scrollTop ?? 0 };
+    return { open };
   }
 
   _restoreView(snap) {
@@ -1289,11 +1295,6 @@ static PARTS = foundry.utils.mergeObject(
     root.querySelectorAll("details[data-fx-index]").forEach(d => {
       if (snap.open.has(d.dataset.fxIndex)) d.open = true;
     });
-    const scroller = root.querySelector(".sheet-body") ?? root.querySelector(".window-content");
-    if (scroller && snap.scrollTop) {
-      scroller.scrollTop = snap.scrollTop;
-      requestAnimationFrame(() => { scroller.scrollTop = snap.scrollTop; });
-    }
   }
 
   /** Applique une modification structurelle puis re-rend en gardant la vue. */
