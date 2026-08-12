@@ -632,6 +632,7 @@ Hooks.once("init", async () => {
     const _unarmed = await import("./rules/unarmed.js");
     game.rpg.unarmed = {
       UNARMED_ID: _unarmed.UNARMED_ID,
+      isUnarmedId: _unarmed.isUnarmedId,
       buildUnarmedWeapon: _unarmed.buildUnarmedWeapon,
       getAttackWeapon: _unarmed.getAttackWeapon,
       resolveWeapon: _unarmed.resolveWeapon

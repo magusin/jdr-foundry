@@ -7,7 +7,32 @@
 // enregistrée dans l'inventaire, elle est reconstruite à l'identique au moment
 // de résoudre l'attaque grâce à l'identifiant réservé UNARMED_ID.
 
-export const UNARMED_ID = "__rpg_unarmed__";
+/**
+ * Identifiant réservé de l'arme « Mains nues ».
+ *
+ * ⚠️ Doit être un identifiant Foundry VALIDE : exactement 16 caractères
+ * alphanumériques. L'ancienne valeur, "__rpg_unarmed__", ne l'était pas (15
+ * caractères, avec des soulignés) et faisait échouer la validation du
+ * document dès sa construction :
+ *   « _id: must be a valid 16-character alphanumeric ID »
+ * buildUnarmedWeapon() attrapait l'erreur et renvoyait null — donc, en
+ * pratique, plus AUCUNE attaque à mains nues n'était possible : ni depuis le
+ * menu d'action (l'entrée disparaissait de la liste), ni depuis l'action de
+ * base « Attaquer » d'un personnage désarmé.
+ */
+export const UNARMED_ID = "rpgUnarmed000000";
+
+/**
+ * Ancienne valeur, encore présente dans les messages de chat d'attaques
+ * déclarées avant ce correctif : resolveWeapon() doit continuer de la
+ * reconnaître, sinon ces messages-là résolvent sur « arme introuvable ».
+ */
+const LEGACY_UNARMED_IDS = ["__rpg_unarmed__"];
+
+/** true si cet identifiant désigne l'arme temporaire « Mains nues ». */
+export function isUnarmedId(id) {
+  return id === UNARMED_ID || LEGACY_UNARMED_IDS.includes(id);
+}
 
 /** Données système d'une attaque à mains nues. */
 export function unarmedSystemData() {
@@ -74,6 +99,6 @@ export function getAttackWeapon(actor) {
  */
 export function resolveWeapon(actor, weaponId) {
   if (!actor) return null;
-  if (weaponId === UNARMED_ID) return buildUnarmedWeapon(actor);
+  if (isUnarmedId(weaponId)) return buildUnarmedWeapon(actor);
   return actor.items.get(weaponId) ?? null;
 }

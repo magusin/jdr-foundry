@@ -145,16 +145,77 @@ async function bumpFatigue(actor, weapon = null, offhand = null) {
 }
 
 /**
- * Appelée dans renderChatMessageHTML. Branche les 3 boutons Échec/Touché/Critique
- * directement (même pattern que bindSpellChatButtons) — masqués pour les joueurs,
- * désactivés une fois la résolution faite.
+ * Appelée dans renderChatMessageHTML. Branche TOUS les boutons du flux
+ * d'attaque, sur les trois types de messages qu'il produit :
+ *   - "attackDeclaration"   : validation MJ, puis jet de touché du joueur,
+ *                             puis verdict Échec/Touché/Critique (MJ) ;
+ *   - "attackDamageRoll"    : « 🎲 Lancer les dégâts » (joueur) ;
+ *   - "attackDamagePending" : « 💥 Appliquer les dégâts » (MJ).
+ * Les boutons réservés au MJ sont retirés du DOM côté joueur, et désactivés
+ * une fois l'étape jouée.
  */
 export function bindAttackChatButtons(htmlEl, message) {
   const flags = message?.flags?.rpg ?? {};
-  if (flags.type !== "attackDeclaration") return;
 
   const root = htmlEl instanceof HTMLElement ? htmlEl : htmlEl?.[0];
   if (!root) return;
+
+  // ── Message "attackDamageRoll" : le joueur lance son jet de dégâts ──────
+  if (flags.type === "attackDamageRoll") {
+    const btn = root.querySelector(".rpg-roll-damage-attack:not([data-bound])");
+    if (!btn) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      btn.disabled = true;
+      try {
+        await rollAttackDamage(message);
+      } catch (e) {
+        console.error("[RPG][AttackDamageRoll]", e);
+        ui.notifications?.error?.(`Erreur jet de dégâts : ${e?.message ?? e}`);
+        btn.disabled = false;
+      }
+    });
+    return;
+  }
+
+  // ── Message "attackDamagePending" : bouton MJ « Appliquer les dégâts » ──
+  if (flags.type === "attackDamagePending") {
+    if (!game.user.isGM) {
+      root.querySelector(".rpg-attack-apply")?.remove();
+      return;
+    }
+    if (root.dataset.rpgAttackApplyBound === "1") return;
+    root.dataset.rpgAttackApplyBound = "1";
+
+    if (flags.applied) {
+      root.querySelectorAll(".rpg-attack-apply-btn").forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
+      return;
+    }
+
+    const applyBtn = root.querySelector(".rpg-attack-apply-btn");
+    applyBtn?.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!game.user.isGM) return;
+      applyBtn.disabled = true;
+      try {
+        await applyAttackDamage(message);
+      } catch (e) {
+        console.error("[RPG][AttackApplyDamage]", e);
+        ui.notifications?.error?.(`Erreur application des dégâts : ${e?.message ?? e}`);
+        applyBtn.disabled = false;
+      }
+    });
+  }
+
+  // ⚠️ Les deux branches ci-dessus traitent des messages qui ne sont PAS des
+  // déclarations : elles doivent rester AVANT ce garde-fou. Écrites en
+  // dessous, elles n'étaient jamais atteintes — c'est ce qui rendait « 🎲
+  // Lancer les dégâts » et « 💥 Appliquer les dégâts » totalement inertes,
+  // pour le joueur comme pour le MJ (aucun écouteur n'était branché, donc
+  // aucune erreur non plus : le clic ne faisait simplement rien).
+  if (flags.type !== "attackDeclaration") return;
 
   const phase = flags.phase ?? "pending";
 
@@ -246,56 +307,6 @@ export function bindAttackChatButtons(htmlEl, message) {
         }
       });
     }
-    return;
-  }
-
-  // ── Message "attackDamageRoll" : le joueur lance son jet de dégâts ──────
-  if (flags.type === "attackDamageRoll") {
-    const btn = root.querySelector(".rpg-roll-damage-attack:not([data-bound])");
-    if (!btn) return;
-    btn.dataset.bound = "1";
-    btn.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      btn.disabled = true;
-      try {
-        await rollAttackDamage(message);
-      } catch (e) {
-        console.error("[RPG][AttackDamageRoll]", e);
-        ui.notifications?.error?.(`Erreur jet de dégâts : ${e?.message ?? e}`);
-        btn.disabled = false;
-      }
-    });
-    return;
-  }
-
-  // ── Message "attackDamagePending" : bouton MJ « Appliquer les dégâts » ──
-  if (flags.type === "attackDamagePending") {
-    if (!game.user.isGM) {
-      root.querySelector(".rpg-attack-apply")?.remove();
-      return;
-    }
-    if (root.dataset.rpgAttackApplyBound === "1") return;
-    root.dataset.rpgAttackApplyBound = "1";
-
-    if (flags.applied) {
-      root.querySelectorAll(".rpg-attack-apply-btn").forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
-      return;
-    }
-
-    const applyBtn = root.querySelector(".rpg-attack-apply-btn");
-    applyBtn?.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (!game.user.isGM) return;
-      applyBtn.disabled = true;
-      try {
-        await applyAttackDamage(message);
-      } catch (e) {
-        console.error("[RPG][AttackApplyDamage]", e);
-        ui.notifications?.error?.(`Erreur application des dégâts : ${e?.message ?? e}`);
-        applyBtn.disabled = false;
-      }
-    });
   }
 }
 
