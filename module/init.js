@@ -1994,9 +1994,10 @@ Hooks.once("init", async () => {
   // Codex : les joueurs ne voient dans les compendiums que ce qu'ils ont eu
   try { installCodex(); } catch (e) { console.warn("[RPG] codex:", e); }
 
-  // Synchro d'objets liés (armes/armures/sorts/consommables/recettes/loot) :
-  // voir rules/item-link.js. Opt-in par objet (case "🔗 Synchro" sur la
-  // fiche), contrepartie de quest-group.js pour tout ce qui n'est pas une
+  // Synchro d'objets liés (armes/armures/sorts/consommables/recettes/loot),
+  // chez TOUS les porteurs — PJ, PNJ et monstres : voir rules/item-link.js.
+  // Active par défaut, avec désistement par exemplaire (case "🔗 Synchro" sur
+  // la fiche) ; contrepartie de quest-group.js pour tout ce qui n'est pas une
   // quête.
   try { ItemLink.installItemLinkSync(); } catch (e) { console.warn("[RPG] synchro objets liés:", e); }
 
