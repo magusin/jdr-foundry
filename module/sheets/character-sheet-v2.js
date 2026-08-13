@@ -1465,7 +1465,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const { runDefaultAction } = await import("../rules/default-actions.js");
       const special = await runDefaultAction(this.document, item);
       if (special.handled) {
-        if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+        // `cancelled` = fenêtre de choix fermée par le joueur : pas d'alerte.
+        if (!special.ok && !special.cancelled) {
+          ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+        }
         await this.render({ force: true });
         return;
       }

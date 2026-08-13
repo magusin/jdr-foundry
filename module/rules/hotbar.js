@@ -60,7 +60,11 @@ async function useItemFromHotbarImpl(uuid) {
     const { runDefaultAction } = await import("./default-actions.js");
     const special = await runDefaultAction(actor, item, { targetToken });
     if (special.handled) {
-      if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+      // `cancelled` = le joueur a fermé la fenêtre de choix : ni action, ni
+      // avertissement (voir pickAttackWeapon).
+      if (!special.ok && !special.cancelled) {
+        ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+      }
       return special;
     }
 
@@ -142,26 +146,62 @@ function bindHotbarHover() {
   if (!bar || bar.dataset.rpgHover) return;
   bar.dataset.rpgHover = "1";
 
-  const resolve = (el) => {
-    const slotEl = el?.closest?.("[data-slot], .macro");
+  /** L'emplacement de barre sous le curseur, quel que soit l'enfant visé. */
+  const slotOf = (el) => el?.closest?.("[data-slot], .macro, .slot") ?? null;
+
+  const uuidOfSlot = (slotEl) => {
     if (!slotEl) return null;
     const slot = Number(slotEl.dataset?.slot);
+    // `data-macro-id` n'existe pas sur toutes les versions de la barre : le
+    // repli par numéro d'emplacement (game.user.hotbar) marche partout.
     const macroId = slotEl.dataset?.macroId
                  ?? (Number.isFinite(slot) ? game.user.hotbar?.[slot] : null);
     const macro = macroId ? game.macros.get(macroId) : null;
     return macro?.getFlag?.(FLAG_SCOPE, FLAG_ITEM) ?? null;
   };
 
+  // ⚠️ `mouseover`/`mouseout` se redéclenchent à CHAQUE enfant traversé
+  // (l'image, le numéro d'emplacement…), pas seulement en entrant et en
+  // sortant de la case. Avec un dessin asynchrone (fromUuid), le nettoyage
+  // déclenché par la sortie de l'image pouvait donc arriver APRÈS le dessin
+  // demandé par l'entrée dans la case : plus rien ne s'affichait, ou par
+  // à-coups. On ne réagit donc qu'aux vrais changements de case, et un
+  // dessin devenu obsolète pendant son await est abandonné.
+  let current = null;   // élément d'emplacement actuellement survolé
+  let seq = 0;          // n° du dernier survol demandé
+
+  const leave = () => {
+    current = null;
+    seq++;
+    try { game.rpg?.ranges?.clearRanges?.(); } catch { /* ignore */ }
+  };
+
   bar.addEventListener("mouseover", async (ev) => {
+    const slotEl = slotOf(ev.target);
+    if (slotEl === current) return;        // simple déplacement interne
+    if (!slotEl) return leave();
+    current = slotEl;
+    const mine = ++seq;
+
     try {
-      const uuid = resolve(ev.target);
+      const uuid = uuidOfSlot(slotEl);
+      // Trace lisible en console (F12) si un survol « ne fait rien » : le
+      // balisage de la barre d'actions varie d'une version de Foundry à
+      // l'autre, et c'est le seul maillon qu'on ne peut pas vérifier hors
+      // d'une vraie session.
+      console.debug("[RPG] survol barre d'actions :", {
+        slot: slotEl.dataset?.slot, macroId: slotEl.dataset?.macroId, uuid
+      });
       if (!uuid) return;
       const item = await fromUuid(uuid).catch(() => null);
       const actor = item?.parent;
       if (!item || !actor) return;
+      if (mine !== seq) return;            // le curseur est déjà reparti
 
       const api = game.rpg?.ranges;
       if (!api) return;
+      // Un sort porte sa propre portée ; « Attaquer » n'en a pas et retombe
+      // sur l'arme équipée (géré dans showSpellRangeOverlay).
       if (item.type === "spell") api.showSpellRange?.(actor, item);
       else if (item.type === "weapon") {
         const token = actor.getActiveTokens?.()?.[0] ?? canvas?.tokens?.controlled?.[0];
@@ -170,8 +210,12 @@ function bindHotbarHover() {
     } catch (e) { console.warn("[RPG] aperçu de portée (barre d'actions) :", e); }
   });
 
-  bar.addEventListener("mouseout", () => {
-    try { game.rpg?.ranges?.clearRanges?.(); } catch { /* ignore */ }
+  // On ne nettoie qu'en quittant réellement la case (ou la barre) : passer de
+  // l'image au <li> parent n'est pas une sortie.
+  bar.addEventListener("mouseout", (ev) => {
+    const to = ev.relatedTarget;
+    if (to && bar.contains(to) && slotOf(to) === current) return;
+    leave();
   });
 }
 

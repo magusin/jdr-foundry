@@ -327,6 +327,12 @@ async function pickAttackWeapon(actor) {
   const diffOf = (w) => Number(w?.system?.difficulte ?? 0) || 0;
   const diffDuo = equipped.reduce((sum, w) => sum + diffOf(w), 0) + dualWieldDifficulty();
 
+  // ⚠️ `rejectClose: false` fait résoudre DialogV2.wait() à `null` quand la
+  // fenêtre est fermée par la croix — ce n'est PAS une réponse, c'est un
+  // renoncement. Retomber sur `equipped[0]` dans ce cas (ce que faisait ce
+  // code) déclarait l'attaque quand même : le joueur fermait la fenêtre et
+  // voyait malgré tout partir la demande de validation au MJ, avec une arme
+  // qu'il n'avait pas choisie. Fermer annule, aux deux étapes.
   try {
     const mode = await ask(
       "Comment frappes-tu ?",
@@ -338,7 +344,7 @@ async function pickAttackWeapon(actor) {
       [{ action: "one", label: "⚔️ Une seule arme" },
        { action: "two", label: "⚔️⚔️ Les deux armes" }]
     );
-    if (!mode) return { weapon: equipped[0], hand: handLabel(equipped[0]), offhand: null };
+    if (!mode) return { weapon: null, cancelled: true };
 
     const chosen = await ask(
       mode === "two" ? "Quelle arme porte le coup principal ?" : "Attaquer avec quelle arme ?",
@@ -348,15 +354,20 @@ async function pickAttackWeapon(actor) {
         : "",
       equipped.map(w => ({ action: w.id, label: describe(w) }))
     );
+    if (!chosen) return { weapon: null, cancelled: true };
 
-    const weapon = actor.items.get(chosen) ?? equipped[0];
+    const weapon = actor.items.get(chosen);
+    if (!weapon) return { weapon: null, cancelled: true };
+
     const offhand = mode === "two"
       ? (equipped.find(w => w.id !== weapon.id) ?? null)
       : null;
     return { weapon, hand: handLabel(weapon), offhand };
   } catch (e) {
+    // Une erreur interne ne doit pas non plus déclarer une attaque que le
+    // joueur n'a pas validée — on annule, en le disant.
     console.warn("[RPG] choix de l'arme d'attaque :", e);
-    return { weapon: equipped[0], hand: handLabel(equipped[0]), offhand: null };
+    return { weapon: null, cancelled: true };
   }
 }
 
@@ -388,7 +399,11 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     if (!target?.actor) {
       return { handled: true, ok: false, reason: "Cible un ennemi (touche T) avant d'attaquer." };
     }
-    const { weapon, hand, offhand } = await pickAttackWeapon(actor);
+    const { weapon, hand, offhand, cancelled } = await pickAttackWeapon(actor);
+    // Renoncement volontaire : rien ne part, et surtout aucune alerte — le
+    // joueur sait ce qu'il vient de fermer, lui afficher un avertissement
+    // donnerait l'impression d'un échec.
+    if (cancelled) return { handled: true, ok: false, cancelled: true };
     if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
 
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir

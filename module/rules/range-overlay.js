@@ -13,7 +13,7 @@
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
-import { tokenFootprintMeters } from "../utils/grid.js";
+import { tokenFootprintMeters, checkRange } from "../utils/grid.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -120,21 +120,23 @@ export function drawRanges(token, layers, highlightEnemies = false) {
   for (const l of [...usable].sort((a, b) => (b.max ?? 0) - (a.max ?? 0))) drawRing(g, cx, cy, l);
 
   if (highlightEnemies) {
-    const reach = Math.max(...usable.map(l => Number(l.max) || 0));
-    const rPx = metersToPixels(reach);
+    // On teste avec checkRange(), exactement le prédicat qui autorisera (ou
+    // refusera) la déclaration — et sur les portées BRUTES, pas les rayons
+    // gonflés du dessin, puisque checkRange retire déjà les deux socles.
+    // Avant, ce bloc refaisait sa propre distance : il ignorait la portée
+    // MINIMALE (un arc surlignait la cible collée sur laquelle il ne peut
+    // pas tirer) et la règle de contact (un sort de portée < 1 m ne
+    // surlignait personne, alors qu'il est bel et bien lançable).
     try {
       for (const other of canvas.tokens?.placeables ?? []) {
         if (other === token || !other.actor) continue;
         if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
-        // Bord à bord : le socle de l'ennemi compte aussi, pas seulement son centre.
-        const otherFoot = metersToPixels(tokenFootprintMeters(other));
-        const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
-          const marker = new PIXI.Graphics();
-          marker.lineStyle(3, 0xffd700, 0.95);
-          marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
-          g.addChild(marker);
-        }
+        const inRange = raw.some(l => checkRange(token, other, l.min ?? 0, l.max ?? 0).ok);
+        if (!inRange) continue;
+        const marker = new PIXI.Graphics();
+        marker.lineStyle(3, 0xffd700, 0.95);
+        marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
+        g.addChild(marker);
       }
     } catch { /* surlignage optionnel */ }
   }
@@ -193,6 +195,17 @@ export function showSpellRangeOverlay(actor, spell) {
   const sys = spell.system ?? {};
   const min = Math.max(0, Number(sys.range?.min ?? 0) || 0);
   const max = Math.max(0, Number(sys.range?.max ?? 0) || 0);
+
+  // « Attaquer » est une action de base : un vrai objet de type sort, mais dont
+  // la portée est 0/0 parce qu'elle n'est pas la sienne — c'est celle de l'arme
+  // équipée au moment de frapper (voir default-actions.js). Sans ce repli,
+  // survoler son icône ne dessinait donc rien du tout : aucune couche de portée
+  // positive, drawRanges() sortait immédiatement, ni cercle ni ennemi surligné.
+  // On affiche les mêmes couches que le survol du token (allonge + arme).
+  if (max <= 0 && spell.getFlag?.("rpg", "defaultActionKey") === "attaquer") {
+    drawRanges(token, defaultLayersFor(token), true);
+    return;
+  }
 
   const layers = [];
   if (max > 0) {

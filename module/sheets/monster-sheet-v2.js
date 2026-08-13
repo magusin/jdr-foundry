@@ -490,7 +490,10 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         const { runDefaultAction } = await import("../rules/default-actions.js");
         const special = await runDefaultAction(this.document, item, { targetToken });
         if (special.handled) {
-          if (!special.ok) ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+          // `cancelled` = fenêtre de choix fermée par le MJ : pas d'alerte.
+          if (!special.ok && !special.cancelled) {
+            ui.notifications?.warn?.(special.reason ?? "Action impossible.");
+          }
           this.render({ force: false });
           return;
         }
