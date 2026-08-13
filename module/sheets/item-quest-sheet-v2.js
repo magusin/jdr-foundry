@@ -51,6 +51,25 @@ function contentLinksFrom(enrichedHTML) {
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
+  /**
+   * Un id UNIQUE par objet. ApplicationV2 s'en sert à la fois pour s'inscrire
+   * dans foundry.applications.instances et comme id de l'élément de fenêtre —
+   * or _insertElement() remplace purement et simplement l'élément déjà présent
+   * qui porte le même id. Avec l'id statique de DEFAULT_OPTIONS, ouvrir une
+   * deuxième fiche du même type arrachait donc du DOM la fenêtre de la
+   * première, dont l'instance se croyait pourtant toujours affichée : la
+   * rouvrir ne faisait plus que redessiner un élément détaché, sans rien
+   * montrer ni rien signaler. C'est le « au bout de quelques ouvertures, les
+   * fiches refusent de s'ouvrir, sans erreur en console ». Même correctif que
+   * RPGCharacterSheetV2 / RPGMonsterSheetV2, à ceci près qu'on prend l'UUID et
+   * pas l'id : un objet embarqué garde le même id sur le prototype d'un
+   * monstre et sur chacun de ses tokens.
+   */
+  get id() {
+    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
+    return `rpg-quest-sheet-v2-${key}`;
+  }
+
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS,
     {

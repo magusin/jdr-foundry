@@ -98,9 +98,12 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
   /** Un GM ouvre souvent plusieurs monstres à la fois (comparer des stat
    *  blocks) — un id statique non unique ferait entrer en collision les
-   *  éléments DOM de deux fiches simultanées, comme RPGCharacterSheetV2. */
+   *  éléments DOM de deux fiches simultanées, comme RPGCharacterSheetV2.
+   *  L'UUID plutôt que l'id : deux tokens non liés du MÊME monstre ont le
+   *  même id d'acteur, et rouvrir la fiche de l'un fermait celle de l'autre. */
   get id() {
-    return `rpg-monster-sheet-v2-${this.document.id}`;
+    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
+    return `rpg-monster-sheet-v2-${key}`;
   }
 
   _activeTab = "main";

@@ -263,8 +263,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     return [];
   }
 
+  /** Un id UNIQUE par acteur — et par TOKEN, d'où l'UUID plutôt que l'id :
+   *  deux tokens non liés du même prototype partagent le même id d'acteur, et
+   *  se seraient donc arraché leur fenêtre l'un à l'autre (voir le détail du
+   *  mécanisme dans RPGGenericItemSheetV2). */
   get id() {
-    return `rpg-character-sheet-v2-${this.document.id}`;
+    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
+    return `rpg-character-sheet-v2-${key}`;
   }
 
   static TABS = {
