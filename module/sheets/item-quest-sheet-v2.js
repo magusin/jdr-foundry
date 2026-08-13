@@ -1,5 +1,5 @@
 // systems/rpg/module/sheets/item-quest-sheet-v2.js
-import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, sheetDomId } from "./sheet-helpers.js";
 import { bindSendToActorsButton } from "./send-item-dialog.js";
 import { splitCharacters } from "../rules/actor-roles.js";
 import { setupItemRefDrop } from "./drop-helper.js";
@@ -49,12 +49,26 @@ function contentLinksFrom(enrichedHTML) {
 }
 
 export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
+
+  /**
+   * Identifiant DOM UNIQUE par document.
+   *
+   * `DEFAULT_OPTIONS.id` était une constante partagée par toutes les instances
+   * de cette fiche : ouvrir un second objet du même type pendant que le
+   * premier était affiché produisait deux fenêtres réclamant le même id.
+   * Foundry considère alors la seconde comme un ré-affichage de la première —
+   * la fiche « ne s'ouvre plus », ou remplace celle déjà ouverte. Même
+   * correctif que RPGCharacterSheetV2 / RPGMonsterSheetV2, qui n'ont pour
+   * cette raison aucun `id` statique.
+   */
+  get id() {
+    return sheetDomId("rpg-quest-sheet-v2", this.document);
+  }
   static documentName = "Item";
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS,
     {
-      id: "rpg-quest-sheet-v2",
       classes: ["rpg", "rpg-sheet", "sheet", "item", "quest"],
       position: { width: 780, height: 660 },
       window: { contentClasses: ["rpg-sheet-window"], resizable: true },

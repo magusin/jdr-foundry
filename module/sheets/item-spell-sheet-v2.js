@@ -1,7 +1,7 @@
 // systems/rpg/module/sheets/item-spell-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
-import { applyUiTheme, sheetContent, sheetActionButtons } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, sheetDomId } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -337,10 +337,24 @@ function normalizeAndMergeEffects(document, expanded) {
 }
 
 export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
+
+  /**
+   * Identifiant DOM UNIQUE par document.
+   *
+   * `DEFAULT_OPTIONS.id` était une constante partagée par toutes les instances
+   * de cette fiche : ouvrir un second objet du même type pendant que le
+   * premier était affiché produisait deux fenêtres réclamant le même id.
+   * Foundry considère alors la seconde comme un ré-affichage de la première —
+   * la fiche « ne s'ouvre plus », ou remplace celle déjà ouverte. Même
+   * correctif que RPGCharacterSheetV2 / RPGMonsterSheetV2, qui n'ont pour
+   * cette raison aucun `id` statique.
+   */
+  get id() {
+    return sheetDomId("rpg-spell-sheet-v2", this.document);
+  }
   static documentName = "Item";
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "rpg-spell-sheet-v2",
     classes: ["rpg", "rpg-sheet", "sheet", "item", "spell"],
     position: { width: 720, height: 920 },
     window: { contentClasses: ["rpg-sheet-window"], resizable: true },

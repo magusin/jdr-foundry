@@ -3,6 +3,30 @@
 // Utilitaires partagés par toutes les fiches (acteurs et objets).
 
 /**
+ * Identifiant DOM unique pour la fenêtre d'un document.
+ *
+ * Foundry indexe ses fenêtres par identifiant : deux applications qui
+ * réclament le même id sont considérées comme une seule, si bien qu'ouvrir la
+ * seconde ne fait que ré-afficher (ou remplacer) la première — la fiche
+ * « ne s'ouvre plus ». Chaque classe de fiche doit donc dériver son id du
+ * document affiché, jamais d'une constante partagée par toutes ses instances.
+ *
+ * On part de l'UUID et non de `document.id`, parce que l'id seul ne distingue
+ * pas les acteurs synthétiques : tous les tokens NON LIÉS issus d'un même
+ * acteur en partagent la valeur, ainsi que celle de leurs objets embarqués.
+ * Deux loups posés depuis le même monstre — le cas courant — retombaient donc
+ * sur le même identifiant. L'UUID, lui, porte le chemin complet
+ * (`Scene.x.Token.y.Actor.z.Item.w`) et les sépare.
+ *
+ * Les caractères hors [A-Za-z0-9_-] sont remplacés : un id contenant des
+ * points reste valide en HTML mais casse tout sélecteur CSS non échappé.
+ */
+export function sheetDomId(prefix, doc) {
+  const raw = String(doc?.uuid ?? doc?.id ?? "sans-document");
+  return `${prefix}-${raw.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+/**
  * Contenu de la fiche, à l'EXCLUSION de la barre de titre de la fenêtre.
  *
  * `this.element` d'une ApplicationV2 englobe l'en-tête de fenêtre, dont les

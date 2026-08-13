@@ -255,7 +255,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 import { setupActorItemDrop } from "./drop-helper.js";
 import {
   applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
-  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced, sheetDomId
 } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -267,7 +267,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   get id() {
-    return `rpg-character-sheet-v2-${this.document.id}`;
+    return sheetDomId("rpg-character-sheet-v2", this.document);
   }
 
   static TABS = {

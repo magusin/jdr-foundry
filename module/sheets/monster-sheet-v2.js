@@ -4,7 +4,8 @@ import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
 import {
-  applyUiTheme, openImageLightbox, tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+  applyUiTheme, openImageLightbox, tokenSizeContext, bindTokenSize,
+  applyTokenSizeToPlaced, sheetDomId
 } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
@@ -103,7 +104,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
    *  blocks) — un id statique non unique ferait entrer en collision les
    *  éléments DOM de deux fiches simultanées, comme RPGCharacterSheetV2. */
   get id() {
-    return `rpg-monster-sheet-v2-${this.document.id}`;
+    return sheetDomId("rpg-monster-sheet-v2", this.document);
   }
 
   _activeTab = "main";
