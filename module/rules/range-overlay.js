@@ -13,7 +13,7 @@
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
-import { tokenFootprintMeters, checkRange, contactRadiusMeters } from "../utils/grid.js";
+import { tokenHalfExtentMeters, checkRange } from "../utils/grid.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -36,9 +36,9 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
-// tokenFootprintMeters vit dans utils/grid.js : le cercle dessiné ici et la
-// portée réellement autorisée par checkRange doivent partir de la MÊME
-// empreinte, sinon l'anneau affiché ment sur ce qui est atteignable.
+// tokenHalfExtentMeters vit dans utils/grid.js : le cercle dessiné ici et la
+// portée réellement autorisée par checkRange doivent partir du MÊME bord,
+// sinon l'anneau affiché ment sur ce qui est atteignable.
 
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 
@@ -56,16 +56,22 @@ export function getWeaponRange(actor) {
 }
 
 /**
- * Rayon à DESSINER pour une portée donnée.
+ * Rayon à DESSINER pour une portée donnée, autour du CENTRE du token.
  *
- * Une allonge inférieure au contact (« Croc 0,5 m ») tracerait un cercle plus
- * petit que le socle du token : invisible, et faux — la règle de contact lui
- * fait atteindre les huit cases voisines. On ne descend donc jamais sous le
- * rayon de contact. Le LIBELLÉ, lui, garde la valeur brute de la fiche.
+ * Les portées se mesurent bord à bord : le cercle part donc du bord du token,
+ * ce qui vaut « portée + demi-largeur » depuis son centre. Un token 1×1 avec
+ * une allonge de 0,5 m se voit tracer un cercle de 1 m — visiblement plus
+ * petit que celui d'une allonge de 1 m (1,5 m), comme il se doit.
+ *
+ * ⚠️ Une version précédente n'ajoutait que l'excédent au-delà d'une demi-case
+ * (soit rien pour un token 1×1) pour que l'anneau colle au chiffre brut de la
+ * fiche. C'était juste tant que les portées se mesuraient de centre à centre ;
+ * ça ne l'est plus, et un cercle de 0,5 m tombait alors pile sur le socle du
+ * token — invisible, et faux.
  */
-function drawnRadius(max) {
+function drawnRadius(max, token) {
   const m = Number(max) || 0;
-  return m > 0 ? Math.max(m, contactRadiusMeters()) : 0;
+  return m > 0 ? m + tokenHalfExtentMeters(token) : 0;
 }
 
 /**
@@ -74,11 +80,12 @@ function drawnRadius(max) {
  * ⚠️ Fonction UNIQUE, appelée par le survol (drawRanges) comme par le cercle
  * du combattant actif (showMovementLimit). Les deux avaient leur propre copie
  * de ce calcul, et elles ont divergé : celle du combattant actif refaisait sa
- * distance à la main, sans portée minimale ni règle de contact, et disait donc
+ * distance à la main, sans même vérifier la portée minimale, et disait donc
  * autre chose que ce que la déclaration allait réellement autoriser.
  *
- * On teste sur les portées BRUTES (pas les rayons dessinés) : checkRange
- * retire déjà les deux socles, et c'est lui qui fait foi au moment de déclarer.
+ * On teste sur les portées BRUTES de la fiche, pas sur les rayons dessinés :
+ * checkRange mesure déjà bord à bord, et c'est lui qui fait foi au moment de
+ * déclarer.
  */
 function highlightEnemiesInRange(g, token, layers) {
   try {
@@ -142,14 +149,12 @@ export function drawRanges(token, layers, highlightEnemies = false) {
   const raw = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
   if (!raw.length) return;
 
-  // Une allonge/portée part du BORD du token, pas de son centre — sinon le
-  // cercle d'une créature de grande taille tombe en partie sous son propre
-  // socle et ne montre pas où un token adverse entre réellement en danger.
-  const foot = tokenFootprintMeters(token);
+  // Une allonge/portée part du BORD du token, pas de son centre : le rayon
+  // tracé depuis le centre vaut donc portée + demi-largeur.
   const usable = raw.map(l => ({
     ...l,
-    max: drawnRadius(l.max) + foot,
-    min: (Number(l.min) || 0) > 0 ? (Number(l.min) || 0) + foot : 0
+    max: drawnRadius(l.max, token),
+    min: drawnRadius(l.min, token)
   }));
 
   const cx = token.center.x, cy = token.center.y;
@@ -170,12 +175,9 @@ function defaultLayersFor(token) {
   if (!actor) return [];
   const layers = [];
 
-  // Le cercle dessiné (drawRanges) ajoute le socle du token au rayon, pour
-  // que le trait touche bien le bord du token — mais le LIBELLÉ, lui,
-  // affiche la valeur brute de la fiche d'objet (allonge/portée), pas ce
-  // rayon augmenté : un joueur qui compare au chiffre de sa fiche d'arme
-  // (ex. 1,5 m) ne doit pas voir un nombre différent (2 m) sur la carte.
-  const foot = tokenFootprintMeters(token);
+  // Le cercle dessiné part du bord du token (drawRanges) ; le LIBELLÉ, lui,
+  // affiche toujours la valeur brute de la fiche — un joueur qui compare au
+  // chiffre de sa fiche d'arme doit y retrouver le même nombre.
 
   const reach = getMeleeReach(actor);
   if (reach > 0) {
@@ -315,12 +317,11 @@ export async function showMovementLimit(token) {
   // propre token entre dans la zone.
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
-    const foot = tokenFootprintMeters(token);
     // Le rayon dessiné inclut le socle du token (bord à bord), mais le
     // libellé affiche l'allonge brute de l'arme — celle de la fiche — pour
     // que le chiffre corresponde à ce que le joueur voit sur son équipement.
     drawRing(g, cx, cy, {
-      min: 0, max: drawnRadius(reach) + foot,
+      min: 0, max: drawnRadius(reach, token),
       color: COLORS.melee, label: `⚔ ${fmtM(reach)}`
     });
     drewSomething = true;
@@ -465,7 +466,7 @@ export function updateDragThreatIndicator(draggedToken) {
     if (engaged) inDanger = true;
 
     drawRing(g, other.center.x, other.center.y, {
-      min: 0, max: drawnRadius(reach) + tokenFootprintMeters(other),
+      min: 0, max: drawnRadius(reach, other),
       color: engaged ? 0xff2b2b : COLORS.melee,
       alpha: engaged ? 1 : 0.55,
       // Libellé = allonge brute de la fiche, jamais le rayon dessiné.

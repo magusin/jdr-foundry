@@ -91,9 +91,10 @@ export function bindImageEditors(root, document) {
  * token déposé : Foundry copie le prototype à chaque création de token, donc
  * un dragon réglé une fois à 3×3 arrive déjà à la bonne taille sur toutes les
  * scènes, sans redimensionnement manuel. C'est aussi ce que lit
- * `tokenFootprintMeters()` (utils/grid.js) pour mesurer les portées depuis le
- * bord d'une grande créature plutôt que depuis son centre — une taille juste
- * n'est donc pas qu'un confort visuel, elle change l'allonge réelle.
+ * `tokenHalfExtentMeters()` (utils/grid.js) pour mesurer les portées de bord
+ * à bord — une taille juste n'est donc pas qu'un confort visuel, elle change
+ * l'allonge réelle : un token plus large atteint plus loin depuis son centre,
+ * et se fait atteindre de plus loin.
  *
  * ⚠️ Ne touche QUE les futurs tokens. Les tokens déjà posés sur une scène sont
  * des copies indépendantes du prototype (comportement Foundry, pas une

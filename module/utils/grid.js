@@ -2,13 +2,23 @@
 //
 // Helpers de grille — et surtout LA référence unique pour « est-ce à portée ? ».
 //
-// Tout le système raisonne en MÈTRES (déplacement, terrain, anneaux de portée
-// dessinés sur le canevas). Les vérifications de portée, elles, comptaient
-// des CASES en distance de Manhattan : sur une grille à 1 m/case les deux
-// coïncidaient par accident pour des valeurs entières, ce qui a masqué le
-// problème longtemps — mais un sort de portée 0,5 m devenait inutilisable
-// (le voisin immédiat est à « 1 case », donc 1 > 0,5), une diagonale comptait
-// double, et rien de tout ça ne correspondait au cercle affiché sur la carte.
+// Tout est en MÈTRES RÉELS, mesurés BORD À BORD. Les tokens se déplacent
+// librement (pas de case en case) : la grille n'est qu'un repère visuel, elle
+// ne doit jamais servir d'unité de mesure. Une portée saisie « 1,5 m » vaut
+// exactement 1,5 mètre entre le corps du lanceur et celui de sa cible.
+//
+// Historique des deux modèles écartés, parce qu'ils expliquent la forme
+// actuelle :
+//   1. Comptage de CASES en distance de Manhattan. Sur une grille à 1 m/case
+//      les nombres coïncidaient par accident pour des valeurs entières, ce qui
+//      a masqué le problème longtemps — mais une portée de 0,5 m devenait
+//      inapplicable, une diagonale comptait double, et rien de tout ça ne
+//      correspondait au cercle affiché sur la carte.
+//   2. Distance de CENTRE à CENTRE, plus une « règle de contact » ad hoc pour
+//      qu'une allonge courte atteigne quand même un voisin immédiat. Deux
+//      tokens 1×1 collés ayant leurs centres à 1 m, toute la plage sous 1,41 m
+//      devenait indistinguable : 0,5 m et 1 m donnaient exactement la même
+//      portée, et le champ « allonge » perdait tout son bas de gamme.
 
 const EPS = 1e-6;
 
@@ -41,51 +51,20 @@ export function gridPosFromToken(token) {
   return { gx: Math.floor(x / size), gy: Math.floor(y / size) };
 }
 
-export function manhattanDistanceTokens(a, b) {
-  const A = gridPosFromToken(a);
-  const B = gridPosFromToken(b);
-  return Math.abs(A.gx - B.gx) + Math.abs(A.gy - B.gy);
-}
-
 /**
- * Nombre de cases séparant deux tokens, une diagonale comptant pour 1
- * (Chebyshev). Sert uniquement à reconnaître « collé » : deux tokens dont
- * les cases se touchent, en ligne droite comme en diagonale.
+ * Demi-largeur d'un token, en mètres — la distance de son centre à son bord.
+ *
+ * C'est ce qui permet de mesurer bord à bord : une allonge part du CORPS d'une
+ * créature, pas d'un point mathématique en son centre. L'écart réel entre deux
+ * combattants est leur distance de centre à centre moins leurs deux
+ * demi-largeurs. Deux tokens 1×1 collés ont donc leurs corps à 0 m d'écart,
+ * et la moindre allonge les atteint — sans avoir besoin d'aucune exception.
  */
-export function cellsApart(a, b) {
-  const A = gridPosFromToken(a);
-  const B = gridPosFromToken(b);
-  return Math.max(Math.abs(A.gx - B.gx), Math.abs(A.gy - B.gy));
-}
-
-/**
- * Excédent de demi-largeur d'un token AU-DELÀ d'une case normale, en mètres.
- *
- * Une allonge/portée se mesure depuis le CORPS d'une créature, pas depuis un
- * point en son centre : sans cet ajout, le cercle d'un monstre de grande
- * taille (2×2 cases ou plus) tombe en grande partie SOUS son propre socle, et
- * un joueur ne peut pas dire à l'œil quand son token entre dans la zone de
- * menace.
- *
- * Ne renvoie que l'EXCÉDENT (demi-largeur − demi-case) plutôt que la
- * demi-largeur brute : pour un token 1×1 (le cas normal), le centre de deux
- * tokens adjacents est déjà exactement à une case l'un de l'autre — l'allonge
- * de la fiche (ex. 1,5 m) mesurée depuis le CENTRE atteint donc déjà le bord
- * d'une case adjacente, sans rien à ajouter. Ajouter la demi-largeur COMPLÈTE
- * (0,5 m sur une grille à 1 m/case) à un token normal gonflait le cercle à 2 m
- * pour une allonge affichée de 1,5 m — l'anneau ne correspondait plus à son
- * étiquette. Seule la taille AU-DELÀ d'une case normale doit compenser
- * (0 pour 1×1, une demi-case pour 2×2, etc.).
- *
- * Partagé entre le dessin (range-overlay.js) et la vérification (checkRange) :
- * les deux doivent partir de la même empreinte, sinon l'anneau affiché ment.
- */
-export function tokenFootprintMeters(token) {
+export function tokenHalfExtentMeters(token) {
   if (!token) return 0;
   const gs = gridSizePx();
-  const gd = gridDistanceMeters();
   const halfPx = Math.max(token.w ?? gs, token.h ?? gs) / 2;
-  return Math.max(0, (halfPx / gs) * gd - gd / 2);
+  return (halfPx / gs) * gridDistanceMeters();
 }
 
 /** Distance en mètres entre deux points en pixels ({x, y}, ex: token.center). */
@@ -96,44 +75,50 @@ export function pointDistanceMeters(a, b) {
 }
 
 /**
- * Distance de portée entre deux tokens, en mètres.
+ * Écart entre deux tokens, en mètres, de BORD À BORD.
  *
- * Euclidienne — le même cercle que celui dessiné par range-overlay.js et
- * spell-range.js. Le débordement des grands tokens est retiré des deux côtés,
- * pour que l'anneau affiché et la portée réellement autorisée coïncident.
+ * Euclidien, sans aucune notion de case : c'est la distance qui sépare
+ * réellement les deux corps. Vaut 0 quand ils se touchent, et croît
+ * continûment ensuite — un token qu'on décale d'un demi-pas voit sa distance
+ * bouger d'autant, ce qu'un comptage de cases ne pouvait pas rendre.
  */
 export function rangeDistanceMeters(a, b) {
   const meters = pointDistanceMeters(a?.center, b?.center);
   if (!Number.isFinite(meters)) return Infinity;
-  return Math.max(0, meters - tokenFootprintMeters(a) - tokenFootprintMeters(b));
+  return Math.max(0, meters - tokenHalfExtentMeters(a) - tokenHalfExtentMeters(b));
 }
 
 /**
- * La cible est-elle à portée ? Tout est en mètres.
+ * La cible est-elle à portée ? Tout est en mètres, bord à bord.
  *
- * Règle de contact : un sort ou une arme dont la portée max est positive
- * atteint toujours un token dont la case touche la sienne, diagonale
- * comprise. Sans elle, une portée saisie sous la barre du mètre (« Croc,
- * 0–0,5 m ») ne pourrait jamais toucher personne, puisque le voisin le plus
- * proche est à 1 m de centre à centre. La portée MIN reste vérifiée telle
- * quelle : un arc qui ne tire pas à bout portant continue de refuser le
- * corps à corps.
+ * Aucune exception, aucun plancher : `max` est la distance maximale entre les
+ * deux corps, `min` la distance minimale (un arc qui ne tire pas à bout
+ * portant). Une allonge de 0,5 m atteint donc ce qui est à moins de 50 cm,
+ * une allonge de 1 m ce qui est à moins d'un mètre, et les deux se
+ * distinguent — contrairement au modèle centre-à-centre qu'elles remplacent.
  */
 export function checkRange(caster, target, min = 0, max = 0) {
   const rmin = Math.max(0, Number(min) || 0);
   const rmax = Math.max(0, Number(max) || 0);
   const dist = rangeDistanceMeters(caster, target);
 
-  const contact = rmax > 0 && cellsApart(caster, target) <= 1;
-  const tooClose = dist + EPS < rmin;
-  const tooFar   = !contact && dist > rmax + EPS;
+  // Portée nulle = aucune allonge : le sort ou l'action ne vise que son
+  // lanceur. À ne surtout pas laisser au test ci-dessous : deux tokens
+  // collés sont à 0 m d'écart en bord à bord, donc « 0 ≤ 0 » passerait et
+  // une action sans portée deviendrait lançable sur le voisin.
+  if (rmax <= 0) {
+    return { ok: false, dist, min: rmin, max: rmax, tooClose: false, tooFar: true };
+  }
 
-  return { ok: !tooClose && !tooFar, dist, min: rmin, max: rmax, tooClose, tooFar, contact };
+  const tooClose = dist + EPS < rmin;
+  const tooFar   = dist > rmax + EPS;
+
+  return { ok: !tooClose && !tooFar, dist, min: rmin, max: rmax, tooClose, tooFar };
 }
 
 /**
  * Objet minimal accepté partout où l'on attend un Token (checkRange,
- * rangeDistanceMeters, cellsApart), pour tester une position HYPOTHÉTIQUE.
+ * rangeDistanceMeters), pour tester une position HYPOTHÉTIQUE.
  *
  * Sert au désengagement : décider s'il y a attaque d'opportunité demande de
  * savoir si le personnage était à portée AVANT son déplacement et ne l'est
@@ -151,24 +136,6 @@ export function virtualToken(center, widthCells = 1, heightCells = 1) {
     w: (Number(widthCells) || 1) * gs,
     h: (Number(heightCells) || 1) * gs
   };
-}
-
-/**
- * Rayon, en mètres, qui représente la règle de contact à l'écran.
- *
- * La règle est une adjacence de CASES (cellsApart ≤ 1), pas un cercle — mais
- * pour un token 1×1 sur une grille carrée les deux coïncident exactement : le
- * voisin orthogonal est à 1 case de centre à centre, le voisin diagonal à √2,
- * et la case suivante à 2. Un cercle de rayon √2 × distance-par-case contient
- * donc précisément les huit voisins, et rien d'autre.
- *
- * Sert à DESSINER une allonge de contact : tracer un cercle de 0,5 m autour
- * d'un token 1×1 le fait tomber pile sur son propre socle — illisible, et
- * surtout mensonger, puisque la règle de contact lui fait bel et bien
- * atteindre les huit cases voisines.
- */
-export function contactRadiusMeters() {
-  return gridDistanceMeters() * Math.SQRT2;
 }
 
 /** Formate une distance en mètres pour un message : « 1 m », « 1,4 m ». */
