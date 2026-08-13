@@ -13,6 +13,30 @@
 // avant toute validation MJ.
 
 import { gmOnly } from "./chat-visibility.js";
+import { checkRange, fmtMeters } from "../utils/grid.js";
+
+/**
+ * Portée utile d'une arme, en mètres : son allonge de corps à corps OU sa
+ * portée de tir, la plus grande des deux.
+ *
+ * Les deux champs cohabitent et ne servent pas à la même chose (`allonge`
+ * dessine la zone de menace et déclenche les attaques d'opportunité,
+ * `range.max` est la portée de tir/jet), mais du point de vue « puis-je
+ * frapper cette cible ? » l'un ou l'autre suffit : une lance d'allonge 2 m
+ * atteint à 2 m, un arc de portée 20 m atteint à 20 m. C'est exactement ce
+ * que dessine défaultLayersFor() sur le canevas — les deux anneaux — donc le
+ * contrôle et l'affichage disent la même chose.
+ */
+function weaponReach(item) {
+  const sys = item?.system ?? {};
+  return {
+    min: Math.max(0, Number(sys.range?.min ?? 0) || 0),
+    max: Math.max(
+      Math.max(0, Number(sys.range?.max ?? sys.portee ?? 0) || 0),
+      Math.max(0, Number(sys.allonge ?? 0) || 0)
+    )
+  };
+}
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -91,6 +115,27 @@ function renderAttackBody(d, phase) {
  */
 export async function declareAttack(attacker, item, targetActor, opts = {}) {
   if (!attacker || !item || !targetActor) return null;
+
+  // ── Portée ────────────────────────────────────────────────────────────
+  // Ce contrôle n'existait NULLE PART sur le chemin d'attaque : seul le menu
+  // de combat grisait son bouton, et lui seul. Déclarer depuis la barre
+  // d'actions ou une fiche permettait donc de frapper une cible à l'autre
+  // bout de la carte. Même règle que les sorts (checkRange), pour que la
+  // mêlée se comporte comme le reste.
+  const attackerTok = opts.attackerToken ?? attacker.getActiveTokens?.()?.[0] ?? null;
+  const targetTok   = opts.targetToken   ?? targetActor.getActiveTokens?.()?.[0] ?? null;
+  if (attackerTok && targetTok) {
+    const { min, max } = weaponReach(item);
+    if (max > 0) {
+      const r = checkRange(attackerTok, targetTok, min, max);
+      if (!r.ok) {
+        const why = r.tooClose ? "trop près" : "hors de portée";
+        ui.notifications?.warn?.(
+          `${targetActor.name} est ${why} (${fmtMeters(r.dist)}, ${min}–${max} m).`);
+        return null;
+      }
+    }
+  }
 
   const Combat = game.rpg?.combat;
   const offhand = opts.offhand ?? null;

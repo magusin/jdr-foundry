@@ -424,7 +424,8 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
       : undefined;
 
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor, { title, offhand, difficulte });
+    await declareAttack(actor, weapon, target.actor,
+      { title, offhand, difficulte, targetToken: target });
     return { handled: true, ok: true };
   }
 

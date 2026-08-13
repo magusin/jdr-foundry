@@ -132,6 +132,28 @@ export function checkRange(caster, target, min = 0, max = 0) {
 }
 
 /**
+ * Objet minimal accepté partout où l'on attend un Token (checkRange,
+ * rangeDistanceMeters, cellsApart), pour tester une position HYPOTHÉTIQUE.
+ *
+ * Sert au désengagement : décider s'il y a attaque d'opportunité demande de
+ * savoir si le personnage était à portée AVANT son déplacement et ne l'est
+ * plus APRÈS — deux positions dont une seule, au mieux, correspond à celle
+ * qu'occupe réellement le token à l'instant du test.
+ *
+ * @param {{x:number,y:number}} center - centre en pixels
+ * @param {number} widthCells  - largeur du token, en cases
+ * @param {number} heightCells - hauteur du token, en cases
+ */
+export function virtualToken(center, widthCells = 1, heightCells = 1) {
+  const gs = gridSizePx();
+  return {
+    center: { x: Number(center?.x) || 0, y: Number(center?.y) || 0 },
+    w: (Number(widthCells) || 1) * gs,
+    h: (Number(heightCells) || 1) * gs
+  };
+}
+
+/**
  * Rayon, en mètres, qui représente la règle de contact à l'écran.
  *
  * La règle est une adjacence de CASES (cellsApart ≤ 1), pas un cercle — mais

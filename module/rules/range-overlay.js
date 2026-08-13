@@ -56,11 +56,6 @@ export function getWeaponRange(actor) {
 }
 
 /**
- * Dessine un anneau de portée (min → max) autour d'un point.
- * La zone sous la portée minimale est hachurée en gris : on y voit d'un coup
- * d'œil qu'on est trop près pour tirer.
- */
-/**
  * Rayon à DESSINER pour une portée donnée.
  *
  * Une allonge inférieure au contact (« Croc 0,5 m ») tracerait un cercle plus
@@ -99,6 +94,11 @@ function highlightEnemiesInRange(g, token, layers) {
   } catch { /* surlignage optionnel */ }
 }
 
+/**
+ * Dessine un anneau de portée (min → max) autour d'un point.
+ * La zone sous la portée minimale est hachurée en gris : on y voit d'un coup
+ * d'œil qu'on est trop près pour tirer.
+ */
 function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9 }) {
   const rMax = metersToPixels(max);
   const rMin = metersToPixels(min);
@@ -448,7 +448,6 @@ export function updateDragThreatIndicator(draggedToken) {
   if (!draggedToken?.actor || !canvas?.ready) return false;
 
   const cx = draggedToken.center.x, cy = draggedToken.center.y;
-  const myFoot = tokenFootprintMeters(draggedToken);
   const g = new PIXI.Graphics();
   let inDanger = false;
 
@@ -459,18 +458,18 @@ export function updateDragThreatIndicator(draggedToken) {
     const reach = getMeleeReach(other.actor);
     if (!(reach > 0)) continue;
 
-    const otherFoot = tokenFootprintMeters(other);
-    const bodyToBody = reach + otherFoot;             // cercle : bord du corps de l'ennemi
-    const engagedAt  = bodyToBody + myFoot;            // + mon propre socle : bord à bord
-    const dist = Math.hypot(cx - other.center.x, cy - other.center.y);
-    const engaged = dist <= metersToPixels(engagedAt) + 1;
+    // Même prédicat que le désengagement et la déclaration d'attaque : c'est
+    // le seul moyen que l'avertissement « DANGER » corresponde à l'attaque
+    // d'opportunité qui va réellement se déclencher.
+    const engaged = checkRange(draggedToken, other, 0, reach).ok;
     if (engaged) inDanger = true;
 
     drawRing(g, other.center.x, other.center.y, {
-      min: 0, max: bodyToBody,
+      min: 0, max: drawnRadius(reach) + tokenFootprintMeters(other),
       color: engaged ? 0xff2b2b : COLORS.melee,
       alpha: engaged ? 1 : 0.55,
-      label: `⚔ ${fmtM(bodyToBody)}${engaged ? " — DANGER" : ""}`
+      // Libellé = allonge brute de la fiche, jamais le rayon dessiné.
+      label: `⚔ ${fmtM(reach)}${engaged ? " — DANGER" : ""}`
     });
   }
 

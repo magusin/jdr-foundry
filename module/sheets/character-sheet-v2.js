@@ -1835,7 +1835,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // de validation MJ. On publiait auparavant un simple aperçu, sans jet ni
     // validation, ce qui laissait l'attaque sans résolution possible.
     const { declareAttack } = await import("../rules/attack-declare.js");
-    await declareAttack(this.document, item, target);
+    await declareAttack(this.document, item, target, { targetToken });
   }
 
   _statePath() { return "system.etatsActifs"; }

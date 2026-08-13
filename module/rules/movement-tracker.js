@@ -12,6 +12,7 @@ import {
   measureSegmentMeters
 } from "./region-behaviors.js";
 import { triggerZoneEffectsForToken } from "./zone-effects.js";
+import { checkRange, virtualToken } from "../utils/grid.js";
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
@@ -565,10 +566,22 @@ async function _processMove(tokenDoc, combatant, waypoints) {
   // Un ennemi obtient une attaque d'opportunité si le personnage QUITTE sa
   // zone de menace (allonge de son arme : 1 m, 1,5 m…) : il était engagé
   // (dBefore ≤ allonge) et ne l'est plus après le déplacement (dAfter > allonge).
-  const MARGE = 0.1; // petite tolérance de mesure
+  // On teste avec checkRange(), la MÊME règle que la portée des sorts et des
+  // attaques : mètres, euclidien depuis le CENTRE, socles des deux tokens
+  // retirés, contact garanti sur les cases voisines. Avant, ce bloc mesurait
+  // en diagonale pondérée depuis le COIN haut-gauche des tokens — une
+  // troisième convention, qui n'était celle d'aucun autre contrôle du jeu :
+  // une allonge sous le mètre n'engageait donc jamais personne (le voisin
+  // immédiat est à 1 m) et aucune attaque d'opportunité ne se déclenchait,
+  // alors que l'anneau de menace, lui, s'affichait bel et bien.
   const moverDisp = tokenDoc.disposition;
   const opportunityTargets = [];
   if (canvas?.tokens?.placeables) {
+    const posAvant = virtualToken(
+      _tokenCenterAt(tokenDoc, startPos.x, startPos.y), tokenDoc.width, tokenDoc.height);
+    const posApres = virtualToken(
+      _tokenCenterAt(tokenDoc, endPos.x, endPos.y), tokenDoc.width, tokenDoc.height);
+
     for (const enemyTok of canvas.tokens.placeables) {
       const ea = enemyTok.actor;
       if (!ea || ea.id === actor.id) continue;
@@ -577,10 +590,12 @@ async function _processMove(tokenDoc, combatant, waypoints) {
       if (!areOpposedDisp(moverDisp, enemyTok.document?.disposition)) continue;
       const ec = combat.combatants.find(c => c.actorId === ea.id);
       if (!ec || ec.getFlag("core","defeated")) continue;
-      const reach   = getMeleeReach(ea);
-      const dBefore = measureDist(startPos.x, startPos.y, enemyTok.x, enemyTok.y);
-      const dAfter  = measureDist(endPos.x,   endPos.y,   enemyTok.x, enemyTok.y);
-      if (dBefore <= reach + MARGE && dAfter > reach + MARGE) {
+      const reach = getMeleeReach(ea);
+      if (!(reach > 0)) continue;   // allonge 0 = ne menace pas
+
+      const engageAvant = checkRange(posAvant, enemyTok, 0, reach).ok;
+      const engageApres = checkRange(posApres, enemyTok, 0, reach).ok;
+      if (engageAvant && !engageApres) {
         opportunityTargets.push({ id: ea.id, name: ea.name, reach });
       }
     }

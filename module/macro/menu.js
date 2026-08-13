@@ -859,7 +859,8 @@
         //    son tour attend la décision Échec/Touché/Critique du MJ.
         const attackAPI = game.rpg?.attack;
         if (!attackAPI?.declareAttack) throw new Error("API d'attaque introuvable — rechargez le monde.");
-        const msg = await attackAPI.declareAttack(actor, weapon, targetToken.actor, { actionId });
+        const msg = await attackAPI.declareAttack(actor, weapon, targetToken.actor,
+          { actionId, attackerToken: token, targetToken });
 
         // Enregistre l'id du message dans le log
         if (budgetAPI && combat && cbt && msg) {

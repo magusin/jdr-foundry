@@ -465,7 +465,8 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
           if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
         } else {
           const { declareAttack } = await import("../rules/attack-declare.js");
-          await declareAttack(this.document, item, targetToken.actor);
+          await declareAttack(this.document, item, targetToken.actor,
+            { attackerToken: casterToken, targetToken });
         }
         this.render({ force: false });
       });

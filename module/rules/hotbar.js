@@ -91,7 +91,7 @@ async function useItemFromHotbarImpl(uuid) {
       return ui.notifications?.warn?.("Cible un ennemi (touche T) avant d'attaquer.");
     }
     const { declareAttack } = await import("./attack-declare.js");
-    return declareAttack(actor, item, targetToken.actor);
+    return declareAttack(actor, item, targetToken.actor, { attackerToken: casterToken, targetToken });
   }
 
   // Autres types : on ouvre simplement la fiche
