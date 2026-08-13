@@ -131,6 +131,24 @@ export function checkRange(caster, target, min = 0, max = 0) {
   return { ok: !tooClose && !tooFar, dist, min: rmin, max: rmax, tooClose, tooFar, contact };
 }
 
+/**
+ * Rayon, en mètres, qui représente la règle de contact à l'écran.
+ *
+ * La règle est une adjacence de CASES (cellsApart ≤ 1), pas un cercle — mais
+ * pour un token 1×1 sur une grille carrée les deux coïncident exactement : le
+ * voisin orthogonal est à 1 case de centre à centre, le voisin diagonal à √2,
+ * et la case suivante à 2. Un cercle de rayon √2 × distance-par-case contient
+ * donc précisément les huit voisins, et rien d'autre.
+ *
+ * Sert à DESSINER une allonge de contact : tracer un cercle de 0,5 m autour
+ * d'un token 1×1 le fait tomber pile sur son propre socle — illisible, et
+ * surtout mensonger, puisque la règle de contact lui fait bel et bien
+ * atteindre les huit cases voisines.
+ */
+export function contactRadiusMeters() {
+  return gridDistanceMeters() * Math.SQRT2;
+}
+
 /** Formate une distance en mètres pour un message : « 1 m », « 1,4 m ». */
 export function fmtMeters(m) {
   const v = Number(m);

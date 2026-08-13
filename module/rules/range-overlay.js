@@ -13,7 +13,7 @@
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
-import { tokenFootprintMeters, checkRange } from "../utils/grid.js";
+import { tokenFootprintMeters, checkRange, contactRadiusMeters } from "../utils/grid.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -60,6 +60,45 @@ export function getWeaponRange(actor) {
  * La zone sous la portée minimale est hachurée en gris : on y voit d'un coup
  * d'œil qu'on est trop près pour tirer.
  */
+/**
+ * Rayon à DESSINER pour une portée donnée.
+ *
+ * Une allonge inférieure au contact (« Croc 0,5 m ») tracerait un cercle plus
+ * petit que le socle du token : invisible, et faux — la règle de contact lui
+ * fait atteindre les huit cases voisines. On ne descend donc jamais sous le
+ * rayon de contact. Le LIBELLÉ, lui, garde la valeur brute de la fiche.
+ */
+function drawnRadius(max) {
+  const m = Number(max) || 0;
+  return m > 0 ? Math.max(m, contactRadiusMeters()) : 0;
+}
+
+/**
+ * Entoure en or les ennemis réellement à portée d'au moins une des couches.
+ *
+ * ⚠️ Fonction UNIQUE, appelée par le survol (drawRanges) comme par le cercle
+ * du combattant actif (showMovementLimit). Les deux avaient leur propre copie
+ * de ce calcul, et elles ont divergé : celle du combattant actif refaisait sa
+ * distance à la main, sans portée minimale ni règle de contact, et disait donc
+ * autre chose que ce que la déclaration allait réellement autoriser.
+ *
+ * On teste sur les portées BRUTES (pas les rayons dessinés) : checkRange
+ * retire déjà les deux socles, et c'est lui qui fait foi au moment de déclarer.
+ */
+function highlightEnemiesInRange(g, token, layers) {
+  try {
+    for (const other of canvas.tokens?.placeables ?? []) {
+      if (other === token || !other.actor) continue;
+      if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
+      if (!layers.some(l => checkRange(token, other, l.min ?? 0, l.max ?? 0).ok)) continue;
+      const marker = new PIXI.Graphics();
+      marker.lineStyle(3, 0xffd700, 0.95);
+      marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
+      g.addChild(marker);
+    }
+  } catch { /* surlignage optionnel */ }
+}
+
 function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9 }) {
   const rMax = metersToPixels(max);
   const rMin = metersToPixels(min);
@@ -109,7 +148,7 @@ export function drawRanges(token, layers, highlightEnemies = false) {
   const foot = tokenFootprintMeters(token);
   const usable = raw.map(l => ({
     ...l,
-    max: (Number(l.max) || 0) + foot,
+    max: drawnRadius(l.max) + foot,
     min: (Number(l.min) || 0) > 0 ? (Number(l.min) || 0) + foot : 0
   }));
 
@@ -119,27 +158,7 @@ export function drawRanges(token, layers, highlightEnemies = false) {
   // Du plus grand au plus petit, pour que les petits restent lisibles
   for (const l of [...usable].sort((a, b) => (b.max ?? 0) - (a.max ?? 0))) drawRing(g, cx, cy, l);
 
-  if (highlightEnemies) {
-    // On teste avec checkRange(), exactement le prédicat qui autorisera (ou
-    // refusera) la déclaration — et sur les portées BRUTES, pas les rayons
-    // gonflés du dessin, puisque checkRange retire déjà les deux socles.
-    // Avant, ce bloc refaisait sa propre distance : il ignorait la portée
-    // MINIMALE (un arc surlignait la cible collée sur laquelle il ne peut
-    // pas tirer) et la règle de contact (un sort de portée < 1 m ne
-    // surlignait personne, alors qu'il est bel et bien lançable).
-    try {
-      for (const other of canvas.tokens?.placeables ?? []) {
-        if (other === token || !other.actor) continue;
-        if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
-        const inRange = raw.some(l => checkRange(token, other, l.min ?? 0, l.max ?? 0).ok);
-        if (!inRange) continue;
-        const marker = new PIXI.Graphics();
-        marker.lineStyle(3, 0xffd700, 0.95);
-        marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
-        g.addChild(marker);
-      }
-    } catch { /* surlignage optionnel */ }
-  }
+  if (highlightEnemies) highlightEnemiesInRange(g, token, raw);
 
   (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
   _gfx = g;
@@ -300,23 +319,12 @@ export async function showMovementLimit(token) {
     // Le rayon dessiné inclut le socle du token (bord à bord), mais le
     // libellé affiche l'allonge brute de l'arme — celle de la fiche — pour
     // que le chiffre corresponde à ce que le joueur voit sur son équipement.
-    drawRing(g, cx, cy, { min: 0, max: reach + foot, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
+    drawRing(g, cx, cy, {
+      min: 0, max: drawnRadius(reach) + foot,
+      color: COLORS.melee, label: `⚔ ${fmtM(reach)}`
+    });
     drewSomething = true;
-    try {
-      const rPx = metersToPixels(reach + foot);
-      for (const other of canvas.tokens?.placeables ?? []) {
-        if (other === token || !other.actor) continue;
-        if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
-        const otherFoot = metersToPixels(tokenFootprintMeters(other));
-        const dx = other.center.x - cx, dy = other.center.y - cy;
-        if (Math.hypot(dx, dy) <= rPx + otherFoot + 1) {
-          const marker = new PIXI.Graphics();
-          marker.lineStyle(3, 0xffd700, 0.95);
-          marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
-          g.addChild(marker);
-        }
-      }
-    } catch { /* surlignage optionnel */ }
+    highlightEnemiesInRange(g, token, [{ min: 0, max: reach }]);
   }
 
   // ── Réserve de déplacement restante ─────────────────────────────────────
