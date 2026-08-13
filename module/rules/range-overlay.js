@@ -24,7 +24,8 @@ let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
 
 const COLORS = {
-  melee:  0xe0524a,   // rouge — zone de menace au corps à corps
+  melee:  0xe0524a,   // rouge — zone de menace au corps à corps (celle des AUTRES)
+  mine:   0x5ec8ff,   // bleu  — MA propre allonge pendant un déplacement
   weapon: 0xd1a144,   // laiton — portée de tir/jet de l'arme
   spell:  0x9b6ede,   // violet — portée du sort
   dead:   0x7a7a86    // gris — zone morte (sous la portée mini)
@@ -46,7 +47,10 @@ function metersToPixels(m) {
 // « Attaquer » (weapon-range.js, qui délègue à la même fonction) doivent partir
 // du MÊME bord, sinon le tracé ment sur ce qui est réellement atteignable.
 
-const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
+// Virgule décimale : ces étiquettes sont lues sur la carte, dans un système
+// entièrement francophone — « 0.5 m » y détonne (et fmtMeters, utils/grid.js,
+// écrit déjà « 0,5 m » dans les messages de chat).
+const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1).replace(".", ",")) + " m";
 
 /**
  * Portée de l'arme équipée d'un acteur, en mètres.
@@ -99,7 +103,11 @@ function strokeReach(g, token, meters) {
 function highlightEnemiesInRange(g, token, layers) {
   try {
     for (const other of canvas.tokens?.placeables ?? []) {
-      if (other === token || !other.actor) continue;
+      // Comparaison d'id en plus de l'identité : pendant un déplacement, le
+      // « token » passé ici est un objet minimal reconstruit à la position
+      // suivie par la souris (drag-limit.js), jamais le placeable lui-même —
+      // sans ce test, un token se surlignerait comme sa propre cible.
+      if (other === token || other.id === token.id || !other.actor) continue;
       if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
       if (!layers.some(l => checkRange(token, other, l.min ?? 0, l.max ?? 0).ok)) continue;
       // Surligne le CARRÉ de la cible, pas un cercle autour d'elle : c'est ce
@@ -124,8 +132,15 @@ function highlightEnemiesInRange(g, token, layers) {
  * Les distances sont celles de la FICHE, brutes : elles partent du carré du
  * token, jamais de son centre (strokeReach s'en charge). La zone sous la portée
  * minimale est grisée : on y voit d'un coup d'œil qu'on est trop près pour tirer.
+ *
+ * `labelBelow` place l'étiquette sous la zone : pendant un déplacement, deux
+ * zones se superposent autour du même token (la mienne et l'avertissement de
+ * menace), et deux étiquettes empilées au-dessus deviennent illisibles.
  */
-function drawRing(g, token, { min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9 }) {
+function drawRing(g, token, {
+  min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9,
+  labelColor = "#ffffff", labelBelow = false
+}) {
   if (!token?.center || !((Number(max) || 0) > 0)) return;
 
   g.lineStyle(3, color, alpha);
@@ -145,11 +160,11 @@ function drawRing(g, token, { min = 0, max = 0, color = 0xffffff, label = null, 
     try {
       const style = new PIXI.TextStyle({
         fontFamily: "Signika, sans-serif", fontSize: 16, fontWeight: "700",
-        fill: "#ffffff", stroke: "#000000", strokeThickness: 4
+        fill: labelColor, stroke: "#000000", strokeThickness: 4
       });
       const t = new PIXI.Text(label, style);
-      t.anchor.set(0.5, 1);
-      t.position.set(token.center.x, box.top - 4);
+      t.anchor.set(0.5, labelBelow ? 0 : 1);
+      t.position.set(token.center.x, labelBelow ? box.bottom + 4 : box.top - 4);
       g.addChild(t);
     } catch { /* étiquette optionnelle */ }
   }
@@ -429,10 +444,11 @@ export function refreshPinned() {
 /* ══════════════════════════════════════════════════════════════════════════
    Indicateur de danger pendant le glisser
    Pendant qu'un joueur fait glisser son token, il ne voit sinon aucun signal
-   au moment précis où il entre dans l'allonge d'un ennemi — seul un survol
-   (immobile) déclenchait l'affichage des portées. Calque séparé de celui du
-   survol/épinglage : on ne veut pas effacer une portée épinglée pendant le
-   drag, ni la faire réapparaître décalée après.
+   au moment précis où il entre dans l'allonge d'un ennemi, ni de celui où sa
+   propre allonge atteint enfin sa cible — seul un survol (immobile) déclenchait
+   l'affichage des portées. Calque séparé de celui du survol/épinglage : on ne
+   veut pas effacer une portée épinglée pendant le drag, ni la faire réapparaître
+   décalée après.
    ══════════════════════════════════════════════════════════════════════════ */
 
 let _dragGfx = null;
@@ -443,10 +459,20 @@ function _clearDragThreat() {
 }
 
 /**
- * Redessine, à la position courante d'un token en train d'être glissé, les
- * zones de menace des ennemis proches — et le fait apparaître en rouge vif,
- * avec une étiquette, dès que son propre corps (bord compris) entre dans
- * l'allonge d'un ennemi (bord compris lui aussi).
+ * Redessine, à la position courante d'un token en train d'être déplacé, les
+ * DEUX allonges qui décident de ce qui va se passer en arrivant :
+ *
+ *   - celle des ennemis proches (rouge), qui vire au rouge vif avec un
+ *     avertissement dès que le corps du token entre dedans — c'est l'attaque
+ *     d'opportunité qui se déclenchera ;
+ *   - la SIENNE (bleu), avec les ennemis qu'elle atteint entourés d'or —
+ *     c'est ce qu'il pourra frapper une fois posé.
+ *
+ * Les deux se lisent en même temps : « j'entre dans sa portée » et « il entre
+ * dans la mienne » ne se produisent pas au même moment quand les allonges
+ * diffèrent, et c'est précisément l'arbitrage que le joueur doit faire pendant
+ * qu'il déplace son token — pas après l'avoir posé.
+ *
  * @param {Token} draggedToken - l'aperçu suivi par la souris (position live)
  * @returns {boolean} vrai si le token est actuellement engagé par au moins un ennemi
  */
@@ -457,6 +483,37 @@ export function updateDragThreatIndicator(draggedToken) {
   const cx = draggedToken.center.x, cy = draggedToken.center.y;
   const g = new PIXI.Graphics();
   let inDanger = false;
+
+  // ── Ma propre allonge : ce que j'atteindrai en me posant ici ─────────────
+  // Dessinée en premier pour rester SOUS les zones ennemies : c'est
+  // l'avertissement rouge qui doit rester lisible en cas de superposition.
+  const myReach = getMeleeReach(draggedToken.actor);
+  if (myReach > 0) {
+    const reachable = [];
+    try {
+      for (const other of canvas.tokens?.placeables ?? []) {
+        if (other === draggedToken || other.id === draggedToken.id || !other.actor) continue;
+        if (!areOpposedDisp(draggedToken.document?.disposition, other.document?.disposition)) continue;
+        if (checkRange(draggedToken, other, 0, myReach).ok) reachable.push(other);
+      }
+    } catch { /* portée personnelle optionnelle */ }
+
+    drawRing(g, draggedToken, {
+      min: 0, max: myReach,
+      color: COLORS.mine,
+      alpha: reachable.length ? 1 : 0.5,
+      labelBelow: true,
+      labelColor: reachable.length ? "#9fe4ff" : "#ffffff",
+      label: reachable.length
+        ? `⚔ Mon allonge ${fmtM(myReach)} — ${reachable.length > 1
+            ? `${reachable.length} cibles atteintes` : "cible atteinte"}`
+        : `⚔ Mon allonge ${fmtM(myReach)}`
+    });
+
+    // Le carré des cibles atteintes, même repère visuel qu'au survol : c'est
+    // ce carré que ma zone doit toucher, pas leur centre qui doit y entrer.
+    highlightEnemiesInRange(g, draggedToken, [{ min: 0, max: myReach }]);
+  }
 
   for (const other of canvas.tokens?.placeables ?? []) {
     if (other === draggedToken || !other.actor) continue;

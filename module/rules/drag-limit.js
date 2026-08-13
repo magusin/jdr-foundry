@@ -105,17 +105,55 @@ function clampDestination(self, point) {
     _cache.set(self.id, { key, x: stop.x, y: stop.y });
   }
 
-  // Signale en direct l'entrée dans l'allonge d'un ennemi — sinon rien ne le
-  // montre avant le dépôt du token. Pas de vrai clone à passer : on construit
-  // un objet minimal portant juste ce dont updateDragThreatIndicator a besoin.
+  return stop;
+}
+
+/* ── Allonges affichées pendant le geste ────────────────────────────────────
+ *
+ * L'affichage des allonges (la mienne, celles des ennemis) était appelé depuis
+ * clampDestination, donc il dépendait du BRIDAGE de déplacement — qui ne
+ * s'applique qu'en combat, qu'aux combattants inscrits, et par défaut qu'aux
+ * joueurs (`movementLimitScope`). Résultat : dans les cas les plus courants —
+ * le MJ qui déplace un monstre, n'importe qui hors combat, une réserve déjà
+ * épuisée (retour anticipé) — rien ne s'affichait pendant le geste et la
+ * situation ne se découvrait qu'une fois le token posé, ce qui est trop tard
+ * pour choisir où s'arrêter. L'affichage est donc désormais branché sur le
+ * geste lui-même, indépendamment du bridage.
+ *
+ * Il reçoit la destination BRIDÉE (celle où le token ira vraiment), pas le
+ * point brut sous la souris : sinon il annoncerait une menace ou une cible
+ * atteinte à un endroit que la réserve de déplacement interdit d'atteindre.
+ */
+
+// Tokens dont un glisser est réellement en cours. Foundry peut rappeler
+// _updateDragDestination une dernière fois pendant le dépôt, APRÈS notre
+// nettoyage : sans ce garde, l'affichage se redessinerait juste après avoir
+// été effacé et resterait figé sur la carte jusqu'au geste suivant.
+const _dragging = new Set();
+let _dragStartHooked = false;
+
+function _isDragging(self) {
+  // Sans point d'accroche sur le début du glisser (API différente), on ne peut
+  // pas savoir : on affiche, comme avant. Le nettoyage de fin de geste reste
+  // en place dans les deux cas.
+  return _dragStartHooked ? _dragging.has(self?.id) : true;
+}
+
+/**
+ * Affiche les deux allonges à la position courante du geste.
+ * Pas de vrai clone à passer en V13 (le token reste immobile pendant le
+ * glisser) : on construit un objet minimal portant juste ce dont
+ * updateDragThreatIndicator a besoin — dont `w`/`h`, l'emprise qui sert de
+ * point de départ aux portées (utils/grid.js).
+ */
+function showDragReaches(self, point) {
+  if (!point || !_isDragging(self)) return;
   try {
     updateDragThreatIndicator({
-      center: stop, actor: limit.actor, id: doc.id,
-      w: self.w, h: self.h, document: { disposition: doc.disposition }
+      center: point, actor: self.actor, id: self.id,
+      w: self.w, h: self.h, document: { disposition: self.document?.disposition }
     });
-  } catch (e) { /* indicateur optionnel */ }
-
-  return stop;
+  } catch { /* indicateur optionnel */ }
 }
 
 // Ne prévient qu'une fois par session si le calcul échoue en cours de
@@ -170,17 +208,29 @@ export function installDragLimit() {
   }
 
   const onDragStart = function (self) {
+    if (self?.id) _dragging.add(self.id);
     try { const c = self.center; _dragOrigin.set(self.id, { x: c.x, y: c.y }); }
     catch { /* origine reprise depuis doc.x/y en repli */ }
   };
   const onDragEnd = function (self) {
+    if (self?.id) _dragging.delete(self.id);
     try { clearDragThreatIndicator(); } catch { /* ignore */ }
     if (self?.id) { _dragOrigin.delete(self.id); _cache.delete(self.id); }
+  };
+
+  // Le geste et son affichage passent par le même point d'appel que le
+  // bridage : une seule destination, donc un affichage qui ne peut pas
+  // annoncer autre chose que ce qui va réellement se produire.
+  const onDragMove = function (self, point) {
+    const dest = safeClampDestination(self, point);
+    showDragReaches(self, dest);
+    return dest;
   };
 
   if (globalThis.libWrapper) {
     try {
       if (typeof proto._onDragLeftStart === "function") {
+        _dragStartHooked = true;
         libWrapper.register("rpg", "CONFIG.Token.objectClass.prototype._onDragLeftStart",
           function (wrapped, event) {
             const result = wrapped(event);
@@ -191,7 +241,7 @@ export function installDragLimit() {
 
       libWrapper.register("rpg", "CONFIG.Token.objectClass.prototype._updateDragDestination",
         function (wrapped, point, options) {
-          return wrapped(safeClampDestination(this, point), options);
+          return wrapped(onDragMove(this, point), options);
         }, "WRAPPER");
 
       for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
@@ -204,7 +254,7 @@ export function installDragLimit() {
       }
 
       globalThis.__rpgDragLimit = true;
-      Hooks.on("canvasTearDown", () => { _cache.clear(); _dragOrigin.clear(); clearDragThreatIndicator(); });
+      Hooks.on("canvasTearDown", () => { _cache.clear(); _dragOrigin.clear(); _dragging.clear(); clearDragThreatIndicator(); });
       console.log("[RPG] Blocage du déplacement au glisser : actif (via libWrapper).");
       return;
     } catch (e) {
@@ -216,6 +266,7 @@ export function installDragLimit() {
   globalThis.__rpgDragLimit = true;
 
   if (typeof proto._onDragLeftStart === "function") {
+    _dragStartHooked = true;
     const originalStart = proto._onDragLeftStart;
     proto._onDragLeftStart = function (event) {
       const result = originalStart.call(this, event);
@@ -226,7 +277,7 @@ export function installDragLimit() {
 
   const originalUpdateDest = proto._updateDragDestination;
   proto._updateDragDestination = function (point, options) {
-    return originalUpdateDest.call(this, safeClampDestination(this, point), options);
+    return originalUpdateDest.call(this, onDragMove(this, point), options);
   };
 
   for (const hookName of ["_onDragLeftDrop", "_onDragLeftCancel"]) {
@@ -238,7 +289,7 @@ export function installDragLimit() {
     };
   }
 
-  Hooks.on("canvasTearDown", () => { _cache.clear(); _dragOrigin.clear(); clearDragThreatIndicator(); });
+  Hooks.on("canvasTearDown", () => { _cache.clear(); _dragOrigin.clear(); _dragging.clear(); clearDragThreatIndicator(); });
   console.log("[RPG] Blocage du déplacement au glisser : actif.");
 }
 
