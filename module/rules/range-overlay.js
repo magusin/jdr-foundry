@@ -9,12 +9,16 @@
 //   3. Épinglage (touche) → garde l'affichage du token sélectionné à l'écran
 //
 // Tout est en MÈTRES, avec la même échelle que le reste du système
-// (rayon en pixels = mètres ÷ distance-par-case × taille-de-case).
+// (pixels = mètres ÷ distance-par-case × taille-de-case).
+//
+// Les zones tracées ne sont pas des cercles mais le CARRÉ du token dilaté de
+// la portée (coins arrondis) : c'est la forme exacte de la règle de mesure
+// (utils/grid.js), qui part du carré du token et non de son centre. Voir
+// strokeReach() plus bas.
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
-import { tokenFootprintMeters } from "./weapon-range.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
-import { tokenHalfExtentMeters, checkRange } from "../utils/grid.js";
+import { checkRange } from "../utils/grid.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -37,10 +41,10 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
-// tokenHalfExtentMeters vit dans utils/grid.js : le cercle dessiné ici, la
-// portée autorisée par checkRange et le bouton « Attaquer » (weapon-range.js,
-// qui délègue à la même fonction) doivent partir du MÊME bord, sinon l'anneau
-// affiché ment sur ce qui est réellement atteignable.
+// La MESURE vit dans utils/grid.js (checkRange / rangeDistanceMeters) : le
+// tracé fait ici, la portée autorisée à la déclaration et le bouton
+// « Attaquer » (weapon-range.js, qui délègue à la même fonction) doivent partir
+// du MÊME bord, sinon le tracé ment sur ce qui est réellement atteignable.
 
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 
@@ -58,22 +62,25 @@ export function getWeaponRange(actor) {
 }
 
 /**
- * Rayon à DESSINER pour une portée donnée, autour du CENTRE du token.
+ * Contour de la zone atteignable à `meters` du bord d'un token : son CARRÉ
+ * dilaté d'autant, coins arrondis.
  *
- * Les portées se mesurent bord à bord : le cercle part donc du bord du token,
- * ce qui vaut « portée + demi-largeur » depuis son centre. Un token 1×1 avec
- * une allonge de 0,5 m se voit tracer un cercle de 1 m — visiblement plus
- * petit que celui d'une allonge de 1 m (1,5 m), comme il se doit.
- *
- * ⚠️ Une version précédente n'ajoutait que l'excédent au-delà d'une demi-case
- * (soit rien pour un token 1×1) pour que l'anneau colle au chiffre brut de la
- * fiche. C'était juste tant que les portées se mesuraient de centre à centre ;
- * ça ne l'est plus, et un cercle de 0,5 m tombait alors pile sur le socle du
- * token — invisible, et faux.
+ * C'est la forme exacte de la règle (rangeDistanceMeters, utils/grid.js) : tout
+ * point du tracé est à exactement `meters` du carré du token, sur les côtés
+ * comme dans les coins. Un cercle, lui, ne pouvait pas l'être — il débordait le
+ * carré de la portée entière sur les axes et d'à peine la moitié dans les
+ * coins, si bien qu'une cible en diagonale se retrouvait hors du cercle tout en
+ * étant à portée. Le carré rouge que Foundry dessine autour du token sert donc
+ * bien de limite de départ, visiblement, dans toutes les directions.
  */
-function drawnRadius(max, token) {
-  const m = Number(max) || 0;
-  return m > 0 ? m + tokenHalfExtentMeters(token) : 0;
+function strokeReach(g, token, meters) {
+  const r = metersToPixels(meters);
+  if (!(r > 0)) return null;
+  const hw = (Number(token?.w) || 0) / 2;
+  const hh = (Number(token?.h) || 0) / 2;
+  const cx = token.center.x, cy = token.center.y;
+  g.drawRoundedRect(cx - hw - r, cy - hh - r, 2 * (hw + r), 2 * (hh + r), r);
+  return { top: cy - hh - r, bottom: cy + hh + r };
 }
 
 /**
@@ -95,33 +102,42 @@ function highlightEnemiesInRange(g, token, layers) {
       if (other === token || !other.actor) continue;
       if (!areOpposedDisp(token.document?.disposition, other.document?.disposition)) continue;
       if (!layers.some(l => checkRange(token, other, l.min ?? 0, l.max ?? 0).ok)) continue;
+      // Surligne le CARRÉ de la cible, pas un cercle autour d'elle : c'est ce
+      // carré que la zone de portée doit toucher pour qu'elle soit atteignable.
+      // Un cercle laissait croire que c'était le centre de la cible qui devait
+      // entrer dans la zone, ce qui n'a jamais été la règle.
       const marker = new PIXI.Graphics();
+      const pad = 3;
       marker.lineStyle(3, 0xffd700, 0.95);
-      marker.drawCircle(other.center.x, other.center.y, Math.max(other.w, other.h) * 0.6);
+      marker.drawRoundedRect(
+        other.center.x - other.w / 2 - pad, other.center.y - other.h / 2 - pad,
+        other.w + 2 * pad, other.h + 2 * pad, 6
+      );
       g.addChild(marker);
     }
   } catch { /* surlignage optionnel */ }
 }
 
 /**
- * Dessine un anneau de portée (min → max) autour d'un point.
- * La zone sous la portée minimale est hachurée en gris : on y voit d'un coup
- * d'œil qu'on est trop près pour tirer.
+ * Dessine une zone de portée (min → max) autour d'un token.
+ *
+ * Les distances sont celles de la FICHE, brutes : elles partent du carré du
+ * token, jamais de son centre (strokeReach s'en charge). La zone sous la portée
+ * minimale est grisée : on y voit d'un coup d'œil qu'on est trop près pour tirer.
  */
-function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9 }) {
-  const rMax = metersToPixels(max);
-  const rMin = metersToPixels(min);
-  if (!(rMax > 0)) return;
+function drawRing(g, token, { min = 0, max = 0, color = 0xffffff, label = null, alpha = 0.9 }) {
+  if (!token?.center || !((Number(max) || 0) > 0)) return;
 
   g.lineStyle(3, color, alpha);
   g.beginFill(color, 0.06);
-  g.drawCircle(cx, cy, rMax);
+  const box = strokeReach(g, token, max);
   g.endFill();
+  if (!box) return;
 
-  if (rMin > 0) {
+  if ((Number(min) || 0) > 0) {
     g.lineStyle(2, COLORS.dead, 0.75);
     g.beginFill(COLORS.dead, 0.14);
-    g.drawCircle(cx, cy, rMin);
+    strokeReach(g, token, min);
     g.endFill();
   }
 
@@ -133,7 +149,7 @@ function drawRing(g, cx, cy, { min = 0, max = 0, color = 0xffffff, label = null,
       });
       const t = new PIXI.Text(label, style);
       t.anchor.set(0.5, 1);
-      t.position.set(cx, cy - rMax - 4);
+      t.position.set(token.center.x, box.top - 4);
       g.addChild(t);
     } catch { /* étiquette optionnelle */ }
   }
@@ -151,19 +167,10 @@ export function drawRanges(token, layers, highlightEnemies = false) {
   const raw = (layers ?? []).filter(l => (Number(l?.max) || 0) > 0);
   if (!raw.length) return;
 
-  // Une allonge/portée part du BORD du token, pas de son centre : le rayon
-  // tracé depuis le centre vaut donc portée + demi-largeur.
-  const usable = raw.map(l => ({
-    ...l,
-    max: drawnRadius(l.max, token),
-    min: drawnRadius(l.min, token)
-  }));
-
-  const cx = token.center.x, cy = token.center.y;
   const g = new PIXI.Graphics();
 
   // Du plus grand au plus petit, pour que les petits restent lisibles
-  for (const l of [...usable].sort((a, b) => (b.max ?? 0) - (a.max ?? 0))) drawRing(g, cx, cy, l);
+  for (const l of [...raw].sort((a, b) => (b.max ?? 0) - (a.max ?? 0))) drawRing(g, token, l);
 
   if (highlightEnemies) highlightEnemiesInRange(g, token, raw);
 
@@ -313,19 +320,16 @@ export async function showMovementLimit(token) {
   let drewSomething = false;
 
   // ── Allonge de mêlée du combattant actif, ennemis à portée surlignés ────
-  // Le cercle part du bord du socle (pas de son centre) : sinon un monstre
-  // de grande taille menace en réalité bien plus loin que ce que le cercle
+  // Le tracé part du carré du socle (pas de son centre) : sinon un monstre
+  // de grande taille menace en réalité bien plus loin que ce que le tracé
   // ne laisse paraître, et un joueur ne peut pas dire à l'œil quand son
   // propre token entre dans la zone.
   const reach = getMeleeReach(token.actor);
   if (reach > 0) {
-    // Le rayon dessiné inclut le socle du token (bord à bord), mais le
-    // libellé affiche l'allonge brute de l'arme — celle de la fiche — pour
-    // que le chiffre corresponde à ce que le joueur voit sur son équipement.
-    drawRing(g, cx, cy, {
-      min: 0, max: drawnRadius(reach, token),
-      color: COLORS.melee, label: `⚔ ${fmtM(reach)}`
-    });
+    // Le tracé part du carré du token (bord à bord) et le libellé affiche
+    // l'allonge brute de l'arme — celle de la fiche : les deux disent la même
+    // chose, « autant de mètres au-delà de mon carré ».
+    drawRing(g, token, { min: 0, max: reach, color: COLORS.melee, label: `⚔ ${fmtM(reach)}` });
     drewSomething = true;
     highlightEnemiesInRange(g, token, [{ min: 0, max: reach }]);
   }
@@ -467,8 +471,8 @@ export function updateDragThreatIndicator(draggedToken) {
     const engaged = checkRange(draggedToken, other, 0, reach).ok;
     if (engaged) inDanger = true;
 
-    drawRing(g, other.center.x, other.center.y, {
-      min: 0, max: drawnRadius(reach, other),
+    drawRing(g, other, {
+      min: 0, max: reach,
       color: engaged ? 0xff2b2b : COLORS.melee,
       alpha: engaged ? 1 : 0.55,
       // Libellé = allonge brute de la fiche, jamais le rayon dessiné.
