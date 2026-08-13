@@ -85,6 +85,130 @@ export function bindImageEditors(root, document) {
   });
 }
 
+/* ── Taille du token ──────────────────────────────────────────────────────
+ *
+ * La taille se règle sur l'ACTEUR (son « prototype token »), pas sur chaque
+ * token déposé : Foundry copie le prototype à chaque création de token, donc
+ * un dragon réglé une fois à 3×3 arrive déjà à la bonne taille sur toutes les
+ * scènes, sans redimensionnement manuel. C'est aussi ce que lit
+ * `tokenFootprintMeters()` (utils/grid.js) pour mesurer les portées depuis le
+ * bord d'une grande créature plutôt que depuis son centre — une taille juste
+ * n'est donc pas qu'un confort visuel, elle change l'allonge réelle.
+ *
+ * ⚠️ Ne touche QUE les futurs tokens. Les tokens déjà posés sur une scène sont
+ * des copies indépendantes du prototype (comportement Foundry, pas une
+ * particularité de ce système) — cf. `applyTokenSizeToPlaced()`.
+ */
+export const TOKEN_SIZE_PRESETS = [
+  { value: 0.5, label: "Minuscule — 0,5 × 0,5" },
+  { value: 1,   label: "Normale — 1 × 1" },
+  { value: 2,   label: "Grande — 2 × 2" },
+  { value: 3,   label: "Énorme — 3 × 3" },
+  { value: 4,   label: "Colossale — 4 × 4" }
+];
+
+/** Contexte d'affichage du sélecteur de taille pour un acteur. */
+export function tokenSizeContext(actor) {
+  const pt = actor?.prototypeToken ?? {};
+  const width  = Number(pt.width  ?? 1) || 1;
+  const height = Number(pt.height ?? 1) || 1;
+  const preset = TOKEN_SIZE_PRESETS.find(p => p.value === width && p.value === height) ?? null;
+  const gd = Number(canvas?.scene?.grid?.distance ?? 1) || 1;
+  const fmt = (n) => String(n).replace(".", ",");
+  return {
+    width, height,
+    isCustom: !preset,
+    presets: TOKEN_SIZE_PRESETS.map(p => ({ ...p, selected: p === preset })),
+    // Encombrement réel, utile parce que c'est lui qui décide de l'allonge.
+    meters: `${fmt(Math.round(width * gd * 100) / 100)} × ${fmt(Math.round(height * gd * 100) / 100)} m`
+  };
+}
+
+/**
+ * Branche le sélecteur de taille de token d'une fiche d'acteur.
+ *
+ * Le préréglage écrit largeur ET hauteur d'un coup (le cas courant : une
+ * créature est carrée). « Personnalisé » révèle les deux champs pour les
+ * formes non carrées (serpent, chariot).
+ *
+ * Les deux champs sont branchés ici plutôt que nommés `prototypeToken.width`
+ * dans le formulaire : la fiche de personnage soumet TOUT le formulaire à
+ * chaque changement (`submitOnChange`), donc un champ nommé encore masqué
+ * réécrirait sa valeur d'avant au prochain changement d'un autre champ, en
+ * écrasant le préréglage qui vient d'être choisi.
+ */
+export function bindTokenSize(root, document) {
+  const box = root?.querySelector?.(".rpg-token-size");
+  if (!box || box.dataset.rpgBound) return;
+  box.dataset.rpgBound = "1";
+
+  const sel    = box.querySelector(".rpg-token-size-preset");
+  const custom = box.querySelector(".rpg-token-size-custom");
+  if (!sel) return;
+
+  // Un joueur ne redimensionne pas son propre token : c'est un réglage de
+  // scène qui change l'allonge et l'encombrement sur la carte.
+  if (!game.user.isGM) {
+    box.querySelectorAll("select, input, button").forEach(el => { el.disabled = true; });
+    return;
+  }
+
+  sel.addEventListener("change", async (ev) => {
+    ev.stopPropagation();
+    const v = sel.value;
+    if (v === "custom") {
+      if (custom) custom.style.display = "";
+      return;
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return;
+    if (custom) custom.style.display = "none";
+    await document.update({ "prototypeToken.width": n, "prototypeToken.height": n });
+  });
+
+  for (const dim of ["width", "height"]) {
+    const input = box.querySelector(`.rpg-token-size-dim[data-dim="${dim}"]`);
+    if (!input) continue;
+    input.addEventListener("change", async (ev) => {
+      ev.stopPropagation();
+      const n = Number(input.value);
+      if (!Number.isFinite(n) || n <= 0) return;
+      await document.update({ [`prototypeToken.${dim}`]: n });
+    });
+  }
+}
+
+/**
+ * Recopie la taille du prototype sur les tokens DÉJÀ posés de cet acteur,
+ * toutes scènes confondues. Foundry ne le fait jamais tout seul : un token
+ * placé est une copie indépendante, figée à la taille qu'avait le prototype
+ * au moment du dépôt.
+ *
+ * @returns {Promise<number>} nombre de tokens effectivement redimensionnés
+ */
+export async function applyTokenSizeToPlaced(actor) {
+  if (!game.user.isGM || !actor) return 0;
+  const w = Number(actor.prototypeToken?.width  ?? 1) || 1;
+  const h = Number(actor.prototypeToken?.height ?? 1) || 1;
+
+  let total = 0;
+  for (const scene of game.scenes ?? []) {
+    const updates = [];
+    for (const td of scene.tokens ?? []) {
+      // `actorId` couvre aussi les tokens non liés : ils partagent l'acteur
+      // source même quand leurs données sont désynchronisées par ailleurs.
+      if (td.actorId !== actor.id) continue;
+      if (Number(td.width) === w && Number(td.height) === h) continue;
+      updates.push({ _id: td.id, width: w, height: h });
+    }
+    if (updates.length) {
+      await scene.updateEmbeddedDocuments("Token", updates);
+      total += updates.length;
+    }
+  }
+  return total;
+}
+
 /**
  * Applique la classe de thème visuel choisie par le joueur (réglage client)
  * sur l'élément racine de la fiche. À appeler dans chaque _onRender().

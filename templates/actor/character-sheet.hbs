@@ -75,6 +75,29 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             title="Cliquer pour changer l'image du token (MJ)"
             style="width:60px;height:60px;cursor:pointer;border-radius:8px;border:1px solid var(--color-border-light-2);object-fit:cover" />
           <small style="font-size:9px;opacity:.6">Token</small>
+          {{!-- Taille réglée sur l'acteur : tout token déposé ensuite naît déjà
+                à la bonne taille, sans redimensionnement à la main. --}}
+          <div class="rpg-token-size">
+            <label>📐 Taille du token</label>
+            <select class="rpg-token-size-preset" title="S'applique aux prochains tokens déposés">
+              {{#each tokenSize.presets}}
+              <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+              {{/each}}
+              <option value="custom" {{#if tokenSize.isCustom}}selected{{/if}}>Personnalisé…</option>
+            </select>
+            <div class="rpg-token-size-custom" {{#unless tokenSize.isCustom}}style="display:none"{{/unless}}>
+              <input type="number" class="rpg-token-size-dim" data-dim="width" value="{{tokenSize.width}}"
+                min="0.5" step="0.5" title="Largeur en cases" />
+              <span>×</span>
+              <input type="number" class="rpg-token-size-dim" data-dim="height" value="{{tokenSize.height}}"
+                min="0.5" step="0.5" title="Hauteur en cases" />
+            </div>
+            <small class="muted">{{tokenSize.meters}} sur la carte</small>
+            <button type="button" data-action="applyTokenSize"
+              title="Redimensionne aussi les tokens de ce personnage déjà posés sur les scènes">
+              Appliquer aux tokens posés
+            </button>
+          </div>
           <button type="button" data-action="configurePrototype"
             title="Configurer le Prototype Token (lien acteur, vision, barres PV/Mana)"
             style="font-size:9px;padding:1px 6px;margin-top:1px;cursor:pointer;line-height:1.4">⚙ Config</button>

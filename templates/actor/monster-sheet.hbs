@@ -17,6 +17,29 @@
           style="cursor:pointer;border-radius:6px;border:1px solid var(--color-border-light-2);object-fit:cover" />
         <small style="font-size:9px;opacity:.7">Token</small>
       </div>
+      {{!-- Taille réglée sur l'acteur : tout token déposé ensuite naît déjà
+            à la bonne taille, sans redimensionnement à la main. --}}
+      <div class="rpg-token-size">
+        <label>📐 Taille du token</label>
+        <select class="rpg-token-size-preset" title="S'applique aux prochains tokens déposés">
+          {{#each tokenSize.presets}}
+          <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+          <option value="custom" {{#if tokenSize.isCustom}}selected{{/if}}>Personnalisé…</option>
+        </select>
+        <div class="rpg-token-size-custom" {{#unless tokenSize.isCustom}}style="display:none"{{/unless}}>
+          <input type="number" class="rpg-token-size-dim" data-dim="width" value="{{tokenSize.width}}"
+            min="0.5" step="0.5" title="Largeur en cases" />
+          <span>×</span>
+          <input type="number" class="rpg-token-size-dim" data-dim="height" value="{{tokenSize.height}}"
+            min="0.5" step="0.5" title="Hauteur en cases" />
+        </div>
+        <small class="muted">{{tokenSize.meters}} sur la carte</small>
+        <button type="button" data-action="applyTokenSize"
+          title="Redimensionne aussi les tokens de ce monstre déjà posés sur les scènes">
+          Appliquer aux tokens posés
+        </button>
+      </div>
       {{/if}}
       {{!-- Côté joueur, l'illustration n'est pas une vignette d'en-tête :
            elle est affichée en grand dans le corps de la fiche (vue PNJ). --}}

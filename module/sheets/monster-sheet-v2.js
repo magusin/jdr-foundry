@@ -3,7 +3,9 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
-import { applyUiTheme, openImageLightbox } from "./sheet-helpers.js";
+import {
+  applyUiTheme, openImageLightbox, tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+} from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
@@ -120,6 +122,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     ctx.canSeeStats = game.user.isGM;
     ctx.isToken = actor.isToken === true;
     ctx.showGenConfig = game.user.isGM && !ctx.isToken;
+    ctx.tokenSize = tokenSizeContext(actor);
     const _entries = Array.isArray(actor.system?.butin?.entries) ? actor.system.butin.entries : [];
     const _tableUuid = String(actor.system?.butin?.tableUuid ?? "").trim();
     ctx.hasLoot = game.user.isGM && (_entries.length > 0 || !!_tableUuid);
@@ -236,6 +239,19 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const root = this.element;
     if (!root) return;
     applyUiTheme(root);
+
+    bindTokenSize(root, this.document);
+    root.querySelectorAll("[data-action='applyTokenSize']").forEach(btn => {
+      if (btn.dataset.rpgBound) return;
+      btn.dataset.rpgBound = "1";
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const n = await applyTokenSizeToPlaced(this.document);
+        ui.notifications?.info?.(n
+          ? `${n} token(s) redimensionné(s).`
+          : "Aucun token posé à redimensionner.");
+      });
+    });
 
     // Côté joueur, l'illustration s'affiche en grand dans le corps de la fiche
     // (vue PNJ) : un clic l'ouvre en plein écran, comme sur la fiche PNJ d'un

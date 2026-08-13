@@ -253,7 +253,10 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox } from "./sheet-helpers.js";
+import {
+  applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
+  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+} from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -525,6 +528,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       // Portrait : MJ ou propriétaire peuvent changer leur illustration
       canEditImg: isGM || isOwner
     };
+
+    ctx.tokenSize = tokenSizeContext(actor);
 
     // XP display
     const lvl = Number(actor.system?.niveau) || 1;
@@ -892,6 +897,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       return;
     }
 
+    bindTokenSize(root, this.document);
+
     // ⚠️ _onRender est rappelé à CHAQUE rendu, mais `root` (l'élément de la
     // fenêtre) survit aux rendus : réenregistrer les écouteurs délégués les
     // empilait, si bien qu'un clic déclenchait l'action autant de fois qu'il y
@@ -1135,6 +1142,14 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       if (action === "configurePrototype") {
         await this._openPrototypeToken();
+        return;
+      }
+
+      if (action === "applyTokenSize") {
+        const n = await applyTokenSizeToPlaced(this.document);
+        ui.notifications?.info?.(n
+          ? `${n} token(s) redimensionné(s).`
+          : "Aucun token posé à redimensionner.");
         return;
       }
 

@@ -1240,3 +1240,56 @@
   color: var(--ink-text-faint);
   font-size: 12px;
 }
+
+/* ── Taille du token (en-tête des fiches acteur) ────────────────────────────
+   Réglage porté par l'ACTEUR : tout token déposé ensuite naît à cette taille.
+   Partagé par la fiche de personnage et la fiche de monstre. */
+.rpg-sheet .rpg-token-size {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 150px;
+}
+
+.rpg-sheet .rpg-token-size > label {
+  font-size: 10px;
+  opacity: .75;
+  white-space: nowrap;
+}
+
+.rpg-sheet .rpg-token-size .rpg-token-size-preset {
+  width: 100%;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.rpg-sheet .rpg-token-size-custom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rpg-sheet .rpg-token-size-custom input {
+  width: 56px;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.rpg-sheet .rpg-token-size-custom span {
+  opacity: .6;
+  font-size: 11px;
+}
+
+.rpg-sheet .rpg-token-size > small {
+  font-size: 9px;
+  opacity: .6;
+}
+
+.rpg-sheet .rpg-token-size button[data-action="applyTokenSize"] {
+  font-size: 9px;
+  padding: 1px 6px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+}
