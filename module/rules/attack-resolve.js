@@ -11,7 +11,7 @@
 // dégâts » — voir applyAttackDamage.
 
 import { hpSecret } from "./chat-visibility.js";
-import { confirmAttackDeclaration, rollAttackDie } from "./attack-declare.js";
+import { confirmAttackDeclaration, rollAttackDie, resolveDeclaredActor } from "./attack-declare.js";
 
 const MISS_MESSAGES_MELEE = [
   "{target} esquive l'attaque au dernier moment !",
@@ -321,8 +321,12 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   if (!game.user.isGM) return;
 
   const f = message?.flags?.rpg?.attackDeclaration ?? message?.flags?.rpg ?? {};
-  const attacker = game.actors.get(f.actorId);
-  const target   = game.actors.get(f.targetId);
+  // Par UUID : sur une scène, un monstre est un token NON LIÉ dont l'acteur
+  // synthétique porte le même id que son prototype — chercher par id frappait
+  // la fiche du répertoire et laissait le token intact (voir
+  // resolveDeclaredActor).
+  const attacker = await resolveDeclaredActor(f.actorUuid, f.actorId);
+  const target   = await resolveDeclaredActor(f.targetUuid, f.targetId);
   // resolveWeapon gère le cas « Mains nues » : arme reconstruite à la volée,
   // absente de l'inventaire.
   const { resolveWeapon } = await import("./unarmed.js");
@@ -389,7 +393,9 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
             type: "attackDamageRoll",
             label, col,
             attackerId: attacker.id,
+            attackerUuid: attacker.uuid ?? null,
             targetId: target?.id ?? null,
+            targetUuid: target?.uuid ?? null,
             weaponId: weapon.id,
             offhandId: f.offhandId ?? null,
             isCrit,
@@ -431,8 +437,9 @@ export async function rollAttackDamage(message) {
   const flags = message?.flags?.rpg ?? {};
   if (flags.type !== "attackDamageRoll") return;
 
-  const attacker = game.actors.get(flags.attackerId);
-  const target   = flags.targetId ? game.actors.get(flags.targetId) : null;
+  const attacker = await resolveDeclaredActor(flags.attackerUuid, flags.attackerId);
+  const target   = (flags.targetUuid || flags.targetId)
+    ? await resolveDeclaredActor(flags.targetUuid, flags.targetId) : null;
   const { resolveWeapon } = await import("./unarmed.js");
   const weapon = resolveWeapon(attacker, flags.weaponId);
 
@@ -497,7 +504,9 @@ export async function rollAttackDamage(message) {
         type: "attackDamagePending",
         baseContent,
         attackerId: attacker.id,
+        attackerUuid: attacker.uuid ?? null,
         targetId: target?.id ?? null,
+        targetUuid: target?.uuid ?? null,
         weaponId: weapon.id,
         offhandId: flags.offhandId ?? null,
         isCrit,
@@ -523,8 +532,9 @@ export async function applyAttackDamage(message) {
   const flags = message?.flags?.rpg ?? {};
   if (flags.type !== "attackDamagePending" || flags.applied) return;
 
-  const attacker = game.actors.get(flags.attackerId);
-  const target   = flags.targetId ? game.actors.get(flags.targetId) : null;
+  const attacker = await resolveDeclaredActor(flags.attackerUuid, flags.attackerId);
+  const target   = (flags.targetUuid || flags.targetId)
+    ? await resolveDeclaredActor(flags.targetUuid, flags.targetId) : null;
   const { resolveWeapon } = await import("./unarmed.js");
   const weapon = resolveWeapon(attacker, flags.weaponId);
 

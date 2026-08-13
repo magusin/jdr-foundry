@@ -581,7 +581,11 @@ async function _processMove(tokenDoc, combatant, waypoints) {
       const dBefore = measureDist(startPos.x, startPos.y, enemyTok.x, enemyTok.y);
       const dAfter  = measureDist(endPos.x,   endPos.y,   enemyTok.x, enemyTok.y);
       if (dBefore <= reach + MARGE && dAfter > reach + MARGE) {
-        opportunityTargets.push({ id: ea.id, name: ea.name, reach });
+        // uuid en plus de l'id : sur un token non lié, `ea` est l'acteur
+        // SYNTHÉTIQUE du token, dont l'id est celui du prototype. Sans son
+        // uuid, l'attaque d'opportunité repartirait de la fiche du monstre
+        // (mêmes PV et mêmes compétences pour tous ses tokens).
+        opportunityTargets.push({ id: ea.id, uuid: ea.uuid ?? null, name: ea.name, reach });
       }
     }
   }
@@ -592,6 +596,7 @@ async function _processMove(tokenDoc, combatant, waypoints) {
          ${opportunityTargets.map(t => `
            <button type="button" class="rpg-opportunity-btn"
              data-enemy-id="${t.id}" data-mover-id="${actor.id}"
+             data-enemy-uuid="${t.uuid ?? ""}" data-mover-uuid="${actor.uuid ?? ""}"
              style="display:block;width:100%;margin-bottom:3px;padding:3px 6px;cursor:pointer;font-size:11px">
              ⚔️ ${htmlEsc(t.name)} (allonge ${fmt(t.reach)}) attaque ${htmlEsc(actor.name)}
            </button>`).join("")}
@@ -709,10 +714,11 @@ async function _chooseOpportunityAbility(ea, ma, abilities) {
   return abilities[0] ?? null; // fallback : 1re compétence
 }
 
-export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
+export async function triggerOpportunityAttack(enemyActorId, moverActorId, opts = {}) {
   if (!game.user.isGM) return;
-  const ea = game.actors.get(enemyActorId);
-  const ma = game.actors.get(moverActorId);
+  const { resolveDeclaredActor } = await import("./attack-declare.js");
+  const ea = await resolveDeclaredActor(opts.enemyUuid, enemyActorId);
+  const ma = await resolveDeclaredActor(opts.moverUuid, moverActorId);
   if (!ea || !ma) { ui.notifications?.warn?.("Acteur introuvable."); return; }
 
   // ── Choix de l'attaque + confirmation MJ ──────────────────────────────
@@ -760,7 +766,8 @@ export async function triggerOpportunityAttack(enemyActorId, moverActorId) {
       </div>
     </div>`,
     flags: { rpg: { type: "attackDeclaration", phase: "rolled", actionId: foundry.utils.randomID(),
-      attackDeclaration: { actorId: ea.id, weaponId: item.id, targetId: ma.id,
+      attackDeclaration: { actorId: ea.id, actorUuid: ea.uuid ?? null,
+        weaponId: item.id, targetId: ma.id, targetUuid: ma.uuid ?? null,
         d20: roll.total, tnFinal: tnData.tnFinal, livraison: tnData.livraison } } }
   });
 }
@@ -775,7 +782,12 @@ export function bindOpportunityAttackButtons(htmlEl) {
     btn.addEventListener("click", async (ev) => {
       ev.preventDefault();
       btn.disabled = true; btn.textContent += " ✓";
-      try { await triggerOpportunityAttack(btn.dataset.enemyId, btn.dataset.moverId); }
+      try {
+        await triggerOpportunityAttack(btn.dataset.enemyId, btn.dataset.moverId, {
+          enemyUuid: btn.dataset.enemyUuid || null,
+          moverUuid: btn.dataset.moverUuid || null
+        });
+      }
       catch (e) { console.error("[RPG][Opportunity]", e); btn.disabled = false; }
     });
   });

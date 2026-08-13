@@ -17,6 +17,32 @@ import { gmOnly } from "./chat-visibility.js";
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
+/**
+ * Retrouve l'acteur EXACT visé par une déclaration.
+ *
+ * ⚠️ `game.actors.get(id)` ne suffit pas. Un token non lié — c'est ainsi que
+ * les monstres sont posés sur une scène — possède son propre acteur
+ * synthétique (PV, états, inventaire propres), mais qui porte le MÊME id que
+ * son prototype dans le répertoire des acteurs. Chercher par id renvoie donc
+ * toujours le PROTOTYPE : les dégâts partaient sur la fiche du monstre pendant
+ * que le token à l'écran gardait ses PV intacts, exactement comme rapporté.
+ * Seul l'UUID distingue les deux (`Scene.x.Token.y.Actor.z` contre `Actor.z`),
+ * d'où son enregistrement dans les drapeaux du message — le flux des sorts
+ * fait déjà pareil avec `tokenUuid`.
+ *
+ * L'id reste accepté en repli, pour les messages postés avant ce correctif.
+ */
+export async function resolveDeclaredActor(uuid, fallbackId = null) {
+  if (uuid) {
+    try {
+      const doc = await fromUuid(uuid);
+      const actor = doc?.actor ?? doc;      // TokenDocument → son acteur synthétique
+      if (actor) return actor;
+    } catch { /* uuid périmé (token supprimé) : repli sur l'id */ }
+  }
+  return fallbackId ? (game.actors.get(fallbackId) ?? null) : null;
+}
+
 function wrapAttack(bodyHtml) {
   return `<div class="rpg-attack-declare" style="font-size:13px;line-height:1.6">${bodyHtml}</div>`;
 }
@@ -122,9 +148,14 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     offhandName: offhand?.name ?? null,
     offhandDice: offhand?.system?.damage?.dice ?? null,
     actorId: attacker.id,
+    // UUID en plus de l'id : c'est lui qui distingue le token du prototype
+    // (voir resolveDeclaredActor). L'id reste écrit pour rester lisible et
+    // pour les repli.
+    actorUuid: attacker.uuid ?? null,
     weaponId: item.id,
     offhandId: offhand?.id ?? null,
     targetId: targetActor.id,
+    targetUuid: targetActor.uuid ?? null,
     livraison: tn.livraison,
     d20: null,
     verdict: null
@@ -193,7 +224,7 @@ export async function rollAttackDie(message) {
   if (flags.phase !== "confirmed") return;
 
   const d = flags.attackDeclaration ?? {};
-  const attacker = game.actors.get(d.actorId);
+  const attacker = await resolveDeclaredActor(d.actorUuid, d.actorId);
 
   const roll = await (new Roll("1d20")).evaluate();
   const d20 = roll.total;
