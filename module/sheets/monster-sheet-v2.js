@@ -3,7 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
-import { applyUiTheme, openImageLightbox, restoreScrollPositions } from "./sheet-helpers.js";
+import { applyUiTheme, openImageLightbox, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -96,14 +96,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     window: { resizable: true }
   }, { inplace: false });
 
-  /** Un GM ouvre souvent plusieurs monstres à la fois (comparer des stat
-   *  blocks) — un id statique non unique ferait entrer en collision les
-   *  éléments DOM de deux fiches simultanées, comme RPGCharacterSheetV2.
-   *  L'UUID plutôt que l'id : deux tokens non liés du MÊME monstre ont le
-   *  même id d'acteur, et rouvrir la fiche de l'un fermait celle de l'autre. */
-  get id() {
-    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
-    return `rpg-monster-sheet-v2-${key}`;
+  /**
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
+   */
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-monster-sheet-v2");
   }
 
   _activeTab = "main";

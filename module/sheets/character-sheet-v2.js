@@ -253,7 +253,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox, restoreScrollPositions } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -263,14 +263,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     return [];
   }
 
-  /** Un id UNIQUE par acteur — et par TOKEN, d'où l'UUID plutôt que l'id :
-   *  deux tokens non liés du même prototype partagent le même id d'acteur, et
-   *  se seraient donc arraché leur fenêtre l'un à l'autre (voir le détail du
-   *  mécanisme dans RPGGenericItemSheetV2). */
-  get id() {
-    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
-    return `rpg-character-sheet-v2-${key}`;
-  }
 
   static TABS = {
     primary: {
@@ -279,6 +271,16 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       initial: "stats"
     }
   };
+
+  /**
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
+   */
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-character-sheet-v2");
+  }
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS,

@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-armor-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -23,23 +23,15 @@ function n(v, d = 0) {
 export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
+
   /**
-   * Un id UNIQUE par objet. ApplicationV2 s'en sert à la fois pour s'inscrire
-   * dans foundry.applications.instances et comme id de l'élément de fenêtre —
-   * or _insertElement() remplace purement et simplement l'élément déjà présent
-   * qui porte le même id. Avec l'id statique de DEFAULT_OPTIONS, ouvrir une
-   * deuxième fiche du même type arrachait donc du DOM la fenêtre de la
-   * première, dont l'instance se croyait pourtant toujours affichée : la
-   * rouvrir ne faisait plus que redessiner un élément détaché, sans rien
-   * montrer ni rien signaler. C'est le « au bout de quelques ouvertures, les
-   * fiches refusent de s'ouvrir, sans erreur en console ». Même correctif que
-   * RPGCharacterSheetV2 / RPGMonsterSheetV2, à ceci près qu'on prend l'UUID et
-   * pas l'id : un objet embarqué garde le même id sur le prototype d'un
-   * monstre et sur chacun de ses tokens.
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
    */
-  get id() {
-    const key = String(this.document?.uuid ?? this.document?.id ?? "sans-id").replace(/\./g, "-");
-    return `rpg-armor-sheet-v2-${key}`;
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-armor-sheet-v2");
   }
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(

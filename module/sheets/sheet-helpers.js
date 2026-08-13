@@ -86,6 +86,43 @@ export function bindImageEditors(root, document) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Un id de fenêtre unique par document                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rend unique, PAR DOCUMENT, l'id de fenêtre d'une fiche.
+ *
+ * ApplicationV2 fige son id À LA CONSTRUCTION, dans un champ privé, à partir
+ * de `options.id` — et c'est CE champ qui sert d'attribut id à l'élément de
+ * fenêtre et de clé dans foundry.applications.instances. Surcharger le getter
+ * `get id()` de la classe ne change donc rien à l'élément inséré : c'est
+ * l'erreur de la première tentative de correctif. Il faut corriger l'OPTION,
+ * avant que le constructeur ne la lise.
+ *
+ * Avec l'id statique de DEFAULT_OPTIONS (partagé par tous les objets du même
+ * type), `_insertElement()` remplaçait dans le DOM la fenêtre déjà ouverte qui
+ * portait ce même id. L'instance de la première fiche restait en cache
+ * (`document.sheet`) en se croyant affichée : la rouvrir ne faisait plus que
+ * redessiner un élément détaché du document — rien à l'écran, rien en console.
+ *
+ * @param {object} appOptions  options déjà fusionnées (retour de super)
+ * @param {object} rawOptions  options brutes reçues par le constructeur
+ * @param {string} baseId      préfixe lisible, propre à la classe de fiche
+ */
+export function uniqueSheetOptions(appOptions, rawOptions, baseId) {
+  const opts = appOptions ?? {};
+  const doc = rawOptions?.document ?? opts.document ?? null;
+  // L'UUID et non l'id : deux tokens non liés du même monstre partagent l'id
+  // de leur acteur, et la copie d'un objet sur un token partage l'id de
+  // l'objet du prototype. Les points ne sont pas valides dans un id HTML.
+  const key = String(doc?.uuid ?? doc?.id ?? "").replace(/\./g, "-")
+           || (foundry.utils?.randomID?.() ?? String(Date.now()));
+  opts.uniqueId = key;
+  opts.id = `${baseId}-${key}`;
+  return opts;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Conservation du défilement entre deux rendus                               */
 /* -------------------------------------------------------------------------- */
 

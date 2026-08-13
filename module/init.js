@@ -877,6 +877,18 @@ Hooks.once("init", async () => {
         // Jamais la barre latérale, le chat ni la barre de macros
         if (root.id === "sidebar" || root.closest?.("#sidebar, #chat, #hotbar")) return;
 
+        // ── Filet de sécurité : fenêtre rendue HORS du document ────────────
+        // Une fiche dont l'élément a été sorti du DOM (collision d'id, module
+        // tiers, arrachage par _insertElement…) continue de se rendre dans le
+        // vide : aucune fenêtre à l'écran, aucune erreur en console, et seul
+        // un F5 débloque. On la raccroche, ce qui la rend de nouveau visible
+        // au lieu de laisser le joueur devant une fiche « qui refuse de
+        // s'ouvrir ». Sans effet quand tout va bien (cas normal).
+        if (!root.isConnected && root.matches?.(RPG_MARKERS)) {
+          console.warn("[RPG] Fenêtre rendue hors du document — raccrochée :", root.id);
+          document.body.appendChild(root);
+        }
+
         // Les tables aléatoires (tables de rencontre, butin…) sont une
         // fenêtre 100% native de Foundry (RollTableConfig / RollTableSheet)
         // mais font partie intégrante du jeu — contrairement aux autres
