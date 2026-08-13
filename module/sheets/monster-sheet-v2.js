@@ -10,6 +10,16 @@ import {
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
+import { asList, listSafeUpdate } from "../utils/indexed-list.js";
+import { safeClick } from "../utils/error-handler.js";
+
+/**
+ * Chemins de cette fiche qui portent une LISTE — voir listSafeUpdate().
+ * Les déclarer permet de réparer une donnée déjà aplatie en objet dès la
+ * première modification, sans deviner : `system.gen.bands`, lui, est un vrai
+ * dictionnaire indexé par niveau et ne doit surtout pas figurer ici.
+ */
+const LIST_FIELDS = ["system.butin.entries"];
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 function parseLevels(csv) {
@@ -126,7 +136,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     ctx.isToken = actor.isToken === true;
     ctx.showGenConfig = game.user.isGM && !ctx.isToken;
     ctx.tokenSize = tokenSizeContext(actor);
-    const _entries = Array.isArray(actor.system?.butin?.entries) ? actor.system.butin.entries : [];
+    // asList, pas Array.isArray : un butin aplati en objet par l'ancien bug
+    // d'écriture doit se réafficher, pas passer pour une table vide.
+    const _entries = asList(actor.system?.butin?.entries);
     const _tableUuid = String(actor.system?.butin?.tableUuid ?? "").trim();
     ctx.hasLoot = game.user.isGM && (_entries.length > 0 || !!_tableUuid);
 
@@ -343,7 +355,15 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
         else value = el.value;
 
-        await this.document.update({ [name]: value }, isGenBand ? { render: false } : {});
+        // ⚠️ Jamais `{ [name]: value }` tel quel : un name traversant un index
+        // de tableau (« system.butin.entries.0.pct ») REMPLACE le tableau par
+        // un objet ne contenant que ce champ — voir utils/indexed-list.js. Le
+        // symptôme rapporté était exactement celui-là : modifier le « % de
+        // chance » d'une ligne de butin effaçait toute la table.
+        await this.document.update(
+          listSafeUpdate(this.document, name, value, LIST_FIELDS),
+          isGenBand ? { render: false } : {}
+        );
 
         if (isLevelsCsv) this.render({ force: false });
       });
@@ -564,17 +584,24 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       });
     });
 
+    // safeClick : sans lui, l'exception d'un gestionnaire async part dans le
+    // vide — c'est ce qui faisait passer ce bouton pour « mort » quand il
+    // butait sur un butin aplati en objet (`.splice` n'existe pas dessus).
     qsAll("[data-action='removeLootEntry']").forEach(btn => {
-      btn.addEventListener("click", async (ev) => {
+      btn.addEventListener("click", safeClick(async (ev) => {
         ev.preventDefault();
         if (!game.user.isGM) return;
         const idx = Number(btn.dataset.idx);
         if (!Number.isFinite(idx)) return;
-        const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+        const entries = this._lootEntries();
+        if (idx < 0 || idx >= entries.length) {
+          ui.notifications?.warn?.("Cette ligne de butin n'existe plus — fiche rafraîchie.");
+          return this.render({ force: true });
+        }
         entries.splice(idx, 1);
         await this.document.update({ "system.butin.entries": entries });
         this.render({ force: true });
-      });
+      }, "suppression d'une ligne de butin"));
     });
 
     // ── États ─────────────────────────────────────────
@@ -683,13 +710,23 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
   /* -------------------------------------------- */
 
   /**
+   * Le butin de ce monstre, toujours sous forme de tableau modifiable —
+   * y compris s'il a été aplati en objet par l'ancien bug d'écriture
+   * (utils/indexed-list.js). Toute mutation part d'ici : réécrire la liste
+   * entière la remet du bon type au passage, sans migration séparée.
+   */
+  _lootEntries() {
+    return foundry.utils.deepClone(asList(this.document.system?.butin?.entries));
+  }
+
+  /**
    * Ajoute une entrée de butin à partir d'un Item déjà résolu (glisser-déposer).
    * Ne stocke QUE l'uuid — nom, image et poids restent sur la fiche de
    * l'objet, source unique, résolus à l'affichage par _prepareContext.
    */
   async addLootEntryFromItem(item) {
     if (!game.user.isGM || !item?.uuid) return;
-    const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+    const entries = this._lootEntries();
     entries.push({ uuid: item.uuid, pct: 100, qtyMin: 1, qtyMax: 1, tries: 1 });
     await this.document.update({ "system.butin.entries": entries });
     this.render({ force: true });
@@ -703,7 +740,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       if (!doc) ui.notifications?.warn?.("UUID introuvable — ajouté quand même.");
     } catch (e) { ui.notifications?.warn?.("UUID invalide."); }
 
-    const entries = foundry.utils.deepClone(this.document.system?.butin?.entries ?? []);
+    const entries = this._lootEntries();
     entries.push({ uuid, pct: 100, qtyMin: 1, qtyMax: 1, tries: 1 });
     await this.document.update({ "system.butin.entries": entries });
     this.render({ force: true });
