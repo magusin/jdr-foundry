@@ -12,6 +12,7 @@
 // (rayon en pixels = mètres ÷ distance-par-case × taille-de-case).
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
+import { tokenFootprintMeters } from "./weapon-range.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
 import { tokenHalfExtentMeters, checkRange } from "../utils/grid.js";
 
@@ -36,9 +37,10 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
-// tokenHalfExtentMeters vit dans utils/grid.js : le cercle dessiné ici et la
-// portée réellement autorisée par checkRange doivent partir du MÊME bord,
-// sinon l'anneau affiché ment sur ce qui est atteignable.
+// tokenHalfExtentMeters vit dans utils/grid.js : le cercle dessiné ici, la
+// portée autorisée par checkRange et le bouton « Attaquer » (weapon-range.js,
+// qui délègue à la même fonction) doivent partir du MÊME bord, sinon l'anneau
+// affiché ment sur ce qui est réellement atteignable.
 
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 

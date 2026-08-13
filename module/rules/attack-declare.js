@@ -13,33 +13,36 @@
 // avant toute validation MJ.
 
 import { gmOnly } from "./chat-visibility.js";
-import { checkRange, fmtMeters } from "../utils/grid.js";
-
-/**
- * Portée utile d'une arme, en mètres : son allonge de corps à corps OU sa
- * portée de tir, la plus grande des deux.
- *
- * Les deux champs cohabitent et ne servent pas à la même chose (`allonge`
- * dessine la zone de menace et déclenche les attaques d'opportunité,
- * `range.max` est la portée de tir/jet), mais du point de vue « puis-je
- * frapper cette cible ? » l'un ou l'autre suffit : une lance d'allonge 2 m
- * atteint à 2 m, un arc de portée 20 m atteint à 20 m. C'est exactement ce
- * que dessine défaultLayersFor() sur le canevas — les deux anneaux — donc le
- * contrôle et l'affichage disent la même chose.
- */
-function weaponReach(item) {
-  const sys = item?.system ?? {};
-  return {
-    min: Math.max(0, Number(sys.range?.min ?? 0) || 0),
-    max: Math.max(
-      Math.max(0, Number(sys.range?.max ?? sys.portee ?? 0) || 0),
-      Math.max(0, Number(sys.allonge ?? 0) || 0)
-    )
-  };
-}
+import { checkWeaponRange } from "./weapon-range.js";
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+/**
+ * Retrouve l'acteur EXACT visé par une déclaration.
+ *
+ * ⚠️ `game.actors.get(id)` ne suffit pas. Un token non lié — c'est ainsi que
+ * les monstres sont posés sur une scène — possède son propre acteur
+ * synthétique (PV, états, inventaire propres), mais qui porte le MÊME id que
+ * son prototype dans le répertoire des acteurs. Chercher par id renvoie donc
+ * toujours le PROTOTYPE : les dégâts partaient sur la fiche du monstre pendant
+ * que le token à l'écran gardait ses PV intacts, exactement comme rapporté.
+ * Seul l'UUID distingue les deux (`Scene.x.Token.y.Actor.z` contre `Actor.z`),
+ * d'où son enregistrement dans les drapeaux du message — le flux des sorts
+ * fait déjà pareil avec `tokenUuid`.
+ *
+ * L'id reste accepté en repli, pour les messages postés avant ce correctif.
+ */
+export async function resolveDeclaredActor(uuid, fallbackId = null) {
+  if (uuid) {
+    try {
+      const doc = await fromUuid(uuid);
+      const actor = doc?.actor ?? doc;      // TokenDocument → son acteur synthétique
+      if (actor) return actor;
+    } catch { /* uuid périmé (token supprimé) : repli sur l'id */ }
+  }
+  return fallbackId ? (game.actors.get(fallbackId) ?? null) : null;
+}
 
 function wrapAttack(bodyHtml) {
   return `<div class="rpg-attack-declare" style="font-size:13px;line-height:1.6">${bodyHtml}</div>`;
@@ -120,20 +123,15 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
   // Ce contrôle n'existait NULLE PART sur le chemin d'attaque : seul le menu
   // de combat grisait son bouton, et lui seul. Déclarer depuis la barre
   // d'actions ou une fiche permettait donc de frapper une cible à l'autre
-  // bout de la carte. Même règle que les sorts (checkRange), pour que la
-  // mêlée se comporte comme le reste.
-  const attackerTok = opts.attackerToken ?? attacker.getActiveTokens?.()?.[0] ?? null;
-  const targetTok   = opts.targetToken   ?? targetActor.getActiveTokens?.()?.[0] ?? null;
-  if (attackerTok && targetTok) {
-    const { min, max } = weaponReach(item);
-    if (max > 0) {
-      const r = checkRange(attackerTok, targetTok, min, max);
-      if (!r.ok) {
-        const why = r.tooClose ? "trop près" : "hors de portée";
-        ui.notifications?.warn?.(
-          `${targetActor.name} est ${why} (${fmtMeters(r.dist)}, ${min}–${max} m).`);
-        return null;
-      }
+  // bout de la carte. On passe par checkWeaponRange (weapon-range.js), la
+  // même définition que le menu de combat et les cercles du canevas.
+  {
+    const attackerTok = opts.attackerToken ?? attacker.getActiveTokens?.()?.[0] ?? null;
+    const targetTok   = opts.targetToken   ?? targetActor.getActiveTokens?.()?.[0] ?? null;
+    const r = checkWeaponRange(attackerTok, targetTok, item);
+    if (!r.ok) {
+      ui.notifications?.warn?.(`${targetActor.name} : ${r.reason}`);
+      return null;
     }
   }
 
@@ -167,9 +165,14 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     offhandName: offhand?.name ?? null,
     offhandDice: offhand?.system?.damage?.dice ?? null,
     actorId: attacker.id,
+    // UUID en plus de l'id : c'est lui qui distingue le token du prototype
+    // (voir resolveDeclaredActor). L'id reste écrit pour rester lisible et
+    // pour les repli.
+    actorUuid: attacker.uuid ?? null,
     weaponId: item.id,
     offhandId: offhand?.id ?? null,
     targetId: targetActor.id,
+    targetUuid: targetActor.uuid ?? null,
     livraison: tn.livraison,
     d20: null,
     verdict: null
@@ -238,7 +241,7 @@ export async function rollAttackDie(message) {
   if (flags.phase !== "confirmed") return;
 
   const d = flags.attackDeclaration ?? {};
-  const attacker = game.actors.get(d.actorId);
+  const attacker = await resolveDeclaredActor(d.actorUuid, d.actorId);
 
   const roll = await (new Roll("1d20")).evaluate();
   const d20 = roll.total;

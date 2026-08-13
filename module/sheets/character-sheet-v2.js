@@ -255,7 +255,8 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 import { setupActorItemDrop } from "./drop-helper.js";
 import {
   applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
-  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced, sheetDomId
+  restoreScrollPositions, uniqueSheetOptions,
+  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
 } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -266,9 +267,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     return [];
   }
 
-  get id() {
-    return sheetDomId("rpg-character-sheet-v2", this.document);
-  }
 
   static TABS = {
     primary: {
@@ -344,12 +342,21 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   /**
-   * La carte PNJ n'a pas de grille de stats à caser : la fenêtre large de la
-   * fiche complète la laisserait flotter au milieu du vide. Décidé ici plutôt
-   * que dans DEFAULT_OPTIONS, qui est statique et partagé par toutes les fiches.
+   * Deux préoccupations dans une seule méthode, et c'est délibéré : une classe
+   * JavaScript ne peut pas définir deux fois `_initializeApplicationOptions`
+   * — la seconde écrase silencieusement la première. Elles ont cohabité un
+   * temps, et l'id unique ci-dessous ne s'appliquait donc jamais à cette
+   * fiche, qui continuait d'entrer en collision avec ses semblables.
+   *
+   * 1. Un id de fenêtre UNIQUE par document (voir uniqueSheetOptions) : sans
+   *    lui, ouvrir une deuxième fiche du même type arrache du DOM celle déjà
+   *    ouverte, qui devient impossible à rouvrir sans erreur visible.
+   * 2. La carte PNJ n'a pas de grille de stats à caser : la fenêtre large de
+   *    la fiche complète la laisserait flotter au milieu du vide.
    */
   _initializeApplicationOptions(options) {
-    const opts = super._initializeApplicationOptions(options);
+    const opts = uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                                    "rpg-character-sheet-v2");
     try {
       if (RPGCharacterSheetV2.isNpcViewFor(options?.document)) {
         opts.position = { ...(opts.position ?? {}), width: 620, height: 780 };
@@ -884,6 +891,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     const root = this.element;
     applyUiTheme(root);
+    // Équiper un objet, cocher une case… re-rend toute la fiche : sans ceci
+    // la fenêtre remonte tout en haut à chaque clic (voir sheet-helpers.js).
+    restoreScrollPositions(root);
 
     // ── Vue PNJ (joueur, personnage qui n'est pas le sien) ────────────────
     // Rien à brancher hormis l'agrandissement de l'illustration : la carte ne

@@ -1,25 +1,21 @@
 // module/sheets/item-recipe-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors, sheetDomId } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
+  static documentName = "Item";
+
 
   /**
-   * Identifiant DOM UNIQUE par document.
-   *
-   * `DEFAULT_OPTIONS.id` était une constante partagée par toutes les instances
-   * de cette fiche : ouvrir un second objet du même type pendant que le
-   * premier était affiché produisait deux fenêtres réclamant le même id.
-   * Foundry considère alors la seconde comme un ré-affichage de la première —
-   * la fiche « ne s'ouvre plus », ou remplace celle déjà ouverte. Même
-   * correctif que RPGCharacterSheetV2 / RPGMonsterSheetV2, qui n'ont pour
-   * cette raison aucun `id` statique.
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
    */
-  get id() {
-    return sheetDomId("rpg-recipe-sheet-v2", this.document);
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-recipe-sheet-v2");
   }
-  static documentName = "Item";
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
     classes: ["rpg", "rpg-sheet", "sheet", "item", "recipe"],
@@ -65,6 +61,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     bindImageEditors(root, this.document);
     applyUiTheme(root);
+    restoreScrollPositions(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindSendToActorsButton(root, this.document);
     bindLinkSyncCheckbox(root, this.document);

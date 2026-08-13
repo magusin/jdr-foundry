@@ -18,9 +18,11 @@
 
 const FLAG_SCOPE = "rpg";
 const FLAG_KEY   = "defaultActions";
-// Incrémenté à chaque nouvelle action de base : le rattrapage au chargement
-// complète alors les acteurs déjà traités par une version antérieure.
-const VERSION    = 4;
+// Incrémenté à chaque nouvelle action de base — ou à chaque RETRAIT : le
+// rattrapage au chargement repasse alors sur les acteurs déjà traités par une
+// version antérieure, pour compléter ce qui manque et supprimer ce qui n'a
+// plus lieu d'être (v5 : « Attaquer » retiré des monstres).
+const VERSION    = 5;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -189,11 +191,16 @@ const DEFAULT_ACTIONS = {
 const TARGET_TYPES = new Set(["character", "monster"]);
 
 /**
- * Actions de base non pertinentes pour certains types d'acteur : un monstre
- * n'a pas besoin de déclarer un « Changer d'arme » (pas d'échange d'arme en
- * tour par tour pour un monstre dans ce système).
+ * Actions de base non pertinentes pour certains types d'acteur.
+ *
+ * Un monstre ne manie pas d'arme dans ce système : ses attaques sont ses
+ * propres compétences (des objets de type « spell » que le MJ écrit sur sa
+ * fiche). « Attaquer », qui frappe avec l'arme équipée — ou à mains nues —,
+ * et « Changer d'arme » n'ont donc aucun sens pour lui : ils encombraient sa
+ * liste de sorts d'entrées inutilisables.
  */
 const ACTION_EXCLUDED_TYPES = {
+  attaquer:    new Set(["monster"]),
   changerArme: new Set(["monster"])
 };
 
@@ -214,6 +221,23 @@ export async function grantDefaultActions(actor) {
   }
 
   if (missing.length) await actor.createEmbeddedDocuments("Item", missing);
+
+  // Retire les actions de base qui ne concernent plus ce type d'acteur.
+  // Indispensable pour un RETRAIT : la liste ci-dessus n'empêche que les
+  // nouvelles attributions, elle ne défait rien sur les monstres qui avaient
+  // déjà reçu « Attaquer » avant que l'exclusion n'existe. Ne touche qu'aux
+  // objets portant NOTRE drapeau : une compétence maison qui s'appellerait
+  // « Attaquer » n'est pas concernée.
+  const stale = actor.items.filter(i => {
+    const key = i.getFlag?.(FLAG_SCOPE, ACTION_KEY_FLAG);
+    return key && ACTION_EXCLUDED_TYPES[key]?.has(actor.type);
+  });
+  if (stale.length) {
+    await actor.deleteEmbeddedDocuments("Item", stale.map(i => i.id));
+    console.log(`[RPG] Actions de base retirées de ${actor.name} : `
+              + stale.map(i => i.name).join(", "));
+  }
+
   try { await openMonsterToPlayers(actor); }
   catch (e) { console.warn(`[RPG] ouverture de la fiche de ${actor.name} :`, e); }
   await actor.setFlag(FLAG_SCOPE, FLAG_KEY, VERSION);
@@ -234,8 +258,11 @@ export async function backfillDefaultActions() {
   let done = 0;
   for (const actor of todo) {
     try {
+      const before = actor.items.size;
       const added = await grantDefaultActions(actor);
-      if (added.length) done++;
+      // Compte aussi les acteurs nettoyés (retrait d'une action devenue
+      // non pertinente), pas seulement ceux qui ont reçu quelque chose.
+      if (added.length || actor.items.size !== before) done++;
     } catch (e) {
       console.warn(`[RPG] actions de base sur ${actor.name} :`, e);
     }
@@ -406,6 +433,19 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     if (cancelled) return { handled: true, ok: false, cancelled: true };
     if (!weapon) return { handled: true, ok: false, reason: "Aucune arme utilisable." };
 
+    // Portée : l'action de base ne la vérifiait pas du tout, alors que le menu
+    // de combat grise son bouton « Attaquer » pour la même arme et la même
+    // cible — on pouvait donc frapper à n'importe quelle distance en passant
+    // par la fiche ou la barre d'actions. Même calcul des deux côtés
+    // (weapon-range.js), sinon les deux chemins se contrediraient à nouveau.
+    const { checkWeaponRange } = await import("./weapon-range.js");
+    const attackerToken = actor.getActiveTokens?.()?.[0] ?? null;
+    const reach = checkWeaponRange(attackerToken, target, weapon);
+    if (!reach.ok) {
+      return { handled: true, ok: false,
+               reason: `${target.actor.name} : ${reach.reason?.toLowerCase() ?? "hors portée"}.` };
+    }
+
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
     // dire laquelle a servi.
     const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")
@@ -423,9 +463,47 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
       ? diffOf(weapon) + diffOf(offhand) + dualWieldDifficulty()
       : undefined;
 
+    // Budget d'action : réserve le slot « attaque », exactement comme le menu
+    // de combat le fait pour une attaque d'arme. Sans ça l'action de base
+    // était gratuite (rien n'était réservé depuis la fiche ni la barre
+    // d'actions) et confirmBudgetSlot(), à la résolution, ne trouvait aucune
+    // entrée à confirmer.
+    let actionId = null;
+    try {
+      const { getBudget, canUseSlot, reserveSlot, saveBudget, addLogEntry } =
+        await import("./action-budget.js");
+      const combat = game.combat;
+      const cbt = combat?.active ? combatantFor(actor, combat) : null;
+      if (cbt) {
+        const budget = getBudget(combat, cbt.id);
+        if (!canUseSlot(budget, "attaque")) {
+          return { handled: true, ok: false, reason: "Slot Attaque épuisé pour ce tour." };
+        }
+        actionId = foundry.utils.randomID();
+        await saveBudget(combat, cbt.id, reserveSlot(budget, "attaque"));
+        await addLogEntry(combat, cbt.id, {
+          id: actionId, slot: "attaque", status: "pending",
+          label: `Attaque ${weapon.name} → ${target.actor.name}`,
+          actorId: actor.id,
+          snapshot: {
+            casterId: actor.id, targetId: target.actor.id,
+            targetPv: Number(target.actor.system?.ressources?.pv?.valeur ?? 0) || 0,
+            addedStateIds: [], cooldown: null
+          },
+          timestamp: Date.now()
+        });
+      }
+    } catch (e) {
+      // Un joueur ne peut pas écrire sur le document Combat (même raison que
+      // « Changer d'arme » plus bas) : on déclare quand même — le MJ voit la
+      // demande et la valide — plutôt que de bloquer l'attaque.
+      console.warn("[RPG] budget d'attaque non réservé :", e);
+      actionId = null;
+    }
+
     const { declareAttack } = await import("./attack-declare.js");
     await declareAttack(actor, weapon, target.actor,
-      { title, offhand, difficulte, targetToken: target });
+      { title, offhand, difficulte, actionId, targetToken: target });
     return { handled: true, ok: true };
   }
 
