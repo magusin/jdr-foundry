@@ -2,10 +2,16 @@
 //
 // Helpers de grille — et surtout LA référence unique pour « est-ce à portée ? ».
 //
-// Tout est en MÈTRES RÉELS, mesurés BORD À BORD. Les tokens se déplacent
-// librement (pas de case en case) : la grille n'est qu'un repère visuel, elle
-// ne doit jamais servir d'unité de mesure. Une portée saisie « 1,5 m » vaut
-// exactement 1,5 mètre entre le corps du lanceur et celui de sa cible.
+// Tout est en MÈTRES RÉELS, mesurés BORD À BORD — d'un carré de token à
+// l'autre. Les tokens se déplacent librement (pas de case en case) : la grille
+// n'est qu'un repère visuel, elle ne doit jamais servir d'unité de mesure. Une
+// portée saisie « 1,5 m » vaut exactement 1,5 mètre entre le carré du lanceur
+// et celui de sa cible.
+//
+// La taille d'un token ne CHANGE donc jamais une portée : elle déplace son
+// point de départ. C'est ce qui rend la mesure symétrique — le même écart, que
+// l'on parte du gros ou du petit — et ce qui garde le jet de touché
+// indépendant de la taille des socles.
 //
 // Historique des deux modèles écartés, parce qu'ils expliquent la forme
 // actuelle :
@@ -19,6 +25,12 @@
 //      tokens 1×1 collés ayant leurs centres à 1 m, toute la plage sous 1,41 m
 //      devenait indistinguable : 0,5 m et 1 m donnaient exactement la même
 //      portée, et le champ « allonge » perdait tout son bas de gamme.
+//   3. Distance des centres MOINS les deux demi-largeurs. Bonne intention
+//      (partir du bord), mauvaise géométrie : un carré n'est à sa demi-largeur
+//      du centre que sur ses axes, et une fois et demie plus loin dans ses
+//      coins. Deux voisins en diagonale, carrés collés par le coin, restaient
+//      comptés à 0,41 m — et le cercle tracé sur la carte, lui, débordait le
+//      carré de la portée entière sur les axes mais à peine dans les coins.
 
 const EPS = 1e-6;
 
@@ -52,19 +64,33 @@ export function gridPosFromToken(token) {
 }
 
 /**
- * Demi-largeur d'un token, en mètres — la distance de son centre à son bord.
+ * Demi-dimensions d'un token, en mètres — de son centre à ses bords.
  *
- * C'est ce qui permet de mesurer bord à bord : une allonge part du CORPS d'une
- * créature, pas d'un point mathématique en son centre. L'écart réel entre deux
- * combattants est leur distance de centre à centre moins leurs deux
- * demi-largeurs. Deux tokens 1×1 collés ont donc leurs corps à 0 m d'écart,
- * et la moindre allonge les atteint — sans avoir besoin d'aucune exception.
+ * C'est l'EMPRISE du token, le carré que Foundry dessine autour de lui : c'est
+ * elle qui sert de bord, et une portée part de ce bord. Largeur et hauteur sont
+ * rendues séparément parce qu'un token n'est pas forcément carré (serpent,
+ * chariot) et que les confondre déplacerait le bord du mauvais côté.
+ *
+ * @returns {{hw:number, hh:number}} demi-largeur / demi-hauteur, en mètres
+ */
+export function tokenHalfSizeMeters(token) {
+  if (!token) return { hw: 0, hh: 0 };
+  const gs = gridSizePx();
+  const perPx = gridDistanceMeters() / gs;
+  return {
+    hw: ((Number(token.w) || gs) / 2) * perPx,
+    hh: ((Number(token.h) || gs) / 2) * perPx
+  };
+}
+
+/**
+ * Demi-largeur d'un token, en mètres (la plus grande des deux dimensions).
+ * Conservée pour l'affichage et la compatibilité ; la MESURE de portée, elle,
+ * passe par tokenHalfSizeMeters (voir rangeDistanceMeters).
  */
 export function tokenHalfExtentMeters(token) {
-  if (!token) return 0;
-  const gs = gridSizePx();
-  const halfPx = Math.max(token.w ?? gs, token.h ?? gs) / 2;
-  return (halfPx / gs) * gridDistanceMeters();
+  const { hw, hh } = tokenHalfSizeMeters(token);
+  return Math.max(hw, hh);
 }
 
 /** Distance en mètres entre deux points en pixels ({x, y}, ex: token.center). */
@@ -75,17 +101,44 @@ export function pointDistanceMeters(a, b) {
 }
 
 /**
- * Écart entre deux tokens, en mètres, de BORD À BORD.
+ * Écart entre deux tokens, en mètres : la distance entre leurs deux CARRÉS.
  *
- * Euclidien, sans aucune notion de case : c'est la distance qui sépare
- * réellement les deux corps. Vaut 0 quand ils se touchent, et croît
- * continûment ensuite — un token qu'on décale d'un demi-pas voit sa distance
- * bouger d'autant, ce qu'un comptage de cases ne pouvait pas rendre.
+ * C'est la règle du système, énoncée simplement : la taille du token définit
+ * la limite, et l'allonge part de cette limite. Deux carrés qui se touchent
+ * sont à 0 m l'un de l'autre (y compris par un coin), et l'écart croît ensuite
+ * continûment — un token décalé d'un demi-pas voit sa distance bouger d'autant.
+ *
+ * La taille n'ajoute donc RIEN à la portée : elle ne fait que déplacer le point
+ * de départ, identiquement dans les deux sens (A vers B et B vers A donnent le
+ * même écart, quelles que soient les deux tailles).
+ *
+ * ⚠️ Ce n'est PAS « distance des centres moins les deux demi-largeurs », qui
+ * était la formule précédente. Celle-ci retire la même demi-largeur dans toutes
+ * les directions alors qu'un carré n'est à sa demi-largeur du centre que sur
+ * ses axes : dans un coin, il s'étend une fois et demie plus loin. Deux tokens
+ * 1×1 en diagonale, dont les carrés se touchent par le coin — collés, à l'œil
+ * comme sur la grille — étaient ainsi comptés à 0,41 m l'un de l'autre, hors
+ * d'atteinte de toute allonge inférieure. L'écart entre deux rectangles se
+ * mesure axe par axe, puis se combine :
  */
 export function rangeDistanceMeters(a, b) {
-  const meters = pointDistanceMeters(a?.center, b?.center);
-  if (!Number.isFinite(meters)) return Infinity;
-  return Math.max(0, meters - tokenHalfExtentMeters(a) - tokenHalfExtentMeters(b));
+  const ca = a?.center, cb = b?.center;
+  if (!ca || !cb) return Infinity;
+
+  const A = tokenHalfSizeMeters(a);
+  const B = tokenHalfSizeMeters(b);
+  const perPx = gridDistanceMeters() / gridSizePx();
+
+  const dx = Math.abs(Number(cb.x) - Number(ca.x)) * perPx;
+  const dy = Math.abs(Number(cb.y) - Number(ca.y)) * perPx;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return Infinity;
+
+  // Écart restant sur chaque axe une fois les deux emprises retirées : 0 quand
+  // les carrés se chevauchent sur cet axe (ils sont alors « en face »).
+  const gx = Math.max(0, dx - A.hw - B.hw);
+  const gy = Math.max(0, dy - A.hh - B.hh);
+
+  return Math.hypot(gx, gy);
 }
 
 /**

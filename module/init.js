@@ -16,6 +16,7 @@ import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
 import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { checkRange, pointDistanceMeters, fmtMeters } from "./utils/grid.js";
+import { asList } from "./utils/indexed-list.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
 import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
@@ -1886,8 +1887,9 @@ Hooks.once("init", async () => {
             app._awaitPendingFieldSave().then(() => app.render());
           }
         } else if (app instanceof RPGMonsterSheetV2) {
-          const entries = app.document?.system?.butin?.entries;
-          if (Array.isArray(entries) && entries.some(e => e?.uuid === item.uuid)) {
+          // asList : cf. utils/indexed-list.js — un butin aplati en objet doit
+          // rester reconnu, sinon la fiche ouverte ne suit plus le renommage.
+          if (asList(app.document?.system?.butin?.entries).some(e => e?.uuid === item.uuid)) {
             app.render();
           }
         } else if (app?.collection && app.collection === item.collection) {

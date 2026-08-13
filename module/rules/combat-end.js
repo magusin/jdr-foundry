@@ -5,6 +5,10 @@
 
 import { appendToCampaignJournal } from "./campaign-journal.js";
 import { checkLevelUp } from "./level-up.js";
+// Le butin peut avoir été aplati en objet par l'ancien bug d'écriture d'un
+// champ indexé (utils/indexed-list.js) : un `Array.isArray` sec le lirait
+// comme une table vide, donc comme un monstre sans butin.
+import { asList } from "../utils/indexed-list.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -152,7 +156,7 @@ export async function resolveEndOfCombat(combat) {
 
   // ── 6. Boutons de loot — un par monstre + un global ──────────────────
   const lootableMonsters = monsterCombatants.filter(m => {
-    const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
+    const entries = asList(m.system?.butin?.entries);
     const tableUuid = String(m.system?.butin?.tableUuid ?? "").trim();
     return entries.length > 0 || tableUuid;
   });
@@ -173,7 +177,7 @@ export async function resolveEndOfCombat(combat) {
     content += `<div style="display:flex;flex-direction:column;gap:4px">`;
 
     for (const m of lootableMonsters) {
-      const entries = Array.isArray(m.system?.butin?.entries) ? m.system.butin.entries : [];
+      const entries = asList(m.system?.butin?.entries);
       const previewParts = await Promise.all(entries.slice(0, 3).map(async (e) => {
         let name = "Item inconnu";
         if (e.uuid) {
@@ -314,7 +318,7 @@ export async function lootMonsters(monsterIds) {
     if (!monster) continue;
 
     const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();
-    const entries   = Array.isArray(monster.system?.butin?.entries) ? monster.system.butin.entries : [];
+    const entries   = asList(monster.system?.butin?.entries);
 
     try {
       const drops = [];
