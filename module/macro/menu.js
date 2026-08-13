@@ -246,13 +246,14 @@
       // Portée min ET max : un arc ne tire pas à bout portant.
       const porteeMax = n(w.system?.range?.max ?? w.system?.portee, 1);
       const porteeMin = n(w.system?.range?.min, 0);
-      let distCases = null;
+      let distM = null;
       let outOfRange = false;
       let tooClose = false;
-      if (token && targetToken && game.rpg?.measureDistance) {
-        distCases = game.rpg.measureDistance(token.center, targetToken.center);
-        tooClose = distCases < porteeMin;
-        outOfRange = distCases > porteeMax || tooClose;
+      if (token && targetToken && game.rpg?.checkRange) {
+        const r = game.rpg.checkRange(token, targetToken, porteeMin, porteeMax);
+        distM = r.dist;
+        tooClose = r.tooClose;
+        outOfRange = !r.ok;
       }
 
       const targets = Array.from(game.user.targets ?? []);
@@ -262,8 +263,8 @@
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
       if (outOfRange) reasons.push(tooClose
-        ? `Trop près (${distCases?.toFixed?.(1) ?? distCases}m, portée mini ${porteeMin}m)`
-        : `Hors portée (${distCases?.toFixed?.(1) ?? distCases}m, portée max ${porteeMax}m)`);
+        ? `Trop près (${game.rpg?.fmtMeters?.(distM) ?? distM}, portée mini ${porteeMin} m)`
+        : `Hors portée (${game.rpg?.fmtMeters?.(distM) ?? distM}, portée max ${porteeMax} m)`);
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
@@ -351,12 +352,15 @@
       // ── Portée : vérifie chaque cible sélectionnée ───────────────────
       let okRange = true;
       let rangeMsg = "";
-      if (needTgt && token && targets.length && game.rpg?.measureDistance) {
+      if (needTgt && token && targets.length && game.rpg?.checkRange) {
         for (const t of targets) {
-          const dist = game.rpg.measureDistance(token.center, t.center);
-          if (dist < r.min || dist > r.max) {
+          const rr = game.rpg.checkRange(token, t, r.min, r.max);
+          if (!rr.ok) {
             okRange = false;
-            rangeMsg = `${t.actor?.name ?? t.name} hors portée (${dist?.toFixed?.(1) ?? dist}m, portée ${r.max}m)`;
+            const d = game.rpg?.fmtMeters?.(rr.dist) ?? rr.dist;
+            rangeMsg = rr.tooClose
+              ? `${t.actor?.name ?? t.name} trop près (${d}, portée mini ${r.min} m)`
+              : `${t.actor?.name ?? t.name} hors portée (${d}, portée max ${r.max} m)`;
             break;
           }
         }

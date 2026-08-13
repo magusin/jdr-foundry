@@ -15,7 +15,7 @@ import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
 import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
 import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
-import { measureDistanceManhattan } from "./rules/distance.js";
+import { checkRange, pointDistanceMeters, fmtMeters } from "./utils/grid.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
 import { installRangeOverlay, showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges } from "./rules/range-overlay.js";
@@ -576,7 +576,11 @@ Hooks.once("init", async () => {
     };
   }
   game[MODULE_ID] = game[MODULE_ID] || {};
-  game.rpg.measureDistance = measureDistanceManhattan;
+  // Portée : en mètres, comme le reste du système. `checkRange` est LA
+  // référence (les macros ne peuvent pas importer, d'où l'exposition ici).
+  game.rpg.measureDistance = pointDistanceMeters;
+  game.rpg.checkRange      = checkRange;
+  game.rpg.fmtMeters       = fmtMeters;
   // API terrain (types de terrain, coût de mouvement)
   const _terrainModule = await import("./rules/region-behaviors.js");
   game.rpg.terrain = {

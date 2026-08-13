@@ -1,5 +1,5 @@
 // systems/rpg/module/rules/spells.js
-import { manhattanDistanceTokens } from "../utils/grid.js";
+import { checkRange, fmtMeters } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
@@ -716,9 +716,9 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
   const rmin = n(sys.range?.min, 0);
   const rmax = n(sys.range?.max, 0);
   if (casterT && targetT) {
-    const dist = measureSquares(casterT, targetT); // ✅ Manhattan
-    if (dist < rmin || dist > rmax) {
-      return { ok: false, reason: `Hors portée (${dist} cases, ${rmin}–${rmax})` };
+    const r = checkRange(casterT, targetT, rmin, rmax);
+    if (!r.ok) {
+      return { ok: false, reason: `Hors portée (${fmtMeters(r.dist)}, ${rmin}–${rmax} m)` };
     }
   }
 
@@ -910,13 +910,9 @@ async function upsertState(actor, state) {
 /* Distances / range check                                       */
 /* ------------------------------------------------------------ */
 
-function measureSquares(tokenA, tokenB) {
-  try {
-    return manhattanDistanceTokens(tokenA, tokenB); // ✅ diagonale=2
-  } catch (e) {
-    return 999999;
-  }
-}
+/* La mesure de portée vit dans utils/grid.js (checkRange) : elle est en
+   mètres, partagée avec le menu de combat et la fiche de monstre, et calée
+   sur le cercle réellement dessiné sur le canevas. */
 
 /* ------------------------------------------------------------ */
 /* WORKFLOW CENTRALISE : declare -> chat buttons -> resolve      */
@@ -974,9 +970,10 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     const rmin = n(sys.range?.min, 0);
     const rmax = n(sys.range?.max, 0);
     for (const tT of targetTokens) {
-      const dist = measureSquares(casterT, tT);
-      if (dist < rmin || dist > rmax) {
-        return { ok: false, reason: `${tT.actor?.name ?? tT.name} hors portée (${dist.toFixed(1)} cases, ${rmin}–${rmax})` };
+      const r = checkRange(casterT, tT, rmin, rmax);
+      if (!r.ok) {
+        const why = r.tooClose ? "trop près" : "hors portée";
+        return { ok: false, reason: `${tT.actor?.name ?? tT.name} ${why} (${fmtMeters(r.dist)}, ${rmin}–${rmax} m)` };
       }
     }
   }

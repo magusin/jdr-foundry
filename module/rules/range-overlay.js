@@ -13,6 +13,7 @@
 
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
+import { tokenFootprintMeters } from "../utils/grid.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -35,32 +36,9 @@ function metersToPixels(m) {
   return (Number(m) || 0) / (gd || 1) * gs;
 }
 
-/**
- * Excédent de demi-largeur d'un token AU-DELÀ d'une case normale, en mètres.
- * Une allonge/portée se mesure depuis le CORPS d'une créature, pas depuis un
- * point en son centre : sans cet ajout, le cercle d'un monstre de grande
- * taille (2×2 cases ou plus) tombe en grande partie SOUS son propre socle,
- * et un joueur ne peut pas dire à l'œil quand son propre token entre
- * réellement dans la zone de menace.
- *
- * Ne renvoie que l'EXCÉDENT (demi-largeur − demi-case) plutôt que la
- * demi-largeur brute : pour un token 1×1 (le cas normal), le centre de deux
- * tokens adjacents est déjà exactement à une case l'un de l'autre — l'allonge
- * de la fiche (ex. 1,5 m) mesurée depuis le CENTRE atteint donc déjà
- * exactement le bord d'une case adjacente, sans rien à ajouter. Ajouter la
- * demi-largeur COMPLÈTE (0,5 m sur une grille à 1 m/case) à un token normal
- * gonflait le cercle à 2 m pour une allonge affichée de 1,5 m — l'anneau ne
- * correspondait plus à son étiquette. Seule la taille AU-DELÀ d'une case
- * normale doit encore compenser (0 pour 1×1, une demi-case pour 2×2, etc.).
- */
-function tokenFootprintMeters(token) {
-  if (!token) return 0;
-  const gs = canvas?.scene?.grid?.size ?? 100;
-  const gd = canvas?.scene?.grid?.distance ?? 1;
-  const halfPx = Math.max(token.w ?? gs, token.h ?? gs) / 2;
-  const halfMeters = halfPx / (gs || 1) * gd;
-  return Math.max(0, halfMeters - gd / 2);
-}
+// tokenFootprintMeters vit dans utils/grid.js : le cercle dessiné ici et la
+// portée réellement autorisée par checkRange doivent partir de la MÊME
+// empreinte, sinon l'anneau affiché ment sur ce qui est atteignable.
 
 const fmtM = (m) => (m % 1 === 0 ? `${m}` : m.toFixed(1)) + " m";
 

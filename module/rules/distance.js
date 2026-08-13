@@ -1,4 +1,11 @@
 // systems/rpg/module/rules/distance.js
+//
+// ⚠️ OBSOLÈTE — plus aucun appelant dans le système.
+// Ces fonctions comptent des CASES en distance de Manhattan (diagonale = 2),
+// ce qui ne correspond ni aux mètres utilisés partout ailleurs, ni aux cercles
+// dessinés sur le canevas. Toute vérification de portée passe désormais par
+// `checkRange()` / `pointDistanceMeters()` dans utils/grid.js.
+// Conservé en l'état au cas où une macro de monde l'appellerait encore.
 
 function getGridPosFromPixels(x, y) {
     // v11/v12 selon

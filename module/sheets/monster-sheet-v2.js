@@ -6,6 +6,7 @@ import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-
 import { applyUiTheme, openImageLightbox } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES } from "../rules/state-builder.js";
+import { checkRange, fmtMeters } from "../utils/grid.js";
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 function parseLevels(csv) {
@@ -435,8 +436,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         const rmax = Number(item.system?.range?.max ?? item.system?.portee ?? 0) || 0;
         const casterToken = this.document.getActiveTokens()?.[0] ?? null;
         if (canvas?.grid && casterToken) {
-          const dist = canvas.grid.measureDistance(casterToken.center, targetToken.center);
-          if (dist < rmin || dist > rmax) return ui.notifications.warn(`Hors portée: ${dist.toFixed(1)} cases (min ${rmin}, max ${rmax}).`);
+          const r = checkRange(casterToken, targetToken, rmin, rmax);
+          if (!r.ok) return ui.notifications.warn(
+            `${r.tooClose ? "Trop près" : "Hors portée"} : ${fmtMeters(r.dist)} (min ${rmin} m, max ${rmax} m).`);
         }
         // Un sort passe par le workflow de sort (coût mana/fatigue, effets,
         // validation MJ) ; une arme/attaque physique par la déclaration
