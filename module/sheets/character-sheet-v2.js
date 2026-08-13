@@ -253,7 +253,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
-import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox } from "./sheet-helpers.js";
+import { applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Actor";
@@ -263,9 +263,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     return [];
   }
 
-  get id() {
-    return `rpg-character-sheet-v2-${this.document.id}`;
-  }
 
   static TABS = {
     primary: {
@@ -274,6 +271,16 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       initial: "stats"
     }
   };
+
+  /**
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
+   */
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-character-sheet-v2");
+  }
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS,
@@ -879,6 +886,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     const root = this.element;
     applyUiTheme(root);
+    // Équiper un objet, cocher une case… re-rend toute la fiche : sans ceci
+    // la fenêtre remonte tout en haut à chaque clic (voir sheet-helpers.js).
+    restoreScrollPositions(root);
 
     // ── Vue PNJ (joueur, personnage qui n'est pas le sien) ────────────────
     // Rien à brancher hormis l'agrandissement de l'illustration : la carte ne

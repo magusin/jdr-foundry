@@ -85,6 +85,131 @@ export function bindImageEditors(root, document) {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Un id de fenêtre unique par document                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rend unique, PAR DOCUMENT, l'id de fenêtre d'une fiche.
+ *
+ * ApplicationV2 fige son id À LA CONSTRUCTION, dans un champ privé, à partir
+ * de `options.id` — et c'est CE champ qui sert d'attribut id à l'élément de
+ * fenêtre et de clé dans foundry.applications.instances. Surcharger le getter
+ * `get id()` de la classe ne change donc rien à l'élément inséré : c'est
+ * l'erreur de la première tentative de correctif. Il faut corriger l'OPTION,
+ * avant que le constructeur ne la lise.
+ *
+ * Avec l'id statique de DEFAULT_OPTIONS (partagé par tous les objets du même
+ * type), `_insertElement()` remplaçait dans le DOM la fenêtre déjà ouverte qui
+ * portait ce même id. L'instance de la première fiche restait en cache
+ * (`document.sheet`) en se croyant affichée : la rouvrir ne faisait plus que
+ * redessiner un élément détaché du document — rien à l'écran, rien en console.
+ *
+ * @param {object} appOptions  options déjà fusionnées (retour de super)
+ * @param {object} rawOptions  options brutes reçues par le constructeur
+ * @param {string} baseId      préfixe lisible, propre à la classe de fiche
+ */
+export function uniqueSheetOptions(appOptions, rawOptions, baseId) {
+  const opts = appOptions ?? {};
+  const doc = rawOptions?.document ?? opts.document ?? null;
+  // L'UUID et non l'id : deux tokens non liés du même monstre partagent l'id
+  // de leur acteur, et la copie d'un objet sur un token partage l'id de
+  // l'objet du prototype. Les points ne sont pas valides dans un id HTML.
+  const key = String(doc?.uuid ?? doc?.id ?? "").replace(/\./g, "-")
+           || (foundry.utils?.randomID?.() ?? String(Date.now()));
+  opts.uniqueId = key;
+  opts.id = `${baseId}-${key}`;
+  return opts;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Conservation du défilement entre deux rendus                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Conteneurs susceptibles de défiler dans une fiche. On les liste plutôt que
+ * de deviner : selon la fiche et le thème, c'est tantôt `.window-content`
+ * (Foundry lui pose `overflow: hidden auto` par défaut, avec une spécificité
+ * que nos propres règles ne battent pas), tantôt le `.sheet-body` interne.
+ * Aucun risque à surveiller les deux : seuls les éléments ayant RÉELLEMENT
+ * défilé (donc émis un événement `scroll`) sont mémorisés.
+ *
+ * `.quest-page-content` est volontairement absent : la fiche de quête gère
+ * elle-même son défilement, parce qu'elle doit justement NE PAS le restaurer
+ * quand une action change de page (« + Étape » saute sur la nouvelle étape).
+ */
+const SCROLL_SELECTORS = [".window-content", ".sheet-body"];
+
+/**
+ * Mémoire de défilement, indexée par l'élément de fenêtre (`app.element`).
+ *
+ * Volontairement attachée au DOM et non à l'instance d'Application : Foundry
+ * garde l'instance en vie après une fermeture (`document.sheet` est mis en
+ * cache) mais détruit puis recrée son élément. Une fiche rouverte repart donc
+ * naturellement du haut, alors qu'un simple re-rendu — qui conserve la
+ * fenêtre — retrouve sa position.
+ */
+const SCROLL_MEMORY = new WeakMap();
+
+/**
+ * Empêche une fiche de « remonter tout en haut » à chaque re-rendu.
+ *
+ * Presque toute action sur une fiche (équiper un objet, cocher une case,
+ * saisir un champ en auto-save…) déclenche un rendu complet : le contenu est
+ * remplacé, le navigateur écrête la position de défilement à 0 et le joueur se
+ * retrouve en haut de la fenêtre alors qu'il travaillait au milieu de son
+ * inventaire (rapporté sur l'onglet Équipement, mais valable partout).
+ *
+ * À appeler dans le `_onRender()` de CHAQUE fiche, juste après
+ * `super._onRender()` : la position mémorisée est réappliquée, puis on branche
+ * (une seule fois par élément) l'écouteur qui la tient à jour.
+ *
+ * @param {HTMLElement} root  L'élément de la fiche (`this.element`).
+ */
+export function restoreScrollPositions(root) {
+  if (!root?.querySelector) return;
+
+  let mem = SCROLL_MEMORY.get(root);
+  if (!mem) SCROLL_MEMORY.set(root, mem = { tops: new Map(), restoring: new Set() });
+
+  for (const selector of SCROLL_SELECTORS) {
+    const el = root.querySelector(selector);
+    if (!el) continue;
+
+    const saved = mem.tops.get(selector) ?? 0;
+    if (saved > 0) {
+      // ⚠️ Écrire scrollTop émet un événement `scroll` — sans cette garde,
+      // l'écouteur ci-dessous mémoriserait la valeur ÉCRÊTÉE par le navigateur
+      // (le contenu tout juste remplacé est momentanément trop court pour
+      // porter l'ancienne position) et écraserait la position à restaurer
+      // avant même la seconde passe.
+      mem.restoring.add(selector);
+      el.scrollTop = saved;
+      // Le contenu n'a pas toujours sa hauteur définitive au moment du rendu
+      // (images, polices, textarea redimensionnées après coup) : seconde passe
+      // à la frame suivante, une fois la mise en page stabilisée.
+      requestAnimationFrame(() => {
+        el.scrollTop = saved;
+        requestAnimationFrame(() => mem.restoring.delete(selector));
+      });
+    }
+
+    // `.window-content` survit aux rendus (c'est le cadre de la fenêtre) —
+    // sans ce garde-fou on empilerait un écouteur par rendu.
+    if (el.dataset.rpgScrollBound) continue;
+    el.dataset.rpgScrollBound = "1";
+    el.addEventListener("scroll", () => {
+      if (mem.restoring.has(selector)) return;
+      // Un retour à 0 sur un conteneur qui n'a PLUS rien à faire défiler n'est
+      // pas un geste du joueur : c'est le navigateur qui écrête la position
+      // parce que le contenu vient d'être remplacé (donc momentanément trop
+      // court). Le mémoriser effacerait justement la position à restaurer.
+      if (el.scrollTop === 0 && (el.scrollHeight - el.clientHeight) <= 0) return;
+      mem.tops.set(selector, el.scrollTop);
+    }, { passive: true });
+  }
+}
+
 /**
  * Applique la classe de thème visuel choisie par le joueur (réglage client)
  * sur l'élément racine de la fiche. À appeler dans chaque _onRender().

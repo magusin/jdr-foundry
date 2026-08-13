@@ -576,7 +576,19 @@ Hooks.once("init", async () => {
     };
   }
   game[MODULE_ID] = game[MODULE_ID] || {};
+  // ⚠️ Distance de MANHATTAN, en CASES — pas en mètres. Conservée pour les
+  // usages qui raisonnent vraiment en cases ; pour tester une portée d'arme
+  // ou de sort, passer par game.rpg.weaponRange (mètres, bord à bord, même
+  // mesure que les cercles du canevas).
   game.rpg.measureDistance = measureDistanceManhattan;
+  const _weaponRange = await import("./rules/weapon-range.js");
+  game.rpg.weaponRange = {
+    check:            _weaponRange.checkWeaponRange,
+    checkForActors:   _weaponRange.checkWeaponRangeForActors,
+    weaponRangeMeters: _weaponRange.weaponRangeMeters,
+    tokenDistance:    _weaponRange.tokenDistanceMeters,
+    metersBetween:    _weaponRange.metersBetweenPoints
+  };
   // API terrain (types de terrain, coût de mouvement)
   const _terrainModule = await import("./rules/region-behaviors.js");
   game.rpg.terrain = {
@@ -621,7 +633,15 @@ Hooks.once("init", async () => {
   game.rpg.chat = { gmOnly, hpSecret };
 
   // Actions de base (Repos…) — exposées pour un rattrapage manuel du MJ
-  game.rpg.defaultActions = { grantDefaultActions, backfillDefaultActions };
+  // runDefaultAction/defaultActionKey sont exposés pour le menu de combat
+  // (macro, donc sans import possible) : sans eux il déclarait « Attaquer »
+  // comme un sort ordinaire — c'est-à-dire un sort vide.
+  const _defaultActions = await import("./rules/default-actions.js");
+  game.rpg.defaultActions = {
+    grantDefaultActions, backfillDefaultActions,
+    runDefaultAction:  _defaultActions.runDefaultAction,
+    defaultActionKey:  _defaultActions.defaultActionKey
+  };
 
   // Affichage des portées — exposé pour les fiches et la macro « Menu Combat »
   game.rpg.ranges = { showSpellRange: showSpellRangeOverlay, showTokenRanges, clearRanges, togglePinnedRanges };
@@ -632,6 +652,7 @@ Hooks.once("init", async () => {
     const _unarmed = await import("./rules/unarmed.js");
     game.rpg.unarmed = {
       UNARMED_ID: _unarmed.UNARMED_ID,
+      isUnarmedId: _unarmed.isUnarmedId,
       buildUnarmedWeapon: _unarmed.buildUnarmedWeapon,
       getAttackWeapon: _unarmed.getAttackWeapon,
       resolveWeapon: _unarmed.resolveWeapon
@@ -855,6 +876,18 @@ Hooks.once("init", async () => {
         if (!root?.querySelector) return;
         // Jamais la barre latérale, le chat ni la barre de macros
         if (root.id === "sidebar" || root.closest?.("#sidebar, #chat, #hotbar")) return;
+
+        // ── Filet de sécurité : fenêtre rendue HORS du document ────────────
+        // Une fiche dont l'élément a été sorti du DOM (collision d'id, module
+        // tiers, arrachage par _insertElement…) continue de se rendre dans le
+        // vide : aucune fenêtre à l'écran, aucune erreur en console, et seul
+        // un F5 débloque. On la raccroche, ce qui la rend de nouveau visible
+        // au lieu de laisser le joueur devant une fiche « qui refuse de
+        // s'ouvrir ». Sans effet quand tout va bien (cas normal).
+        if (!root.isConnected && root.matches?.(RPG_MARKERS)) {
+          console.warn("[RPG] Fenêtre rendue hors du document — raccrochée :", root.id);
+          document.body.appendChild(root);
+        }
 
         // Les tables aléatoires (tables de rencontre, butin…) sont une
         // fenêtre 100% native de Foundry (RollTableConfig / RollTableSheet)
@@ -1994,9 +2027,10 @@ Hooks.once("init", async () => {
   // Codex : les joueurs ne voient dans les compendiums que ce qu'ils ont eu
   try { installCodex(); } catch (e) { console.warn("[RPG] codex:", e); }
 
-  // Synchro d'objets liés (armes/armures/sorts/consommables/recettes/loot) :
-  // voir rules/item-link.js. Opt-in par objet (case "🔗 Synchro" sur la
-  // fiche), contrepartie de quest-group.js pour tout ce qui n'est pas une
+  // Synchro d'objets liés (armes/armures/sorts/consommables/recettes/loot),
+  // chez TOUS les porteurs — PJ, PNJ et monstres : voir rules/item-link.js.
+  // Active par défaut, avec désistement par exemplaire (case "🔗 Synchro" sur
+  // la fiche) ; contrepartie de quest-group.js pour tout ce qui n'est pas une
   // quête.
   try { ItemLink.installItemLinkSync(); } catch (e) { console.warn("[RPG] synchro objets liés:", e); }
 

@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-generic-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -10,6 +10,17 @@ function n(v, d = 0) {
 
 export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
+
+
+  /**
+   * Un id de fenêtre UNIQUE par document — voir uniqueSheetOptions() : sans
+   * lui, ouvrir une deuxième fiche du même type arrache du DOM la fenêtre de
+   * la première, qui devient alors impossible à rouvrir sans erreur visible.
+   */
+  _initializeApplicationOptions(options) {
+    return uniqueSheetOptions(super._initializeApplicationOptions(options), options,
+                              "rpg-generic-item-sheet-v2");
+  }
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(
     super.DEFAULT_OPTIONS,
@@ -110,6 +121,7 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
 
     // read-only joueur : désactive tout (sécurité)
     applyUiTheme(root);
+    restoreScrollPositions(root);
     applySheetViewMode(root, { isGM: game.user.isGM });
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);

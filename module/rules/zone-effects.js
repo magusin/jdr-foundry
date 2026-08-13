@@ -21,7 +21,7 @@ import { hpSecret } from "./chat-visibility.js";
 import { isImmuneToTerrain } from "./movement-types.js";
 import { applyResistances } from "./resistances.js";
 import { listEffects, EFFECT_TAGS } from "./effect-library.js";
-import { applyUiTheme } from "../sheets/sheet-helpers.js";
+import { applyUiTheme, restoreScrollPositions } from "../sheets/sheet-helpers.js";
 
 // Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg", ...,
 // { types: ["character"] }) — jamais "rpg.character"), un sous-type de
@@ -611,6 +611,9 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
       content.style.overflowY = "auto";
       content.style.maxHeight = "80vh";
     }
+    // Ajouter/retirer une ligne de modificateur re-rend toute la fenêtre :
+    // sans ceci elle remonte tout en haut à chaque clic (cf. sheet-helpers.js).
+    restoreScrollPositions(this.element);
   }
 
   /** Ajoute une ligne de modificateur vierge — repart des données du document
