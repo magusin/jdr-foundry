@@ -180,7 +180,7 @@
     {{!-- RÉSISTANCES ÉLÉMENTAIRES --}}
     <hr/>
     <section>
-      <h2>Résistances élémentaires</h2>
+      <h2>Résistances aux dégâts (par type)</h2>
       {{#if canEdit}}
         <div class="rpg-resist-elem-grid">
           {{#each resistElemRows as |r|}}
@@ -215,7 +215,7 @@
     {{#if canEdit}}
       <hr/>
       <section>
-        <h2>Résistances aux effets</h2>
+        <h2>Résistances aux états (durée / dégâts par tour)</h2>
         <div class="rpg-resistances">
           {{#each system.resistances as |r idx|}}
           <div class="resistance-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">

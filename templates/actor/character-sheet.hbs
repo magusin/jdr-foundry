@@ -580,7 +580,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           {{!-- Résistances élémentaires : total effectif (base + équipement
                 porté + états actifs), calculé dans documents/actor.js. --}}
           <div style="margin-top:8px">
-            <label style="font-size:12px">Résistances élémentaires</label>
+            <label style="font-size:12px">Résistances aux dégâts (par type)</label>
             {{#if resistElemActive.length}}
             <div class="rpg-resist-elem-read">
               {{#each resistElemActive as |r|}}
@@ -615,7 +615,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             </div>
             <small class="raw-stats-hint">Valeur brute avant niveau, compétences et équipement.</small>
 
-            <h4 style="margin:10px 0 2px;font-size:12px">Résistances élémentaires innées (%)</h4>
+            <h4 style="margin:10px 0 2px;font-size:12px">Résistances aux dégâts innées, par type (%)</h4>
             <div class="rpg-resist-elem-grid">
               {{#each resistElemRows as |r|}}
               <div class="rpg-resist-elem-cell">

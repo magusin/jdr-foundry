@@ -94,20 +94,23 @@ function sumBonuses(actor) {
 }
 
 /**
- * Résistances élémentaires accordées par les états actifs.
- * Un état pose sa résistance sous state.resistance = {tag, damagePct, …} —
- * le même objet que lit resistances.js pour les résistances aux ÉTATS ;
- * seul `damagePct` (dégâts directs) nous concerne ici.
+ * Résistances aux DÉGÂTS accordées par les états actifs.
+ *
+ * Lit `state.resistanceDamage = {tag, pct}` — et surtout PAS
+ * `state.resistance`, qui est la résistance aux ÉTATS (durée, dégâts par
+ * tour, immunité) que lit resistances.js. Les deux sont deux champs
+ * distincts de la fiche de sort, chacun avec son propre type visé : un buff
+ * peut réduire les dégâts de feu sans rien changer aux brûlures.
  */
 function sumStateResistances(actor) {
   const out = emptyResistMap();
   const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
   for (const st of states) {
-    const r = st?.resistance;
+    const r = st?.resistanceDamage;
     if (!r || typeof r !== "object") continue;
     const tag = String(r.tag ?? "").trim().toLowerCase();
     if (!isDamageType(tag)) continue;
-    out[tag] += Number(r.damagePct ?? 0) || 0;
+    out[tag] += Number(r.pct ?? 0) || 0;
   }
   return out;
 }

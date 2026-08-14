@@ -1431,17 +1431,21 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
           // Toujours construit, même vide : {tag:null,...} est filtré sans
           // effet côté lecture (computeResistanceFor ignore une résistance sans
           // tag ni effectKey), pas besoin d'un if ici.
-          // `damagePct`, lui, réduit les DÉGÂTS DIRECTS de ce type (coup
-          // d'épée, boule de feu, piège) : agrégé dans
-          // derived.resistancesElem par actor.js, appliqué par
-          // computeFinalDamage(). Les trois autres champs ne touchent qu'aux
-          // états, d'où la cohabitation dans le même objet.
           resistance: {
             tag: String(fx.resistTag ?? "").trim() || null,
-            damagePct: n(fx.resistDamagePct, 0),
             durationReduction: n(fx.resistDurationReduction, 0),
             dotReductionPct: n(fx.resistDotPct, 0),
             immune: !!fx.resistImmune
+          },
+          // Résistance aux DÉGÂTS d'un type : objet SÉPARÉ de `resistance`
+          // ci-dessus, avec son propre type visé. Les deux ne se recouvrent
+          // pas (protéger des dégâts de feu n'a pas à protéger des brûlures)
+          // et ne sont pas lus par le même code : celui-ci est agrégé dans
+          // derived.resistancesElem par actor.js puis appliqué par
+          // computeFinalDamage(), l'autre par resistances.js.
+          resistanceDamage: {
+            tag: String(fx.resistDamageTag ?? "").trim() || null,
+            pct: n(fx.resistDamagePct, 0)
           }
         };
         if (isAura) state.aura = {

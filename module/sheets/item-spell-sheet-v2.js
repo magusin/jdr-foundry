@@ -112,21 +112,31 @@ function decorateMod(m) {
  */
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 function buildResistSummary(fx) {
+  const out = [];
+
+  // Partie 6 — résistance aux DÉGÂTS d'un type.
   const dmgPct = n(fx.resistDamagePct, 0);
-  if (!fx.resistTag && !fx.resistImmune && !dmgPct) return null;
-  const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
-  // La réduction de dégâts subis vaut même sous immunité : l'immunité ne
-  // couvre que les états, pas les dégâts directs (voir la fiche, partie 6).
-  if (dmgPct) bits.push(`dégâts subis ${dmgPct > 0 ? "−" : "+"}${Math.abs(dmgPct)}%`);
-  if (fx.resistImmune) {
-    bits.push("immunité aux états");
-  } else {
-    const dur = n(fx.resistDurationReduction, 0);
-    if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
-    const pct = n(fx.resistDotPct, 0);
-    if (pct) bits.push(`dégâts/tour ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
+  if (fx.resistDamageTag && dmgPct) {
+    out.push(`🛡️ ${tagLabel(fx.resistDamageTag)} · dégâts ${dmgPct > 0 ? "−" : "+"}${Math.abs(dmgPct)}%`);
   }
-  return `🛡️ ${bits.join(" · ")}`;
+
+  // Partie 7 — résistance aux ÉTATS. Résumée à part : les deux visent
+  // chacune leur propre type, les fondre en une ligne laisserait croire
+  // qu'un seul choix les gouverne.
+  if (fx.resistTag || fx.resistImmune) {
+    const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
+    if (fx.resistImmune) {
+      bits.push("immunité");
+    } else {
+      const dur = n(fx.resistDurationReduction, 0);
+      if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
+      const pct = n(fx.resistDotPct, 0);
+      if (pct) bits.push(`dégâts/tour ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
+    }
+    out.push(`🧪 États ${bits.join(" · ")}`);
+  }
+
+  return out.length ? out.join(" | ") : null;
 }
 
 function buildFxUi(fx) {
@@ -680,8 +690,14 @@ static PARTS = foundry.utils.mergeObject(
       fx.removeBaseTN = n(fx.removeBaseTN, 0);
       fx.auraTarget   = String(fx.auraTarget ?? "allies");
 
-      fx.resistTag = String(fx.resistTag ?? "");
+      // Deux résistances DISTINCTES, chacune avec son propre type visé :
+      // celle aux dégâts d'un type (partie 6) et celle aux états (partie 7).
+      // Les mélanger obligerait à protéger des brûlures dès qu'on protège
+      // des dégâts de feu — ce sont deux décisions séparées du MJ.
+      fx.resistDamageTag = String(fx.resistDamageTag ?? "");
       fx.resistDamagePct = clampResist(fx.resistDamagePct);
+
+      fx.resistTag = String(fx.resistTag ?? "");
       fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
       fx.resistDotPct = n(fx.resistDotPct, 0);
       fx.resistImmune = !!fx.resistImmune;
@@ -802,10 +818,13 @@ static PARTS = foundry.utils.mergeObject(
         // enregistrement au lieu de continuer à l'appliquer invisiblement
         // (remove-state-macro.js additionne toujours ce champ s'il existe).
         retraitMod: 0,
-        resistTag:               str("resistTag", prev.resistTag ?? ""),
-        // Résistance aux DÉGÂTS DIRECTS du type visé (damage-types.js) —
-        // distincte des deux champs suivants, qui ne jouent que sur les états.
+        // Résistance aux DÉGÂTS du type visé (damage-types.js) — son propre
+        // type visé, indépendant de celui de la résistance aux états.
+        resistDamageTag:         str("resistDamageTag", prev.resistDamageTag ?? ""),
         resistDamagePct:         clampResist(num("resistDamagePct", 0)),
+        // Résistance aux ÉTATS (durée, dégâts par tour, immunité) — lue par
+        // resistances.js, sans aucun effet sur les dégâts directs.
+        resistTag:               str("resistTag", prev.resistTag ?? ""),
         resistDurationReduction: num("resistDurationReduction", 0),
         resistDotPct:            num("resistDotPct", 0),
         resistImmune:            bool("resistImmune"),

@@ -218,7 +218,7 @@
             <div class="mm-line"><span>Réduction mag.</span><b>{{system.derived.reductions.magiquePct}}%</b></div>
           </div>
           <div style="margin-top:6px">
-            <span class="muted" style="font-size:11px">Résistances élémentaires (base + états)</span>
+            <span class="muted" style="font-size:11px">Résistances aux dégâts par type (base + états)</span>
             {{#if resistElemActive.length}}
             <div class="rpg-resist-elem-read">
               {{#each resistElemActive as |r|}}
@@ -345,7 +345,7 @@
             </div>
           </div>
 
-          <h4 style="margin:10px 0 2px">Résistances élémentaires (%)</h4>
+          <h4 style="margin:10px 0 2px">Résistances aux dégâts, par type (%)</h4>
           <div class="rpg-resist-elem-grid">
             {{#each resistElemRows as |r|}}
             <div class="rpg-resist-elem-cell">
@@ -612,7 +612,7 @@
               </div>
 
               <div class="gen-group">
-                <h4>Résistances élémentaires (%)</h4>
+                <h4>Résistances aux dégâts, par type (%)</h4>
                 <div class="gen-pair-grid">
                   {{#each b.resistancesElem as |r|}}
                   <div class="gen-pair">

@@ -544,12 +544,33 @@
             <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff. Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte : l'aura part de lui et touche, à chaque tour et selon la distance, les alliés / les ennemis / tout le monde. ⚠️ Pour une aura autour du <b>lanceur</b>, mets « S'applique à : Le lanceur » en partie 2, sinon elle rayonnera autour de la cible.</small>
           </fieldset>
 
-          {{!-- 6 · Résistance accordée --}}
+          {{!-- 6 · Résistance à un TYPE DE DÉGÂTS --}}
           <fieldset class="fx-fieldset">
-            <legend>6 · Résistance accordée (optionnel)</legend>
+            <legend>6 · Résistance à un type de dégâts (optionnel)</legend>
+            <div class="fx-grid-2">
+              <div>
+                <label title="Type de dégâts visé — indépendant du Type/Élément de CET effet en partie 1 (ex : un buff « Écaille de dragon », lui-même magique, accorde une résistance au feu).">🛡️ Type de dégâts visé</label>
+                <select data-fx-field="resistDamageTag">
+                  <option value="" {{#unless fx.resistDamageTag}}selected{{/unless}}>— Aucun —</option>
+                  {{#each @root.damageTypeChoices as |c|}}
+                    <option value="{{c.key}}" {{#if (eq fx.resistDamageTag c.key)}}selected{{/if}}>{{c.label}}</option>
+                  {{/each}}
+                </select>
+              </div>
+              <div>
+                <label title="Retiré aux DÉGÂTS reçus du type visé : boule de feu, coup d'épée, piège. Positif (%) = résistance (100 = immunité) ; négatif = vulnérabilité (dégâts augmentés).">🛡️ Réduction des dégâts subis (%)</label>
+                <input type="number" data-fx-field="resistDamagePct" value="{{fx.resistDamagePct}}" step="5" min="-100" max="100" placeholder="0"/>
+              </div>
+            </div>
+            <small class="fx-hint">Réduit les <b>dégâts</b> du type choisi tant que l'effet est actif — rien à voir avec la partie 7 ci-dessous, qui ne joue que sur les états. Ex. Écaille de dragon : <b>Feu · −50%</b>. <b>100</b> = immunité, valeur <b>négative</b> = vulnérabilité.</small>
+          </fieldset>
+
+          {{!-- 7 · Résistance aux ÉTATS --}}
+          <fieldset class="fx-fieldset">
+            <legend>7 · Résistance aux états (optionnel)</legend>
             <div class="fx-grid-4">
               <div>
-                <label title="Type d'effet visé par cette résistance/vulnérabilité — indépendant du Type/Élément de CET effet en partie 1 (ex : un buff « Écaille de dragon », lui-même magique, peut accorder une résistance au feu).">🛡️ Élément visé</label>
+                <label title="Type des ÉTATS visés (brûlure = feu, poison = terre…) — champ distinct du type de dégâts en partie 6 : un même effet peut protéger des dégâts de feu sans rien changer aux brûlures, ou l'inverse.">🧪 Type d'état visé</label>
                 <select data-fx-field="resistTag">
                   <option value="" {{#unless fx.resistTag}}selected{{/unless}}>— Aucun —</option>
                   {{#each @root.damageTypeChoices as |c|}}
@@ -558,26 +579,22 @@
                 </select>
               </div>
               <div>
-                <label title="Retiré aux DÉGÂTS DIRECTS du type visé : coup d'épée, boule de feu, piège. Positif (%) = résistance (100 = immunité) ; négatif = vulnérabilité (dégâts augmentés). C'est le champ à utiliser pour « résiste au feu ».">🛡️ Réduction dégâts subis (%)</label>
-                <input type="number" data-fx-field="resistDamagePct" value="{{fx.resistDamagePct}}" step="5" min="-100" max="100" placeholder="0"/>
-              </div>
-              <div>
-                <label title="Retiré à la durée d'un effet du type visé quand la cible le reçoit — pas seulement de ce sort, de n'importe quel sort ou piège. Positif = résistance (dure moins longtemps) ; négatif = vulnérabilité (dure plus longtemps).">⏳ Réduction de durée (tours)</label>
+                <label title="Retiré à la durée d'un état du type visé quand la cible le reçoit — pas seulement de ce sort, de n'importe quel sort ou piège. Positif = résistance (dure moins longtemps) ; négatif = vulnérabilité (dure plus longtemps).">⏳ Réduction de durée (tours)</label>
                 <input type="number" data-fx-field="resistDurationReduction" value="{{fx.resistDurationReduction}}" step="1" placeholder="0"/>
               </div>
               <div>
-                <label title="Retiré aux dégâts/soin par tour d'un effet du type visé (brûlure, poison…). Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
+                <label title="Retiré aux dégâts/soin PAR TOUR d'un état du type visé (brûlure, poison…). Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
                 <input type="number" data-fx-field="resistDotPct" value="{{fx.resistDotPct}}" step="5" placeholder="0"/>
               </div>
               <div>
                 <label>🚫 Immunité aux états</label>
-                <label class="fx-check" title="La cible ignore complètement tout ÉTAT du type visé (durée et dégâts par tour). Les dégâts directs, eux, restent réglés par « Réduction dégâts subis » — mets-la à 100 % pour une immunité complète.">
+                <label class="fx-check" title="La cible ignore complètement tout ÉTAT du type visé (durée et dégâts par tour). Ne touche pas aux dégâts directs — ceux-là se règlent en partie 6.">
                   <input type="checkbox" data-fx-field="resistImmune" {{#if fx.resistImmune}}checked{{/if}} />
                   <span>Immunisé</span>
                 </label>
               </div>
             </div>
-            <small class="fx-hint">Facultatif — laisse « Aucun » si cet effet n'accorde ni résistance ni vulnérabilité. Une fois cet effet actif sur une cible, s'applique à TOUT ce qu'elle reçoit ensuite du type visé (sorts, armes, pièges...), pas seulement ce sort-ci. Ex. Écaille de dragon : <b>Feu · dégâts subis −50% · durée −2</b>. Une valeur <b>négative</b> fait l'inverse : c'est ainsi qu'on pose une vulnérabilité.</small>
+            <small class="fx-hint">Agit sur la <b>durée</b> et les <b>dégâts par tour</b> des états du type visé (brûlure, poison, gel...), jamais sur les dégâts directs. Une fois l'effet actif sur une cible, s'applique à tous les états de ce type qu'elle reçoit ensuite, pas seulement ceux de ce sort-ci.</small>
           </fieldset>
 
         </div>
