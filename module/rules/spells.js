@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/spells.js
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
+import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
@@ -895,6 +896,10 @@ export function buildSpellEffectsPreview({ actor, item }) {
       parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
     }
 
+    // Résistances accordées : même formulation que la fiche de sort et que
+    // la liste des états actifs d'un acteur (damage-types.js).
+    parts.push(...fxResistTextParts(fx).all);
+
     list.push({
       label: str(fx.label, "Effet"),
       when: PREVIEW_WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? str(fx.when, "Touché"),
@@ -1435,6 +1440,16 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
             durationReduction: n(fx.resistDurationReduction, 0),
             dotReductionPct: n(fx.resistDotPct, 0),
             immune: !!fx.resistImmune
+          },
+          // Résistance aux DÉGÂTS d'un type : objet SÉPARÉ de `resistance`
+          // ci-dessus, avec son propre type visé. Les deux ne se recouvrent
+          // pas (protéger des dégâts de feu n'a pas à protéger des brûlures)
+          // et ne sont pas lus par le même code : celui-ci est agrégé dans
+          // derived.resistancesElem par actor.js puis appliqué par
+          // computeFinalDamage(), l'autre par resistances.js.
+          resistanceDamage: {
+            tag: String(fx.resistDamageTag ?? "").trim() || null,
+            pct: n(fx.resistDamagePct, 0)
           }
         };
         if (isAura) state.aura = {
@@ -1717,10 +1732,16 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         pvMax: n(tActor.system?.ressources?.pv?.max, 0),
         blocks: dmgBlocks.map(b => {
           const isPhys = b.livraison === "physique";
+          // Résistance élémentaire de la cible au type du SORT (system.tag).
+          // Sans élément ("neutre"), la livraison de la ligne fait office de
+          // type — voir resolveDamageType() dans damage-types.js.
+          const res = resistanceFor(tActor, { tag: item.system?.tag, livraison: b.livraison });
           return {
             ...b,
             fixe: isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0),
             pct:  isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0),
+            elemPct: res.pct,
+            elemLabel: res.label
           };
         })
       };

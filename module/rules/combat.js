@@ -1,5 +1,7 @@
 // systems/rpg/module/rules/combat.js
 
+import { resistanceFor, applyResistPct } from "./damage-types.js";
+
 export const AUTO_FAIL_MAX  = 5;   // 5- échec auto
 export const AUTO_SUCC_MIN  = 16;  // 16+ succès auto
 
@@ -263,10 +265,18 @@ export async function applyFinalDamage({ targetActor, finalDamage }) {
 }
 
 /**
- * Calcule dégâts finaux (raw → après armure/rés fixe + %).
- * Utilise les réductions calculées dans actor.js (derived.reductions).
+ * Calcule dégâts finaux (raw → après armure/rés fixe + % → après résistance
+ * élémentaire).
+ *
+ * Deux étages, dans cet ordre :
+ *  1. armure/résistance classiques (derived.reductions, calculées dans actor.js) ;
+ *  2. résistance au TYPE des dégâts (damage-types.js) — feu, glace, physique…
+ *
+ * `tag` est l'élément explicite des dégâts (celui d'un sort, d'une zone) ;
+ * sans lui c'est la livraison qui fait office de type, ce qui donne son sens
+ * à une résistance « physique » ou « magique » (voir resolveDamageType).
  */
-export function computeFinalDamage({ targetActor, livraison, rawDamage }) {
+export function computeFinalDamage({ targetActor, livraison, rawDamage, tag = null }) {
   const sys    = targetActor.system ?? {};
   const effD   = sys.derived?.effective?.defenses ?? sys.defenses ?? {};
   const red    = sys.derived?.reductions ?? {};
@@ -280,6 +290,11 @@ export function computeFinalDamage({ targetActor, livraison, rawDamage }) {
     ? Number(red.physiquePct ?? 0)
     : Number(red.magiquePct  ?? 0);
 
-  const final = mitigateDamage(rawDamage, fixe, pct, 70);
-  return { fixe, pct, final };
+  const afterArmor = mitigateDamage(rawDamage, fixe, pct, 70);
+  const res = resistanceFor(targetActor, { tag, livraison });
+  // Le minimum à 1 de mitigateDamage vaut pour l'armure, pas pour une
+  // immunité : une créature immunisée au feu doit pouvoir encaisser 0.
+  const final = res.pct ? applyResistPct(afterArmor, res.pct) : afterArmor;
+
+  return { fixe, pct, final, elemPct: res.pct, elemType: res.type, elemLabel: res.label };
 }

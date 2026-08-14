@@ -3,10 +3,18 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 import { applyUiTheme, sheetContent, sheetActionButtons, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import {
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
+} from "../rules/damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
+}
+
+/** % de résistance/vulnérabilité, borné comme dans damage-types.js. */
+function clampResist(v) {
+  return Math.max(RESIST_MIN, Math.min(RESIST_MAX, Math.round(n(v, 0))));
 }
 
 // bool safe: gère "0/1", "on", true/false, et arrays ["0","1"]
@@ -106,17 +114,10 @@ function decorateMod(m) {
  */
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 function buildResistSummary(fx) {
-  if (!fx.resistTag && !fx.resistImmune) return null;
-  const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
-  if (fx.resistImmune) {
-    bits.push("immunité");
-  } else {
-    const dur = n(fx.resistDurationReduction, 0);
-    if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
-    const pct = n(fx.resistDotPct, 0);
-    if (pct) bits.push(`dégâts ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
-  }
-  return `🛡️ ${bits.join(" · ")}`;
+  // Formulation partagée avec l'aperçu des effets d'un sort et la liste des
+  // états actifs d'un acteur — voir fxResistTextParts() dans damage-types.js.
+  const parts = fxResistTextParts(fx).all;
+  return parts.length ? parts.join(" | ") : null;
 }
 
 function buildFxUi(fx) {
@@ -630,6 +631,15 @@ static PARTS = foundry.utils.mergeObject(
       ctx.weatherEffect = null;
     }
 
+    // Liste des types de dégâts, partagée par le <select> « Élément / Type »
+    // du sort et par celui de la résistance accordée (partie 6 d'un effet) —
+    // une seule source pour les deux, sinon « Physique » finit par n'exister
+    // que dans l'un des deux.
+    ctx.damageTypeChoices = DAMAGE_TYPE_KEYS.map(key => ({
+      key, label: DAMAGE_TYPES[key], selected: key === String(ctx.system.tag ?? "")
+    }));
+    ctx.tagLabel = tagLabel(String(ctx.system.tag ?? "neutre") || "neutre");
+
     ctx.system.damage = normDamage(ctx.system.damage);
     ctx.system.damageCrit = normDamage(ctx.system.damageCrit);
 
@@ -660,6 +670,13 @@ static PARTS = foundry.utils.mergeObject(
 
       fx.removeBaseTN = n(fx.removeBaseTN, 0);
       fx.auraTarget   = String(fx.auraTarget ?? "allies");
+
+      // Deux résistances DISTINCTES, chacune avec son propre type visé :
+      // celle aux dégâts d'un type (partie 6) et celle aux états (partie 7).
+      // Les mélanger obligerait à protéger des brûlures dès qu'on protège
+      // des dégâts de feu — ce sont deux décisions séparées du MJ.
+      fx.resistDamageTag = String(fx.resistDamageTag ?? "");
+      fx.resistDamagePct = clampResist(fx.resistDamagePct);
 
       fx.resistTag = String(fx.resistTag ?? "");
       fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
@@ -782,6 +799,12 @@ static PARTS = foundry.utils.mergeObject(
         // enregistrement au lieu de continuer à l'appliquer invisiblement
         // (remove-state-macro.js additionne toujours ce champ s'il existe).
         retraitMod: 0,
+        // Résistance aux DÉGÂTS du type visé (damage-types.js) — son propre
+        // type visé, indépendant de celui de la résistance aux états.
+        resistDamageTag:         str("resistDamageTag", prev.resistDamageTag ?? ""),
+        resistDamagePct:         clampResist(num("resistDamagePct", 0)),
+        // Résistance aux ÉTATS (durée, dégâts par tour, immunité) — lue par
+        // resistances.js, sans aucun effet sur les dégâts directs.
         resistTag:               str("resistTag", prev.resistTag ?? ""),
         resistDurationReduction: num("resistDurationReduction", 0),
         resistDotPct:            num("resistDotPct", 0),

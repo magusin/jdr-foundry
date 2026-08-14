@@ -76,14 +76,16 @@ const SYNC_DOC_FIELDS = ["name", "img"];
 const SYNC_FIELDS = {
   weapon: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.effects", "system.resistances", "system.recetteAssociee", "system.bonus",
+    "system.effects", "system.resistances", "system.resistancesElem",
+    "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description",
     "system.twoHands", "system.difficulte", "system.fatigueCost", "system.livraison",
+    "system.tag",
     "system.portee", "system.range", "system.allonge", "system.damage", "system.crit", "system.effet"
   ],
   armor: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.effects", "system.resistances", "system.amplifications",
+    "system.effects", "system.resistances", "system.resistancesElem", "system.amplifications",
     "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description"
   ],
@@ -92,7 +94,7 @@ const SYNC_FIELDS = {
   // de l'état d'équipement, pas de la définition.
   relic: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.effects", "system.resistances", "system.amplifications",
+    "system.effects", "system.resistances", "system.resistancesElem", "system.amplifications",
     "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description"
   ],

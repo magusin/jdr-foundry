@@ -1,5 +1,7 @@
 // systems/rpg/monster-gen.js
 
+import { DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "./rules/damage-types.js";
+
 function randInt(min, max) {
   min = Math.floor(Number(min));
   max = Math.floor(Number(max));
@@ -41,6 +43,34 @@ function clampMin0(n) {
 function rollClamped(rangeArr, fallbackMin = 0, fallbackMax = 0) {
   const [mn, mx] = getRange(rangeArr, fallbackMin, fallbackMax);
   return clampMin0(randInt(mn, mx));
+}
+
+/**
+ * Résistances élémentaires tirées dans les plages du band.
+ *
+ * Volontairement PAS clampées à 0 comme les autres tirages : une plage
+ * négative est le seul moyen de générer une vulnérabilité (un élémentaire
+ * de glace faible au feu), ce qui est tout l'intérêt du champ. Bornes
+ * −100 / +100 comme partout ailleurs (damage-types.js).
+ *
+ * Retourne un objet de mises à jour en notation pointée, vide si le band ne
+ * déclare aucune plage : ne rien écrire laisse intactes les valeurs déjà
+ * saisies à la main sur la fiche, plutôt que de les remettre à zéro à chaque
+ * génération.
+ */
+function rollResistances(band) {
+  const src = band?.resistancesElem;
+  if (!src || typeof src !== "object") return {};
+  const out = {};
+  for (const key of DAMAGE_TYPE_KEYS) {
+    const range = src[key];
+    if (!Array.isArray(range) || range.length === 0) continue;
+    const [mn, mx] = getRange(range, 0, 0);
+    if (mn === 0 && mx === 0) continue;
+    const v = randInt(mn, mx);
+    out[`system.resistancesElem.${key}`] = Math.max(RESIST_MIN, Math.min(RESIST_MAX, v));
+  }
+  return out;
 }
 
 export async function randomizeMonster(actor) {
@@ -124,7 +154,8 @@ export async function randomizeMonster(actor) {
     "system.ressources.pv.max": pvMaxFinal,
     "system.ressources.pv.valeur": pvMaxFinal,
     "system.recompenses.xp": xpReward,
-    "system.gen.generated": true
+    "system.gen.generated": true,
+    ...rollResistances(band)
   };
 
   await actor.update(updates);
@@ -187,6 +218,7 @@ export function buildRandomUpdatesForActor(actor) {
     "system.ressources.pv.max": pvMaxFinal,
     "system.ressources.pv.valeur": pvMaxFinal,
     "system.recompenses.xp": xpReward,
-    "system.gen.generated": true
+    "system.gen.generated": true,
+    ...rollResistances(band)
   };
 }

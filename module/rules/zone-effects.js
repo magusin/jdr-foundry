@@ -21,6 +21,7 @@ import { hpSecret } from "./chat-visibility.js";
 import { isImmuneToTerrain } from "./movement-types.js";
 import { applyResistances } from "./resistances.js";
 import { listEffects, EFFECT_TAGS } from "./effect-library.js";
+import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS } from "./damage-types.js";
 import { applyUiTheme, restoreScrollPositions } from "../sheets/sheet-helpers.js";
 
 // Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg", ...,
@@ -242,11 +243,20 @@ export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, waypoin
       try {
         const roll = await (new Roll(formula)).evaluate();
         const livraison = String(sys.damageLivraison ?? "physique");
-        const { final } = computeFinalDamage({ targetActor: actor, livraison, rawDamage: roll.total });
+        // `tag` : l'élément de la zone quand elle en déclare un (une nappe de
+        // feu blesse au feu) ; sinon la livraison sert de type et une cible
+        // résistante au physique/magique en profite quand même.
+        const dmgTag = String(sys.damageTag ?? "").trim() || null;
+        const { final, elemPct, elemLabel } = computeFinalDamage({
+          targetActor: actor, livraison, rawDamage: roll.total, tag: dmgTag
+        });
         await applyFinalDamage({ targetActor: actor, finalDamage: final });
         const pv = Number(actor.system?.ressources?.pv?.valeur ?? 0);
         const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0);
-        lines.push(`💥 <b>${final}</b> dégâts (${livraison}, brut ${roll.total})` + hpSecret(actor, ` — PV: ${pv}/${pvMax}`));
+        const resLine = elemPct
+          ? ` · ${elemLabel} ${elemPct > 0 ? "−" : "+"}${Math.abs(elemPct)}%`
+          : "";
+        lines.push(`💥 <b>${final}</b> dégâts (${livraison}, brut ${roll.total}${resLine})` + hpSecret(actor, ` — PV: ${pv}/${pvMax}`));
       } catch (e) {
         console.warn("[RPG][Zone] formule de dégâts invalide:", formula, e);
       }
@@ -456,6 +466,12 @@ export function registerZoneEffectBehavior() {
         speedMult:         new fields.NumberField({ initial: 1, min: 0.1, max: 1 }),
         damageFormula:     new fields.StringField({ initial: "" }),
         damageLivraison:   new fields.StringField({ initial: "physique", choices: ["physique", "magique"] }),
+        // Élément des dégâts (feu, glace…) : décide de la RÉSISTANCE
+        // ÉLÉMENTAIRE opposée par la cible (damage-types.js), là où
+        // damageLivraison décide de l'armure ou de la résistance qui absorbe.
+        // Vide = pas d'élément : c'est alors la livraison qui fait office de
+        // type (une cible résistante au physique en profite quand même).
+        damageTag:         new fields.StringField({ initial: "", choices: ["", ...DAMAGE_TYPE_KEYS] }),
         effectLabel:       new fields.StringField({ initial: "" }),
         effectDuration:    new fields.NumberField({ initial: 1, min: 1, max: 20 }),
         effectDotPerTick:  new fields.NumberField({ initial: 0, min: 0 }),
@@ -573,6 +589,14 @@ export class ZoneEffectBehaviorSheet extends foundry.applications.sheets.RegionB
     ctx.effectGroups = Object.entries(byTag).map(([tag, defs]) => ({
       tag, tagLabel: EFFECT_TAGS[tag] ?? tag, effects: defs
     }));
+
+    // Élément des dégâts (résistances élémentaires) — "selected" précalculé
+    // ici pour la même raison que ci-dessus.
+    const curTag = String(ctx.system.damageTag ?? "");
+    ctx.damageTagChoices = DAMAGE_TYPE_KEYS.map(key => ({
+      key, label: DAMAGE_TYPES[key], selected: key === curTag
+    }));
+    ctx.damageTagNone = !curTag;
 
     // Décore les modificateurs pour l'affichage : sens explicite (bonus/malus)
     // + quantité toujours positive dans le champ nombre — même convention que

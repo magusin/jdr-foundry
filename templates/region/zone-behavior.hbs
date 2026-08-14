@@ -70,6 +70,17 @@
       <option value="physique" {{#if (eq system.damageLivraison "physique")}}selected{{/if}}>Physique</option>
       <option value="magique" {{#if (eq system.damageLivraison "magique")}}selected{{/if}}>Magique</option>
     </select>
+    <p class="hint" style="font-size:11px;opacity:.8;margin:2px 0 0">Décide de ce qui absorbe : Physique → armure de la cible, Magique → résistance.</p>
+  </div>
+  <div class="form-group">
+    <label style="font-weight:700">Élément des dégâts</label>
+    <select name="system.damageTag" style="width:100%">
+      <option value="" {{#if damageTagNone}}selected{{/if}}>— Aucun (le type ci-dessus fait foi) —</option>
+      {{#each damageTagChoices as |c|}}
+        <option value="{{c.key}}" {{#if c.selected}}selected{{/if}}>{{c.label}}</option>
+      {{/each}}
+    </select>
+    <p class="hint" style="font-size:11px;opacity:.8;margin:2px 0 0">Décide de la <b>résistance élémentaire</b> opposée par la cible (feu, glace…). Sans élément, c'est le type ci-dessus qui sert de référence.</p>
   </div>
 
   <hr style="opacity:.2" />

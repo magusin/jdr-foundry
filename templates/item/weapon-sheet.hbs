@@ -104,6 +104,20 @@
           {{/if}}
         </div>
 
+        <div class="mm-line" title="Élément des dégâts : décide de la RÉSISTANCE ÉLÉMENTAIRE opposée par la cible (une épée enflammée blesse au feu). Sans élément, c'est le type de dégâts ci-dessus qui sert de référence — une cible résistante au physique encaisse moins de coups d'épée.">
+          <span class="mm-label">Élément</span>
+          {{#if canEdit}}
+            <select class="mm-input" name="system.tag">
+              <option value="" {{#unless system.tag}}selected{{/unless}}>— Aucun (selon le type ci-dessus) —</option>
+              {{#each damageTypeChoices as |c|}}
+                <option value="{{c.key}}" {{#if c.selected}}selected{{/if}}>{{c.label}}</option>
+              {{/each}}
+            </select>
+          {{else}}
+            <div class="mm-value"><b>{{#if system.tag}}{{tagLabel}}{{else}}—{{/if}}</b></div>
+          {{/if}}
+        </div>
+
         {{#if canEdit}}
           <div class="mm-line">
             <span class="mm-label">Dé de base</span>
@@ -399,10 +413,54 @@
       </section>
     {{/if}}
 
-    {{!-- RÉSISTANCES (MJ ONLY) --}}
+    {{!-- RÉSISTANCES ÉLÉMENTAIRES --}}
+    <section class="card">
+      <h2>Résistances aux dégâts (par type)</h2>
+      {{#if canEdit}}
+        <div class="rpg-resist-elem-grid">
+          {{#each resistElemRows as |r|}}
+          <div class="rpg-resist-elem-cell">
+            <label title="Réduction des dégâts de type {{r.label}} tant que l'arme est équipée. Négatif = vulnérabilité.">{{r.label}}</label>
+            <div class="rpg-resist-elem-input">
+              <input type="number" name="system.resistancesElem.{{r.key}}" value="{{r.value}}" min="-100" max="100" step="5"/>
+              <span>%</span>
+            </div>
+          </div>
+          {{/each}}
+        </div>
+        <div style="font-size:11px;opacity:0.8;margin-top:4px">
+          Réduit les <b>dégâts</b> reçus de ce type tant que l'arme est équipée (une garde runique protège du feu).
+          <b>100 %</b> = immunité, valeur <b>négative</b> = vulnérabilité.
+        </div>
+      {{else}}
+        {{#if resistElemActive.length}}
+        <div class="rpg-resist-elem-read">
+          {{#each resistElemActive as |r|}}
+          <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{else}}is-resist{{/if}}">{{r.text}}</span>
+          {{/each}}
+        </div>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux dégâts.</div>
+        {{/if}}
+      {{/if}}
+    </section>
+
+    {{!-- RÉSISTANCES AUX ÉTATS — lecture pour le joueur, édition pour le MJ --}}
+    {{#unless canEdit}}
+      <section class="card">
+        <h2>Résistances aux états (durée / dégâts par tour)</h2>
+        {{#if resistStateRows.length}}
+        <ul style="margin:0;padding-left:18px">
+          {{#each resistStateRows as |r|}}<li style="font-size:12px">{{r.text}}</li>{{/each}}
+        </ul>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux états.</div>
+        {{/if}}
+      </section>
+    {{/unless}}
     {{#if canEdit}}
       <section class="card">
-        <h2>Résistances aux effets</h2>
+        <h2>Résistances aux états (durée / dégâts par tour)</h2>
         <div class="rpg-resistances">
           {{#each system.resistances as |r idx|}}
           <div class="resistance-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">

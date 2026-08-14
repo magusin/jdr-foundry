@@ -2,12 +2,15 @@
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
-import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
+import { normalizeState, ensureStateDialogCSS, LABELS, decorateStates } from "./character-sheet-v2.js";
 import {
   applyUiTheme, openImageLightbox, restoreScrollPositions, uniqueSheetOptions,
   tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
 } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
+import {
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, normalizeResistMap, resistRows, nonZeroResistRows
+} from "../rules/damage-types.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -46,7 +49,13 @@ function ensureBand(system, lvl) {
     fatigueMax: cur.fatigueMax ?? [10, 10],
     toucherPhysique: cur.toucherPhysique ?? [0, 0],
     toucherMagique: cur.toucherMagique ?? [0, 0],
+    // Plages de résistance élémentaire (%) — négatives autorisées : c'est
+    // ainsi qu'on génère une vulnérabilité (cf. rollResistances()).
+    resistancesElem: cur.resistancesElem ?? {},
   };
+  for (const key of DAMAGE_TYPE_KEYS) {
+    next.resistancesElem[key] = next.resistancesElem[key] ?? [0, 0];
+  }
   next.stats.force = next.stats.force ?? [0, 0];
   next.stats.intelligence = next.stats.intelligence ?? [0, 0];
   next.stats.dexterite = next.stats.dexterite ?? [0, 0];
@@ -80,7 +89,14 @@ function getBand(system, lvl) {
     xpReward: rangeArrToObj(b.xpReward),
     fatigueMax: rangeArrToObj(b.fatigueMax),
     toucherPhysique: rangeArrToObj(b.toucherPhysique),
-    toucherMagique: rangeArrToObj(b.toucherMagique)
+    toucherMagique: rangeArrToObj(b.toucherMagique),
+    // Une ligne par élément : {key, label, min, max} — le template n'a pas à
+    // connaître la liste des types, elle vit dans damage-types.js.
+    resistancesElem: DAMAGE_TYPE_KEYS.map(key => ({
+      key,
+      label: DAMAGE_TYPES[key],
+      ...rangeArrToObj(b.resistancesElem?.[key])
+    }))
   };
 }
 
@@ -188,6 +204,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     ctx.genLevels = levels;
     ctx.genBands = levels.map(lvl => getBand(ctx.system, lvl));
 
+    // ── Résistances élémentaires ──────────────────────────────────────────
+    // Base éditable par le MJ (ou tirée par la génération) d'un côté, total
+    // effectif (base + états actifs — un monstre ne porte pas d'équipement)
+    // de l'autre : c'est ce total que subit réellement un attaquant.
+    ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
+    ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
+    ctx.resistElemActive = nonZeroResistRows(sys.derived?.resistancesElem ?? ctx.system.resistancesElem);
+
     const itemDocs = Array.from(actor.items);
     const itemsObj = itemDocs.map(i => i.toObject());
     ctx.itemsAttaques = itemsObj.filter(i => i.type === "weapon" || i.type === "spell");
@@ -207,43 +231,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       actor.system?.principales ??
       {};
 
-    const labelMap = {
-      force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
-      scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
-      pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana", vitesse: "Vitesse",
-      toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", initiativeMod: "Initiative",
-      fatigueMax: "Fatigue max", podsMax: "Pods max"
-    };
-
+    // Résumé des états : la MÊME fonction que la fiche de personnage et que
+    // la carte PNJ (decorateStates). Cette fiche en avait une copie manuelle
+    // — libellés de stats identiques au caractère près, mais elle ignorait
+    // tout ce qui a été ajouté depuis (les résistances accordées, en
+    // dernier lieu) : un état décrit ici ne disait donc pas la même chose
+    // que le même état décrit ailleurs.
     const states = Array.isArray(sys?.etatsActifs) ? foundry.utils.deepClone(sys.etatsActifs) : [];
-    for (const e of states) {
-      const parts = [];
-      const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-      if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
-      else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
-
-      const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
-      if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
-      else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
-      const mods = e?.mods ?? {};
-      for (const [k, v] of Object.entries(mods)) {
-        const flat = Number(v?.flat ?? 0) || 0;
-        const pct = Number(v?.pct ?? 0) || 0;
-        const name = labelMap[k] ?? k;
-        if (flat) parts.push(`${name} ${flat > 0 ? "+" : ""}${flat}`);
-        if (pct) parts.push(`${name} ${pct > 0 ? "+" : ""}${pct}%`);
-      }
-      let hasPlus = false, hasMinus = false;
-      for (const v of Object.values(mods)) {
-        const flat = Number(v?.flat ?? 0) || 0;
-        const pct = Number(v?.pct ?? 0) || 0;
-        if (flat > 0 || pct > 0) hasPlus = true;
-        if (flat < 0 || pct < 0) hasMinus = true;
-      }
-      e.isBeneficial = hasPlus && !hasMinus;
-      e.isHarmful = hasMinus && !hasPlus;
-      e.summary = parts.join(" • ");
-    }
+    decorateStates(states);
     ctx.system.etatsActifs = states;
     return ctx;
   }

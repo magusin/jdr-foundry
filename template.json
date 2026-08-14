@@ -31,6 +31,18 @@
           "scoreArmure": 0,
           "scoreResistance": 0
         },
+        "resistancesElem": {
+          "physique": 0,
+          "magique": 0,
+          "feu": 0,
+          "eau": 0,
+          "eclair": 0,
+          "glace": 0,
+          "air": 0,
+          "terre": 0,
+          "lumiere": 0,
+          "obscurite": 0
+        },
         "regeneration": {
           "pv": 1.0,
           "mana": 1.0
@@ -202,6 +214,18 @@
         "equipe": false,
         "effects": [],
         "resistances": [],
+        "resistancesElem": {
+          "physique": 0,
+          "magique": 0,
+          "feu": 0,
+          "eau": 0,
+          "eclair": 0,
+          "glace": 0,
+          "air": 0,
+          "terre": 0,
+          "lumiere": 0,
+          "obscurite": 0
+        },
         "recetteAssociee": {
           "uuid": "",
           "name": ""
@@ -247,6 +271,7 @@
       "difficulte": 0,
       "fatigueCost": 1,
       "livraison": "physique",
+      "tag": "",
       "portee": 1,
       "range": {
         "min": 0,

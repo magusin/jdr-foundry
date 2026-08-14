@@ -633,6 +633,20 @@ Hooks.once("init", async () => {
   // Visibilité du chat — exposée pour les macros (qui ne peuvent pas importer)
   game.rpg.chat = { gmOnly, hpSecret };
 
+  // Types de dégâts / résistances élémentaires — exposés pour les macros,
+  // qui ne peuvent pas importer (voir le pont game.rpg.* dans CLAUDE.md).
+  try {
+    const _dt = await import("./rules/damage-types.js");
+    game.rpg.damageTypes = {
+      DAMAGE_TYPES: _dt.DAMAGE_TYPES,
+      DAMAGE_TYPE_KEYS: _dt.DAMAGE_TYPE_KEYS,
+      damageTypeLabel: _dt.damageTypeLabel,
+      resolveDamageType: _dt.resolveDamageType,
+      getResistPct: _dt.getResistPct,
+      resistanceFor: _dt.resistanceFor
+    };
+  } catch (e) { console.warn("[RPG] types de dégâts indisponibles :", e); }
+
   // Actions de base (Repos…) — exposées pour un rattrapage manuel du MJ
   // runDefaultAction/defaultActionKey sont exposés pour le menu de combat
   // (macro, donc sans import possible) : sans eux il déclarait « Attaquer »
@@ -1405,14 +1419,25 @@ Hooks.once("init", async () => {
                   const fixe = Number(b.fixe) || 0;
                   const pct  = Number(b.pct)  || 0;
                   const afterFixe = Math.max(0, raw - fixe);
-                  const finalDmg  = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+                  const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+                  // Résistance élémentaire (second étage, capturée à la
+                  // résolution du sort dans spells.js) : négative = vulné-
+                  // rabilité. Le plancher à 1 est celui de l'armure, pas
+                  // celui-ci — une immunité doit pouvoir ramener à 0.
+                  const elemPct = Math.max(-100, Math.min(100, Number(b.elemPct) || 0));
+                  const finalDmg = elemPct
+                    ? Math.max(0, Math.ceil(afterArmor * (1 - elemPct / 100)))
+                    : afterArmor;
                   totalFinal += finalDmg;
                   // Vol de vie : calculé sur les dégâts réellement encaissés,
                   // pas sur le jet brut — voler la vie d'un coup absorbé par
                   // l'armure n'aurait pas de sens.
                   const sPct = Math.max(0, Math.min(100, Number(b.siphon) || 0));
                   if (sPct > 0) siphonTotal += Math.floor(finalDmg * sPct / 100);
-                  resultLines.push(`${b.label}: brut <b>${raw}</b> → <b style="color:#c0392b">${finalDmg}</b>`);
+                  const elemPart = elemPct
+                    ? ` <span style="opacity:.75;font-size:11px">(${b.elemLabel ?? "élément"} ${elemPct > 0 ? "−" : "+"}${Math.abs(elemPct)}%)</span>`
+                    : "";
+                  resultLines.push(`${b.label}: brut <b>${raw}</b> → <b style="color:#c0392b">${finalDmg}</b>${elemPart}`);
                 }
 
                 const pvCur = tData.pvCur ?? Number(target?.system?.ressources?.pv?.valeur ?? 0);

@@ -4,6 +4,9 @@ import { getBudget, movementRemaining, movementSpent } from "../rules/action-bud
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { isNpcActor } from "../rules/actor-roles.js";
+import {
+  normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
+} from "../rules/damage-types.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -125,6 +128,12 @@ export function decorateStates(states) {
       .join(" • ");
 
     if (modsTxt) parts.push(modsTxt);
+
+    // Résistances accordées par l'état — sans elles, un buff « Écaille de
+    // dragon » s'affichait comme une ligne vide de toute information alors
+    // qu'il est justement là pour ça. Décrit avec la même formulation que
+    // la fiche de sort (damage-types.js).
+    parts.push(...stateResistTextParts(e).all);
 
     e.summary = parts.join(" • ");
 
@@ -508,6 +517,14 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const total = Number(effD[k] ?? 0) || 0;
       return { key: k, perm, total, fromEffects: total - perm, hasEffects: (total - perm) !== 0, effectsUp: (total - perm) > 0 };
     }).reduce((acc, r) => { acc[r.key] = r; return acc; }, {});
+
+    // Résistances élémentaires : la grille MJ édite la valeur INNÉE
+    // (system.resistancesElem), les pastilles affichent le TOTAL effectif
+    // (derived.resistancesElem : inné + équipement porté + états actifs).
+    ctx.resistElemRows = resistRows(normalizeResistMap(actor.system?.resistancesElem));
+    ctx.resistElemActive = nonZeroResistRows(
+      actor.system?.derived?.resistancesElem ?? actor.system?.resistancesElem
+    );
 
     // Vitesse : permanente vs effective (épuisement, surcharge, effets)
     const vitPerm = Number(actor.system?.derived?.permanent?.vitesse ?? 0) || 0;
