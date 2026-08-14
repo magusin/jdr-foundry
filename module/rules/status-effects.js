@@ -494,8 +494,47 @@ const KEY_TO_BUCKET = {
   podsMax: ["charge", "podsMax"]
 };
 
+/**
+ * Effets d'un sort PASSIF, présentés comme des états permanents.
+ *
+ * Un sort dont la Vitesse vaut « Passif » ne se déclare jamais (declareSpell
+ * le refuse) : il est censé agir en permanence sur son porteur. Or seul
+ * `system.bonus` (grille de la fiche d'ARME/ARMURE, absente de la fiche de
+ * sort) était lu pour lui — les bonus/malus saisis dans ses effets
+ * secondaires, eux, ne partaient nulle part. « Passif » était donc une option
+ * proposée par la fiche qui ne produisait strictement rien.
+ *
+ * On ne fabrique aucun document : ces mods sont recalculés à chaque
+ * prepareDerivedData, donc ils apparaissent et disparaissent avec le sort,
+ * sans état à synchroniser. Un DOT/HOT par tour ou une aura portés par un
+ * sort passif restent, eux, non gérés (ils supposent un vrai état posé).
+ */
+function passiveSpellStates(actor) {
+  const out = [];
+  for (const it of (actor.items ?? [])) {
+    if (it?.type !== "spell") continue;
+    if (String(it.system?.speed) !== "passif") continue;
+
+    for (const fx of (Array.isArray(it.system?.effectsUI) ? it.system.effectsUI : [])) {
+      const mods = {};
+      for (const m of (Array.isArray(fx?.mods) ? fx.mods : [])) {
+        const stat = String(m?.stat ?? "").trim();
+        if (!stat) continue;
+        const mode = m?.mode === "pct" ? "pct" : "flat";
+        mods[stat] = mods[stat] ?? { flat: 0, pct: 0 };
+        mods[stat][mode] += Number(m?.value) || 0;
+      }
+      if (Object.keys(mods).length) out.push({ mods });
+    }
+  }
+  return out;
+}
+
 export function sumActiveEffectMods(actor) {
-  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  const states = [
+    ...(Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : []),
+    ...passiveSpellStates(actor)
+  ];
 
   const out = {
     flat: {

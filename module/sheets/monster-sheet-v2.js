@@ -477,7 +477,10 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         // d'attaque commune (jet de touché + boutons de validation MJ).
         // Auparavant on publiait ici un simple aperçu : ni jet, ni validation.
         if (item.type === "spell") {
-          const res = await declareSpell(this.document, item, { casterToken, targetToken });
+          // Pas de targetToken : declareSpell reprend TOUTES les cibles visées
+          // (et revérifie la portée pour chacune). Lui passer la première
+          // écrasait le multi-cible depuis la fiche de monstre.
+          const res = await declareSpell(this.document, item, { casterToken });
           if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
         } else {
           const { declareAttack } = await import("../rules/attack-declare.js");
@@ -518,7 +521,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         console.error("[RPG] action de base (monstre) :", e);
       }
 
-      const res = await declareSpell(this.document, item, { casterToken, targetToken });
+      // targetToken n'est transmis qu'aux actions de base ci-dessus (qui n'en
+      // visent qu'une) — le workflow de sort, lui, reprend toutes les cibles.
+      const res = await declareSpell(this.document, item, { casterToken });
       if (!res?.ok) ui.notifications.warn(res?.reason ?? "Impossible de déclarer le sort.");
       this.render({ force: false });
     };

@@ -58,6 +58,11 @@ const WHEN_LABELS = {
 
 const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous" };
 
+/** Bénéficiaire d'un effet — mêmes clés que applyEffectsFor() dans spells.js. */
+const FX_TARGET_LABELS = {
+  target: "🎯 sur la cible", self: "🎯 sur soi", both: "🎯 soi + cible"
+};
+
 /**
  * Libellés des types/éléments d'un effet. `feu`, `eclair`, `obscurite`… sont
  * des CLÉS techniques : affichées telles quelles elles perdent accents et
@@ -129,6 +134,7 @@ function buildFxUi(fx) {
   return {
     uiTick,
     uiTag: fx.tag ? tagLabel(fx.tag) : null,
+    uiTarget: FX_TARGET_LABELS[String(fx.target ?? "target")] ?? FX_TARGET_LABELS.target,
     uiWhen: WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? fx.when,
     uiDuration: fx.permanent ? "♾️ Permanent" : `⏳ ${n(fx.duration, 0)} tour(s)`,
     uiAura: fx.isAura
@@ -519,7 +525,8 @@ static PARTS = foundry.utils.mergeObject(
       };
       const SPEED = { passif: "Passif", rapide: "Rapide", normal: "Normal" };
       add("⚡", "Vitesse", SPEED[String(ctx.system.speed)] ?? ctx.system.speed);
-      add("🎯", "Livraison", ctx.system.livraison === "physique" ? "Physique" : "Magique");
+      add("🎯", "Jet de touché", ctx.system.livraison === "physique"
+        ? "Physique (Dextérité)" : "Magique (Acuité)");
       add("🔮", "Élément", tagLabel(ctx.system.tag ?? "neutre"));
       add("💧", "Coût mana", n(ctx.system.coutMana, 0));
       add("😫", "Coût fatigue", n(ctx.system.fatigueCost, 0));
@@ -566,6 +573,7 @@ static PARTS = foundry.utils.mergeObject(
       // Ce que le sort rend, en clair (ex : « 1d10 + 5 + Endurance/10 »)
       const RES_ICON  = { pv: "❤️", mana: "🔷", fatigue: "😴" };
       const RES_LABEL = { pv: "Rend des PV", mana: "Rend du mana", fatigue: "Rend de la fatigue" };
+      const RES_WHO   = { target: " (cible)", both: " (soi + cible)" };
       for (const r of ctx.system.restores) {
         const parts = [];
         if (r.dice) parts.push(r.dice);
@@ -574,7 +582,7 @@ static PARTS = foundry.utils.mergeObject(
         if (!parts.length) continue;
         ctx.playerInfo.push({
           icon: RES_ICON[r.resource] ?? "✨",
-          label: `${RES_LABEL[r.resource] ?? "Récupération"}${r.cible === "target" ? " (cible)" : ""}`,
+          label: `${RES_LABEL[r.resource] ?? "Récupération"}${RES_WHO[r.cible] ?? ""}`,
           value: parts.join(" + "), wide: true
         });
       }
@@ -636,7 +644,11 @@ static PARTS = foundry.utils.mergeObject(
       fx.id = fx.id ?? foundry.utils.randomID();
       fx.label = fx.label ?? "Effet";
       fx.when = fx.when ?? "hit";
-      fx.target = fx.target ?? "target";
+      // Seules ces trois valeurs sont proposées par la fiche et comprises par
+      // applyEffectsFor() ; tout le reste (ancien format) retombe sur la cible.
+      fx.target = ["self", "both", "target"].includes(String(fx.target))
+        ? String(fx.target)
+        : (String(fx.target) === "caster" ? "self" : "target");
       fx.duration = n(fx.duration, 0);
       fx.details = fx.details ?? "";
 
@@ -755,7 +767,10 @@ static PARTS = foundry.utils.mergeObject(
         label:     str("label", prev.label ?? ""),
         tag:       str("tag", prev.tag ?? ""),
         when:      str("when", prev.when ?? "hit") || "hit",
-        target:    String(prev.target ?? "target"),
+        // Bénéficiaire de l'effet : longtemps figé à « target » faute de champ
+        // dans la fiche — impossible d'écrire un buff sur le lanceur, et une
+        // aura lancée sur un ennemi rayonnait autour de LUI.
+        target:    str("target", prev.target ?? "target") || "target",
         duration:  num("duration", 0),
         permanent: bool("permanent"),
         removeBaseTN: num("removeBaseTN", 0),
@@ -974,6 +989,7 @@ static PARTS = foundry.utils.mergeObject(
         .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
       chips.push(`<span class="fx-chip fx-chip-when">${esc(ui.uiWhen)}</span>`);
+      chips.push(`<span class="fx-chip">${esc(ui.uiTarget)}</span>`);
       chips.push(`<span class="fx-chip">${esc(ui.uiDuration)}</span>`);
       if (ui.uiTag)   chips.push(`<span class="fx-chip fx-chip-tag">${esc(ui.uiTag)}</span>`);
       if (ui.uiTick)  chips.push(`<span class="fx-chip fx-chip-tick">${esc(ui.uiTick)}</span>`);
