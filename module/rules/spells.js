@@ -178,6 +178,22 @@ const FX_TARGET_LABELS = {
 };
 const fxTargetLabel = (t) => FX_TARGET_LABELS[String(t ?? "").toLowerCase()] ?? t;
 
+/** « magique » / « physique » accordés au pluriel (« dégâts magiques »). */
+const livraisonLabel = (l) => (String(l ?? "magique") === "physique" ? "physiques" : "magiques");
+
+/**
+ * Bénéficiaire d'un effet secondaire, tel qu'annoncé dans le chat.
+ * Miroir exact du dispatch de applyEffectsFor() : « cible(s) » est le défaut,
+ * y compris pour une valeur inconnue, pour ne jamais annoncer autre chose que
+ * ce qui sera réellement appliqué.
+ */
+export function fxApplyLabel(target) {
+  const t = String(target ?? "target").toLowerCase();
+  if (t === "self" || t === "caster") return "sur le lanceur";
+  if (t === "both" || t === "selftarget") return "sur le lanceur + la/les cible(s)";
+  return "sur la/les cible(s)";
+}
+
 function getEffP(actor) {
   return actor?.system?.derived?.effective?.principales
     ?? actor?.system?.derived?.effP
@@ -473,6 +489,44 @@ async function ensureSpellDefaults(item) {
     }
   }
 
+  // ── Migration : ancien bloc unique system.damage / system.damageCrit ────
+  // Ces deux blocs ne sont plus éditables sur la fiche (remplacés par les
+  // lignes system.damages[]), mais la résolution les applique toujours : un
+  // sort créé avant la refonte inflige donc des dégâts que le MJ ne voit
+  // nulle part et ne peut plus corriger. On les convertit en une ligne
+  // normale, puis on les désactive — le sort garde exactement la même
+  // puissance, mais elle devient visible et modifiable.
+  const legacy     = sys.damage;
+  const legacyCrit = sys.damageCrit;
+  const legacyDice = String(legacy?.dice ?? "").trim();
+  const hasLegacy  = !!legacy?.enabled && (
+    (legacyDice && legacyDice !== "0") ||
+    n(legacy.flat, 0) !== 0 ||
+    n(legacy.scaling?.perStep, 0) !== 0
+  );
+  if (hasLegacy) {
+    const lines = Array.isArray(sys.damages) ? foundry.utils.deepClone(sys.damages) : [];
+    lines.push({
+      id: foundry.utils.randomID(),
+      dice:    legacyDice || "0",
+      flat:    n(legacy.flat, 0),
+      stat:    String(legacy.scaling?.stat ?? ""),
+      per:     Math.max(1, n(legacy.scaling?.per, 10) || 10),
+      perStep: n(legacy.scaling?.perStep, 0),
+      // Bloc crit désactivé côté ancien format = aucun dégât sur critique.
+      // On reprend ici les valeurs normales plutôt que de conserver ce trou :
+      // un critique qui fait moins qu'une réussite normale n'a jamais été
+      // voulu, c'était un effet de bord de l'ancien découpage.
+      critDice: legacyCrit?.enabled ? String(legacyCrit.dice ?? "").trim() : "",
+      critFlat: legacyCrit?.enabled ? n(legacyCrit.flat, 0) : n(legacy.flat, 0),
+      siphon: 0,
+      livraison: String(sys.livraison ?? "magique")
+    });
+    patch["system.damages"] = lines;
+    patch["system.damage.enabled"] = false;
+    patch["system.damageCrit.enabled"] = false;
+  }
+
   // effectsUI default
   if (sys.effectsUI === undefined) patch["system.effectsUI"] = [];
   if (sys.coutMana === undefined) patch["system.coutMana"] = 0;
@@ -650,10 +704,15 @@ export function buildSpellUI({ actor, item }) {
   const rangeMin = n(sys.range?.min, 0);
   const rangeMax = n(sys.range?.max, 0);
 
-  const auraEnabled = !!(sys.aura?.enabled || sys.aura?.active);
-  const auraMin = n(sys.aura?.range?.min, 0);
-  const auraMax = n(sys.aura?.range?.max, 0);
-  const auraTarget = str(sys.aura?.target, "allies");
+  // L'aura d'un sort vient de ses EFFETS (fx.isAura) — l'ancien bloc
+  // system.aura n'est plus éditable et ne pose plus rien. La pastille « Aura »
+  // de la liste de sorts se lisait pourtant uniquement sur lui : elle
+  // manquait donc sur tous les sorts d'aura créés depuis la refonte.
+  const fxAura = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).find(fx => fx?.isAura) ?? null;
+  const auraEnabled = !!fxAura || !!(sys.aura?.enabled || sys.aura?.active);
+  const auraMin = fxAura ? n(fxAura.auraMin, 0) : n(sys.aura?.range?.min, 0);
+  const auraMax = fxAura ? n(fxAura.auraMax, 0) : n(sys.aura?.range?.max, 0);
+  const auraTarget = fxTargetLabel(fxAura ? str(fxAura.auraTarget, "allies") : str(sys.aura?.target, "allies"));
 
   const _manaCostBase  = n(sys.coutMana, 0);
   const _tag           = sys.tag ?? "neutre";
@@ -671,6 +730,10 @@ export function buildSpellUI({ actor, item }) {
   // Natures du sort, pour le filtrage des listes (« kinds » séparés par |)
   const kinds = new Set();
   if ((Array.isArray(sys.damages) && sys.damages.length) || sys.damage?.enabled) kinds.add("damage");
+  // Une ligne de récupération EST un soin : sans ça, le filtre « soin » de la
+  // liste de sorts ne trouvait que les soins par tour (HOT), jamais un soin
+  // direct — c'est-à-dire l'immense majorité d'entre eux.
+  if (Array.isArray(sys.restores) && sys.restores.length) kinds.add("heal");
   for (const fx of (Array.isArray(sys.effectsUI) ? sys.effectsUI : [])) {
     const mode = String(fx?.tick?.mode ?? "");
     if (mode === "damage") kinds.add("damage");
@@ -797,62 +860,46 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
   return { ok: true, messageId: msg.id };
 }
 
+const PREVIEW_WHEN_LABELS = {
+  hit: "Touché + crit", hitonly: "Touché normal", crit: "Crit uniquement",
+  cast: "Au lancement"
+};
+
+/**
+ * Aperçu des effets d'un sort pour la liste de sorts d'une fiche.
+ *
+ * Liste TOUS les effets. L'ancienne version n'en montrait que deux — le
+ * premier « touché » et le premier « crit » — donc un sort à trois buffs n'en
+ * affichait qu'un, et un effet « touché normal uniquement » ou « au
+ * lancement » n'apparaissait jamais. Elle ajoutait par ailleurs une ligne
+ * « Aura » lue sur l'ancien bloc system.aura, qui ne pose aucune aura : les
+ * auras réelles sont portées par les effets (fx.isAura) et sont donc
+ * désormais décrites dans la ligne de leur propre effet.
+ */
 export function buildSpellEffectsPreview({ actor, item }) {
   if (!item || item.type !== "spell") return [];
 
   const sys = item.system ?? {};
-  const auraEnabled = !!(sys.aura?.enabled || sys.aura?.active);
   const list = [];
 
-  const fxHit = getFxByWhen(item, "hit")[0] ?? null;
-  const fxCrit = getFxByWhen(item, "crit")[0] ?? null;
+  for (const fx of (Array.isArray(sys.effectsUI) ? sys.effectsUI : [])) {
+    const parts = [];
+    const perTick = tickPerTick(fx, getEffP(actor));
+    if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
+    else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
 
-  if (fxHit) {
-    const mods = buildModsFromFxMods(fxHit.mods);
-    list.push({
-      label: str(fxHit.label, "Effet"),
-      when: "Touché",
-      target: fxTargetLabel(str(fxHit.target, "target")),
-      duration: n(fxHit.duration, 0),
-      summary: summarizeMods(mods)
-    });
-  }
+    const modSummary = summarizeMods(buildModsFromFxMods(fx.mods));
+    if (modSummary) parts.push(modSummary);
 
-  if (fxCrit) {
-    const mods = buildModsFromFxMods(fxCrit.mods);
-    list.push({
-      label: str(fxCrit.label, "Effet Crit"),
-      when: "Crit",
-      target: fxTargetLabel(str(fxCrit.target, "target")),
-      duration: n(fxCrit.duration, 0),
-      summary: summarizeMods(mods)
-    });
-  }
-
-  if (auraEnabled) {
-    const amin = n(sys.aura?.range?.min, 0);
-    const amax = n(sys.aura?.range?.max, 0);
-    const tgt = fxTargetLabel(str(sys.aura?.target, "allies"));
-    const key = str(sys.aura?.key, "") || item.name;
-
-    const dot = n(sys.aura?.dotFlat, 0);
-    const dc = n(sys.aura?.cleanseDC, 0);
-
-    // mods affichés = HIT ONLY
-    const auraMods = fxHit ? summarizeMods(buildModsFromFxMods(fxHit.mods)) : "";
-
-    const parts = [
-      `Portée ${amin}–${amax}`,
-      auraMods ? `Mods: ${auraMods}` : null,
-      dot ? `DOT ${dot}/tour` : null,
-      dc ? `Retrait ${dc}+` : null
-    ].filter(Boolean);
+    if (fx.isAura) {
+      parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
+    }
 
     list.push({
-      label: `Aura (${key})`,
-      when: "—",
-      target: tgt,
-      duration: "—",
+      label: str(fx.label, "Effet"),
+      when: PREVIEW_WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? str(fx.when, "Touché"),
+      target: fxApplyLabel(fx.target).replace(/^sur /, ""),
+      duration: fx.permanent ? "permanent" : (n(fx.duration, 0) ? `${n(fx.duration, 0)} tours` : ""),
       summary: parts.join(" • ")
     });
   }
@@ -968,12 +1015,16 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const tcMax = n(sys.targetCount?.max, 1);
   const tcCount = targetTokens.length;
 
+  // Rappel du geste : viser plusieurs tokens n'a rien d'évident dans Foundry
+  // (outil Ciblage ✛ de la barre d'outils Token, clic = 1 cible, Maj+clic pour
+  // en ajouter). Sans ce rappel, le refus ressemblait à un bug du sort.
+  const HOW_TO_TARGET = "outil Ciblage ✛ : clic sur la 1re cible, Maj+clic sur les suivantes";
   if (tcMin > 0 || tcMax > 0) {
     if (tcCount < tcMin) {
-      return { ok: false, reason: `Ce sort nécessite au moins ${tcMin} cible(s) — ${tcCount} sélectionnée(s)` };
+      return { ok: false, reason: `Ce sort nécessite au moins ${tcMin} cible(s) — ${tcCount} visée(s) (${HOW_TO_TARGET})` };
     }
     if (tcMax > 0 && tcCount > tcMax) {
-      return { ok: false, reason: `Ce sort ne prend que ${tcMax} cible(s) maximum — ${tcCount} sélectionnée(s)` };
+      return { ok: false, reason: `Ce sort ne prend que ${tcMax} cible(s) maximum — ${tcCount} visée(s) : retire des cibles (Maj+clic) avant de lancer` };
     }
   }
 
@@ -1026,26 +1077,63 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
       const perTick = tickPerTick(fx, getEffP(actor));
       if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
       else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
-      else {
-        const fxDmg = computeDamageExpr({ actor, block: fx.damage });
-        if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
-      }
       if (fx.isAura) parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
       if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ Debuff" : "⬆️ Buff"}: ${modInfo.summary}`);
 
       // si l'effet n'a rien, on ne l'affiche pas
       if (!parts.length) continue;
 
-      lines.push(`<li><b>${str(fx.label, "Effet")}</b> — ${parts.join(" • ")}</li>`);
+      // Sur qui il tombe : sans cette mention, un buff pour le lanceur et un
+      // malus pour la cible s'affichaient exactement de la même façon.
+      const onWhom = fxApplyLabel(fx.target);
+      lines.push(`<li><b>${str(fx.label, "Effet")}</b> <span style="opacity:.75">(${onWhom})</span> — ${parts.join(" • ")}</li>`);
     }
     if (!lines.length) return null;
     return `<ul style="margin:6px 0 0 18px;">${lines.join("")}</ul>`;
   };
 
-  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
-  const auraSummary = auraEnabled
-    ? `🌀 <b>Aura</b> — Cible : <b>${fxTargetLabel(str(sys.aura?.target, "allies"))}</b> • Portée : <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé : <b>${str(sys.aura?.key, item.name)}</b>`
-    : null;
+  /**
+   * Formule lisible d'une ligne (dégâts ou récupération) : dés + plat +
+   * apport de la stat du lanceur, déjà chiffré. Les lignes system.damages[] /
+   * system.restores[] n'étaient jusqu'ici annoncées NULLE PART à la
+   * déclaration — seuls les anciens blocs system.damage l'étaient — donc un
+   * sort moderne s'annonçait sans un mot sur ce qu'il allait faire.
+   */
+  const lineFormula = (b) => {
+    const statKey  = String(b.stat ?? "").trim();
+    const per      = Math.max(1, n(b.per, 10) || 10);
+    const perStep  = n(b.perStep, 0);
+    const statBonus = statKey ? Math.floor(n(getEffP(actor)?.[statKey], 0) / per) * perStep : 0;
+    const flat     = n(b.flat, 0) + statBonus;
+    const dice     = String(b.dice ?? "").trim();
+    const parts    = [];
+    if (dice && dice !== "0") parts.push(dice);
+    if (flat) parts.push(`${flat}`);
+    return parts.join(" + ");
+  };
+
+  const damageLines = (Array.isArray(sys.damages) ? sys.damages : []).map(d => {
+    const f = lineFormula(d);
+    if (!f) return null;
+    const siphon = n(d.siphon, 0);
+    return `💥 <b>Dégâts ${livraisonLabel(d.livraison)}</b> : ${f}`
+         + (siphon > 0 ? ` <span style="opacity:.75">(vol de vie ${siphon} %)</span>` : "");
+  }).filter(Boolean);
+
+  const RES_DECL = { pv: "❤️ PV rendus", mana: "🔷 Mana rendu", fatigue: "😴 Fatigue rendue" };
+  const restoreLines = (Array.isArray(sys.restores) ? sys.restores : []).map(r => {
+    const f = lineFormula(r);
+    if (!f) return null;
+    const who = String(r.cible ?? "self");
+    const whoTxt = who === "target" ? "cible(s)" : (who === "both" ? "soi + cible(s)" : "soi");
+    return `<b>${RES_DECL[String(r.resource ?? "pv")] ?? "✨ Récupération"}</b> (${whoTxt}) : ${f}`;
+  }).filter(Boolean);
+
+  // NB : l'ancien bloc system.aura (aura « du sort ») n'est plus annoncé ici.
+  // Il n'est plus éditable sur la fiche et ne posait aucune aura à la
+  // résolution : seule une aura portée par un EFFET (fx.isAura, résumé
+  // ci-dessus par summarizeFxList) en crée une réellement. L'annoncer donnait
+  // au joueur une aura qui n'existait pas.
 
   const speaker = ChatMessage.getSpeaker({ actor, token: casterT?.document ?? undefined });
 
@@ -1101,7 +1189,8 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     <div style="margin-top:8px;">
       ${dmgHit?.expr ? `💥 <b>Dégâts (réussite)</b> : ${dmgHit.expr}<br>` : ``}
       ${dmgCrit?.expr ? `💥 <b>Dégâts (crit)</b> : ${dmgCrit.expr}<br>` : ``}
-      ${auraSummary ? `${auraSummary}<br>` : ``}
+      ${damageLines.map(l => `${l}<br>`).join("")}
+      ${restoreLines.map(l => `${l}<br>`).join("")}
     </div>
 
     ${summarizeFxList(fxCast) ? `<div style="margin-top:6px;"><b>Effets (au lancement)</b>${summarizeFxList(fxCast)}</div>` : ``}
@@ -1282,6 +1371,121 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   const publicMsg = data.linkedPublicId ? game.messages.get(data.linkedPublicId) : null;
   const deletePublicMsg = () => publicMsg?.delete().catch(() => {});
 
+  // ── Effets/États — appliqués immédiatement après réussite ────────────
+  const fxResultRows = [];
+  const addedStatesTracker = [];
+
+  /**
+   * Applique les effets secondaires correspondant à un résultat donné.
+   * Extrait de la branche « réussite » pour que les effets marqués
+   * « Au lancement (toujours) » partent AUSSI sur un échec : c'est le sens
+   * même de l'option, et jusqu'ici la branche échec sortait avant d'avoir
+   * appliqué le moindre effet.
+   */
+  const applyEffectsFor = async (outcome) => {
+    const fxList = effectsForResult(item, outcome);
+
+    for (const fx of fxList) {
+      const mods = buildModsFromFxMods(fx.mods);
+      // Qui reçoit l'effet : la ou les cibles visées, le lanceur, ou les deux.
+      // Une valeur inconnue (ancien format) retombe sur les cibles plutôt que
+      // sur une liste vide — un effet qui ne s'applique à personne, sans un mot
+      // dans le chat, est le pire des comportements par défaut.
+      const fxTarget = String(fx.target ?? "target").toLowerCase();
+      const applyToList =
+        (fxTarget === "self" || fxTarget === "caster") ? [actor] :
+        (fxTarget === "both" || fxTarget === "selftarget")
+          ? [actor, ...targetActors.filter(a => a.id !== actor.id)] :
+        targetActors;
+
+      for (const applyTo of applyToList) {
+        if (!applyTo) continue;
+        const stateId  = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
+
+        // Effet par tour : la nature (dégâts / soin) est explicite dans
+        // tick.mode, la quantité est toujours positive et monte avec une stat
+        // du lanceur (stat ÷ per × perStep), figée au lancement.
+        // En interne le moteur de tour traite un perTick négatif comme un soin.
+        const dotFlat  = tickPerTick(fx, getEffP(actor));
+        const dotDice  = String(fx.damage?.dice ?? "").trim();
+        const tag = String(fx.tag ?? "").trim() || null;
+        const effectKey = String(fx.effectKey ?? "").trim() || null;
+        const isAura = !!fx.isAura;
+        const permanent = !!fx.permanent;
+        const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
+
+        const state = {
+          id: stateId, label: String(fx.label ?? item.name),
+          type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
+          dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
+          mods: {
+            ...mods,
+            ...(fx.movementTypeGrant ? { movementTypeGrant: fx.movementTypeGrant } : {})
+          },
+          removeBaseTN: n(fx.removeBaseTN, 0) || null,
+          // Résistance/vulnérabilité ACCORDÉE par cet effet (ex: "Écaille de
+          // dragon" réduit la durée/les dégâts des effets tag "feu" reçus
+          // ENSUITE par la cible) — lu par resistances.js's applyResistances()
+          // via getStateResistances() tant que cet effet reste actif sur elle.
+          // Toujours construit, même vide : {tag:null,...} est filtré sans
+          // effet côté lecture (computeResistanceFor ignore une résistance sans
+          // tag ni effectKey), pas besoin d'un if ici.
+          resistance: {
+            tag: String(fx.resistTag ?? "").trim() || null,
+            durationReduction: n(fx.resistDurationReduction, 0),
+            dotReductionPct: n(fx.resistDotPct, 0),
+            immune: !!fx.resistImmune
+          }
+        };
+        if (isAura) state.aura = {
+          min: n(fx.auraMin, 0),
+          max: n(fx.auraMax, 3),
+          key: state.label,
+          target: String(fx.auraTarget ?? "allies")
+        };
+
+        // Amplification côté LANCEUR (équipement + états) : allonge la durée,
+        // renforce les dégâts/soin par tour et les bonus/malus. S'applique
+        // AVANT les résistances de la cible.
+        let ampInfo = null;
+        let outgoing = state;
+        try {
+          const { amplifyState } = await import("./amplification.js");
+          const amped = amplifyState(actor, state);
+          outgoing = amped.state;
+          ampInfo = amped.info;
+        } catch (e) {
+          console.warn("[RPG] amplification d'effet :", e);
+        }
+
+        const resistResult = await upsertState(applyTo, outgoing);
+        const info = resistResult?.resistanceInfo;
+
+        if (resistResult?.resisted) {
+          const reason = info?.immune ? "immunité" : "durée ramenée à 0";
+          fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
+          continue;
+        }
+        addedStatesTracker.push({ actorId: applyTo.id, stateId });
+        const modSummary = summarizeMods(mods);
+        const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? n(outgoing.duration, duration)} tours`;
+        // Trace l'amplification pour que le MJ voie d'où vient le renfort
+        const ampBits = [];
+        if (ampInfo?.durationBonus) ampBits.push(`durée ${ampInfo.durationBonus > 0 ? "+" : ""}${ampInfo.durationBonus}`);
+        if (ampInfo?.dotBonusPct)   ampBits.push(`puissance ${ampInfo.dotBonusPct > 0 ? "+" : ""}${ampInfo.dotBonusPct}%`);
+        if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
+        const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
+        fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
+      }
+    }
+
+    // Une aura ne vit que par l'état qu'on vient de poser sur son porteur :
+    // c'est refreshAuras() qui la propage ensuite aux tokens alentour.
+    if (fxList.some(fx => fx?.isAura) && globalThis.RPG_AURAS?.refreshAuras) {
+      setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
+    }
+  };
+
   // ── Échec Critique ───────────────────────────────────────────────────
   // Le MJ choisit toujours lui-même la conséquence (jamais de hasard ici)
   if (res === "critfail") {
@@ -1289,8 +1493,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const choice = await promptCritFailConsequence({ kind: "spell", actorName: actor.name });
     if (!choice) return false; // MJ a annulé — message conservé, boutons réactivés
 
+    // Effets « Au lancement (toujours) » : ils partent même ici — le sort a
+    // bien été lancé, seul son résultat est catastrophique.
+    await applyEffectsFor("critfail");
+
     const actionId = data.actionId ?? null;
-    await confirmBudgetSlot(actionId);
+    await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
     await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
     await deletePublicMsg();
@@ -1304,8 +1512,9 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       selfDmgLine = hpSecret(actor, `<br>${actor.name} subit <b>${choice.selfDamage}</b> dégâts (${pvCur} → <b>${pvNew}</b>/${pvMax} PV)`);
     }
 
+    const fxLineCF = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
     await ChatMessage.create({
-      content: `<b style="color:#8b1a12">☠ ÉCHEC CRITIQUE</b> — ${choice.label}${selfDmgLine}`,
+      content: `<b style="color:#8b1a12">☠ ÉCHEC CRITIQUE</b> — ${choice.label}${selfDmgLine}${fxLineCF}`,
       speaker: ChatMessage.getSpeaker({ actor })
     });
     return true;
@@ -1318,14 +1527,19 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   // ── Échec ────────────────────────────────────────────────────────────
   if (res === "fail") {
+    // Idem : seuls les effets « Au lancement (toujours) » sont retenus par
+    // effectsForResult() pour un échec ; tous les autres sont ignorés.
+    await applyEffectsFor("fail");
+
     const actionId = data.actionId ?? null;
-    await confirmBudgetSlot(actionId);
+    await confirmBudgetSlot(actionId, addedStatesTracker.length ? { addedStates: addedStatesTracker } : null);
     await bumpFatigue(actor, n(item.system?.fatigueCost, 1));
     await message.delete();
     await deletePublicMsg();
     const failMsg = pickSpellFailMessage(actor.name, targetNames);
+    const fxLineFail = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
     await ChatMessage.create({
-      content: `<b style="color:#c0392b">✗ ÉCHEC</b> — ${failMsg}`,
+      content: `<b style="color:#c0392b">✗ ÉCHEC</b> — ${failMsg}${fxLineFail}`,
       speaker: ChatMessage.getSpeaker({ actor })
     });
     return;
@@ -1333,7 +1547,6 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
 
   // ── Collecte toutes les lignes de dégâts (ancien format ET nouveau) ──
   const dmgBlocks = [];
-  const addedStatesTracker = [];
 
   // Ancien format system.damage / system.damageCrit
   const dmgBlock = (res === "crit") ? sys.damageCrit : sys.damage;
@@ -1375,7 +1588,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const livr     = String(d.livraison ?? sys.livraison ?? "magique");
     dmgBlocks.push({
       dice, flat, livraison: livr,
-      label: `Dégâts${isCrit ? " (crit)" : ""} ${livr}`.trim(),
+      label: `Dégâts${isCrit ? " (crit)" : ""} ${livraisonLabel(livr)}`.trim(),
       statKey, statBonus,
       // Vol de vie : part des dégâts RÉELLEMENT infligés (après armure)
       // rendue en PV au lanceur.
@@ -1427,113 +1640,24 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         label: `${RES_LABEL[resource] ?? resource}${isCrit ? " (crit)" : ""}`
       };
 
-      if (String(r.cible ?? "self") === "target") {
+      const benef = String(r.cible ?? "self");
+      if (benef === "target" || benef === "both") {
         targetActors.forEach((tActor, idx) => push(tActor, targetTokens[idx], block));
-      } else {
-        push(actor, casterToken, block);
+      }
+      if (benef === "self" || benef === "both") {
+        // « Soi + cible(s) » alors qu'on s'est ciblé soi-même : une seule
+        // part, sinon le lanceur encaisse deux fois la même ligne de soin.
+        const casterKey = casterToken?.document?.uuid ?? actor.uuid;
+        const alreadyTargeted = benef === "both" && targetActors.some((tA, idx) =>
+          (targetTokens[idx]?.document?.uuid ?? tA.uuid) === casterKey);
+        if (!alreadyTargeted) push(actor, casterToken, block);
       }
     }
     restoreEntries.push(...byBeneficiary.values());
   }
 
-  // ── Effets/États — appliqués immédiatement après réussite ────────────
-  const fxList = effectsForResult(item, res);
-  const fxResultRows = [];
-
-  for (const fx of fxList) {
-    const mods = buildModsFromFxMods(fx.mods);
-    const fxTarget = String(fx.target ?? "target").toLowerCase();
-    const applyToList =
-      (fxTarget === "self" || fxTarget === "caster") ? [actor] :
-      (fxTarget === "target") ? targetActors : [];
-
-    for (const applyTo of applyToList) {
-      if (!applyTo) continue;
-      const stateId  = `spell_${item.id}_${fx.id ?? foundry.utils.randomID(6)}_${applyTo.id}`;
-
-      // Effet par tour : la nature (dégâts / soin) est explicite dans
-      // tick.mode, la quantité est toujours positive et monte avec une stat
-      // du lanceur (stat ÷ per × perStep), figée au lancement.
-      // En interne le moteur de tour traite un perTick négatif comme un soin.
-      const dotFlat  = tickPerTick(fx, getEffP(actor));
-      const dotDice  = String(fx.damage?.dice ?? "").trim();
-      const tag = String(fx.tag ?? "").trim() || null;
-      const effectKey = String(fx.effectKey ?? "").trim() || null;
-      const isAura = !!fx.isAura;
-      const permanent = !!fx.permanent;
-      const duration = permanent ? 0 : Math.max(1, n(fx.duration, 1));
-
-      const state = {
-        id: stateId, label: String(fx.label ?? item.name),
-        type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
-        dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
-        mods: {
-          ...mods,
-          ...(fx.movementTypeGrant ? { movementTypeGrant: fx.movementTypeGrant } : {})
-        },
-        removeBaseTN: n(fx.removeBaseTN, 0) || null,
-        // Résistance/vulnérabilité ACCORDÉE par cet effet (ex: "Écaille de
-        // dragon" réduit la durée/les dégâts des effets tag "feu" reçus
-        // ENSUITE par la cible) — lu par resistances.js's applyResistances()
-        // via getStateResistances() tant que cet effet reste actif sur elle.
-        // Toujours construit, même vide : {tag:null,...} est filtré sans
-        // effet côté lecture (computeResistanceFor ignore une résistance sans
-        // tag ni effectKey), pas besoin d'un if ici.
-        resistance: {
-          tag: String(fx.resistTag ?? "").trim() || null,
-          durationReduction: n(fx.resistDurationReduction, 0),
-          dotReductionPct: n(fx.resistDotPct, 0),
-          immune: !!fx.resistImmune
-        }
-      };
-      if (isAura) state.aura = {
-        min: n(fx.auraMin, 0),
-        max: n(fx.auraMax, 3),
-        key: state.label,
-        target: String(fx.auraTarget ?? "allies")
-      };
-
-      // Amplification côté LANCEUR (équipement + états) : allonge la durée,
-      // renforce les dégâts/soin par tour et les bonus/malus. S'applique
-      // AVANT les résistances de la cible.
-      let ampInfo = null;
-      let outgoing = state;
-      try {
-        const { amplifyState } = await import("./amplification.js");
-        const amped = amplifyState(actor, state);
-        outgoing = amped.state;
-        ampInfo = amped.info;
-      } catch (e) {
-        console.warn("[RPG] amplification d'effet :", e);
-      }
-
-      const resistResult = await upsertState(applyTo, outgoing);
-      const info = resistResult?.resistanceInfo;
-
-      if (resistResult?.resisted) {
-        const reason = info?.immune ? "immunité" : "durée ramenée à 0";
-        fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
-        continue;
-      }
-      addedStatesTracker.push({ actorId: applyTo.id, stateId });
-      const modSummary = summarizeMods(mods);
-      const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? n(outgoing.duration, duration)} tours`;
-      // Trace l'amplification pour que le MJ voie d'où vient le renfort
-      const ampBits = [];
-      if (ampInfo?.durationBonus) ampBits.push(`durée ${ampInfo.durationBonus > 0 ? "+" : ""}${ampInfo.durationBonus}`);
-      if (ampInfo?.dotBonusPct)   ampBits.push(`puissance ${ampInfo.dotBonusPct > 0 ? "+" : ""}${ampInfo.dotBonusPct}%`);
-      if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
-      const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
-      fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
-    }
-  }
-
-  // Aura
-  const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
-  if (auraEnabled && globalThis.RPG_AURAS?.refreshAuras) {
-    setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
-    fxResultRows.push(`🌀 <b>Aura</b> active — ${fxTargetLabel(str(sys.aura?.target, "allies"))}`);
-  }
+  // ── Effets/États : appliqués maintenant que le MJ a tranché ──────────
+  await applyEffectsFor(res);
 
   await message.delete();
   await deletePublicMsg();
@@ -1553,7 +1677,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const formula = (b) => {
       const parts = [];
       if (b.dice) parts.push(`<b>${b.dice}</b>`);
-      if (b.flat !== 0) parts.push(`<b>${b.flat > 0 ? "+" : ""}${b.flat}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
+      if (b.flat !== 0) parts.push(`<b>${b.flat < 0 ? "−" : ""}${Math.abs(b.flat)}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
       return parts.join(" + ") || "<b>0</b>";
     };
     const lines = restoreEntries.flatMap(e =>
@@ -1574,9 +1698,9 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     const formulaLines = dmgBlocks.map(b => {
       const parts = [];
       if (b.dice) parts.push(`<b>${b.dice}</b>`);
-      if (b.flat !== 0) parts.push(`<b>${b.flat > 0 ? "+" : ""}${b.flat}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
+      if (b.flat !== 0) parts.push(`<b>${b.flat < 0 ? "−" : ""}${Math.abs(b.flat)}</b>${b.statBonus ? ` (dont +${b.statBonus} ${b.statKey})` : ""}`);
       const formula = parts.join(" + ") || "<b>0</b>";
-      return `${b.label} : ${formula} dégâts ${b.livraison}`;
+      return `${b.label} : ${formula}`;
     });
 
     // Encode les blocs + réductions pour le handler du bouton

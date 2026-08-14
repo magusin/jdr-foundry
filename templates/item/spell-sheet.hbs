@@ -28,10 +28,15 @@
     {{#if canEdit}}
     <section class="card">
       <h2>Général</h2>
+      <div style="font-size:11px;opacity:.7;margin:-2px 0 8px">
+        Un même sort peut cumuler librement : <b>Dégâts</b> (physiques et/ou magiques, plusieurs lignes),
+        <b>Récupération</b> (PV / mana / fatigue, pour soi ou pour les cibles) et des
+        <b>Effets secondaires</b> (bonus, malus, dégâts ou soin par tour, aura). Laisse vide ce qui ne sert pas.
+      </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
         <div>
-          <label>Vitesse</label>
+          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il l'a dans son grimoire (dégâts par tour et aura non gérés en passif).">Vitesse</label>
           {{#if canEdit}}
           <select name="system.speed" style="width:100%">
             <option value="passif" {{#if (eq system.speed "passif")}}selected{{/if}}>Passif</option>
@@ -42,11 +47,14 @@
         </div>
 
         <div>
-          <label>Livraison</label>
+          {{!-- Ce champ ne concerne PAS la mitigation des dégâts (chaque ligne
+               de dégâts a sa propre livraison) : il décide des stats comparées
+               au jet de touché — d'où le libellé « Jet de touché ». --}}
+          <label title="Décide du JET DE TOUCHÉ, pas des dégâts : Magique compare l'Acuité du lanceur à celle de la cible (et utilise son bonus de toucher magique) ; Physique compare les Dextérités. La façon dont chaque ligne de dégâts est encaissée (armure ou résistance) se règle, elle, ligne par ligne dans la carte Dégâts.">Jet de touché</label>
           {{#if canEdit}}
           <select name="system.livraison" style="width:100%">
-            <option value="magique"  {{#if (eq system.livraison "magique")}}selected{{/if}}>Magique</option>
-            <option value="physique" {{#if (eq system.livraison "physique")}}selected{{/if}}>Physique</option>
+            <option value="magique"  {{#if (eq system.livraison "magique")}}selected{{/if}}>Magique (Acuité)</option>
+            <option value="physique" {{#if (eq system.livraison "physique")}}selected{{/if}}>Physique (Dextérité)</option>
           </select>
           {{else}}<div><b>{{system.livraison}}</b></div>{{/if}}
         </div>
@@ -119,13 +127,13 @@
         </div>
 
         <div>
-          <label>Cibles min</label>
+          <label title="Nombre de tokens que le lanceur doit avoir visés. 0 = pas de minimum (sort sur soi).">Nb de cibles — min</label>
           {{#if canEdit}}<input type="number" name="system.targetCount.min" value="{{system.targetCount.min}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.targetCount.min}}</b></div>{{/if}}
         </div>
 
         <div>
-          <label>Cibles max</label>
+          <label title="Au-delà, la déclaration est refusée. Mets 3 pour un sort qui frappe jusqu'à 3 cibles : dégâts, soins et effets s'appliquent alors à chacune.">Nb de cibles — max</label>
           {{#if canEdit}}<input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.targetCount.max}}</b></div>{{/if}}
         </div>
@@ -137,10 +145,15 @@
         </div>
 
         <div>
-          <label>Recharge restante</label>
+          <label title="État en cours, pas une valeur de définition : décompté automatiquement à chaque tour.">Recharge restante</label>
           <input type="number" name="system.cooldown.restant" value="{{system.cooldown.restant}}" min="0" style="width:100%"/>
         </div>
 
+      </div>
+      <div style="font-size:11px;opacity:.7;margin-top:6px">
+        👥 <b>Viser plusieurs cibles</b> — outil <b>Ciblage ✛</b> de la barre d'outils Token :
+        clic sur la 1<sup>re</sup> cible, puis <b>Maj+clic</b> sur les suivantes (re-clic = retirer).
+        Le sort n'est déclaré que si le nombre de cibles visées tient entre le min et le max ci-dessus.
       </div>
     </section>
     {{else}}
@@ -212,6 +225,9 @@
       {{#unless system.damages.length}}
       <div style="font-size:11px;opacity:.6;padding:4px">Aucune ligne — clique "+ Ligne" pour en ajouter.</div>
       {{/unless}}
+      <small class="fx-hint">Une ligne par type de dégâts : la <b>Livraison</b> de chaque ligne décide de ce qui l'encaisse
+        (Physique → armure de la cible, Magique → résistance). Un sort peut donc cumuler une ligne physique et une ligne magique.
+        Toutes les lignes s'appliquent à <b>chaque</b> cible visée.</small>
     </section>
     {{/if}}
 
@@ -241,9 +257,10 @@
           <option value="mana"    {{#if (eq res.resource "mana")}}selected{{/if}}>🔷 Mana</option>
           <option value="fatigue" {{#if (eq res.resource "fatigue")}}selected{{/if}}>😴 Fatigue</option>
         </select>
-        <select              name="system.restores.{{i}}.cible" style="font-size:12px" title="Qui en profite">
+        <select              name="system.restores.{{i}}.cible" style="font-size:12px" title="Qui en profite. « Cible(s) » = chaque token visé par le sort (soin d'allié) ; « Soi + cible(s) » = le lanceur en profite aussi.">
           <option value="self"   {{#if (eq res.cible "self")}}selected{{/if}}>Soi</option>
           <option value="target" {{#if (eq res.cible "target")}}selected{{/if}}>Cible(s)</option>
+          <option value="both"   {{#if (eq res.cible "both")}}selected{{/if}}>Soi + cible(s)</option>
         </select>
         <input type="text"   name="system.restores.{{i}}.dice"     value="{{res.dice}}"     placeholder="1d10" style="font-size:12px" title="Dés (ex: 1d10)"/>
         <input type="number" name="system.restores.{{i}}.flat"     value="{{res.flat}}"     placeholder="0"    style="font-size:12px" title="Bonus plat"/>
@@ -271,6 +288,9 @@
         Aucune ligne — clique "+ Ligne" pour un sort qui rend des PV, du mana ou de la fatigue.
       </div>
       {{/unless}}
+      <small class="fx-hint">C'est ici que se règle un <b>soin</b>. Ce qui est rendu n'est jamais diminué :
+        ni par l'armure/résistance de celui qui le reçoit, ni par ses résistances élémentaires.
+        Sur un allié, laisse la <b>Difficulté</b> à 0 (carte Général) et le sort réussit sans jet.</small>
     </section>
     {{/if}}
 
@@ -290,6 +310,7 @@
           <span class="fx-title">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
           <span class="fx-chips">
             <span class="fx-chip fx-chip-when">{{fx.uiWhen}}</span>
+            <span class="fx-chip">{{fx.uiTarget}}</span>
             <span class="fx-chip">{{fx.uiDuration}}</span>
             {{#if fx.uiTag}}<span class="fx-chip fx-chip-tag">{{fx.uiTag}}</span>{{/if}}
             {{#if fx.uiTick}}<span class="fx-chip fx-chip-tick">{{fx.uiTick}}</span>{{/if}}
@@ -354,15 +375,23 @@
 
           {{!-- 2 · Quand et combien de temps --}}
           <fieldset class="fx-fieldset">
-            <legend>2 · Déclenchement &amp; durée</legend>
+            <legend>2 · Qui, quand, combien de temps</legend>
             <div class="fx-grid-4">
               <div>
-                <label title="Sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement quel que soit le résultat.">⚡ Se déclenche</label>
+                <label title="Qui reçoit cet effet. « Cible(s) » = tous les tokens visés par le sort. « Lanceur » = celui qui lance (obligatoire pour une aura qui doit rayonner AUTOUR DE LUI). Pour toucher les alliés/ennemis alentour sans les viser un par un, utilise l'Aura en partie 5.">🎯 S'applique à</label>
+                <select data-fx-field="target">
+                  <option value="target" {{#if (eq fx.target "target")}}selected{{/if}}>La/les cible(s) du sort</option>
+                  <option value="self"   {{#if (eq fx.target "self")}}selected{{/if}}>Le lanceur (soi)</option>
+                  <option value="both"   {{#if (eq fx.target "both")}}selected{{/if}}>Lanceur + cible(s)</option>
+                </select>
+              </div>
+              <div>
+                <label title="Sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement quel que soit le résultat — y compris sur un échec.">⚡ Se déclenche</label>
                 <select data-fx-field="when">
                   <option value="hit"     {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale + crit</option>
                   <option value="hitOnly" {{#if (eq fx.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
                   <option value="crit"    {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
-                  <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (toujours)</option>
+                  <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (même sur échec)</option>
                 </select>
               </div>
               <div>
@@ -381,6 +410,7 @@
                 <input type="number" data-fx-field="removeBaseTN" value="{{fx.removeBaseTN}}" min="0" max="20" placeholder="0" title="0 = impossible à retirer par un jet"/>
               </div>
             </div>
+            <small class="fx-hint">Un soin (partie 3 en mode Soin) n'est <b>jamais</b> réduit par les résistances de celui qui le reçoit — seuls les effets néfastes le sont.</small>
           </fieldset>
 
           {{!-- 3 · Effet par tour --}}
@@ -527,7 +557,7 @@
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à la cible de l'effet (celle visée par le sort) — indépendant de l'Aura, marche très bien pour un simple buff sur une cible. Coche <b>Aura</b> seulement en plus, si l'effet doit AUSSI rayonner autour du porteur.</small>
+            <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff. Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte : l'aura part de lui et touche, à chaque tour et selon la distance, les alliés / les ennemis / tout le monde. ⚠️ Pour une aura autour du <b>lanceur</b>, mets « S'applique à : Le lanceur » en partie 2, sinon elle rayonnera autour de la cible.</small>
           </fieldset>
 
           {{!-- 6 · Résistance accordée --}}

@@ -82,6 +82,20 @@ export function computeResistanceFor(actor, tag, effectLabel = "") {
 }
 
 /**
+ * Un état est-il un SOIN ? (dot.perTick négatif = PV rendus chaque tour)
+ *
+ * Les résistances protègent d'une agression : elles ne doivent jamais rogner
+ * ni bloquer ce qui FAIT DU BIEN à la cible. Sans cette distinction, soigner
+ * un allié résistant au feu avec un soin tagué « feu » lui rendait moins de
+ * PV — et une immunité (ou une réduction de durée suffisante) annulait le
+ * soin purement et simplement, alors que la cible n'a aucune raison de s'en
+ * défendre.
+ */
+function isHealingState(state) {
+  return n(state?.dot?.perTick ?? state?.dot?.flat, 0) < 0;
+}
+
+/**
  * Ajuste un "state" avant application selon les résistances de la cible.
  * Retourne null si l'effet est totalement résisté (immunité ou durée ≤ 0
  * après réduction) — dans ce cas, ne PAS l'ajouter à etatsActifs.
@@ -94,6 +108,10 @@ export function applyResistances(actor, state) {
   // ✅ Une résistance peut viser un type (tag) OU un effet précis (label) —
   // donc on vérifie même sans tag, tant qu'il y a un label.
   if (!state?.tag && !state?.label) return state;
+
+  // Un soin passe toujours en entier : ni réduction de montant, ni de durée,
+  // ni immunité. Voir isHealingState().
+  if (isHealingState(state)) return state;
 
   const res = computeResistanceFor(actor, state.tag, state.label);
 

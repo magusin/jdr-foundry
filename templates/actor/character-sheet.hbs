@@ -1051,7 +1051,8 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           <li>
             <b>{{fx.label}}</b>
             <span style="opacity:.8;">[{{fx.when}} • {{fx.target}}]</span>
-            {{#if fx.duration}} <span style="opacity:.8;">({{fx.duration}} tours)</span>{{/if}}
+            {{#if fx.duration}} <span style="opacity:.8;">({{fx.duration}})</span>{{/if}}
+            {{#if fx.summary}}<div style="opacity:.8;">{{fx.summary}}</div>{{/if}}
           </li>
           {{/each}}
         </ul>

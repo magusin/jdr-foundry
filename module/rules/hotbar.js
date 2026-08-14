@@ -80,8 +80,14 @@ async function useItemFromHotbarImpl(uuid) {
       return ui.notifications?.warn?.(`Mana insuffisant : ${manaCur}/${manaCost} requis.`);
     }
 
+    // targetToken volontairement omis : declareSpell lit alors LUI-MÊME
+    // toutes les cibles visées (game.user.targets). En lui passant
+    // `targetToken` — le PREMIER ciblé — un sort multi-cible lancé depuis la
+    // barre d'actions ne touchait qu'un seul token, et un sort exigeant 2
+    // cibles minimum se faisait refuser « 1 sélectionnée » alors que le
+    // joueur en avait bien visé deux.
     const { declareSpell } = await import("./spells.js");
-    const res = await declareSpell(actor, item, { casterToken, targetToken });
+    const res = await declareSpell(actor, item, { casterToken });
     if (!res?.ok) ui.notifications?.warn?.(res?.reason ?? "Impossible de lancer ce sort.");
     return res;
   }
