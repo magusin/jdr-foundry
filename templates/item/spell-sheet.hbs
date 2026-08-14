@@ -291,7 +291,7 @@
           <span class="fx-chips">
             <span class="fx-chip fx-chip-when">{{fx.uiWhen}}</span>
             <span class="fx-chip">{{fx.uiDuration}}</span>
-            {{#if fx.tag}}<span class="fx-chip fx-chip-tag">{{fx.tag}}</span>{{/if}}
+            {{#if fx.uiTag}}<span class="fx-chip fx-chip-tag">{{fx.uiTag}}</span>{{/if}}
             {{#if fx.uiTick}}<span class="fx-chip fx-chip-tick">{{fx.uiTick}}</span>{{/if}}
             {{#each fx.mods as |mod mi|}}
             <span class="fx-chip {{#if mod.isMalus}}fx-chip-malus{{else}}fx-chip-bonus{{/if}}">{{mod.text}}</span>

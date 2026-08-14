@@ -101,7 +101,12 @@ export async function resolveEndOfCombat(combat) {
     const actor = c.actor;
     if (!actor) continue;
     if (actor.type === "character") pjCombatants.push(actor);
-    if (actor.type === "monster")   monsterCombatants.push(actor);
+    // L'UUID, jamais l'id : deux tokens non liés du même monstre portent le
+    // même id d'acteur (leur prototype), donc les deux dépouilles seraient
+    // indiscernables — un seul bouton pour deux loups.
+    if (actor.type === "monster") {
+      monsterCombatants.push({ actor, uuid: actor.uuid ?? c.token?.uuid ?? null });
+    }
   }
 
   if (!pjCombatants.length)  return; // pas de PJ → rien à distribuer
@@ -114,11 +119,11 @@ export async function resolveEndOfCombat(combat) {
 
   // ── 2. XP total ────────────────────────────────────────────────────────
   let totalXP = 0;
-  for (const monster of monsterCombatants) {
+  for (const { actor: monster } of monsterCombatants) {
     totalXP += n(monster.system?.recompenses?.xp, 0);
   }
 
-  const monsterNamesForPrompt = monsterCombatants.map((m) => m.name).join(", ");
+  const monsterNamesForPrompt = monsterCombatants.map((m) => m.actor.name).join(", ");
 
   // ── 3. Le MJ choisit s'il distribue l'XP, et à qui ──────────────────────
   const { proceed, selectedIds } = await promptEndOfCombatChoice({
@@ -155,14 +160,17 @@ export async function resolveEndOfCombat(combat) {
   }
 
   // ── 6. Boutons de loot — un par monstre + un global ──────────────────
-  const lootableMonsters = monsterCombatants.filter(m => {
+  const lootableMonsters = monsterCombatants.filter(({ actor: m }) => {
     const entries = asList(m.system?.butin?.entries);
     const tableUuid = String(m.system?.butin?.tableUuid ?? "").trim();
     return entries.length > 0 || tableUuid;
   });
+  // Référence d'une dépouille : son UUID, avec l'id en repli si le combattant
+  // n'avait pas de token (acteur lié directement).
+  const lootRef = ({ actor, uuid }) => uuid ?? actor.id;
 
   // ── 7. Message récap ───────────────────────────────────────────────────
-  const monsterNames = monsterCombatants.map((m) => m.name).join(", ");
+  const monsterNames = monsterCombatants.map((m) => m.actor.name).join(", ");
 
   let content =
     `<h3>⚔️ Fin de combat</h3>` +
@@ -172,11 +180,12 @@ export async function resolveEndOfCombat(combat) {
       : `<p><b>XP :</b> non distribué.</p>`);
 
   if (lootableMonsters.length) {
-    const allIds = lootableMonsters.map(m => m.id).join(",");
+    const allRefs = lootableMonsters.map(lootRef).join(",");
     content += `<hr><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎁 Dépouilles</div>`;
     content += `<div style="display:flex;flex-direction:column;gap:4px">`;
 
-    for (const m of lootableMonsters) {
+    for (const mRef of lootableMonsters) {
+      const m = mRef.actor;
       const entries = asList(m.system?.butin?.entries);
       const previewParts = await Promise.all(entries.slice(0, 3).map(async (e) => {
         let name = "Item inconnu";
@@ -189,7 +198,7 @@ export async function resolveEndOfCombat(combat) {
       content += `
         <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
           <span style="flex:1;font-size:12px"><b>${m.name}</b>${preview ? `<br><small style="opacity:.6">${preview}</small>` : ""}</span>
-          <button type="button" data-action="lootNow" data-monster-ids="${m.id}"
+          <button type="button" data-action="lootNow" data-monster-uuids="${lootRef(mRef)}"
             style="padding:3px 10px;cursor:pointer;border-radius:5px;font-size:11px;white-space:nowrap">
             🎲 Looter
           </button>
@@ -198,7 +207,7 @@ export async function resolveEndOfCombat(combat) {
 
     if (lootableMonsters.length > 1) {
       content += `<div style="margin-top:6px;text-align:center">
-        <button type="button" data-action="lootNow" data-monster-ids="${allIds}"
+        <button type="button" data-action="lootNow" data-monster-uuids="${allRefs}"
           style="padding:5px 14px;cursor:pointer;border-radius:6px;font-weight:600;width:100%">
           🎁 Tout looter (${lootableMonsters.length} monstres)
         </button>
@@ -294,6 +303,35 @@ export async function restoreManaFatigue(actorIds) {
 }
 
 /**
+ * Retrouve la dépouille désignée par un bouton de loot.
+ *
+ * Une référence est un UUID (`Scene.x.Token.y.Actor.z` pour un monstre posé sur
+ * une scène, `Actor.z` pour un acteur lié) — deux tokens non liés du même
+ * monstre ne se distinguent que par là. Un id nu reste accepté : c'est ce que
+ * portent les messages de fin de combat postés avant ce correctif.
+ *
+ * Si le token a disparu entre-temps (dépouille effacée de la scène), on retombe
+ * sur le prototype : le butin est une donnée de définition, elle y est intacte.
+ */
+async function resolveLootActor(ref) {
+  const s = String(ref ?? "").trim();
+  if (!s) return null;
+
+  if (s.includes(".")) {
+    try {
+      const doc = await fromUuid(s);
+      const actor = doc?.actor ?? doc;   // TokenDocument → son acteur synthétique
+      if (actor) return actor;
+    } catch { /* uuid périmé : repli ci-dessous */ }
+    return game.actors.get(s.split(".").pop()) ?? null;
+  }
+
+  return game.actors.get(s)
+    ?? canvas?.tokens?.placeables?.find(t => t.id === s || t.actor?.id === s)?.actor
+    ?? null;
+}
+
+/**
  * Tire le butin des monstres sélectionnés (appelé au clic sur "Looter les
  * dépouilles" — jamais automatiquement, c'est un choix des joueurs/du MJ).
  */
@@ -304,17 +342,15 @@ export async function restoreManaFatigue(actorIds) {
  * la fiche de l'objet lui-même, jamais d'un instantané figé sur l'entrée).
  * Exemple : Dent, 90%, qty 1-1, tries=5 → 5 jets de 90% → 0 à 5 dents.
  */
-export async function lootMonsters(monsterIds) {
+export async function lootMonsters(monsterRefs) {
   if (!game.user.isGM) return;
 
   const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
   const lootLines = [];
 
-  for (const id of monsterIds) {
-    // Cherche d'abord dans les acteurs du monde, puis dans les tokens de la scène
-    const monster = game.actors.get(id)
-      ?? canvas?.tokens?.placeables?.find(t => t.id === id || t.actor?.id === id)?.actor;
+  for (const ref of monsterRefs) {
+    const monster = await resolveLootActor(ref);
     if (!monster) continue;
 
     const tableUuid = String(monster.system?.butin?.tableUuid ?? "").trim();

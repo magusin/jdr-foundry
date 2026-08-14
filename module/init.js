@@ -1716,16 +1716,47 @@ Hooks.once("init", async () => {
       try { bindOpportunityAttackButtons(html); } catch (e) { }
       try {
         const root = html instanceof HTMLElement ? html : html?.[0];
-        const lootBtn = root?.querySelector('[data-action="lootNow"]');
-        if (lootBtn && !lootBtn.dataset.bound && game.user.isGM) {
-          lootBtn.dataset.bound = "1";
-          lootBtn.addEventListener("click", async (ev) => {
-            ev.preventDefault();
-            lootBtn.disabled = true;
-            lootBtn.textContent = "Butin tiré";
-            const ids = (lootBtn.dataset.monsterIds ?? "").split(",").filter(Boolean);
-            await lootMonsters(ids);
-          });
+        // ⚠️ Un récap de fin de combat porte PLUSIEURS boutons de loot : un par
+        // dépouille + le « Tout looter » global. `querySelector` n'en liait que
+        // le premier, donc seul le premier monstre était lootable — les
+        // suivants et le bouton global ne faisaient strictement rien.
+        const lootBtns = Array.from(root?.querySelectorAll('[data-action="lootNow"]') ?? []);
+        if (lootBtns.length && game.user.isGM) {
+          // Les monstres sont désignés par UUID : deux tokens non liés du même
+          // monstre partagent le MÊME id d'acteur (deux « Loup de keld »), donc
+          // un suivi par id confondrait les deux dépouilles en une seule.
+          // `data-monster-ids` reste lu en repli pour les messages d'avant.
+          const refsOf = (btn) =>
+            String(btn.dataset.monsterUuids ?? btn.dataset.monsterIds ?? "").split(",").filter(Boolean);
+
+          const looted = new Set(message?.flags?.rpg?.lootedRefs ?? []);
+          const refresh = () => {
+            for (const b of lootBtns) {
+              if (refsOf(b).some((r) => !looted.has(r))) continue;
+              b.disabled = true;
+              b.textContent = "Butin tiré";
+            }
+          };
+          refresh();
+
+          for (const btn of lootBtns) {
+            if (btn.dataset.bound) continue;
+            btn.dataset.bound = "1";
+            btn.addEventListener("click", async (ev) => {
+              ev.preventDefault();
+              // Ne tire que les dépouilles pas encore ouvertes : « Tout looter »
+              // après un loot individuel ne rejoue pas ce monstre-là.
+              const refs = refsOf(btn).filter((r) => !looted.has(r));
+              if (!refs.length) { refresh(); return; }
+              for (const r of refs) looted.add(r);
+              refresh();
+              await lootMonsters(refs);
+              // Mémorisé sur le message : sans ça, un simple F5 réactive les
+              // boutons et la même dépouille peut être tirée deux fois.
+              try { await message?.setFlag?.("rpg", "lootedRefs", [...looted]); }
+              catch (e) { console.warn("[RPG][Loot] état de loot non mémorisé :", e); }
+            });
+          }
         }
       } catch (e) { }
       try {

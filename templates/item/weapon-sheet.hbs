@@ -9,7 +9,7 @@
       {{else}}
         <input class="name-input" name="name" type="text" value="{{item.name}}"/>
       {{/if}}
-      <small>{{item.type}}</small>
+      <small>{{typeLabel}}</small>
     </div>
     {{#if isGM}}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -116,7 +116,7 @@
           </div>
 
           <div class="mm-line">
-            <span class="mm-label">Scaling stat</span>
+            <span class="mm-label">Stat d'échelle</span>
             <select class="mm-input" name="system.damage.scaling.stat">
               <option value="force" {{#if (eq system.damage.scaling.stat "force")}}selected{{/if}}>Force</option>
               <option value="intelligence" {{#if (eq system.damage.scaling.stat "intelligence")}}selected{{/if}}>Intelligence</option>
@@ -193,7 +193,7 @@
           </div>
 
           <div class="mm-line">
-            <span class="mm-label">Scaling stat (crit)</span>
+            <span class="mm-label">Stat d'échelle (crit)</span>
             <select class="mm-input" name="system.crit.damage.scaling.stat">
               <option value="force" {{#if (eq system.crit.damage.scaling.stat "force")}}selected{{/if}}>Force</option>
               <option value="intelligence" {{#if (eq system.crit.damage.scaling.stat "intelligence")}}selected{{/if}}>Intelligence</option>

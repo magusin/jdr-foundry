@@ -2,7 +2,7 @@
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
-import { STATE_TYPES } from "../rules/state-builder.js";
+import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { isNpcActor } from "../rules/actor-roles.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -1832,7 +1832,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     const targetToken = Array.from(game.user.targets)[0];
     if (!targetToken) {
-      return ui.notifications.warn("Cible un ennemi (Target : touche T) avant d'utiliser une attaque/sort.");
+      return ui.notifications.warn("Cible un ennemi (touche T) avant d'utiliser une attaque/sort.");
     }
 
     const target = targetToken.actor;
@@ -2087,8 +2087,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         <div class="line">
           <div class="lbl">Cible (aura)</div>
           <select name="aura.target">
-            ${["allies", "enemies", "both"].map(t =>
-      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${t}</option>`
+            ${Object.entries(AURA_TARGETS).map(([t, lbl]) =>
+      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${lbl}</option>`
     ).join("")}
           </select>
         </div>
@@ -2206,8 +2206,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
   async _postStateInfoToChat(st) {
     const dotTxt = (st.dot?.flat || st.dot?.formula)
-      ? `DOT: <b>${st.dot?.flat ?? 0}</b>${st.dot?.formula ? ` + <b>${st.dot.formula}</b>` : ""}`
-      : "DOT: <i>aucun</i>";
+      ? `Dégâts par tour : <b>${st.dot?.flat ?? 0}</b>${st.dot?.formula ? ` + <b>${st.dot.formula}</b>` : ""}`
+      : "Dégâts par tour : <i>aucun</i>";
 
     const mods = st.mods ?? {};
     const modsTxt = Object.entries(mods)
@@ -2217,23 +2217,23 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const pct = Number(v.pct ?? 0) || 0;
         const a = flat ? `${flat > 0 ? "+" : ""}${flat}` : "";
         const b = pct ? `${pct > 0 ? "+" : ""}${pct}%` : "";
-        return `${name}: ${[a, b].filter(Boolean).join(" ")}`.trim();
+        return `${name} : ${[a, b].filter(Boolean).join(" ")}`.trim();
       })
       .filter(Boolean)
       .join("<br>") || "<i>Aucun modificateur</i>";
 
     const auraTxt = st.isAura && st.aura?.max
-      ? `<br>Aura: <b>${st.aura.target}</b> • Portée <b>${st.aura.min}–${st.aura.max}</b>`
+      ? `<br>Aura : <b>${auraTargetLabel(st.aura.target)}</b> • Portée <b>${st.aura.min}–${st.aura.max}</b>`
       : "";
 
     const content = `
-      <b>${this.document.name}</b> — État: <b>${st.label}</b><br>
-      Type: <b>${st.type}</b> ${st.isAura ? "(Aura)" : ""}${auraTxt}<br>
-      Durée: <b>${st.remaining}</b> / ${st.duration} tour(s)<br>
-      Retrait: ${st.cleanseDC ? `<b>${st.cleanseDC}+</b>` : "<i>—</i>"}<br>
+      <b>${this.document.name}</b> — État : <b>${st.label}</b><br>
+      Type : <b>${stateTypeLabel(st.type)}</b> ${st.isAura ? "(Aura)" : ""}${auraTxt}<br>
+      Durée : <b>${st.remaining}</b> / ${st.duration} tour(s)<br>
+      Retrait : ${st.cleanseDC ? `<b>${st.cleanseDC}+</b>` : "<i>—</i>"}<br>
       ${dotTxt}<br>
       <hr>
-      <b>Mods</b><br>${modsTxt}
+      <b>Modificateurs</b><br>${modsTxt}
     `;
 
     await ChatMessage.create({

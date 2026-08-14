@@ -58,6 +58,28 @@ const WHEN_LABELS = {
 
 const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous" };
 
+/**
+ * Libellés des types/éléments d'un effet. `feu`, `eclair`, `obscurite`… sont
+ * des CLÉS techniques : affichées telles quelles elles perdent accents et
+ * majuscules (« eclair »). Reprend mot pour mot les options proposées par
+ * spell-sheet.hbs, `magique`/`physique` compris — que la liste d'éléments de
+ * weather-library.js ne connaît pas.
+ */
+const TAG_LABELS = {
+  neutre: "⚪ Neutre", magique: "✨ Magique", physique: "⚔️ Physique",
+  feu: "🔥 Feu", air: "🌬️ Air", eau: "💧 Eau", glace: "❄️ Glace",
+  eclair: "⚡ Éclair", terre: "🌿 Terre",
+  lumiere: "✨ Lumière", obscurite: "🌑 Obscurité"
+};
+
+/** Modes de déplacement qu'un effet peut accorder (mêmes options que la fiche). */
+const MOVEMENT_GRANT_LABELS = {
+  volant: "🦅 Vol", aquatique: "🐟 Nage", amphibie: "🐸 Amphibie",
+  ethere: "👻 Éthéré", montagnard: "⛰️ Montagnard", forestier: "🌲 Forestier"
+};
+
+const tagLabel = (t) => TAG_LABELS[String(t ?? "").toLowerCase()] ?? t;
+
 /** Décore un modificateur pour l'affichage (sens, quantité, libellé). */
 function decorateMod(m) {
   const isMalus = m.sens === "malus";
@@ -80,7 +102,7 @@ function decorateMod(m) {
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 function buildResistSummary(fx) {
   if (!fx.resistTag && !fx.resistImmune) return null;
-  const bits = [fx.resistTag || "?"];
+  const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
   if (fx.resistImmune) {
     bits.push("immunité");
   } else {
@@ -106,12 +128,15 @@ function buildFxUi(fx) {
   const mods = (fx.mods ?? []).map(decorateMod);
   return {
     uiTick,
+    uiTag: fx.tag ? tagLabel(fx.tag) : null,
     uiWhen: WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? fx.when,
     uiDuration: fx.permanent ? "♾️ Permanent" : `⏳ ${n(fx.duration, 0)} tour(s)`,
     uiAura: fx.isAura
       ? `🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m · ${AURA_TARGET_LABELS[fx.auraTarget] ?? fx.auraTarget}`
       : null,
-    uiMove: fx.movementTypeGrant ? `🏃 ${fx.movementTypeGrant}` : null,
+    uiMove: fx.movementTypeGrant
+      ? `🏃 ${MOVEMENT_GRANT_LABELS[fx.movementTypeGrant] ?? fx.movementTypeGrant}`
+      : null,
     uiRemove: n(fx.removeBaseTN, 0)
       ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+`
       : null,
@@ -493,14 +518,9 @@ static PARTS = foundry.utils.mergeObject(
         ctx.playerInfo.push({ icon, label, value: `${value}${suffix}` });
       };
       const SPEED = { passif: "Passif", rapide: "Rapide", normal: "Normal" };
-      const TAGS = {
-        neutre: "⚪ Neutre", feu: "🔥 Feu", eau: "💧 Eau", eclair: "⚡ Éclair",
-        glace: "❄️ Glace", air: "💨 Air", terre: "🌍 Terre",
-        lumiere: "✨ Lumière", obscurite: "🌑 Obscurité"
-      };
       add("⚡", "Vitesse", SPEED[String(ctx.system.speed)] ?? ctx.system.speed);
       add("🎯", "Livraison", ctx.system.livraison === "physique" ? "Physique" : "Magique");
-      add("🔮", "Élément", TAGS[String(ctx.system.tag ?? "neutre")] ?? ctx.system.tag);
+      add("🔮", "Élément", tagLabel(ctx.system.tag ?? "neutre"));
       add("💧", "Coût mana", n(ctx.system.coutMana, 0));
       add("😫", "Coût fatigue", n(ctx.system.fatigueCost, 0));
       const rmin = n(ctx.system.range?.min, 0), rmax = n(ctx.system.range?.max, 0);
@@ -955,7 +975,7 @@ static PARTS = foundry.utils.mergeObject(
 
       chips.push(`<span class="fx-chip fx-chip-when">${esc(ui.uiWhen)}</span>`);
       chips.push(`<span class="fx-chip">${esc(ui.uiDuration)}</span>`);
-      if (fx.tag)     chips.push(`<span class="fx-chip fx-chip-tag">${esc(fx.tag)}</span>`);
+      if (ui.uiTag)   chips.push(`<span class="fx-chip fx-chip-tag">${esc(ui.uiTag)}</span>`);
       if (ui.uiTick)  chips.push(`<span class="fx-chip fx-chip-tick">${esc(ui.uiTick)}</span>`);
       for (const m of ui.mods) {
         chips.push(`<span class="fx-chip ${m.isMalus ? "fx-chip-malus" : "fx-chip-bonus"}">${esc(m.text)}</span>`);

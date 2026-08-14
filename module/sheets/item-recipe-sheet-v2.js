@@ -75,7 +75,7 @@ export class RPGRecipeSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         try {
           const doc = await fromUuid(uuid);
           if (doc?.sheet) doc.sheet.render(true);
-          else ui.notifications?.warn?.("Item introuvable pour cet UUID.");
+          else ui.notifications?.warn?.("Objet introuvable pour cet UUID.");
         } catch(e) {
           ui.notifications?.error?.(`UUID invalide : ${uuid}`);
         }

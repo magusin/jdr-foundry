@@ -22,7 +22,7 @@
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "fr"));
 
   if (!recipes.length) {
-    ui.notifications.warn("Aucune recette trouvée dans les Objets du monde. Crée d'abord un Item de type 'Recipe'.");
+    ui.notifications.warn("Aucune recette trouvée dans les Objets du monde. Crée d'abord un objet de type Recette.");
     return;
   }
 
@@ -42,7 +42,7 @@
     });
 
   if (!pjs.length) {
-    ui.notifications.warn("Aucun personnage (character) trouvé dans le monde.");
+    ui.notifications.warn("Aucun personnage trouvé dans le monde.");
     return;
   }
 

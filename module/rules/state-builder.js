@@ -19,6 +19,29 @@ export const STATE_TYPES = {
   obscurite:  "Obscurité"
 };
 
+/**
+ * Cibles d'une aura. `allies`/`enemies`/`both` sont des CLÉS techniques : elles
+ * étaient écrites telles quelles dans le menu déroulant du dialogue « état » et
+ * dans la carte de chat, seul endroit anglophone d'une interface française.
+ */
+export const AURA_TARGETS = {
+  allies:  "Alliés",
+  enemies: "Ennemis",
+  both:    "Tout le monde"
+};
+
+/** Libellé d'un type/élément d'état, la clé nue en dernier recours. */
+export function stateTypeLabel(tag) {
+  const key = String(tag ?? "").toLowerCase();
+  return STATE_TYPES[key] ?? (tag || "—");
+}
+
+/** Libellé d'une cible d'aura, la clé nue en dernier recours. */
+export function auraTargetLabel(target) {
+  const key = String(target ?? "").toLowerCase();
+  return AURA_TARGETS[key] ?? (target || "—");
+}
+
 export const STAT_KEYS = {
   force: "Force", intelligence: "Intelligence", dexterite: "Dextérité",
   acuite: "Acuité", endurance: "Endurance",

@@ -14,6 +14,25 @@ export function sheetContent(root) {
   return root?.querySelector?.(".window-content") ?? root;
 }
 
+/**
+ * Nom français d'un type d'objet, pour affichage.
+ *
+ * `item.type` est une CLÉ technique anglaise (`loot`, `weapon`, `consumable`…) :
+ * l'écrire telle quelle dans une fiche affiche « loot » à un joueur
+ * francophone. Les traductions vivent déjà dans `lang/fr.json`
+ * (`TYPES.Item.loot` → « Objet »), c'est la seule source à consulter — jamais
+ * une table de correspondance recopiée dans une fiche, qui se désynchroniserait
+ * du jour où un type est ajouté.
+ */
+export function itemTypeLabel(type) {
+  const key = String(type ?? "").trim();
+  if (!key) return "";
+  const label = game.i18n?.localize?.(`TYPES.Item.${key}`);
+  // localize() renvoie la clé elle-même quand la traduction manque : dans ce
+  // cas on préfère encore la clé nue à « TYPES.Item.xxx ».
+  return !label || label === `TYPES.Item.${key}` ? key : label;
+}
+
 /** Boutons d'action de la fiche, jamais ceux de la barre de titre. */
 export function sheetActionButtons(root, extraSelector = "") {
   const scope = sheetContent(root);
