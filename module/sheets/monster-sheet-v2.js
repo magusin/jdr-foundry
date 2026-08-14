@@ -412,9 +412,9 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         btn.disabled = true;
         try {
           const { lootMonsters } = await import("../rules/combat-end.js");
-          // Utilise l'id de l'acteur OU du token selon le contexte
-          const id = this.document.id;
-          await lootMonsters([id]);
+          // L'UUID désigne CETTE fiche : celle du token non lié ouvert, pas
+          // celle du prototype avec qui il partage son id.
+          await lootMonsters([this.document.uuid ?? this.document.id]);
         } catch(e) {
           console.error("[RPG] lootThisMonster:", e);
           ui.notifications?.error?.(`Erreur loot : ${e?.message ?? e}`);
