@@ -4,7 +4,9 @@ import { getBudget, movementRemaining, movementSpent } from "../rules/action-bud
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { isNpcActor } from "../rules/actor-roles.js";
-import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
+import {
+  normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
+} from "../rules/damage-types.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -126,6 +128,12 @@ export function decorateStates(states) {
       .join(" • ");
 
     if (modsTxt) parts.push(modsTxt);
+
+    // Résistances accordées par l'état — sans elles, un buff « Écaille de
+    // dragon » s'affichait comme une ligne vide de toute information alors
+    // qu'il est justement là pour ça. Décrit avec la même formulation que
+    // la fiche de sort (damage-types.js).
+    parts.push(...stateResistTextParts(e).all);
 
     e.summary = parts.join(" • ");
 

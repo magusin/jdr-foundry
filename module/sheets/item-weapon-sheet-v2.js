@@ -6,6 +6,7 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, damageTypeLabel,
   normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
+import { gearStateResistRows } from "../rules/resistances.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -187,6 +188,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
     ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
     ctx.resistElemActive = nonZeroResistRows(ctx.system.resistancesElem);
+    // Résistances aux ÉTATS, en lecture pour le joueur : la grille d'édition
+    // reste MJ, mais le porteur doit pouvoir lire ce que l'arme lui apporte.
+    ctx.resistStateRows = gearStateResistRows(ctx.system.resistances);
 
     // Portée min/max (un arc ne tire pas à bout portant). L'ancien champ
     // unique `portee` sert de valeur de départ pour le max.

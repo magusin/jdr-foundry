@@ -8,6 +8,35 @@
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 import { getWeatherModifierFor } from "./weather-library.js";
+import { resistTextParts } from "./damage-types.js";
+
+/**
+ * Lignes lisibles des résistances aux ÉTATS portées par un objet
+ * (`system.resistances[]`), pour l'affichage joueur des fiches d'arme et
+ * d'armure — jusque-là ces lignes n'étaient visibles que du MJ, donc un
+ * joueur ne pouvait pas savoir ce que son armure lui apportait.
+ *
+ * La formulation vient de resistTextParts() (damage-types.js), partagée
+ * avec la fiche de sort et la liste des états actifs : une résistance aux
+ * états se lit pareil partout, quelle que soit sa provenance.
+ */
+export function gearStateResistRows(list) {
+  const rows = Array.isArray(list) ? list : [];
+  return rows.map(r => {
+    const { state } = resistTextParts({
+      stateTag: r?.tag ?? null,
+      durationReduction: r?.durationReduction ?? 0,
+      dotReductionPct: r?.dotReductionPct ?? 0,
+      immune: !!r?.immune
+    });
+    if (!state) return null;
+    // Une résistance peut ne viser QU'UN effet précis (« Brûlure ») plutôt
+    // que tout un type : sans ce rappel, deux lignes très différentes
+    // s'affichent à l'identique.
+    const key = String(r?.effectKey ?? "").trim();
+    return { text: key ? `${state} — ${key} uniquement` : state };
+  }).filter(Boolean);
+}
 
 /**
  * Résistances fournies par l'équipement équipé (arme/armure/relique).

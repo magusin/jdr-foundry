@@ -160,6 +160,75 @@ export function applyResistPct(amount, pct) {
 }
 
 /**
+ * Texte d'une résistance ACCORDÉE par un effet (buff/malus), pour toutes les
+ * surfaces qui la décrivent : l'en-tête d'un effet sur la fiche de sort,
+ * l'aperçu des effets d'un sort, la liste des états actifs d'un acteur.
+ *
+ * Les deux moitiés restent SÉPARÉES dans le rendu comme elles le sont dans
+ * les données — chacune vise son propre type, les fondre en une ligne
+ * laisserait croire qu'un seul choix les gouverne.
+ *
+ * Signature à plat parce que les appelants n'ont pas la même forme : un
+ * effet de fiche de sort porte `resistDamageTag`/`resistTag`, un état posé
+ * sur un acteur porte `resistanceDamage.tag`/`resistance.tag`. Une seule
+ * formulation, quel que soit le point d'entrée.
+ *
+ * @returns {{damage: string|null, state: string|null, all: string[]}}
+ */
+export function resistTextParts({
+  damageTag = null, damagePct = 0,
+  stateTag = null, durationReduction = 0, dotReductionPct = 0, immune = false
+} = {}) {
+  const signed = (v, unit = "") => `${v > 0 ? "−" : "+"}${Math.abs(v)}${unit}`;
+
+  const dPct = clampPct(damagePct);
+  const damage = (damageTag && dPct)
+    ? `🛡️ ${damageTypeLabel(damageTag)} · dégâts ${signed(dPct, "%")}`
+    : null;
+
+  let state = null;
+  if (stateTag || immune) {
+    const bits = [stateTag ? damageTypeLabel(stateTag) : "?"];
+    if (immune) {
+      bits.push("immunité");
+    } else {
+      const dur = num(durationReduction, 0);
+      if (dur) bits.push(`durée ${signed(dur)}`);
+      const dot = num(dotReductionPct, 0);
+      if (dot) bits.push(`dégâts/tour ${signed(dot, "%")}`);
+    }
+    // Seul un type visé sans aucun chiffre ne dit rien : on ne l'affiche pas.
+    if (bits.length > 1) state = `🧪 États ${bits.join(" · ")}`;
+  }
+
+  return { damage, state, all: [damage, state].filter(Boolean) };
+}
+
+/** Même texte, lu directement sur un état actif (`system.etatsActifs[]`). */
+export function stateResistTextParts(st) {
+  return resistTextParts({
+    damageTag:         st?.resistanceDamage?.tag ?? null,
+    damagePct:         st?.resistanceDamage?.pct ?? 0,
+    stateTag:          st?.resistance?.tag ?? null,
+    durationReduction: st?.resistance?.durationReduction ?? 0,
+    dotReductionPct:   st?.resistance?.dotReductionPct ?? 0,
+    immune:            !!st?.resistance?.immune
+  });
+}
+
+/** Même texte, lu sur un effet de la fiche de sort (`system.effectsUI[]`). */
+export function fxResistTextParts(fx) {
+  return resistTextParts({
+    damageTag:         fx?.resistDamageTag ?? null,
+    damagePct:         fx?.resistDamagePct ?? 0,
+    stateTag:          fx?.resistTag ?? null,
+    durationReduction: fx?.resistDurationReduction ?? 0,
+    dotReductionPct:   fx?.resistDotPct ?? 0,
+    immune:            !!fx?.resistImmune
+  });
+}
+
+/**
  * Résistance d'un acteur aux dégâts décrits par {tag, livraison}, prête à
  * afficher : {type, label, pct}. `type` vaut null si les dégâts n'ont aucun
  * type exploitable (aucune résistance ne s'applique alors).

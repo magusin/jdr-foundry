@@ -2,7 +2,7 @@
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { setupActorItemDrop } from "./drop-helper.js";
 import { randomizeMonster } from "../monster-gen.js";
-import { normalizeState, ensureStateDialogCSS, LABELS } from "./character-sheet-v2.js";
+import { normalizeState, ensureStateDialogCSS, LABELS, decorateStates } from "./character-sheet-v2.js";
 import {
   applyUiTheme, openImageLightbox, restoreScrollPositions, uniqueSheetOptions,
   tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
@@ -231,43 +231,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       actor.system?.principales ??
       {};
 
-    const labelMap = {
-      force: "Force", dexterite: "Dextérité", intelligence: "Intelligence", acuite: "Acuité", endurance: "Endurance",
-      scoreArmure: "Score Armure", scoreResistance: "Score Résistance", armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
-      pvMax: "PV max", manaMax: "Mana max", regenPv: "Régén PV", regenMana: "Régén Mana", vitesse: "Vitesse",
-      toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", initiativeMod: "Initiative",
-      fatigueMax: "Fatigue max", podsMax: "Pods max"
-    };
-
+    // Résumé des états : la MÊME fonction que la fiche de personnage et que
+    // la carte PNJ (decorateStates). Cette fiche en avait une copie manuelle
+    // — libellés de stats identiques au caractère près, mais elle ignorait
+    // tout ce qui a été ajouté depuis (les résistances accordées, en
+    // dernier lieu) : un état décrit ici ne disait donc pas la même chose
+    // que le même état décrit ailleurs.
     const states = Array.isArray(sys?.etatsActifs) ? foundry.utils.deepClone(sys.etatsActifs) : [];
-    for (const e of states) {
-      const parts = [];
-      const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-      if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
-      else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
-
-      const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
-      if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
-      else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
-      const mods = e?.mods ?? {};
-      for (const [k, v] of Object.entries(mods)) {
-        const flat = Number(v?.flat ?? 0) || 0;
-        const pct = Number(v?.pct ?? 0) || 0;
-        const name = labelMap[k] ?? k;
-        if (flat) parts.push(`${name} ${flat > 0 ? "+" : ""}${flat}`);
-        if (pct) parts.push(`${name} ${pct > 0 ? "+" : ""}${pct}%`);
-      }
-      let hasPlus = false, hasMinus = false;
-      for (const v of Object.values(mods)) {
-        const flat = Number(v?.flat ?? 0) || 0;
-        const pct = Number(v?.pct ?? 0) || 0;
-        if (flat > 0 || pct > 0) hasPlus = true;
-        if (flat < 0 || pct < 0) hasMinus = true;
-      }
-      e.isBeneficial = hasPlus && !hasMinus;
-      e.isHarmful = hasMinus && !hasPlus;
-      e.summary = parts.join(" • ");
-    }
+    decorateStates(states);
     ctx.system.etatsActifs = states;
     return ctx;
   }

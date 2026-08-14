@@ -3,6 +3,7 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
+import { gearStateResistRows } from "../rules/resistances.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -172,6 +173,9 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
     ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
     ctx.resistElemActive = nonZeroResistRows(ctx.system.resistancesElem);
+    // Résistances aux ÉTATS, en lecture pour le joueur : la grille d'édition
+    // reste MJ, mais le porteur doit pouvoir lire ce que l'objet lui apporte.
+    ctx.resistStateRows = gearStateResistRows(ctx.system.resistances);
 
     return ctx;
   }

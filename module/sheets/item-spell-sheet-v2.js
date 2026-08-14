@@ -3,7 +3,9 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 import { applyUiTheme, sheetContent, sheetActionButtons, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
-import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "../rules/damage-types.js";
+import {
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
+} from "../rules/damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -112,31 +114,10 @@ function decorateMod(m) {
  */
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 function buildResistSummary(fx) {
-  const out = [];
-
-  // Partie 6 — résistance aux DÉGÂTS d'un type.
-  const dmgPct = n(fx.resistDamagePct, 0);
-  if (fx.resistDamageTag && dmgPct) {
-    out.push(`🛡️ ${tagLabel(fx.resistDamageTag)} · dégâts ${dmgPct > 0 ? "−" : "+"}${Math.abs(dmgPct)}%`);
-  }
-
-  // Partie 7 — résistance aux ÉTATS. Résumée à part : les deux visent
-  // chacune leur propre type, les fondre en une ligne laisserait croire
-  // qu'un seul choix les gouverne.
-  if (fx.resistTag || fx.resistImmune) {
-    const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
-    if (fx.resistImmune) {
-      bits.push("immunité");
-    } else {
-      const dur = n(fx.resistDurationReduction, 0);
-      if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
-      const pct = n(fx.resistDotPct, 0);
-      if (pct) bits.push(`dégâts/tour ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
-    }
-    out.push(`🧪 États ${bits.join(" · ")}`);
-  }
-
-  return out.length ? out.join(" | ") : null;
+  // Formulation partagée avec l'aperçu des effets d'un sort et la liste des
+  // états actifs d'un acteur — voir fxResistTextParts() dans damage-types.js.
+  const parts = fxResistTextParts(fx).all;
+  return parts.length ? parts.join(" | ") : null;
 }
 
 function buildFxUi(fx) {

@@ -440,12 +440,24 @@
           {{/each}}
         </div>
         {{else}}
-        <div style="font-size:11px;opacity:.7">Aucune résistance élémentaire.</div>
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux dégâts.</div>
         {{/if}}
       {{/if}}
     </section>
 
-    {{!-- RÉSISTANCES AUX EFFETS (MJ ONLY) --}}
+    {{!-- RÉSISTANCES AUX ÉTATS — lecture pour le joueur, édition pour le MJ --}}
+    {{#unless canEdit}}
+      <section class="card">
+        <h2>Résistances aux états (durée / dégâts par tour)</h2>
+        {{#if resistStateRows.length}}
+        <ul style="margin:0;padding-left:18px">
+          {{#each resistStateRows as |r|}}<li style="font-size:12px">{{r.text}}</li>{{/each}}
+        </ul>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux états.</div>
+        {{/if}}
+      </section>
+    {{/unless}}
     {{#if canEdit}}
       <section class="card">
         <h2>Résistances aux états (durée / dégâts par tour)</h2>

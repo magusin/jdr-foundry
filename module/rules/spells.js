@@ -1,7 +1,7 @@
 // systems/rpg/module/rules/spells.js
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
-import { resistanceFor } from "./damage-types.js";
+import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
@@ -895,6 +895,10 @@ export function buildSpellEffectsPreview({ actor, item }) {
     if (fx.isAura) {
       parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
     }
+
+    // Résistances accordées : même formulation que la fiche de sort et que
+    // la liste des états actifs d'un acteur (damage-types.js).
+    parts.push(...fxResistTextParts(fx).all);
 
     list.push({
       label: str(fx.label, "Effet"),

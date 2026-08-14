@@ -196,7 +196,7 @@
         <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">
           Réduit les <b>dégâts</b> reçus de ce type (arme, sort, piège) tant que l'objet est équipé.
           <b>100 %</b> = immunité, valeur <b>négative</b> = vulnérabilité (dégâts augmentés).
-          Différent des « Résistances aux effets » ci-dessous, qui n'agissent que sur la durée et les dégâts par tour des états.
+          Différent des « Résistances aux états » ci-dessous, qui n'agissent que sur la durée et les dégâts par tour des états.
         </div>
       {{else}}
         {{#if resistElemActive.length}}
@@ -206,12 +206,25 @@
           {{/each}}
         </div>
         {{else}}
-        <div style="font-size:11px;opacity:.7">Aucune résistance élémentaire.</div>
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux dégâts.</div>
         {{/if}}
       {{/if}}
     </section>
 
-    {{!-- RÉSISTANCES AUX EFFETS (MJ ONLY) --}}
+    {{!-- RÉSISTANCES AUX ÉTATS — lecture pour le joueur, édition pour le MJ --}}
+    {{#unless canEdit}}
+      <hr/>
+      <section>
+        <h2>Résistances aux états (durée / dégâts par tour)</h2>
+        {{#if resistStateRows.length}}
+        <ul style="margin:0;padding-left:18px">
+          {{#each resistStateRows as |r|}}<li style="font-size:12px">{{r.text}}</li>{{/each}}
+        </ul>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux états.</div>
+        {{/if}}
+      </section>
+    {{/unless}}
     {{#if canEdit}}
       <hr/>
       <section>
