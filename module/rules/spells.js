@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/spells.js
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
+import { resistanceFor } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
@@ -1430,8 +1431,14 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
           // Toujours construit, même vide : {tag:null,...} est filtré sans
           // effet côté lecture (computeResistanceFor ignore une résistance sans
           // tag ni effectKey), pas besoin d'un if ici.
+          // `damagePct`, lui, réduit les DÉGÂTS DIRECTS de ce type (coup
+          // d'épée, boule de feu, piège) : agrégé dans
+          // derived.resistancesElem par actor.js, appliqué par
+          // computeFinalDamage(). Les trois autres champs ne touchent qu'aux
+          // états, d'où la cohabitation dans le même objet.
           resistance: {
             tag: String(fx.resistTag ?? "").trim() || null,
+            damagePct: n(fx.resistDamagePct, 0),
             durationReduction: n(fx.resistDurationReduction, 0),
             dotReductionPct: n(fx.resistDotPct, 0),
             immune: !!fx.resistImmune
@@ -1717,10 +1724,16 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         pvMax: n(tActor.system?.ressources?.pv?.max, 0),
         blocks: dmgBlocks.map(b => {
           const isPhys = b.livraison === "physique";
+          // Résistance élémentaire de la cible au type du SORT (system.tag).
+          // Sans élément ("neutre"), la livraison de la ligne fait office de
+          // type — voir resolveDamageType() dans damage-types.js.
+          const res = resistanceFor(tActor, { tag: item.system?.tag, livraison: b.livraison });
           return {
             ...b,
             fixe: isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0),
             pct:  isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0),
+            elemPct: res.pct,
+            elemLabel: res.label
           };
         })
       };

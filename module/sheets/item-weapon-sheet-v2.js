@@ -2,6 +2,10 @@
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions, itemTypeLabel } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import {
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, damageTypeLabel,
+  normalizeResistMap, resistRows, nonZeroResistRows
+} from "../rules/damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -169,6 +173,20 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
     ctx.system.allonge = n(ctx.system.allonge, 1);
+
+    // Élément de l'arme (facultatif) : sert de type pour les résistances
+    // élémentaires de la cible. Vide = c'est la livraison qui fait foi.
+    ctx.system.tag = String(ctx.system.tag ?? "");
+    ctx.damageTypeChoices = DAMAGE_TYPE_KEYS.map(key => ({
+      key, label: DAMAGE_TYPES[key], selected: key === ctx.system.tag
+    }));
+    ctx.tagLabel = damageTypeLabel(ctx.system.tag);
+
+    // ---- Résistances élémentaires accordées par l'arme quand elle est
+    // équipée (réduction des dégâts REÇUS, pas des dégâts infligés).
+    ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
+    ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
+    ctx.resistElemActive = nonZeroResistRows(ctx.system.resistancesElem);
 
     // Portée min/max (un arc ne tire pas à bout portant). L'ancien champ
     // unique `portee` sert de valeur de départ pour le max.
@@ -340,6 +358,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
           r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
           r.immune = !!r.immune;
         }
+      }
+
+      // résistances élémentaires : garde les clés connues, borne les %
+      if (expanded.system.resistancesElem) {
+        expanded.system.resistancesElem = normalizeResistMap(expanded.system.resistancesElem);
       }
 
       // amplifications : normalise Object -> Array + types

@@ -577,6 +577,21 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             </div>
           </div>
 
+          {{!-- Résistances élémentaires : total effectif (base + équipement
+                porté + états actifs), calculé dans documents/actor.js. --}}
+          <div style="margin-top:8px">
+            <label style="font-size:12px">Résistances élémentaires</label>
+            {{#if resistElemActive.length}}
+            <div class="rpg-resist-elem-read">
+              {{#each resistElemActive as |r|}}
+              <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{else}}is-resist{{/if}}">{{r.text}}</span>
+              {{/each}}
+            </div>
+            {{else}}
+            <div style="font-size:11px;opacity:.7">Aucune — l'équipement, les sorts et les états peuvent en accorder.</div>
+            {{/if}}
+          </div>
+
           {{#if flags.isGM}}
           <details class="raw-stats">
             <summary>⚙️ Valeurs de départ (MJ)</summary>
@@ -599,6 +614,20 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
               </div>
             </div>
             <small class="raw-stats-hint">Valeur brute avant niveau, compétences et équipement.</small>
+
+            <h4 style="margin:10px 0 2px;font-size:12px">Résistances élémentaires innées (%)</h4>
+            <div class="rpg-resist-elem-grid">
+              {{#each resistElemRows as |r|}}
+              <div class="rpg-resist-elem-cell">
+                <label title="Réduction des dégâts de type {{r.label}}. 100 = immunité, négatif = vulnérabilité.">{{r.label}}</label>
+                <div class="rpg-resist-elem-input">
+                  <input type="number" name="system.resistancesElem.{{r.key}}" value="{{r.value}}" min="-100" max="100" step="5"/>
+                  <span>%</span>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <small class="raw-stats-hint">Propres au personnage (race, don…), avant équipement et états.</small>
           </details>
           {{/if}}
         </section>

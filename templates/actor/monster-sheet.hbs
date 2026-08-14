@@ -217,6 +217,18 @@
             <div class="mm-line"><span>Réduction phys.</span><b>{{system.derived.reductions.physiquePct}}%</b></div>
             <div class="mm-line"><span>Réduction mag.</span><b>{{system.derived.reductions.magiquePct}}%</b></div>
           </div>
+          <div style="margin-top:6px">
+            <span class="muted" style="font-size:11px">Résistances élémentaires (base + états)</span>
+            {{#if resistElemActive.length}}
+            <div class="rpg-resist-elem-read">
+              {{#each resistElemActive as |r|}}
+              <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{else}}is-resist{{/if}}">{{r.text}}</span>
+              {{/each}}
+            </div>
+            {{else}}
+            <div style="font-size:11px;opacity:.7">Aucune.</div>
+            {{/if}}
+          </div>
         </section>
 
         {{!-- Ces valeurs sont tirées par la génération mais n'étaient visibles
@@ -332,6 +344,20 @@
               <input type="number" name="system.defenses.scoreResistance" value="{{system.defenses.scoreResistance}}" min="0" />
             </div>
           </div>
+
+          <h4 style="margin:10px 0 2px">Résistances élémentaires (%)</h4>
+          <div class="rpg-resist-elem-grid">
+            {{#each resistElemRows as |r|}}
+            <div class="rpg-resist-elem-cell">
+              <label title="Réduction des dégâts de type {{r.label}}. 100 = immunité, négatif = vulnérabilité.">{{r.label}}</label>
+              <div class="rpg-resist-elem-input">
+                <input type="number" name="system.resistancesElem.{{r.key}}" value="{{r.value}}" min="-100" max="100" step="5" />
+                <span>%</span>
+              </div>
+            </div>
+            {{/each}}
+          </div>
+          <small class="muted">Réduit les dégâts reçus du type correspondant. <b>100</b> = immunité, valeur <b>négative</b> = vulnérabilité. Tirées par la génération aléatoire si des plages sont renseignées dans l'onglet 🎲.</small>
         </details>
 
         <section class="panel-states" style="grid-column: 1 / -1;">
@@ -583,6 +609,23 @@
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div class="gen-group">
+                <h4>Résistances élémentaires (%)</h4>
+                <div class="gen-pair-grid">
+                  {{#each b.resistancesElem as |r|}}
+                  <div class="gen-pair">
+                    <label title="{{r.label}}">{{r.label}}</label>
+                    <div class="gen-pair-inputs">
+                      <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.resistancesElem.{{r.key}}.0" value="{{r.min}}" min="-100" max="100" />
+                      <span class="sep">–</span>
+                      <input class="num sm" type="number" name="system.gen.bands.{{b.lvl}}.resistancesElem.{{r.key}}.1" value="{{r.max}}" min="-100" max="100" />
+                    </div>
+                  </div>
+                  {{/each}}
+                </div>
+                <small class="muted">Plage tirée au hasard à la génération. <b>0–0</b> = pas de tirage (la valeur déjà saisie sur la fiche est laissée telle quelle). Valeurs <b>négatives</b> = vulnérabilité, <b>100</b> = immunité.</small>
               </div>
 
               <div class="gen-group">

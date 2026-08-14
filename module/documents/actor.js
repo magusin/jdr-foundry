@@ -1,5 +1,8 @@
 // systems/rpg/module/documents/actor.js
 import { sumActiveEffectMods } from "../rules/status-effects.js";
+import {
+  DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
+} from "../rules/damage-types.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -30,7 +33,11 @@ function sumBonuses(actor) {
     ressources: { pvMax: 0, manaMax: 0 },
     regen: { pvPct: 0, manaPct: 0 },
     move: { vitesse: 0 },
-    combat: { toucherPhysique: 0, toucherMagique: 0 }
+    combat: { toucherPhysique: 0, toucherMagique: 0 },
+    // Résistances élémentaires apportées par l'équipement porté — même règle
+    // que les autres bonus : il faut que l'objet soit équipé, et un monstre
+    // ne porte pas d'équipement (voir isEquip plus bas).
+    resistancesElem: emptyResistMap()
   };
 
   const isMonster = actor.type === "monster";
@@ -71,9 +78,38 @@ function sumBonuses(actor) {
 
     totals.combat.toucherPhysique += Number(b.toucherPhysique ?? 0) || 0;
     totals.combat.toucherMagique += Number(b.toucherMagique ?? 0) || 0;
+
+    // ⚠️ system.resistancesElem, PAS system.bonus.* : les résistances
+    // élémentaires d'un objet vivent à côté de system.resistances (états),
+    // pas dans la grille de bonus de stats.
+    const re = sys.resistancesElem;
+    if (re && typeof re === "object") {
+      for (const k of DAMAGE_TYPE_KEYS) {
+        totals.resistancesElem[k] += Number(re[k] ?? 0) || 0;
+      }
+    }
   }
 
   return totals;
+}
+
+/**
+ * Résistances élémentaires accordées par les états actifs.
+ * Un état pose sa résistance sous state.resistance = {tag, damagePct, …} —
+ * le même objet que lit resistances.js pour les résistances aux ÉTATS ;
+ * seul `damagePct` (dégâts directs) nous concerne ici.
+ */
+function sumStateResistances(actor) {
+  const out = emptyResistMap();
+  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  for (const st of states) {
+    const r = st?.resistance;
+    if (!r || typeof r !== "object") continue;
+    const tag = String(r.tag ?? "").trim().toLowerCase();
+    if (!isDamageType(tag)) continue;
+    out[tag] += Number(r.damagePct ?? 0) || 0;
+  }
+  return out;
 }
 
 export class RPGActor extends Actor {
@@ -219,6 +255,21 @@ export class RPGActor extends Actor {
     // -----------------------
     sys.derived.reductions.physiquePct = scoreToPct(effD.scoreArmure);
     sys.derived.reductions.magiquePct = scoreToPct(effD.scoreResistance);
+
+    // -----------------------
+    // 3ter) Résistances élémentaires (second étage de mitigation)
+    // -----------------------
+    // Base propre à l'acteur (tirée à la génération pour un monstre, éditée
+    // par le MJ sinon) + équipement porté + états actifs. Bornée une seule
+    // fois dans sumResistMaps() : 100 = immunité, négatif = vulnérabilité.
+    // La base est aussi réécrite normalisée pour qu'une fiche importée sans
+    // le champ (ou avec des clés inconnues) affiche quand même sa grille.
+    sys.resistancesElem = normalizeResistMap(sys.resistancesElem);
+    sys.derived.resistancesElem = sumResistMaps(
+      sys.resistancesElem,
+      bonus.resistancesElem,
+      sumStateResistances(this)
+    );
 
     // -----------------------
     // 3bis) Bonus dégâts depuis stats (FOR/INT)

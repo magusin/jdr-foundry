@@ -518,3 +518,65 @@
   gap: 1px;
 }
 .rpg-spell-sheet .spi-row--wide .spi-value { text-align: left; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   RÉSISTANCES ÉLÉMENTAIRES
+   Grille d'édition (MJ) + pastilles de lecture (joueur), partagées par les
+   fiches arme / armure / relique et par les fiches d'acteur — d'où des
+   sélecteurs sans préfixe de fiche, contrairement au reste de ce fichier.
+   ══════════════════════════════════════════════════════════════════════ */
+.rpg-resist-elem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px 8px;
+  margin-top: 6px;
+}
+.rpg-resist-elem-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rpg-resist-elem-cell > label {
+  font-size: 11px;
+  color: var(--ink-text-dim, #b6ad9a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rpg-resist-elem-input {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.rpg-resist-elem-input input {
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+}
+.rpg-resist-elem-input > span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.rpg-resist-elem-read {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+/* Résistance = vert (on encaisse moins), vulnérabilité = braise (on prend
+   plus) : la couleur seule ne porte pas l'information, le texte de la
+   pastille garde son signe explicite (voir resistRows() côté JS). */
+.rpg-resist-elem-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.14));
+  background: var(--sage-dim, rgba(111,191,139,0.16));
+  color: var(--ink-text, #ece4d3);
+  white-space: nowrap;
+}
+.rpg-resist-elem-chip.is-weak {
+  background: var(--ember-dim, rgba(224,82,74,0.16));
+}

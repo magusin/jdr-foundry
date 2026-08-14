@@ -1,5 +1,7 @@
 // systems/rpg/module/documents/item.js
 
+import { resistanceFor, applyResistPct } from "../rules/damage-types.js";
+
 function ceil(n) {
   return Math.ceil(Number(n) || 0);
 }
@@ -173,6 +175,11 @@ export class RPGItem extends Item {
     // ── 4) Mitigation cible ───────────────────────────────────────
     let fixe = 0;
     let pct  = 0;
+    // Résistance élémentaire : second étage, après l'armure. Une arme n'a pas
+    // d'élément propre (system.tag reste optionnel) — sans lui, sa livraison
+    // fait office de type, c'est ce qui rend une résistance « physique »
+    // opérante face à une épée. Voir damage-types.js.
+    let elem = { type: null, label: "", pct: 0 };
 
     if (targetActor) {
       const tSys = targetActor.system ?? {};
@@ -187,10 +194,15 @@ export class RPGItem extends Item {
       pct = type === "magique"
         ? (Number(red.magiquePct) || 0)
         : (Number(red.physiquePct) || 0);
+
+      elem = resistanceFor(targetActor, { tag: w.tag ?? null, livraison: type });
     }
 
     const afterFixe = Math.max(0, beforeMitigation - fixe);
-    const final     = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+    const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+    // Le plancher à 1 est celui de l'armure : une immunité (100 %) doit
+    // pouvoir ramener le coup à 0.
+    const final = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
 
     return {
       brut:             rawBrut,
@@ -198,6 +210,9 @@ export class RPGItem extends Item {
       beforeMitigation,
       fixe,
       pct,
+      elemPct:          elem.pct,
+      elemType:         elem.type,
+      elemLabel:        elem.label,
       final,
       statBonus,
       rollTotal:        roll.total,
@@ -267,6 +282,7 @@ export class RPGItem extends Item {
     const beforeMitigation = Math.max(0, rawBrut);
 
     let fixe = 0, pct = 0;
+    let elem = { type: null, label: "", pct: 0 };
     if (targetActor) {
       const tSys = targetActor.system ?? {};
       const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
@@ -274,16 +290,21 @@ export class RPGItem extends Item {
       const isMagic = livraison === "magique";
       fixe = isMagic ? (Number(effD.resistanceFixe) || 0) : (Number(effD.armureFixe) || 0);
       pct  = isMagic ? (Number(red.magiquePct) || 0)      : (Number(red.physiquePct) || 0);
+      // Une compétence de monstre porte, elle, un élément (system.tag) :
+      // c'est lui qui prime sur la livraison pour la résistance élémentaire.
+      elem = resistanceFor(targetActor, { tag: sys.tag ?? null, livraison });
     }
 
     const afterFixe = Math.max(0, beforeMitigation - fixe);
-    const final     = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+    const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+    const final = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
 
     return {
       brut: rawBrut,
       critBonus: 0,          // le critique est déjà intégré dans les lignes
       beforeMitigation,
       fixe, pct, final,
+      elemPct: elem.pct, elemType: elem.type, elemLabel: elem.label,
       statBonus,
       rollTotal,
       livraison

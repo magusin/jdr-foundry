@@ -3,10 +3,16 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBiome, ELEMENT_TAGS } from "../rules/weather-library.js";
 import { applyUiTheme, sheetContent, sheetActionButtons, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "../rules/damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
+}
+
+/** % de résistance/vulnérabilité, borné comme dans damage-types.js. */
+function clampResist(v) {
+  return Math.max(RESIST_MIN, Math.min(RESIST_MAX, Math.round(n(v, 0))));
 }
 
 // bool safe: gère "0/1", "on", true/false, et arrays ["0","1"]
@@ -106,15 +112,19 @@ function decorateMod(m) {
  */
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 function buildResistSummary(fx) {
-  if (!fx.resistTag && !fx.resistImmune) return null;
+  const dmgPct = n(fx.resistDamagePct, 0);
+  if (!fx.resistTag && !fx.resistImmune && !dmgPct) return null;
   const bits = [fx.resistTag ? tagLabel(fx.resistTag) : "?"];
+  // La réduction de dégâts subis vaut même sous immunité : l'immunité ne
+  // couvre que les états, pas les dégâts directs (voir la fiche, partie 6).
+  if (dmgPct) bits.push(`dégâts subis ${dmgPct > 0 ? "−" : "+"}${Math.abs(dmgPct)}%`);
   if (fx.resistImmune) {
-    bits.push("immunité");
+    bits.push("immunité aux états");
   } else {
     const dur = n(fx.resistDurationReduction, 0);
     if (dur) bits.push(`durée ${dur > 0 ? "−" : "+"}${Math.abs(dur)}`);
     const pct = n(fx.resistDotPct, 0);
-    if (pct) bits.push(`dégâts ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
+    if (pct) bits.push(`dégâts/tour ${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`);
   }
   return `🛡️ ${bits.join(" · ")}`;
 }
@@ -630,6 +640,15 @@ static PARTS = foundry.utils.mergeObject(
       ctx.weatherEffect = null;
     }
 
+    // Liste des types de dégâts, partagée par le <select> « Élément / Type »
+    // du sort et par celui de la résistance accordée (partie 6 d'un effet) —
+    // une seule source pour les deux, sinon « Physique » finit par n'exister
+    // que dans l'un des deux.
+    ctx.damageTypeChoices = DAMAGE_TYPE_KEYS.map(key => ({
+      key, label: DAMAGE_TYPES[key], selected: key === String(ctx.system.tag ?? "")
+    }));
+    ctx.tagLabel = tagLabel(String(ctx.system.tag ?? "neutre") || "neutre");
+
     ctx.system.damage = normDamage(ctx.system.damage);
     ctx.system.damageCrit = normDamage(ctx.system.damageCrit);
 
@@ -662,6 +681,7 @@ static PARTS = foundry.utils.mergeObject(
       fx.auraTarget   = String(fx.auraTarget ?? "allies");
 
       fx.resistTag = String(fx.resistTag ?? "");
+      fx.resistDamagePct = clampResist(fx.resistDamagePct);
       fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
       fx.resistDotPct = n(fx.resistDotPct, 0);
       fx.resistImmune = !!fx.resistImmune;
@@ -783,6 +803,9 @@ static PARTS = foundry.utils.mergeObject(
         // (remove-state-macro.js additionne toujours ce champ s'il existe).
         retraitMod: 0,
         resistTag:               str("resistTag", prev.resistTag ?? ""),
+        // Résistance aux DÉGÂTS DIRECTS du type visé (damage-types.js) —
+        // distincte des deux champs suivants, qui ne jouent que sur les états.
+        resistDamagePct:         clampResist(num("resistDamagePct", 0)),
         resistDurationReduction: num("resistDurationReduction", 0),
         resistDotPct:            num("resistDotPct", 0),
         resistImmune:            bool("resistImmune"),

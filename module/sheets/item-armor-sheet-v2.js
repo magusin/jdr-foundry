@@ -2,6 +2,7 @@
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -165,6 +166,13 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
     };
 
+    // ✅ résistances élémentaires : réduction (%) des DÉGÂTS d'un type tant
+    // que l'objet est équipé — à ne pas confondre avec system.resistances
+    // ci-dessus, qui ne joue que sur les états (durée, dégâts par tour).
+    ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
+    ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
+    ctx.resistElemActive = nonZeroResistRows(ctx.system.resistancesElem);
+
     return ctx;
   }
 
@@ -218,6 +226,11 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
         r.immune = !!r.immune;
       }
+    }
+
+    // résistances élémentaires : garde les clés connues, borne les %
+    if (expanded?.system?.resistancesElem) {
+      expanded.system.resistancesElem = normalizeResistMap(expanded.system.resistancesElem);
     }
 
     // amplifications : normalise Object -> Array + types

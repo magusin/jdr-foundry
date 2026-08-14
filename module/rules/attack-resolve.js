@@ -480,8 +480,15 @@ export async function rollAttackDamage(message) {
       ? `<br>🗡️ ${dmgResult.offhandName} (${dmgResult.offhandDie}) : <b>${dmgResult.offhandTotal}</b> — dé seul`
       : "");
 
-  const mitigLine = (dmgResult.fixe || dmgResult.pct)
-    ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%`
+  // Résistance élémentaire : affichée séparément de l'armure, et avec son
+  // signe — une valeur négative est une VULNÉRABILITÉ (dégâts amplifiés),
+  // l'écrire « −(−25)% » serait illisible.
+  const elemPct = Number(dmgResult.elemPct) || 0;
+  const elemPart = elemPct
+    ? ` · ${dmgResult.elemLabel} ${elemPct > 0 ? "−" : "+"}${Math.abs(elemPct)}%`
+    : "";
+  const mitigLine = (dmgResult.fixe || dmgResult.pct || elemPct)
+    ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%${elemPart}`
     : `🛡️ Aucune mitigation`;
 
   const baseContent =

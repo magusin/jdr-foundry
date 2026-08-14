@@ -177,7 +177,41 @@
       </section>
     {{/if}}
 
-    {{!-- RÉSISTANCES (MJ ONLY) --}}
+    {{!-- RÉSISTANCES ÉLÉMENTAIRES --}}
+    <hr/>
+    <section>
+      <h2>Résistances élémentaires</h2>
+      {{#if canEdit}}
+        <div class="rpg-resist-elem-grid">
+          {{#each resistElemRows as |r|}}
+          <div class="rpg-resist-elem-cell">
+            <label title="Réduction des dégâts de type {{r.label}} tant que l'objet est équipé. Négatif = vulnérabilité.">{{r.label}}</label>
+            <div class="rpg-resist-elem-input">
+              <input type="number" name="system.resistancesElem.{{r.key}}" value="{{r.value}}" min="-100" max="100" step="5"/>
+              <span>%</span>
+            </div>
+          </div>
+          {{/each}}
+        </div>
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">
+          Réduit les <b>dégâts</b> reçus de ce type (arme, sort, piège) tant que l'objet est équipé.
+          <b>100 %</b> = immunité, valeur <b>négative</b> = vulnérabilité (dégâts augmentés).
+          Différent des « Résistances aux effets » ci-dessous, qui n'agissent que sur la durée et les dégâts par tour des états.
+        </div>
+      {{else}}
+        {{#if resistElemActive.length}}
+        <div class="rpg-resist-elem-read">
+          {{#each resistElemActive as |r|}}
+          <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{else}}is-resist{{/if}}">{{r.text}}</span>
+          {{/each}}
+        </div>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance élémentaire.</div>
+        {{/if}}
+      {{/if}}
+    </section>
+
+    {{!-- RÉSISTANCES AUX EFFETS (MJ ONLY) --}}
     {{#if canEdit}}
       <hr/>
       <section>

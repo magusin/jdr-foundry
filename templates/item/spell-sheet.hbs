@@ -60,32 +60,16 @@
         </div>
 
         <div>
-          <label>Élément / Type</label>
+          <label title="Décide de la RÉSISTANCE ÉLÉMENTAIRE que la cible oppose aux dégâts de ce sort (feu, glace… mais aussi Physique ou Magique pour un sort sans élément particulier). ⚪ Neutre = pas d'élément : c'est alors le jet de touché ci-contre (Physique/Magique) qui sert de référence.">Élément / Type</label>
           {{#if canEdit}}
           <select name="system.tag" style="width:100%">
-            <option value="neutre"    {{#if (eq system.tag "neutre")}}selected{{/if}}>⚪ Neutre</option>
-            <option value="feu"       {{#if (eq system.tag "feu")}}selected{{/if}}>🔥 Feu</option>
-            <option value="eau"       {{#if (eq system.tag "eau")}}selected{{/if}}>💧 Eau</option>
-            <option value="eclair"    {{#if (eq system.tag "eclair")}}selected{{/if}}>⚡ Éclair</option>
-            <option value="glace"     {{#if (eq system.tag "glace")}}selected{{/if}}>❄️ Glace</option>
-            <option value="air"       {{#if (eq system.tag "air")}}selected{{/if}}>💨 Air</option>
-            <option value="terre"     {{#if (eq system.tag "terre")}}selected{{/if}}>🌍 Terre</option>
-            <option value="lumiere"   {{#if (eq system.tag "lumiere")}}selected{{/if}}>✨ Lumière</option>
-            <option value="obscurite" {{#if (eq system.tag "obscurite")}}selected{{/if}}>🌑 Obscurité</option>
+            <option value="neutre" {{#if (eq system.tag "neutre")}}selected{{/if}}>⚪ Neutre</option>
+            {{#each damageTypeChoices as |c|}}
+              <option value="{{c.key}}" {{#if c.selected}}selected{{/if}}>{{c.label}}</option>
+            {{/each}}
           </select>
           {{else}}
-          <div style="font-size:13px">
-            {{#if (eq system.tag "feu")}}🔥 Feu{{/if}}
-            {{#if (eq system.tag "eau")}}💧 Eau{{/if}}
-            {{#if (eq system.tag "eclair")}}⚡ Éclair{{/if}}
-            {{#if (eq system.tag "glace")}}❄️ Glace{{/if}}
-            {{#if (eq system.tag "air")}}💨 Air{{/if}}
-            {{#if (eq system.tag "terre")}}🌍 Terre{{/if}}
-            {{#if (eq system.tag "lumiere")}}✨ Lumière{{/if}}
-            {{#if (eq system.tag "obscurite")}}🌑 Obscurité{{/if}}
-            {{#if (eq system.tag "neutre")}}⚪ Neutre{{/if}}
-            {{#unless system.tag}}⚪ Neutre{{/unless}}
-          </div>
+          <div style="font-size:13px">{{tagLabel}}</div>
           {{/if}}
         </div>
 
@@ -568,35 +552,32 @@
                 <label title="Type d'effet visé par cette résistance/vulnérabilité — indépendant du Type/Élément de CET effet en partie 1 (ex : un buff « Écaille de dragon », lui-même magique, peut accorder une résistance au feu).">🛡️ Élément visé</label>
                 <select data-fx-field="resistTag">
                   <option value="" {{#unless fx.resistTag}}selected{{/unless}}>— Aucun —</option>
-                  <option value="magique"  {{#if (eq fx.resistTag "magique")}}selected{{/if}}>✨ Magique</option>
-                  <option value="physique" {{#if (eq fx.resistTag "physique")}}selected{{/if}}>⚔️ Physique</option>
-                  <option value="feu"    {{#if (eq fx.resistTag "feu")}}selected{{/if}}>🔥 Feu</option>
-                  <option value="air"    {{#if (eq fx.resistTag "air")}}selected{{/if}}>🌬️ Air</option>
-                  <option value="eau"    {{#if (eq fx.resistTag "eau")}}selected{{/if}}>💧 Eau</option>
-                  <option value="glace"  {{#if (eq fx.resistTag "glace")}}selected{{/if}}>❄️ Glace</option>
-                  <option value="eclair" {{#if (eq fx.resistTag "eclair")}}selected{{/if}}>⚡ Éclair</option>
-                  <option value="terre"  {{#if (eq fx.resistTag "terre")}}selected{{/if}}>🌿 Terre</option>
-                  <option value="lumiere"  {{#if (eq fx.resistTag "lumiere")}}selected{{/if}}>✨ Lumière</option>
-                  <option value="obscurite" {{#if (eq fx.resistTag "obscurite")}}selected{{/if}}>🌑 Obscurité</option>
+                  {{#each @root.damageTypeChoices as |c|}}
+                    <option value="{{c.key}}" {{#if (eq fx.resistTag c.key)}}selected{{/if}}>{{c.label}}</option>
+                  {{/each}}
                 </select>
+              </div>
+              <div>
+                <label title="Retiré aux DÉGÂTS DIRECTS du type visé : coup d'épée, boule de feu, piège. Positif (%) = résistance (100 = immunité) ; négatif = vulnérabilité (dégâts augmentés). C'est le champ à utiliser pour « résiste au feu ».">🛡️ Réduction dégâts subis (%)</label>
+                <input type="number" data-fx-field="resistDamagePct" value="{{fx.resistDamagePct}}" step="5" min="-100" max="100" placeholder="0"/>
               </div>
               <div>
                 <label title="Retiré à la durée d'un effet du type visé quand la cible le reçoit — pas seulement de ce sort, de n'importe quel sort ou piège. Positif = résistance (dure moins longtemps) ; négatif = vulnérabilité (dure plus longtemps).">⏳ Réduction de durée (tours)</label>
                 <input type="number" data-fx-field="resistDurationReduction" value="{{fx.resistDurationReduction}}" step="1" placeholder="0"/>
               </div>
               <div>
-                <label title="Retiré aux dégâts/soin par tour d'un effet du type visé. Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
+                <label title="Retiré aux dégâts/soin par tour d'un effet du type visé (brûlure, poison…). Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
                 <input type="number" data-fx-field="resistDotPct" value="{{fx.resistDotPct}}" step="5" placeholder="0"/>
               </div>
               <div>
-                <label>🚫 Immunité totale</label>
-                <label class="fx-check" title="La cible ignore complètement tout effet du type visé — les deux champs ci-dessus ne comptent plus dans ce cas.">
+                <label>🚫 Immunité aux états</label>
+                <label class="fx-check" title="La cible ignore complètement tout ÉTAT du type visé (durée et dégâts par tour). Les dégâts directs, eux, restent réglés par « Réduction dégâts subis » — mets-la à 100 % pour une immunité complète.">
                   <input type="checkbox" data-fx-field="resistImmune" {{#if fx.resistImmune}}checked{{/if}} />
                   <span>Immunisé</span>
                 </label>
               </div>
             </div>
-            <small class="fx-hint">Facultatif — laisse « Aucun » si cet effet n'accorde ni résistance ni vulnérabilité. Une fois cet effet actif sur une cible, s'applique à TOUS les effets du type visé qu'elle reçoit ensuite (sorts, pièges...), pas seulement ceux de ce sort-ci. Ex. Écaille de dragon : <b>Feu · durée −2 · dégâts −50%</b>.</small>
+            <small class="fx-hint">Facultatif — laisse « Aucun » si cet effet n'accorde ni résistance ni vulnérabilité. Une fois cet effet actif sur une cible, s'applique à TOUT ce qu'elle reçoit ensuite du type visé (sorts, armes, pièges...), pas seulement ce sort-ci. Ex. Écaille de dragon : <b>Feu · dégâts subis −50% · durée −2</b>. Une valeur <b>négative</b> fait l'inverse : c'est ainsi qu'on pose une vulnérabilité.</small>
           </fieldset>
 
         </div>

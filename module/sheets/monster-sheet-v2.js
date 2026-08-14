@@ -8,6 +8,9 @@ import {
   tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
 } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
+import {
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, normalizeResistMap, resistRows, nonZeroResistRows
+} from "../rules/damage-types.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -46,7 +49,13 @@ function ensureBand(system, lvl) {
     fatigueMax: cur.fatigueMax ?? [10, 10],
     toucherPhysique: cur.toucherPhysique ?? [0, 0],
     toucherMagique: cur.toucherMagique ?? [0, 0],
+    // Plages de résistance élémentaire (%) — négatives autorisées : c'est
+    // ainsi qu'on génère une vulnérabilité (cf. rollResistances()).
+    resistancesElem: cur.resistancesElem ?? {},
   };
+  for (const key of DAMAGE_TYPE_KEYS) {
+    next.resistancesElem[key] = next.resistancesElem[key] ?? [0, 0];
+  }
   next.stats.force = next.stats.force ?? [0, 0];
   next.stats.intelligence = next.stats.intelligence ?? [0, 0];
   next.stats.dexterite = next.stats.dexterite ?? [0, 0];
@@ -80,7 +89,14 @@ function getBand(system, lvl) {
     xpReward: rangeArrToObj(b.xpReward),
     fatigueMax: rangeArrToObj(b.fatigueMax),
     toucherPhysique: rangeArrToObj(b.toucherPhysique),
-    toucherMagique: rangeArrToObj(b.toucherMagique)
+    toucherMagique: rangeArrToObj(b.toucherMagique),
+    // Une ligne par élément : {key, label, min, max} — le template n'a pas à
+    // connaître la liste des types, elle vit dans damage-types.js.
+    resistancesElem: DAMAGE_TYPE_KEYS.map(key => ({
+      key,
+      label: DAMAGE_TYPES[key],
+      ...rangeArrToObj(b.resistancesElem?.[key])
+    }))
   };
 }
 
@@ -187,6 +203,14 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const levels = uniqSorted(parseLevels(ctx.system.gen.levelsCsv));
     ctx.genLevels = levels;
     ctx.genBands = levels.map(lvl => getBand(ctx.system, lvl));
+
+    // ── Résistances élémentaires ──────────────────────────────────────────
+    // Base éditable par le MJ (ou tirée par la génération) d'un côté, total
+    // effectif (base + états actifs — un monstre ne porte pas d'équipement)
+    // de l'autre : c'est ce total que subit réellement un attaquant.
+    ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
+    ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
+    ctx.resistElemActive = nonZeroResistRows(sys.derived?.resistancesElem ?? ctx.system.resistancesElem);
 
     const itemDocs = Array.from(actor.items);
     const itemsObj = itemDocs.map(i => i.toObject());
