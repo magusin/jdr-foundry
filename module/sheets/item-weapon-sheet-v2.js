@@ -1,6 +1,6 @@
 // systems/rpg/module/sheets/item-weapon-sheet-v2.js
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
-import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
+import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions, itemTypeLabel } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 
 function n(v, d = 0) {
@@ -145,6 +145,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     ctx.item = item;
     ctx.system = foundry.utils.deepClone(item.system ?? {});
+    ctx.typeLabel = itemTypeLabel(item.type);   // « Arme », jamais « weapon »
     // MJ peut toujours éditer, joueur uniquement s'il possède l'objet
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
@@ -379,7 +380,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         try {
           const doc = await fromUuid(uuid);
           if (doc?.sheet) doc.sheet.render(true);
-          else ui.notifications?.warn?.("Item introuvable pour cet UUID.");
+          else ui.notifications?.warn?.("Objet introuvable pour cet UUID.");
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });

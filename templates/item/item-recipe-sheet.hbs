@@ -39,7 +39,7 @@
       <div class="ingredient-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         {{#if ../canEdit}}
         <input type="text" name="system.ingredients.{{idx}}.name" value="{{ing.name}}"
-          placeholder="Nom de l'objet (loot/consommable)" style="flex:2" />
+          placeholder="Nom de l'objet (objet/consommable)" style="flex:2" />
         <input type="number" name="system.ingredients.{{idx}}.qty" value="{{ing.qty}}" min="1" style="width:60px" />
         <button type="button" data-action="removeIngredient" data-idx="{{idx}}" style="cursor:pointer;color:#c0392b">✕</button>
         {{else}}
@@ -58,11 +58,11 @@
     <div class="card">
       <h2>Résultat</h2>
       <div class="form-group">
-        <label>UUID de l'item à créer</label>
+        <label>UUID de l'objet à créer</label>
         {{#if canEdit}}
         <div style="display:flex;gap:6px;align-items:center">
           <input type="text" name="system.result.uuid" value="{{system.result.uuid}}"
-            placeholder="Clic droit sur un item → Copy UUID" style="flex:1;font-size:11px" />
+            placeholder="Clic droit sur un objet → Copier l'UUID" style="flex:1;font-size:11px" />
           {{#if system.result.uuid}}
           <button type="button" class="rpg-open-uuid" data-uuid="{{system.result.uuid}}"
             style="cursor:pointer;padding:2px 8px;font-size:11px;white-space:nowrap" title="Ouvrir la fiche">📄 Voir</button>
@@ -72,7 +72,7 @@
         {{#if system.result.uuid}}
         <button type="button" class="rpg-open-uuid" data-uuid="{{system.result.uuid}}"
           style="cursor:pointer;padding:4px 12px;border-radius:6px;font-weight:600">
-          📄 {{#if system.result.name}}{{system.result.name}}{{else}}Voir l'item résultat{{/if}}
+          📄 {{#if system.result.name}}{{system.result.name}}{{else}}Voir l'objet résultat{{/if}}
         </button>
         {{else}}<div style="opacity:.5">Aucun résultat configuré.</div>{{/if}}
         {{/if}}

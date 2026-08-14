@@ -166,6 +166,18 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+/**
+ * Qui un effet ou une aura touche. `target`, `self`, `allies`… sont des CLÉS
+ * techniques : écrites telles quelles dans une carte de chat ou sur la fiche de
+ * personnage, elles s'affichaient en anglais au milieu d'une interface
+ * française (« [Touché • target] », « Aura — Cible: allies »).
+ */
+const FX_TARGET_LABELS = {
+  target: "cible", self: "soi",
+  allies: "alliés", enemies: "ennemis", both: "tout le monde"
+};
+const fxTargetLabel = (t) => FX_TARGET_LABELS[String(t ?? "").toLowerCase()] ?? t;
+
 function getEffP(actor) {
   return actor?.system?.derived?.effective?.principales
     ?? actor?.system?.derived?.effP
@@ -800,7 +812,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
     list.push({
       label: str(fxHit.label, "Effet"),
       when: "Touché",
-      target: str(fxHit.target, "target"),
+      target: fxTargetLabel(str(fxHit.target, "target")),
       duration: n(fxHit.duration, 0),
       summary: summarizeMods(mods)
     });
@@ -811,7 +823,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
     list.push({
       label: str(fxCrit.label, "Effet Crit"),
       when: "Crit",
-      target: str(fxCrit.target, "target"),
+      target: fxTargetLabel(str(fxCrit.target, "target")),
       duration: n(fxCrit.duration, 0),
       summary: summarizeMods(mods)
     });
@@ -820,7 +832,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
   if (auraEnabled) {
     const amin = n(sys.aura?.range?.min, 0);
     const amax = n(sys.aura?.range?.max, 0);
-    const tgt = str(sys.aura?.target, "allies");
+    const tgt = fxTargetLabel(str(sys.aura?.target, "allies"));
     const key = str(sys.aura?.key, "") || item.name;
 
     const dot = n(sys.aura?.dotFlat, 0);
@@ -1018,7 +1030,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
         const fxDmg = computeDamageExpr({ actor, block: fx.damage });
         if (fxDmg?.expr) parts.push(`💥 ${fxDmg.expr}`);
       }
-      if (fx.isAura) parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${str(fx.auraTarget, "allies")})`);
+      if (fx.isAura) parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
       if (modInfo?.summary) parts.push(`${modInfo.kind === "debuff" ? "⬇️ Debuff" : "⬆️ Buff"}: ${modInfo.summary}`);
 
       // si l'effet n'a rien, on ne l'affiche pas
@@ -1032,7 +1044,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
   const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
   const auraSummary = auraEnabled
-    ? `🌀 <b>Aura</b> — Cible: <b>${str(sys.aura?.target, "allies")}</b> • Portée: <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé: <b>${str(sys.aura?.key, item.name)}</b>`
+    ? `🌀 <b>Aura</b> — Cible : <b>${fxTargetLabel(str(sys.aura?.target, "allies"))}</b> • Portée : <b>${n(sys.aura?.range?.min, 0)}–${n(sys.aura?.range?.max, 0)}</b> • Clé : <b>${str(sys.aura?.key, item.name)}</b>`
     : null;
 
   const speaker = ChatMessage.getSpeaker({ actor, token: casterT?.document ?? undefined });
@@ -1520,7 +1532,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   const auraEnabled = !!(sys.aura?.active || sys.aura?.enabled);
   if (auraEnabled && globalThis.RPG_AURAS?.refreshAuras) {
     setTimeout(() => globalThis.RPG_AURAS.refreshAuras(), 200);
-    fxResultRows.push(`🌀 <b>Aura</b> active — ${str(sys.aura?.target, "alliés")}`);
+    fxResultRows.push(`🌀 <b>Aura</b> active — ${fxTargetLabel(str(sys.aura?.target, "allies"))}`);
   }
 
   await message.delete();

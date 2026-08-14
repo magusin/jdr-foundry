@@ -8,7 +8,7 @@ import {
   tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
 } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
-import { STATE_TYPES } from "../rules/state-builder.js";
+import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
 import { safeClick } from "../utils/error-handler.js";
@@ -417,7 +417,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
           await lootMonsters([this.document.uuid ?? this.document.id]);
         } catch(e) {
           console.error("[RPG] lootThisMonster:", e);
-          ui.notifications?.error?.(`Erreur loot : ${e?.message ?? e}`);
+          ui.notifications?.error?.(`Erreur de butin : ${e?.message ?? e}`);
         } finally {
           btn.disabled = false;
         }
@@ -547,7 +547,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         try {
           const doc = await fromUuid(uuid);
           if (doc?.sheet) doc.sheet.render(true);
-          else ui.notifications?.warn?.("Item introuvable pour cet UUID.");
+          else ui.notifications?.warn?.("Objet introuvable pour cet UUID.");
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
@@ -945,8 +945,8 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         <div class="line">
           <div class="lbl">Cible (aura)</div>
           <select name="aura.target">
-            ${["allies", "enemies", "both"].map(t =>
-      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${t}</option>`
+            ${Object.entries(AURA_TARGETS).map(([t, lbl]) =>
+      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${lbl}</option>`
     ).join("")}
           </select>
         </div>
@@ -1064,8 +1064,8 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
   async _postStateInfoToChat(st) {
     const dotTxt = (st.dot?.flat || st.dot?.formula)
-      ? `DOT: <b>${st.dot?.flat ?? 0}</b>${st.dot?.formula ? ` + <b>${st.dot.formula}</b>` : ""}`
-      : "DOT: <i>aucun</i>";
+      ? `Dégâts par tour : <b>${st.dot?.flat ?? 0}</b>${st.dot?.formula ? ` + <b>${st.dot.formula}</b>` : ""}`
+      : "Dégâts par tour : <i>aucun</i>";
 
     const mods = st.mods ?? {};
     const modsTxt = Object.entries(mods)
@@ -1075,23 +1075,23 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         const pct = Number(v.pct ?? 0) || 0;
         const a = flat ? `${flat > 0 ? "+" : ""}${flat}` : "";
         const b = pct ? `${pct > 0 ? "+" : ""}${pct}%` : "";
-        return `${name}: ${[a, b].filter(Boolean).join(" ")}`.trim();
+        return `${name} : ${[a, b].filter(Boolean).join(" ")}`.trim();
       })
       .filter(Boolean)
       .join("<br>") || "<i>Aucun modificateur</i>";
 
     const auraTxt = st.isAura && st.aura?.max
-      ? `<br>Aura: <b>${st.aura.target}</b> • Portée <b>${st.aura.min}–${st.aura.max}</b>`
+      ? `<br>Aura : <b>${auraTargetLabel(st.aura.target)}</b> • Portée <b>${st.aura.min}–${st.aura.max}</b>`
       : "";
 
     const content = `
-      <b>${this.document.name}</b> — État: <b>${st.label}</b><br>
-      Type: <b>${st.type}</b> ${st.isAura ? "(Aura)" : ""}${auraTxt}<br>
-      Durée: <b>${st.remaining}</b> / ${st.duration} tour(s)<br>
-      Retrait: ${st.cleanseDC ? `<b>${st.cleanseDC}+</b>` : "<i>—</i>"}<br>
+      <b>${this.document.name}</b> — État : <b>${st.label}</b><br>
+      Type : <b>${stateTypeLabel(st.type)}</b> ${st.isAura ? "(Aura)" : ""}${auraTxt}<br>
+      Durée : <b>${st.remaining}</b> / ${st.duration} tour(s)<br>
+      Retrait : ${st.cleanseDC ? `<b>${st.cleanseDC}+</b>` : "<i>—</i>"}<br>
       ${dotTxt}<br>
       <hr>
-      <b>Mods</b><br>${modsTxt}
+      <b>Modificateurs</b><br>${modsTxt}
     `;
 
     await ChatMessage.create({
