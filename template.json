@@ -240,12 +240,14 @@
           "manaMax": 0,
           "fatigueMax": 0,
           "vitesse": 0,
+          "podsMax": 0,
           "armureFixe": 0,
           "resistanceFixe": 0,
           "scoreArmure": 0,
           "scoreResistance": 0,
           "regenPvPct": 0,
           "regenManaPct": 0,
+          "retraitMod": 0,
           "toucherPhysique": 0,
           "toucherMagique": 0
         }

@@ -4,18 +4,36 @@
 // des types. Le MJ renseigne lui-même durée, dégâts, bonus/malus, aura
 // etc. au moment d'appliquer l'effet. Aucune valeur n'est pré-configurée.
 
+// `neutre` a remplacé `magique` : les effets qu'il regroupe (Dissipation,
+// Silence, Renforcement, Drain) ne sont pas d'un élément, ils sont SANS
+// élément — et « Magique » prêtait à confusion avec la livraison magique
+// d'une attaque, qui est une tout autre notion. Voir normalizeEffectTag()
+// pour la compatibilité des données déjà saisies.
 export const EFFECT_TAGS = {
+  neutre:  "⚪ Neutre",
+  physique:"⚔️ Physique",
   feu:     "🔥 Feu",
   air:     "🌬️ Air",
   eau:     "💧 Eau",
   glace:   "❄️ Glace",
   eclair:  "⚡ Éclair",
   terre:   "🌿 Terre",
-  magique: "✨ Magique",
-  physique:"⚔️ Physique",
   lumiere: "✨ Lumière",
   obscurite:"🌑 Obscurité"
 };
+
+/**
+ * Tag d'effet normalisé, pour lire une donnée saisie avant le renommage.
+ *
+ * Un objet ou un état enregistré du temps où le tag s'appelait « magique »
+ * porte encore cette valeur ; sans normalisation, sa résistance cesserait
+ * simplement de correspondre — silencieusement, comme toujours avec une
+ * comparaison de chaînes. À passer des DEUX côtés de toute comparaison.
+ */
+export function normalizeEffectTag(tag) {
+  const t = String(tag ?? "").trim();
+  return t === "magique" ? "neutre" : t;
+}
 
 export const EFFECT_LIBRARY = {
   // ── FEU ──────────────────────────────────────────────────────────────
@@ -54,11 +72,11 @@ export const EFFECT_LIBRARY = {
   enlisement:     { key: "enlisement",     label: "Enlisement",      tag: "terre"   },
   endurance_tellurique:{ key: "endurance_tellurique", label: "Endurance Tellurique", tag: "terre" },
 
-  // ── MAGIQUE ──────────────────────────────────────────────────────────
-  dissipation:    { key: "dissipation",    label: "Dissipation",     tag: "magique" },
-  silence:        { key: "silence",        label: "Silence",         tag: "magique" },
-  renforcement:   { key: "renforcement",   label: "Renforcement",    tag: "magique" },
-  drain:          { key: "drain",          label: "Drain",           tag: "magique" },
+  // ── NEUTRE (sans élément) ──────────────────────────────────────────────────────────
+  dissipation:    { key: "dissipation",    label: "Dissipation",     tag: "neutre"  },
+  silence:        { key: "silence",        label: "Silence",         tag: "neutre"  },
+  renforcement:   { key: "renforcement",   label: "Renforcement",    tag: "neutre"  },
+  drain:          { key: "drain",          label: "Drain",           tag: "neutre"  },
 
   // ── PHYSIQUE ─────────────────────────────────────────────────────────
   hemorragie:     { key: "hemorragie",     label: "Hémorragie",      tag: "physique"},
@@ -89,6 +107,38 @@ export function getEffectDef(key) {
 
 export function listEffects() {
   return Object.values(EFFECT_LIBRARY);
+}
+
+/**
+ * Catalogue groupé par type, prêt pour un `<optgroup>` par famille.
+ *
+ * Sert à remplacer une saisie libre du nom d'effet par un choix dans la
+ * liste réellement définie : un « Brulure » tapé sans accent ne
+ * correspondait à rien et échouait en silence, puisque la comparaison est
+ * une simple égalité de chaînes.
+ *
+ * @param {object} [opts]
+ * @param {"key"|"label"} [opts.value="key"] Ce que porte l'option.
+ *   Les résistances et amplifications stockent un LIBELLÉ dans `effectKey`
+ *   (computeResistanceFor le compare au `label` de l'état, en minuscules),
+ *   là où la fiche de sort stocke la clé technique. Le même catalogue sert
+ *   les deux, il suffit de dire lequel on veut.
+ * @returns {Object<string, Array<{value:string, key:string, label:string, tag:string}>>}
+ */
+export function effectCatalogByTag({ value = "key" } = {}) {
+  const out = {};
+  for (const def of Object.values(EFFECT_LIBRARY)) {
+    const tag = normalizeEffectTag(def.tag);
+    const groupLabel = EFFECT_TAGS[tag] ?? tag;
+    (out[groupLabel] ??= []).push({
+      value: value === "label" ? def.label : def.key,
+      key: def.key,
+      label: def.label,
+      tag
+    });
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  return out;
 }
 
 /**

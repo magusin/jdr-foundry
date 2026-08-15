@@ -5,6 +5,7 @@ import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog
 import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
+import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -145,8 +146,9 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       pvMax: "PV max",
       manaMax: "Mana max",
       fatigueMax: "Fatigue max",
-      regenPv: "Régén PV",
-      regenMana: "Régén Mana",
+      regenPvPct: "Régén PV %",
+      regenManaPct: "Régén Mana %",
+      retraitMod: "Mod. retrait d'état",
 
       // Autres
       vitesse: "Vitesse",
@@ -170,11 +172,18 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // ✅ résistances (tag, durationReduction, dotReductionPct, immune)
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.system.amplifications = Array.isArray(ctx.system.amplifications) ? ctx.system.amplifications : [];
-    ctx.EFFECT_TAGS = {
-      "": "(N'importe quel type — filtre seulement par nom d'effet)",
-      magique: "Magique", physique: "Physique",
-      feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
-    };
+    // Liste des types tirée de la bibliothèque d'effets, plus une copie locale
+    // écrite à la main : celle-ci avait été figée à huit types et ignorait
+    // Lumière et Obscurité, pourtant définis dans le catalogue depuis — un
+    // effet de ces deux familles ne pouvait donc recevoir aucune résistance.
+    ctx.EFFECT_TAGS = { "": "(N'importe quel type — filtre seulement par nom d'effet)", ...EFFECT_TAGS };
+
+    // Catalogue des effets réellement définis, groupé par type. Il remplace
+    // une saisie libre : `effectKey` est comparé par égalité stricte au
+    // libellé de l'état, donc « Brulure » sans accent ne correspondait à rien
+    // et échouait sans le moindre message. La valeur portée est le LIBELLÉ,
+    // pas la clé technique — c'est ce que compare computeResistanceFor().
+    ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "label" });
 
     // ✅ résistances élémentaires : réduction (%) des DÉGÂTS d'un type tant
     // que l'objet est équipé — à ne pas confondre avec system.resistances

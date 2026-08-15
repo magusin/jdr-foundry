@@ -105,8 +105,8 @@
           <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
           <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
           <div><label>Fatigue max</label><input type="number" name="system.bonus.fatigueMax" value="{{system.bonus.fatigueMax}}"/></div>
-          <div><label>Régén PV</label><input type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}"/></div>
-          <div><label>Régén Mana</label><input type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}"/></div>
+          <div><label title="Pourcentage ajouté à la régénération de base (1 PV/tour). Le calcul arrondit à l'entier inférieur : en dessous de +100 %, le bonus ne rend rien.">Régén PV %</label><input type="number" name="system.bonus.regenPvPct" value="{{system.bonus.regenPvPct}}"/></div>
+          <div><label title="Pourcentage ajouté à la régénération de mana de base. Même arrondi que la régén PV.">Régén Mana %</label><input type="number" name="system.bonus.regenManaPct" value="{{system.bonus.regenManaPct}}"/></div>
 
           <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
           <div><label>Pods max</label><input type="number" name="system.bonus.podsMax" value="{{system.bonus.podsMax}}"/></div>
@@ -276,8 +276,17 @@
                 <option value="{{tag}}" {{#if (eq r.tag tag)}}selected{{/if}}>{{label}}</option>
               {{/each}}
             </select>
-            <input type="text" name="system.resistances.{{idx}}.effectKey" value="{{r.effectKey}}"
-              placeholder="Effet précis (ex: Brûlure) — vide = tout le type" style="flex:1.5;font-size:11px"/>
+            <select name="system.resistances.{{idx}}.effectKey" style="flex:1.5;font-size:11px"
+              title="Vide = tous les effets du type choisi ci-contre. Sinon, un effet précis du catalogue.">
+              <option value="">— Tous les effets de ce type —</option>
+              {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+              <optgroup label="{{gLabel}}">
+                {{#each group as |e|}}
+                <option value="{{e.value}}" {{#if (eq r.effectKey e.value)}}selected{{/if}}>{{e.label}}</option>
+                {{/each}}
+              </optgroup>
+              {{/each}}
+            </select>
             <label style="font-size:11px;white-space:nowrap">Durée -<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" min="0" style="width:50px"/></label>
             <label style="font-size:11px;white-space:nowrap">DOT -<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="0" max="100" style="width:50px"/>%</label>
             <label style="font-size:11px;white-space:nowrap"><input type="checkbox" name="system.resistances.{{idx}}.immune" {{#if r.immune}}checked{{/if}}/> Immunité</label>
@@ -304,8 +313,17 @@
                 <option value="{{tag}}" {{#if (eq a.tag tag)}}selected{{/if}}>{{label}}</option>
               {{/each}}
             </select>
-            <input type="text" name="system.amplifications.{{idx}}.effectKey" value="{{a.effectKey}}"
-              placeholder="Effet précis (ex: Brûlure) — vide = tout le type" style="flex:1.5;font-size:11px"/>
+            <select name="system.amplifications.{{idx}}.effectKey" style="flex:1.5;font-size:11px"
+              title="Vide = tous les effets du type choisi ci-contre. Sinon, un effet précis du catalogue.">
+              <option value="">— Tous les effets de ce type —</option>
+              {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+              <optgroup label="{{gLabel}}">
+                {{#each group as |e|}}
+                <option value="{{e.value}}" {{#if (eq a.effectKey e.value)}}selected{{/if}}>{{e.label}}</option>
+                {{/each}}
+              </optgroup>
+              {{/each}}
+            </select>
             <label style="font-size:11px;white-space:nowrap" title="Tours ajoutés à la durée de l'effet appliqué.">Durée +<input type="number" name="system.amplifications.{{idx}}.durationBonus" value="{{a.durationBonus}}" style="width:50px"/></label>
             <label style="font-size:11px;white-space:nowrap" title="Renforce les dégâts ou le soin par tour de l'effet.">Puissance +<input type="number" name="system.amplifications.{{idx}}.dotBonusPct" value="{{a.dotBonusPct}}" min="-100" max="500" style="width:50px"/>%</label>
             <label style="font-size:11px;white-space:nowrap" title="Renforce les bonus et malus de stats portés par l'effet.">Bonus/Malus +<input type="number" name="system.amplifications.{{idx}}.modBonusPct" value="{{a.modBonusPct}}" min="-100" max="500" style="width:50px"/>%</label>

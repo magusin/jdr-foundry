@@ -91,6 +91,7 @@ function sumBonuses(actor) {
     ressources: { pvMax: 0, manaMax: 0, fatigueMax: 0 },
     regen: { pvPct: 0, manaPct: 0 },
     move: { vitesse: 0 },
+    charge: { podsMax: 0 },
     combat: { toucherPhysique: 0, toucherMagique: 0 },
     // Résistances élémentaires apportées par l'équipement porté — même règle
     // que les autres bonus : il faut que l'objet soit équipé, et un monstre
@@ -130,6 +131,10 @@ function sumBonuses(actor) {
     totals.ressources.fatigueMax += Number(b.fatigueMax ?? 0) || 0;
 
     totals.move.vitesse += Number(b.vitesse ?? 0) || 0;
+    // podsMax : le champ existait sur les fiches d'arme et d'armure mais
+    // n'était cumulé nulle part — un sac de voyage « +20 pods » n'ajoutait
+    // rien. Même famille de champ mort que fatigueMax et les régén.
+    totals.charge.podsMax += Number(b.podsMax ?? 0) || 0;
 
     totals.defenses.armureFixe += Number(b.armureFixe ?? 0) || 0;
     totals.defenses.resistanceFixe += Number(b.resistanceFixe ?? 0) || 0;
@@ -537,7 +542,7 @@ export class RPGActor extends Actor {
       const PODS_PER_FOR_STEP = 3;
       const podsFromFor = Math.floor((Number(effP.force) || 0) / PODS_PER_FOR_STEP);
 
-      chargeMax = basePodsMax + podsFromFor;
+      chargeMax = basePodsMax + podsFromFor + (Number(bonus.charge?.podsMax ?? 0) || 0);
       chargeMax += Number(flat?.charge?.podsMax ?? 0) || 0;
       chargeMax = applyPct(chargeMax, pct?.charge?.podsMax);
       chargeMax = Math.max(0, Math.floor(chargeMax));

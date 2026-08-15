@@ -92,6 +92,13 @@ export const STAT_WEIGHTS = {
   pvMax: 2,
   manaMax: 1.5,            // base 5 : +1 pèse lourd tôt, beaucoup moins tard
   fatigueMax: 3,           // sur une base de 10 : +1 = +10 % d'actions
+  podsMax: 0.15,           // sur une base de 50 : du confort, pas de la puissance
+
+  // Modificateur au seuil de retrait d'un état : NÉGATIF = plus facile à se
+  // débarrasser d'un état, donc bénéfique. Le poids est négatif pour que le
+  // total monte quand la valeur descend. Vaut moins qu'un point de toucher :
+  // on tente un retrait de temps en temps, on attaque à chaque tour.
+  retraitMod: -3,
 
   // ── Principales : PAS de valeur commune, parce qu'elles n'ont ni le même
   // nombre de rôles ni les mêmes barèmes.
@@ -208,7 +215,8 @@ const LABELS = {
   armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
   toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
   vitesse: "Vitesse", pvMax: "PV max", manaMax: "Mana max",
-  fatigueMax: "Fatigue max", force: "Force", intelligence: "Intelligence",
+  fatigueMax: "Fatigue max", podsMax: "Pods max", retraitMod: "Mod. retrait d'état",
+  force: "Force", intelligence: "Intelligence",
   dexterite: "Dextérité", acuite: "Acuité", endurance: "Endurance",
   scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
   regenPvPct: "Régén PV %", regenManaPct: "Régén Mana %"
