@@ -33,18 +33,41 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card rpg-recipe-ingredients">
       <h2>Ingrédients requis</h2>
+      {{#if canEdit}}
+      <div class="rpg-drop-hint">
+        ↓ Glisse ici un objet (compendium, barre latérale, sac d'un PJ) pour l'ajouter — un objet déjà listé voit sa quantité augmenter.
+      </div>
+      {{/if}}
       {{#each system.ingredients as |ing idx|}}
       <div class="ingredient-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        {{#if ing.img}}
+        <img src="{{ing.img}}" alt="" style="width:24px;height:24px;border-radius:4px;flex:none;object-fit:cover" />
+        {{/if}}
         {{#if ../canEdit}}
+        {{!-- uuid/source/img/type n'ont pas de champ visible mais DOIVENT être
+              resoumis : submitOnChange réécrit tout le tableau, un champ absent
+              du formulaire serait effacé (voir _onFormSubmitV2). --}}
+        <input type="hidden" name="system.ingredients.{{idx}}.uuid"   value="{{ing.uuid}}" />
+        <input type="hidden" name="system.ingredients.{{idx}}.source" value="{{ing.source}}" />
+        <input type="hidden" name="system.ingredients.{{idx}}.img"    value="{{ing.img}}" />
+        <input type="hidden" name="system.ingredients.{{idx}}.type"   value="{{ing.type}}" />
         <input type="text" name="system.ingredients.{{idx}}.name" value="{{ing.name}}"
           placeholder="Nom de l'objet (objet/consommable)" style="flex:2" />
         <input type="number" name="system.ingredients.{{idx}}.qty" value="{{ing.qty}}" min="1" style="width:60px" />
+        {{#if ing.uuid}}
+        <button type="button" class="rpg-open-uuid" data-uuid="{{ing.uuid}}"
+          style="cursor:pointer;padding:2px 6px;font-size:11px;white-space:nowrap" title="Ouvrir la fiche de l'objet">📄</button>
+        {{/if}}
         <button type="button" data-action="removeIngredient" data-idx="{{idx}}" style="cursor:pointer;color:#c0392b">✕</button>
         {{else}}
         <span style="flex:2">{{ing.name}}</span>
         <span style="opacity:.7">×{{ing.qty}}</span>
+        {{#if ing.uuid}}
+        <button type="button" class="rpg-open-uuid" data-uuid="{{ing.uuid}}"
+          style="cursor:pointer;padding:2px 6px;font-size:11px" title="Ouvrir la fiche de l'objet">📄</button>
+        {{/if}}
         {{/if}}
       </div>
       {{else}}
@@ -55,14 +78,21 @@
       {{/if}}
     </div>
 
-    <div class="card">
+    <div class="card rpg-recipe-result">
       <h2>Résultat</h2>
+      {{#if canEdit}}
+      <div class="rpg-drop-hint">↓ Glisse ici l'objet à fabriquer pour renseigner son UUID.</div>
+      {{/if}}
       <div class="form-group">
         <label>UUID de l'objet à créer</label>
         {{#if canEdit}}
         <div style="display:flex;gap:6px;align-items:center">
+          {{#if system.result.img}}
+          <img src="{{system.result.img}}" alt="" style="width:24px;height:24px;border-radius:4px;flex:none;object-fit:cover" />
+          {{/if}}
+          <input type="hidden" name="system.result.img" value="{{system.result.img}}" />
           <input type="text" name="system.result.uuid" value="{{system.result.uuid}}"
-            placeholder="Clic droit sur un objet → Copier l'UUID" style="flex:1;font-size:11px" />
+            placeholder="Glisse un objet ici, ou colle un UUID" style="flex:1;font-size:11px" />
           {{#if system.result.uuid}}
           <button type="button" class="rpg-open-uuid" data-uuid="{{system.result.uuid}}"
             style="cursor:pointer;padding:2px 8px;font-size:11px;white-space:nowrap" title="Ouvrir la fiche">📄 Voir</button>

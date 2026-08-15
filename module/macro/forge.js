@@ -39,9 +39,12 @@
       const check  = forgeAPI.checkIngredients(actor, r);
       const chance = forgeAPI.computeForgeChance(actor, r);
 
-      const ingLines = check.results.map(ing =>
-        `<span style="color:${ing.ok ? "#1d9e75" : "#c0392b"}">${htmlEscape(ing.name)} (${ing.have}/${ing.need})</span>`
-      ).join(", ");
+      const ingLines = check.results.map(ing => {
+        const icon = ing.img
+          ? `<img src="${htmlEscape(ing.img)}" alt="" style="width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:2px" />`
+          : "";
+        return `<span style="color:${ing.ok ? "#1d9e75" : "#c0392b"};white-space:nowrap">${icon}${htmlEscape(ing.name)} (${ing.have}/${ing.need})</span>`;
+      }).join(", ");
 
       const resultName = r.system?.result?.name || "(objet non précisé)";
 

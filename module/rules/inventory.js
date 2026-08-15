@@ -43,10 +43,18 @@ function toData(source) {
   return data;
 }
 
-/** Source de compendium éventuelle — même heuristique que item-link.js / codex.js. */
-function sourceOf(itemOrData) {
+/**
+ * Source de compendium éventuelle — même heuristique que item-link.js / codex.js.
+ * Exporté parce que forge.js s'en sert pour reconnaître, dans le sac d'un
+ * acteur, l'exemplaire correspondant à l'ingrédient glissé-déposé sur une
+ * recette : c'est la même question ("ces deux items sont-ils le même objet ?")
+ * et elle doit recevoir la même réponse ici et là.
+ */
+export function compendiumSourceOf(itemOrData) {
   return String(itemOrData?._stats?.compendiumSource ?? itemOrData?.flags?.core?.sourceId ?? "");
 }
+
+const sourceOf = compendiumSourceOf;
 
 /**
  * Exemplaire « unique » : le MJ a explicitement décoché « 🔗 Synchro » sur

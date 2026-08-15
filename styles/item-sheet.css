@@ -71,6 +71,25 @@
   border-radius: 8px;
 }
 
+/* ── Recette : zones de glisser-déposer (ingrédients / résultat) ─────────
+   Une recette se remplit en déposant des objets ; l'invite reste visible en
+   permanence côté MJ, parce qu'une zone de drop qui ne se signale qu'au
+   survol ne se découvre jamais. */
+.rpg-recipe-sheet .rpg-drop-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: .65;
+  font-style: italic;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border: 1px dashed var(--border-soft, rgba(255,255,255,0.18));
+  border-radius: 6px;
+}
+.rpg-recipe-sheet .rpg-recipe-result.rpg-drop-hover {
+  outline: 2px dashed var(--brass, #d1a144);
+  outline-offset: 2px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    Fiche de quête — aération et hiérarchie des étapes
    ══════════════════════════════════════════════════════════════════════ */

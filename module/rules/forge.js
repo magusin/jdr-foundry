@@ -2,20 +2,72 @@
 // Logique de craft : vérification ingrédients, jet de chance, déclaration,
 // puis validation MJ avant consommation/création (le MJ garde le contrôle).
 
+import { compendiumSourceOf } from "./inventory.js";
+
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+const norm = (s) => String(s ?? "").trim().toLowerCase();
 
 /**
- * Quantité totale possédée d'un ingrédient (somme sur tous les stacks loot/consumable
- * dont le nom correspond, insensible à la casse).
+ * Types cherchés dans le sac pour satisfaire un ingrédient.
+ *
+ * Par défaut « Objet » et « Consommable » — les seules marchandises qu'on
+ * imagine consommer dans une recette, et le comportement historique des
+ * recettes saisies à la main (rien d'autre n'a jamais compté).
+ *
+ * MAIS un ingrédient posé par glisser-déposer mémorise le type de l'item
+ * déposé (`ing.type`) et c'est CELUI-LÀ qui fait foi : un MJ qui dépose une
+ * arme comme composant (refondre une épée) verrait sinon son ingrédient
+ * introuvable pour toujours, sans le moindre message — la recette
+ * deviendrait silencieusement infaisable.
  */
-export function getInventoryQty(actor, ingredientName) {
-  const target = String(ingredientName ?? "").trim().toLowerCase();
-  if (!target) return 0;
+const DEFAULT_INGREDIENT_TYPES = ["loot", "consumable"];
+
+/** Ingrédient legacy (chaîne = nom seul) ou objet {name, qty, uuid, source, type}. */
+function asIngredient(ing) {
+  return (typeof ing === "string") ? { name: ing } : (ing ?? {});
+}
+
+/**
+ * true si `item` (du sac de l'acteur) satisfait l'ingrédient `ing`.
+ *
+ * Empreinte identique à celle de inventory.js/item-link.js/codex.js : même
+ * source de compendium OU même nom (insensible à la casse). Le OU est
+ * volontaire et vaut ici aussi — le minerai qu'un joueur a ramassé sur un
+ * monstre n'est pas forcément la copie du même pack que celle glissée sur la
+ * recette, et un exemplaire renommé reste le même objet.
+ *
+ * C'est ce qui permet à une recette d'être ciblée par UUID sans casser les
+ * recettes existantes (elles n'ont qu'un nom : seule la 2ᵉ branche joue).
+ */
+export function ingredientMatchesItem(item, ingredient) {
+  const ing = asIngredient(ingredient);
+  const types = ing.type ? [String(ing.type)] : DEFAULT_INGREDIENT_TYPES;
+  if (!types.includes(item?.type)) return false;
+
+  const itemSrc = compendiumSourceOf(item);
+  const refs = [ing.source, ing.uuid].map(v => String(v ?? "").trim()).filter(Boolean);
+  for (const ref of refs) {
+    if (itemSrc && itemSrc === ref) return true;
+    if (item?.uuid === ref) return true;
+  }
+
+  const name = norm(ing.name);
+  return !!name && norm(item?.name) === name;
+}
+
+/**
+ * Quantité totale possédée pour un ingrédient (somme sur tous les stacks
+ * correspondants). Accepte un ingrédient complet {name, uuid, source, type}
+ * ou, pour compatibilité avec les appelants existants (game.rpg.forge est
+ * public, les macros s'en servent), un simple nom.
+ */
+export function getInventoryQty(actor, ingredient) {
+  const ing = asIngredient(ingredient);
+  if (!ing.name && !ing.uuid && !ing.source) return 0;
 
   let total = 0;
   for (const it of actor.items) {
-    if (it.type !== "loot" && it.type !== "consumable") continue;
-    if (String(it.name ?? "").trim().toLowerCase() !== target) continue;
+    if (!ingredientMatchesItem(it, ing)) continue;
     total += Math.max(0, n(it.system?.qte, 1));
   }
   return total;
@@ -26,10 +78,11 @@ export function getInventoryQty(actor, ingredientName) {
  */
 export function checkIngredients(actor, recipe) {
   const ingredients = Array.isArray(recipe.system?.ingredients) ? recipe.system.ingredients : [];
-  const results = ingredients.map(ing => {
-    const have = getInventoryQty(actor, ing.name);
+  const results = ingredients.map(raw => {
+    const ing = asIngredient(raw);
+    const have = getInventoryQty(actor, ing);
     const need = Math.max(1, n(ing.qty, 1));
-    return { name: ing.name, need, have, ok: have >= need };
+    return { name: ing.name, img: ing.img ?? "", uuid: ing.uuid ?? "", need, have, ok: have >= need };
   });
   return { results, allOk: results.every(r => r.ok) };
 }
@@ -40,14 +93,14 @@ export function checkIngredients(actor, recipe) {
 async function consumeIngredients(actor, recipe) {
   const ingredients = Array.isArray(recipe.system?.ingredients) ? recipe.system.ingredients : [];
 
-  for (const ing of ingredients) {
+  for (const raw of ingredients) {
+    const ing = asIngredient(raw);
     let remaining = Math.max(1, n(ing.qty, 1));
-    const target = String(ing.name ?? "").trim().toLowerCase();
 
-    const matching = actor.items.filter(it =>
-      (it.type === "loot" || it.type === "consumable") &&
-      String(it.name ?? "").trim().toLowerCase() === target
-    );
+    // Même critère que checkIngredients : ce qui a été compté comme
+    // disponible est exactement ce qui est consommé (sinon un ingrédient
+    // reconnu par UUID serait validé puis jamais retiré du sac).
+    const matching = actor.items.filter(it => ingredientMatchesItem(it, ing));
 
     const updates = [];
     const deletions = [];
