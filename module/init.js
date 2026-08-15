@@ -466,6 +466,27 @@ Hooks.once("init", async () => {
     choices: FATIGUE_CHOICES, default: 0, requiresReload: false
   });
 
+  // ── Groupe de référence de la pesée (théoriecraft MJ) ─────────────────
+  // La « pesée de rencontre » d'un monstre mesure sa durée de vie face à un
+  // groupe type. Ce groupe ne peut pas être une constante : deux tables n'ont
+  // ni le même effectif ni le même armement, et un nombre de tours calculé
+  // sur trois personnages à deux épées courtes ne dit rien d'un groupe de
+  // cinq qui manie des haches. Ces deux réglages décrivent le groupe AU
+  // NIVEAU 1 ; la pesée les fait ensuite progresser avec le niveau du monstre.
+  game.settings.register("rpg", "peseeGroupeTaille", {
+    name: "Pesée — taille du groupe",
+    hint: "Nombre de personnages joueurs pris comme référence pour estimer la durée de vie d'un monstre. Purement indicatif : n'affecte aucune règle, seulement l'encart « Pesée de rencontre » de la fiche monstre.",
+    scope: "world", config: true, type: Number,
+    default: 3, requiresReload: false
+  });
+
+  game.settings.register("rpg", "peseeDegatsAttaque", {
+    name: "Pesée — dégâts par attaque (niveau 1)",
+    hint: "Dégâts bruts moyens d'UNE attaque d'un personnage débutant, seconde arme comprise. 7 par défaut = deux armes 1d6 (3,5 + 3,5). Monte-le si tes joueurs démarrent avec des armes plus lourdes.",
+    scope: "world", config: true, type: Number,
+    default: 7, requiresReload: false
+  });
+
   // Interrupteur MJ : le MJ reste libre par défaut (poussées, téléportations,
   // repositionnements), et active la limite à la volée quand il veut jouer un
   // monstre « à la règle ». Basculé par le raccourci clavier ci-dessous.

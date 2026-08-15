@@ -58,23 +58,29 @@ const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d
  * trentième.
  */
 export const STAT_WEIGHTS = {
-  // ── Réduction plate : linéaire, s'applique à CHAQUE coup, et le plancher
-  // de dégâts à 1 la rend écrasante contre les adversaires qui frappent
-  // souvent pour peu. Le champ le plus cher du jeu à l'échelle actuelle.
-  armureFixe: 10,
-  resistanceFixe: 7,       // idem, mais les dégâts magiques sont plus rares
+  // ── PHYSIQUE ET MAGIQUE PÈSENT PAREIL, PARTOUT ────────────────────────
+  //
+  // Une version antérieure dévaluait le versant magique (résistance fixe,
+  // toucher magique, résistance élémentaire magique) au motif que « la
+  // quasi-totalité des monstres frappe au physique ». C'est faux dans ce
+  // système, et les données le disent : les attaques d'un monstre SONT ses
+  // items `spell`, dont le champ `livraison` vaut « magique » PAR DÉFAUT
+  // (template.json). Un bestiaire mêle donc les deux, quand il ne penche pas
+  // franchement du côté magique.
+  //
+  // Toute asymétrie physique/magique de cette table a été retirée. S'il faut
+  // un jour en réintroduire une, elle devra s'appuyer sur le bestiaire réel
+  // de la table, pas sur une intuition de genre.
 
-  // ── Chance de toucher : la bande utile du d20 ne fait que 10 valeurs
+  // Réduction plate : linéaire, s'applique à CHAQUE coup, et le plancher de
+  // dégâts à 1 la rend écrasante contre les adversaires qui frappent souvent
+  // pour peu. Le champ le plus cher du jeu à l'échelle actuelle.
+  armureFixe: 10,
+  resistanceFixe: 10,
+
+  // Chance de toucher : la bande utile du d20 ne fait que 10 valeurs
   // (1-5 échec auto, 16+ succès auto), donc +1 = +5 points de % fermes,
   // soit ~10 % de dégâts infligés en plus.
-  //
-  // Les deux ont le MÊME poids, contrairement à armureFixe/resistanceFixe
-  // juste au-dessus, et la distinction vaut d'être comprise : ce qu'on pèse,
-  // c'est la puissance pour CELUI QUI PORTE l'objet. Le type de dégâts qu'on
-  // REÇOIT est une propriété du monde (l'écrasante majorité des monstres
-  // frappent au physique), d'où l'asymétrie côté défense ; le type de dégâts
-  // qu'on INFLIGE est un choix de personnage, et un mage tire de son toucher
-  // magique exactement ce qu'un guerrier tire du sien.
   toucherPhysique: 10,
   toucherMagique: 10,
 
@@ -90,26 +96,37 @@ export const STAT_WEIGHTS = {
   // ── Principales : PAS de valeur commune, parce qu'elles n'ont ni le même
   // nombre de rôles ni les mêmes barèmes.
   //
-  //   force        dégâts physiques (/10) + pods (/3)
-  //   intelligence dégâts magiques (/10), et le scaling par défaut des sorts
-  //   dexterite    TN physique + initiative (moitié de (dex+acu)/2)
-  //   acuite       TN magique + initiative (idem)
+  //   force        dégâts physiques (/10) + pods max (/3)
+  //   intelligence dégâts magiques  (/10) + mana max (/20)
+  //   dexterite    TN physique + initiative — floor((dex+acu)/2)
+  //   acuite       TN magique  + initiative — floor((dex+acu)/2)
   //   endurance    score armure (/3) + score résistance (/3) + PV (/5)
   //
-  // Ce sont les DIVISEURS qui décident, pas le nombre de rôles : +1 de Force
-  // ne rend qu'un dixième de point de dégât, alors que +1 de Dextérité rend
-  // un demi-point d'initiative tout de suite. D'où le classement ci-dessous,
-  // qui inverse l'intuition — l'Endurance a trois rôles et le poids le plus
-  // faible, parce que ses trois barèmes sont les plus grossiers.
+  // Deux PAIRES parfaitement symétriques, vérifiées dans actor.js :
+  //
+  //   - force / intelligence : même moitié « dégâts » au même diviseur (/10).
+  //     Leur seconde moitié diffère de nom mais pas de valeur — la Force rend
+  //     un pod tous les 3 points, l'Intelligence un mana tous les 20, et comme
+  //     un mana vaut bien plus qu'un pod, les deux se rejoignent à la virgule
+  //     près. Les séparer serait du bruit.
+  //   - dexterite / acuite : même contribution à l'initiative (elles y entrent
+  //     à égalité, floor((dex+acu)/2)), et un TN chacune. Le TN physique n'est
+  //     pas plus fréquent que le magique — les attaques d'un monstre sont des
+  //     `spell`, dont la livraison est « magique » par défaut.
+  //
+  // Restent les DIVISEURS pour départager, et leur verdict inverse
+  // l'intuition : l'Endurance a TROIS rôles et le poids le plus faible, parce
+  // que ses trois barèmes (/3, /3, /5) sont les plus grossiers, tandis que
+  // Dextérité et Acuité touchent leur demi-point d'initiative immédiatement.
   //
   // ⚠️ Ces valeurs sont des MOYENNES d'un gain en escalier : la Force ne rend
   // rien neuf fois, puis un point de dégât entier au passage de la dizaine.
   // Un +2 de Force ne fait donc littéralement rien tant qu'il ne fait pas
   // franchir un seuil — la pesée le lisse, la table le subit en une fois.
-  force: 0.9,
-  intelligence: 0.8,
-  dexterite: 1.5,
-  acuite: 1.3,
+  force: 0.85,
+  intelligence: 0.85,
+  dexterite: 1.4,
+  acuite: 1.4,
   endurance: 0.6,
 
   // ── Scores de défense : S/(S+160). Mesuré autour d'un score de 20
@@ -127,11 +144,16 @@ export const STAT_WEIGHTS = {
   regenManaPct: 0.05
 };
 
-/** Résistances élémentaires : par point de %. */
+/**
+ * Résistances élémentaires : par point de %.
+ *
+ * `physique` et `magique` valent PAREIL : ce sont les deux livraisons, et un
+ * bestiaire les mêle (cf. la note sur la symétrie dans STAT_WEIGHTS). Chacune
+ * couvre à peu près la moitié des dégâts reçus, un élément nommé beaucoup
+ * moins — d'où l'écart, qui lui est bien réel.
+ */
 export const RESIST_WEIGHTS = {
-  // physique/magique couvrent la quasi-totalité des dégâts reçus…
-  physique: 1, magique: 0.9,
-  // …un élément n'en couvre qu'une fraction.
+  physique: 1, magique: 1,
   feu: 0.4, eau: 0.4, eclair: 0.4, glace: 0.4,
   air: 0.4, terre: 0.4, lumiere: 0.4, obscurite: 0.4
 };
@@ -401,11 +423,26 @@ export function isWeighable(type) {
 export function partyRefFor(level = 1) {
   const lvl = Math.max(1, n(level, 1));
   const step = lvl - 1;
+
+  // La taille du groupe et ses dégâts par attaque sont RÉGLABLES en monde :
+  // deux tables n'ont ni le même effectif ni le même armement, et une survie
+  // calculée sur « deux épées courtes à trois » ne veut rien dire pour un
+  // groupe de cinq qui manie des haches. Les réglages sont lus ici, à chaque
+  // pesée, pour qu'un changement se voie sans recharger quoi que ce soit.
+  // Le try/catch couvre l'import du module hors de Foundry (harnais de test) :
+  // `game` n'existe pas, on retombe sur les valeurs de départ.
+  let size = 3;
+  let dmg = 7;      // deux armes 1d6 : dé principal + dé de seconde main
+  try {
+    size = n(game.settings.get("rpg", "peseeGroupeTaille"), 3);
+    dmg = n(game.settings.get("rpg", "peseeDegatsAttaque"), 7);
+  } catch (e) { /* hors Foundry, ou réglages pas encore enregistrés */ }
+
   return {
     level: lvl,
-    size: 3,                                       // 3 PJ
+    size: Math.max(1, size),
     hitChance: 0.5,                                // ~50 %, la bande du d20 est plate
-    damagePerHit: 7 + step,                        // deux armes 1d6 au départ
+    damagePerHit: Math.max(1, dmg + step),         // +1 de dégât moyen par niveau
     pv: 30 + step * 4,
     armureFixe: 0,
     reductionPct: Math.min(45, 5 + step * 3)
@@ -456,13 +493,22 @@ export function computeMonsterValue(actor) {
 
   // ── Durée de vie : PV effectifs face aux dégâts du groupe ──────────────
   const pv = Math.max(1, n(sys.ressources?.pv?.max, n(sys.base?.pvMax, 1)));
-  const armureFixe = n(sys.defenses?.armureFixe, 0);
-  const redPct = scorePct(n(sys.defenses?.scoreArmure, 0) + Math.floor(n(sys.principales?.endurance, 0) / 3));
-  const resistPhys = Math.min(99, n(sys.resistancesElem?.physique, 0));
+  const endBonus = Math.floor(n(sys.principales?.endurance, 0) / 3);
 
-  // Un coup type du groupe, après les deux étages de mitigation du monstre.
-  let perHit = Math.max(1, Math.ceil((PARTY.damagePerHit - armureFixe) * (1 - redPct / 100)));
-  perHit = Math.max(1, perHit * (1 - resistPhys / 100));
+  // Un groupe frappe des DEUX livraisons : les armes en physique, les sorts en
+  // magique. Ne tester que l'armure surestimait la survie d'un monstre bien
+  // blindé mais peu résistant à la magie — et l'inverse pour un élémentaire.
+  // On moyenne donc les deux étages de mitigation, l'un et l'autre complets
+  // (fixe + score + résistance élémentaire de la livraison).
+  const mitigate = (fixe, score, elemPct) => {
+    const afterFixe = Math.max(1, Math.ceil((PARTY.damagePerHit - n(fixe, 0)) * (1 - scorePct(score) / 100)));
+    return Math.max(1, afterFixe * (1 - Math.min(99, n(elemPct, 0)) / 100));
+  };
+  const hitPhys = mitigate(sys.defenses?.armureFixe, n(sys.defenses?.scoreArmure, 0) + endBonus,
+                           sys.resistancesElem?.physique);
+  const hitMag  = mitigate(sys.defenses?.resistanceFixe, n(sys.defenses?.scoreResistance, 0) + endBonus,
+                           sys.resistancesElem?.magique);
+  const perHit = (hitPhys + hitMag) / 2;
 
   const partyDps = PARTY.size * PARTY.hitChance * perHit;
   const regen = n(sys.regeneration?.pv, 0);

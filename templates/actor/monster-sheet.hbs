@@ -419,12 +419,18 @@
           <div class="rpg-iv-alert">⚠️ {{this}}</div>
           {{/each}}
           <small class="rpg-iv-help">
-            Mesuré contre un groupe de référence de 3 PJ de début de partie
-            (30 PV, ~50 % de touche, 7 de dégâts par attaque à deux armes, 5 % de réduction).
-            Le total est menace × durée de vie : trivial ≤ 15, mineur ≤ 40,
-            sérieux ≤ 90, élite ≤ 180, au-delà c'est un boss.
+            Mesuré contre un groupe de <b>{{monsterValue.partyRef.size}} PJ de niveau
+            {{monsterValue.partyRef.level}}</b> ({{monsterValue.partyRef.pv}} PV,
+            ~50 % de touche, {{monsterValue.partyRef.damagePerHit}} de dégâts bruts par attaque,
+            {{monsterValue.partyRef.reductionPct}} % de réduction) — la référence suit le niveau du
+            monstre, et sa taille comme ses dégâts se règlent dans les paramètres du monde
+            (« Pesée — taille du groupe » / « dégâts par attaque »), parce qu'ils dépendent
+            entièrement de l'armement réel de tes joueurs.
+            Le total est menace × durée de vie : trivial ≤ 3, mineur ≤ 12,
+            sérieux ≤ 35, élite ≤ 90, au-delà c'est un boss.
             Les recharges sont prises en compte — une capacité à recharge 3 ne
-            compte que pour un tour sur trois.
+            compte que pour un tour sur trois. Le groupe frappe des deux livraisons :
+            armure et résistance comptent chacune pour moitié.
           </small>
         </details>
         {{/if}}
