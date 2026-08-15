@@ -19,8 +19,8 @@
 // cocher la case : "ça ne marche que quand je coche la case").
 //
 // Ce que ça NE synchronise JAMAIS : l'état propre à chaque copie (équipé,
-// emplacement, quantité, utilisations restantes, recharge/cooldown en
-// cours, aura active/enabled...). C'est une liste BLANCHE de champs de
+// emplacement, quantité, recharge/cooldown en cours, aura
+// active/enabled...). C'est une liste BLANCHE de champs de
 // définition, pas une liste noire d'état d'instance — un champ absent de
 // SYNC_FIELDS ne synchronise jamais, même par excès de prudence : mieux
 // vaut sous-synchroniser que corrompre l'état d'une copie qu'un joueur a
@@ -53,8 +53,8 @@ const SYNC_DOC_FIELDS = ["name", "img"];
 /**
  * Champs de définition synchronisables par type. Volontairement absents,
  * pour chaque type concerné :
- *  - system.qte / system.utilisations : compteurs propres à chaque copie
- *    (combien CE PJ en a / lui reste), jamais une "définition".
+ *  - system.qte : compteur propre à chaque copie (combien CE PJ en a),
+ *    jamais une "définition".
  *  - system.emplacement, system.equipe, system.actif : état d'équipement/
  *    activation en cours (confirmés par la liste blanche joueur d'init.js,
  *    preUpdateItem — "system.emplacement" y est écrit par le SYSTÈME

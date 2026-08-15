@@ -12,14 +12,16 @@
 //     copie n'a pas de sens (et la quête porte en plus sa propre
 //     progression).
 //
-// Le consommable a longtemps été exclu au motif que chaque exemplaire porte
-// son propre compteur `system.utilisations` — une potion à moitié bue n'est
-// pas une neuve. L'argument est juste, mais il ne justifiait pas d'interdire
-// l'empilement : il justifiait de ne fusionner QUE des exemplaires au même
-// compteur (voir stackCompatible). Sans ça, dix rations neuves identiques
-// occupaient dix lignes d'inventaire — et un butin qui rend une dizaine de
-// consommables par monstre rendait le sac illisible dès le premier combat.
-// La potion entamée, elle, garde toujours sa ligne à part.
+// Le consommable a longtemps été exclu au motif que chaque exemplaire portait
+// son propre compteur `system.utilisations` — une potion à moitié bue n'étant
+// pas une neuve, les fusionner aurait écrasé un compteur avec l'autre. Ce
+// champ n'existe plus : un consommable se compte en QUANTITÉ, exactement
+// comme un objet, et « consommer » retire 1 à la pile. Il n'y a donc plus
+// aucun état par exemplaire à préserver, et l'empilement est inconditionnel.
+//
+// Ce qui motivait le changement : dix rations identiques occupaient dix
+// lignes d'inventaire, et un butin qui rend une dizaine de consommables par
+// monstre rendait le sac illisible dès le premier combat.
 //
 // TOUS les chemins qui donnent un objet à un acteur passent par ici
 // (glisser-déposer sur la fiche, bouton « 📤 Envoyer », macro « Distribuer
@@ -32,30 +34,6 @@ import { carriedWeight, CHARGE_TIERS } from "../documents/actor.js";
 
 /** Types dont deux exemplaires identiques fusionnent en une quantité. */
 const STACKABLE_TYPES = new Set(["loot", "consumable"]);
-
-/**
- * Champs d'ÉTAT qui doivent coïncider pour que deux exemplaires du même objet
- * fusionnent — au-delà de l'empreinte (type + nom/source), qui ne dit que
- * « c'est le même objet », pas « ils sont dans le même état ».
- *
- * Consommable : `system.utilisations`. Une fiole à moitié bue et une fiole
- * neuve sont bien la même potion, mais les empiler ferait disparaître la
- * différence — la pile n'a qu'un compteur, donc l'exemplaire entamé serait
- * silencieusement rendu neuf (ou l'inverse, selon celui qui absorbe l'autre).
- */
-const STACK_STATE_FIELDS = { consumable: ["utilisations"] };
-
-/** Même objet ET même état : les deux conditions de la fusion. */
-function stackCompatible(item, data) {
-  const fields = STACK_STATE_FIELDS[String(data?.type ?? "")] ?? [];
-  for (const f of fields) {
-    // Absent des deux côtés = compatible ; absent d'un seul = on compare bien
-    // undefined à une valeur, donc incompatible, ce qui est le comportement
-    // prudent (on préfère une ligne de trop à un compteur écrasé).
-    if (Number(item?.system?.[f] ?? 0) !== Number(data?.system?.[f] ?? 0)) return false;
-  }
-  return true;
-}
 
 /** true si ce type d'item s'empile au lieu de créer un doublon. */
 export function isStackableType(type) {
@@ -108,9 +86,11 @@ function isUniqueCopy(itemOrData) {
  * copie reste le même objet, et deux objets de même nom venus de deux packs
  * différents sont, pour un joueur qui regarde son sac, la même chose.
  *
- * S'y ajoute, pour les types qui portent un état par exemplaire, l'égalité de
- * cet état (stackCompatible) : deux potions du même nom mais aux utilisations
- * différentes restent deux lignes.
+ * Aucun type empilable ne porte d'état par exemplaire : la quantité EST le
+ * seul compteur, pour un objet comme pour un consommable. Un type qu'on
+ * rendrait empilable en gardant un compteur par copie devrait, lui, exiger
+ * l'égalité de ce compteur en plus de l'empreinte — sans quoi la fusion
+ * écraserait silencieusement la valeur d'un exemplaire avec celle de l'autre.
  */
 export function findStackTarget(actor, data) {
   if (!actor || !isStackableType(data?.type)) return null;
@@ -122,7 +102,6 @@ export function findStackTarget(actor, data) {
   return actor.items.find(it => {
     if (it.type !== data.type) return false;
     if (isUniqueCopy(it)) return false;
-    if (!stackCompatible(it, data)) return false;
     if (name && norm(it.name) === name) return true;
     const otherSrc = sourceOf(it);
     return !!src && otherSrc === src;

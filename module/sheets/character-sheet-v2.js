@@ -1820,7 +1820,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       weapon: { name: "Nouvelle arme", type: "weapon", system: { equipe: false, emplacement: "mainDroite", qte: 1, poids: 1, difficulte: 0, damage: { dice: "1d6", flat: 0, scaling: { stat: "force", per: 10, perStep: 1 } }, livraison: "physique" } },
       armor: { name: "Nouvelle armure", type: "armor", system: { equipe: false, emplacement: "torse", qte: 1, poids: 2 } },
       relic: { name: "Nouvelle relique", type: "relic", system: { equipe: false, emplacement: RELIC_SLOT, qte: 1, poids: 0.5 } },
-      consumable: { name: "Nouveau consommable", type: "consumable", system: { qte: 1, poids: 0.2, utilisations: 1, effet: "" } },
+      consumable: { name: "Nouveau consommable", type: "consumable", system: { qte: 1, poids: 0.2, effet: "" } },
 
       // ✅ spell compat: aura.active (ton template) + aura.enabled supporté
       spell: {

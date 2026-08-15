@@ -999,15 +999,37 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
 
         <input type="search" class="name-filter-q" data-filter-tab="consumables" placeholder="🔎 Rechercher un consommable…" style="width:100%;margin-bottom:8px" />
 
-        <ol class="items-list simple">
+        {{!-- Même présentation que l'onglet Objets : quantité, poids unitaire,
+              poids total. Un consommable est une marchandise comme une autre —
+              il s'empile, et ce qui compte pour le joueur est combien il en a
+              et ce que ça pèse dans son sac. --}}
+        <ol class="items-list">
+          <li class="items-header">
+            <span>Nom</span>
+            <span>Qté</span>
+            <span>Poids</span>
+            <span>Total</span>
+            <span></span>
+          </li>
+
           {{#each items.consommables as |it|}}
           <li class="item" data-item-id="{{it._id}}">
             <span class="name">
               <img src="{{it.img}}" alt="" />
               <a class="item-edit">{{it.name}}</a>
-              <small>Utilisations: {{it.system.utilisations}}</small>
               {{#if it.system.effet}}<div class="muted" style="font-size:11px;margin-top:2px">{{it.system.effet}}</div>{{/if}}
             </span>
+
+            {{#if ../flags.isGM}}
+            <span><input type="number" value="{{it.system.qte}}" min="0" data-field="system.qte" /></span>
+            <span><input type="number" value="{{it.system.poids}}" min="0" step="0.1"
+                data-field="system.poids" /></span>
+            {{else}}
+            <span>{{it.system.qte}}</span>
+            <span>{{it.system.poids}}</span>
+            {{/if}}
+
+            <span class="total">{{it._derived.poidsTotal}}</span>
 
             <span class="actions">
               {{#if ../flags.isGM}}
