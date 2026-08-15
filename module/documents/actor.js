@@ -88,7 +88,7 @@ function sumBonuses(actor) {
   const totals = {
     principales: { force: 0, intelligence: 0, dexterite: 0, acuite: 0, endurance: 0 },
     defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
-    ressources: { pvMax: 0, manaMax: 0 },
+    ressources: { pvMax: 0, manaMax: 0, fatigueMax: 0 },
     regen: { pvPct: 0, manaPct: 0 },
     move: { vitesse: 0 },
     combat: { toucherPhysique: 0, toucherMagique: 0 },
@@ -123,6 +123,11 @@ function sumBonuses(actor) {
 
     totals.ressources.pvMax += Number(b.pvMax ?? 0) || 0;
     totals.ressources.manaMax += Number(b.manaMax ?? 0) || 0;
+    // fatigueMax : prepareDerivedData lisait déjà `bonus.ressources.fatigueMax`
+    // alors que rien ne l'a jamais alimenté — ni ce cumul, ni un champ dans
+    // equipBonus. La lecture valait donc 0 pour toujours : du code mort, et
+    // aucun équipement ne pouvait toucher à la réserve de fatigue.
+    totals.ressources.fatigueMax += Number(b.fatigueMax ?? 0) || 0;
 
     totals.move.vitesse += Number(b.vitesse ?? 0) || 0;
 
@@ -457,11 +462,20 @@ export class RPGActor extends Actor {
       sys.ressources.mana.valeur = clamp(Number(sys.ressources.mana.valeur) || 0, -9999, manaMax);
     }
 
-    // FATIGUE : max = 10 + bonus d'Endurance (tous les 20 points -> +1), + bonus états/équipement
+    // FATIGUE : max = base (10) + équipement + états. AUCUNE caractéristique
+    // ne l'alimente, et c'est délibéré.
+    //
+    // L'Endurance y contribuait, tous les 20 points — un barème qui, aux
+    // valeurs réellement pratiquées (une principale monte de +1 par niveau,
+    // donc ~25 en fin de campagne), ne rendait jamais le moindre point : le
+    // lien existait sur le papier et valait 0 en jeu. Le rétablir aurait
+    // surtout donné TROIS rôles à l'Endurance (scores de défense, PV, puis
+    // fatigue) contre un seul à la Dextérité et à l'Acuité, ce qui déséquilibre
+    // la répartition des caractéristiques bien plus qu'une réserve de fatigue
+    // figée. La fatigue passe donc par l'équipement et les effets, deux leviers
+    // que le MJ dose objet par objet.
     sys.ressources.fatigue = sys.ressources.fatigue ?? { valeur: 0, max: 10 };
-    const FATIGUE_PER_END_STEP = 20;
-    const fatigueFromEnd = Math.floor((Number(effP.endurance) || 0) / FATIGUE_PER_END_STEP);
-    let fatigueMax = Number(sys.base.fatigueMax ?? 10) + fatigueFromEnd + (Number(bonus.ressources.fatigueMax ?? 0) || 0);
+    let fatigueMax = Number(sys.base.fatigueMax ?? 10) + (Number(bonus.ressources.fatigueMax ?? 0) || 0);
     fatigueMax += Number(flat?.ressources?.fatigueMax ?? 0) || 0;
     fatigueMax = applyPct(fatigueMax, pct?.ressources?.fatigueMax);
     fatigueMax = Math.max(1, Math.floor(fatigueMax));

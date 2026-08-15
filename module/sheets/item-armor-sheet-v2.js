@@ -136,6 +136,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       // Ressources
       pvMax: "PV max",
       manaMax: "Mana max",
+      fatigueMax: "Fatigue max",
       regenPv: "Régén PV",
       regenMana: "Régén Mana",
 

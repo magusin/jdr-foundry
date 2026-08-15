@@ -275,6 +275,16 @@
             <div class="mm-line">
               <span>😫 Fatigue</span>
               <b>{{system.ressources.fatigue.valeur}} / {{system.ressources.fatigue.max}}</b>
+              {{!-- L'épuisement s'applique aux monstres comme aux personnages
+                    (-10 % de principales, -1 vitesse, -1 toucher) mais n'était
+                    signalé que sur la fiche personnage : le MJ n'avait aucun
+                    moyen de voir qu'une de ses créatures était épuisée. --}}
+              {{#if system.derived.epuise}}
+              <b style="color:#c0392b" title="Fatigue au maximum : -10 % sur les principales, -1 Vitesse, -1 Toucher. Il faut redescendre sous le seuil pour lever le malus.">— ÉPUISÉ</b>
+              {{/if}}
+              {{#if system.ressources.fatigue.depassement}}
+              <b style="color:#c0392b">(+{{system.ressources.fatigue.depassement}} au-delà du seuil)</b>
+              {{/if}}
             </div>
           </div>
           <small class="muted">Tirées par la génération — modifiables dans « Ajustement manuel » ci-dessous.</small>

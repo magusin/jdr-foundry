@@ -226,7 +226,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.bonus = ctx.system.bonus ?? {};
     const BONUS_KEYS = [
       "force","intelligence","dexterite","acuite","endurance",
-      "pvMax","manaMax","regenPv","regenMana","vitesse",
+      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse",
       "armureFixe","resistanceFixe","scoreArmure","scoreResistance"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
@@ -239,6 +239,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       endurance: "Endurance",
       pvMax: "PV max",
       manaMax: "Mana max",
+      fatigueMax: "Fatigue max",
       regenPv: "Régén PV",
       regenMana: "Régén Mana",
       vitesse: "Vitesse",

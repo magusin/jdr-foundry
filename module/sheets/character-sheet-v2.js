@@ -22,6 +22,7 @@ export const LABELS = {
   endurance: "Endurance",
   pvMax: "PV max",
   manaMax: "Mana max",
+  fatigueMax: "Fatigue max",
   regenPv: "Régén PV",
   regenMana: "Régén Mana",
   vitesse: "Vitesse",
