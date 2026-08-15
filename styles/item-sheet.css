@@ -683,3 +683,45 @@
   line-height: 1.45;
   opacity: .7;
 }
+
+/* ── Résistances aux états sur une fiche d'acteur ────────────────────────
+   Le bloc liste ce que l'équipement porté et les états actifs raccourcissent
+   ou annulent. Volontairement sobre : c'est une lecture, pas une saisie. */
+.rpg-state-resist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.rpg-state-resist-row {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.10));
+  background: var(--ink-3, rgba(255,255,255,0.05));
+  color: var(--ink-text, #ece4d3);
+}
+.rpg-state-resist-row .rpg-sr-src {
+  font-size: 10px;
+  opacity: .65;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.rpg-resist-detail {
+  margin-top: 5px;
+}
+.rpg-resist-detail > summary {
+  font-size: 10.5px;
+  opacity: .65;
+  cursor: pointer;
+  list-style: revert;
+}
+.rpg-resist-detail > summary:hover { opacity: 1; }
+.rpg-resist-detail .rpg-resist-elem-read { margin-top: 4px; }
+/* Une ligne à 0 reste lisible mais s'efface : la grille complète existe pour
+   vérifier une absence, pas pour la mettre en avant. */
+.rpg-resist-elem-chip.is-zero {
+  background: transparent;
+  opacity: .45;
+}

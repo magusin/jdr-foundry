@@ -11,6 +11,8 @@ import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.
 import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
+import { actorStateResistRows } from "../rules/resistances.js";
+import { computeMonsterValue } from "../rules/item-value.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -211,6 +213,17 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
     ctx.resistElemRows = resistRows(ctx.system.resistancesElem);
     ctx.resistElemActive = nonZeroResistRows(sys.derived?.resistancesElem ?? ctx.system.resistancesElem);
+    ctx.resistElemTotalRows = resistRows(
+      normalizeResistMap(sys.derived?.resistancesElem ?? ctx.system.resistancesElem)
+    );
+    // Résistances aux ÉTATS accordées par ses états actifs (un monstre ne
+    // porte pas d'équipement) — invisibles jusque-là, comme sur la fiche PJ.
+    ctx.stateResist = actorStateResistRows(actor);
+
+    // Pesée du monstre (théoriecraft) — MJ uniquement, et jamais placée dans
+    // le contexte rendu d'un joueur : la fiche monstre est consultable par
+    // les joueurs (pvReveal), donc le garde doit être ici, pas au template.
+    ctx.monsterValue = game.user.isGM ? computeMonsterValue(actor) : null;
 
     const itemDocs = Array.from(actor.items);
     const itemsObj = itemDocs.map(i => i.toObject());

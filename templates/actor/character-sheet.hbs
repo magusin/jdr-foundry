@@ -603,6 +603,36 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             {{else}}
             <div style="font-size:11px;opacity:.7">Aucune — l'équipement, les sorts et les états peuvent en accorder.</div>
             {{/if}}
+            {{!-- Les pastilles ne montrent que les lignes non nulles, ce qui
+                  est le bon défaut mais empêche de vérifier « je vaux quoi
+                  contre chaque type ? ». La grille complète est ici, repliée. --}}
+            <details class="rpg-resist-detail">
+              <summary>Voir les 10 types</summary>
+              <div class="rpg-resist-elem-read">
+                {{#each resistElemTotalRows as |r|}}
+                <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{/if}}{{#unless r.value}} is-zero{{/unless}}">{{r.label}} {{r.text}}</span>
+                {{/each}}
+              </div>
+            </details>
+          </div>
+
+          {{!-- Résistances aux ÉTATS : équipement porté + états actifs. Elles
+                étaient appliquées par rules/resistances.js mais n'apparaissaient
+                sur aucune fiche — il fallait ouvrir chaque objet un par un. --}}
+          <div style="margin-top:8px">
+            <label style="font-size:12px">Résistances aux états</label>
+            {{#if stateResist.total}}
+            <div class="rpg-state-resist-list">
+              {{#each stateResist.gear as |r|}}
+              <div class="rpg-state-resist-row"><span class="rpg-sr-src">🛡 Équipement</span> {{r.text}}</div>
+              {{/each}}
+              {{#each stateResist.states as |r|}}
+              <div class="rpg-state-resist-row"><span class="rpg-sr-src">✨ État actif</span> {{r.text}}</div>
+              {{/each}}
+            </div>
+            {{else}}
+            <div style="font-size:11px;opacity:.7">Aucune — durée des états subis et dégâts sur la durée non réduits.</div>
+            {{/if}}
           </div>
 
           {{#if flags.isGM}}

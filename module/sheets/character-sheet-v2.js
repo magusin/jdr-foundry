@@ -7,6 +7,7 @@ import { isNpcActor } from "../rules/actor-roles.js";
 import {
   normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
 } from "../rules/damage-types.js";
+import { actorStateResistRows } from "../rules/resistances.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -526,6 +527,15 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     ctx.resistElemActive = nonZeroResistRows(
       actor.system?.derived?.resistancesElem ?? actor.system?.resistancesElem
     );
+    // Grille complète du TOTAL effectif : les pastilles ci-dessus ne montrent
+    // que les lignes non nulles, ce qui est le bon défaut mais ne permet pas
+    // de vérifier d'un coup d'œil « qu'est-ce que je vaux contre chaque type ».
+    ctx.resistElemTotalRows = resistRows(
+      normalizeResistMap(actor.system?.derived?.resistancesElem ?? actor.system?.resistancesElem)
+    );
+    // Résistances aux ÉTATS (équipement porté + états actifs). Elles étaient
+    // appliquées mais n'apparaissaient sur aucune fiche d'acteur.
+    ctx.stateResist = actorStateResistRows(actor);
 
     // Vitesse : permanente vs effective (épuisement, surcharge, effets)
     const vitPerm = Number(actor.system?.derived?.permanent?.vitesse ?? 0) || 0;

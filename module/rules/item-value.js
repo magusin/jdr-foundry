@@ -67,8 +67,16 @@ export const STAT_WEIGHTS = {
   // ── Chance de toucher : la bande utile du d20 ne fait que 10 valeurs
   // (1-5 échec auto, 16+ succès auto), donc +1 = +5 points de % fermes,
   // soit ~10 % de dégâts infligés en plus.
+  //
+  // Les deux ont le MÊME poids, contrairement à armureFixe/resistanceFixe
+  // juste au-dessus, et la distinction vaut d'être comprise : ce qu'on pèse,
+  // c'est la puissance pour CELUI QUI PORTE l'objet. Le type de dégâts qu'on
+  // REÇOIT est une propriété du monde (l'écrasante majorité des monstres
+  // frappent au physique), d'où l'asymétrie côté défense ; le type de dégâts
+  // qu'on INFLIGE est un choix de personnage, et un mage tire de son toucher
+  // magique exactement ce qu'un guerrier tire du sien.
   toucherPhysique: 10,
-  toucherMagique: 8,
+  toucherMagique: 10,
 
   // ── Mobilité : sur une base de 3 m, +1 m est un tiers de déplacement en
   // plus. Décide qui engage, qui décroche, qui atteint le mage.
@@ -76,22 +84,47 @@ export const STAT_WEIGHTS = {
 
   // ── Ressources : linéaires mais sans effet de seuil.
   pvMax: 2,
-  manaMax: 1,
+  manaMax: 1.5,            // base 5 : +1 pèse lourd tôt, beaucoup moins tard
   fatigueMax: 3,           // sur une base de 10 : +1 = +10 % d'actions
 
-  // ── Principales : deux rôles chacune (dégâts/pods, TN/initiative,
-  // défenses/PV), mais des barèmes à pas large — leur valeur unitaire est
-  // faible tôt et grandit avec la campagne.
-  force: 3, intelligence: 3, dexterite: 3, acuite: 3, endurance: 3,
+  // ── Principales : PAS de valeur commune, parce qu'elles n'ont ni le même
+  // nombre de rôles ni les mêmes barèmes.
+  //
+  //   force        dégâts physiques (/10) + pods (/3)
+  //   intelligence dégâts magiques (/10), et le scaling par défaut des sorts
+  //   dexterite    TN physique + initiative (moitié de (dex+acu)/2)
+  //   acuite       TN magique + initiative (idem)
+  //   endurance    score armure (/3) + score résistance (/3) + PV (/5)
+  //
+  // Ce sont les DIVISEURS qui décident, pas le nombre de rôles : +1 de Force
+  // ne rend qu'un dixième de point de dégât, alors que +1 de Dextérité rend
+  // un demi-point d'initiative tout de suite. D'où le classement ci-dessous,
+  // qui inverse l'intuition — l'Endurance a trois rôles et le poids le plus
+  // faible, parce que ses trois barèmes sont les plus grossiers.
+  //
+  // ⚠️ Ces valeurs sont des MOYENNES d'un gain en escalier : la Force ne rend
+  // rien neuf fois, puis un point de dégât entier au passage de la dizaine.
+  // Un +2 de Force ne fait donc littéralement rien tant qu'il ne fait pas
+  // franchir un seuil — la pesée le lisse, la table le subit en une fois.
+  force: 0.9,
+  intelligence: 0.8,
+  dexterite: 1.5,
+  acuite: 1.3,
+  endurance: 0.6,
 
   // ── Scores de défense : S/(S+160). Mesuré autour d'un score de 20
   // (milieu de campagne), +1 rend environ un demi-point de pourcentage.
   scoreArmure: 0.3,
   scoreResistance: 0.3,
 
-  // ── Régénération, en % des max, par tour.
-  regenPvPct: 1.5,
-  regenManaPct: 0.8
+  // ── Régénération : un POURCENTAGE DE LA RÉGÉN DE BASE, pas des PV max.
+  // La régén de base vaut 1 PV/tour et le calcul est
+  // `floor(base × (1 + pct/100))` — il faut donc +100 % pour gagner un seul
+  // PV par tour, et tout ce qui est en dessous est mangé par l'arrondi.
+  // D'où un poids minuscule, et l'alerte levée plus bas pour un bonus qui
+  // n'atteint pas le seuil : il coûte une ligne sur la fiche et ne fait rien.
+  regenPvPct: 0.1,
+  regenManaPct: 0.05
 };
 
 /** Résistances élémentaires : par point de %. */
@@ -238,6 +271,18 @@ export function computeItemValue(item) {
         );
       }
     }
+    // Régén : le calcul est `floor(base × (1 + pct/100))` sur une base de 1
+    // PV/tour. En dessous de +100 %, l'arrondi avale tout le bonus — la ligne
+    // s'affiche sur la fiche de l'objet et ne produit rien du tout.
+    if ((key === "regenPvPct" || key === "regenManaPct") && v > 0 && v < 100) {
+      warn = true;
+      warnings.push(
+        `${LABELS[key] ?? key} : +${round1(v)} % est absorbé par l'arrondi. ` +
+        `La régén de base vaut 1/tour et le calcul l'arrondit à l'entier inférieur : ` +
+        `il faut +100 % pour gagner le premier point.`
+      );
+    }
+
     add(LABELS[key] ?? key, v, weight, { key, warn });
   }
 
@@ -321,4 +366,204 @@ export function computeItemValue(item) {
 /** Types d'objets que la pesée sait traiter. */
 export function isWeighable(type) {
   return ["weapon", "armor", "relic"].includes(String(type ?? ""));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PESÉE D'UN MONSTRE
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Même intention que pour un objet, mais la question change : « combien de
+// tours ce monstre va-t-il tenir, et combien va-t-il faire mal pendant ce
+// temps ? ». Un monstre ne se compare pas à un plafond de bonus, il se
+// compare à un GROUPE. On l'exprime donc en deux quantités concrètes, puis
+// on les croise :
+//
+//   MENACE     = dégâts moyens par tour qu'il inflige réellement
+//   RÉSISTANCE = tours qu'il met à tomber sous le feu d'un groupe type
+//
+// Le produit des deux est le « poids de rencontre » : c'est lui qui dit si
+// deux de ces bestioles font un combat de trois tours ou de douze.
+
+/**
+ * Groupe de référence, à un niveau donné.
+ *
+ * La référence DOIT suivre le niveau du monstre, sinon toute créature de
+ * milieu de campagne est classée « boss » par le seul fait d'être comparée à
+ * des débutants — et le palier, qui est justement ce qu'on veut lire pour un
+ * gros monstre, devient inutilisable là où il sert le plus.
+ *
+ * La progression retenue est celle recommandée à la table : les PJ gagnent
+ * ~4 PV par niveau (leur `base.pvMax`, puisque l'Endurance seule ne leur en
+ * donne quasiment aucun), leurs armes montent d'environ un point de dégâts
+ * moyen par niveau, et leur équipement gagne du score d'armure. La chance de
+ * toucher, elle, ne bouge pas : la bande du d20 est plate à cette échelle.
+ */
+export function partyRefFor(level = 1) {
+  const lvl = Math.max(1, n(level, 1));
+  const step = lvl - 1;
+  return {
+    level: lvl,
+    size: 3,                                       // 3 PJ
+    hitChance: 0.5,                                // ~50 %, la bande du d20 est plate
+    damagePerHit: 7 + step,                        // deux armes 1d6 au départ
+    pv: 30 + step * 4,
+    armureFixe: 0,
+    reductionPct: Math.min(45, 5 + step * 3)
+  };
+}
+
+/** Référence de début de partie, conservée pour les appels sans niveau. */
+export const PARTY_REF = partyRefFor(1);
+
+/**
+ * Paliers de rencontre, en « poids » (menace × durée de vie), pour UN
+ * exemplaire du monstre. Calibrés sur le fait qu'un monstre de base est censé
+ * se jouer en nombre : un loup seul tombe en un tour et demi face à trois PJ,
+ * ce qui est normal — c'est la meute qui fait le combat.
+ */
+const MONSTER_TIERS = [
+  { max: 3,   key: "trivial",  label: "Trivial",   hint: "figurant — un PJ seul s'en occupe" },
+  { max: 12,  key: "mineur",   label: "Mineur",    hint: "à jouer par 2-3 pour faire un combat" },
+  { max: 35,  key: "serieux",  label: "Sérieux",   hint: "un vrai combat seul ou à deux" },
+  { max: 90,  key: "elite",    label: "Élite",     hint: "mini-boss, un seul suffit" },
+  { max: Infinity, key: "boss", label: "Boss",     hint: "⚠️ vérifie que le groupe peut le blesser" }
+];
+
+/** Réduction en % rendue par un score de défense (miroir de actor.js). */
+function scorePct(score) {
+  const S = Math.max(0, n(score, 0));
+  return Math.min(70, (S / (S + 160)) * 100);
+}
+
+/**
+ * Pèse un monstre : menace, durée de vie, et poids de rencontre.
+ *
+ * Lit les items `spell` du monstre pour ses attaques — un monstre n'a pas
+ * d'armes dans ce système, ses attaques SONT ses sorts. On retient la
+ * meilleure attaque disponible chaque tour, en tenant compte de la recharge :
+ * une capacité à recharge 3 ne sort qu'un tour sur trois, et la compter à
+ * plein régime surestimerait très largement des créatures dont tout le
+ * dossier tient dans un coup spécial.
+ *
+ * @param {Actor|object} actor
+ * @returns {{threat:number, survival:number, encounter:number, tier:object, rows:Array, warnings:Array}}
+ */
+export function computeMonsterValue(actor) {
+  const sys = actor?.system ?? {};
+  const rows = [];
+  const warnings = [];
+  const PARTY = partyRefFor(sys.niveau);
+
+  // ── Durée de vie : PV effectifs face aux dégâts du groupe ──────────────
+  const pv = Math.max(1, n(sys.ressources?.pv?.max, n(sys.base?.pvMax, 1)));
+  const armureFixe = n(sys.defenses?.armureFixe, 0);
+  const redPct = scorePct(n(sys.defenses?.scoreArmure, 0) + Math.floor(n(sys.principales?.endurance, 0) / 3));
+  const resistPhys = Math.min(99, n(sys.resistancesElem?.physique, 0));
+
+  // Un coup type du groupe, après les deux étages de mitigation du monstre.
+  let perHit = Math.max(1, Math.ceil((PARTY.damagePerHit - armureFixe) * (1 - redPct / 100)));
+  perHit = Math.max(1, perHit * (1 - resistPhys / 100));
+
+  const partyDps = PARTY.size * PARTY.hitChance * perHit;
+  const regen = n(sys.regeneration?.pv, 0);
+
+  // Régén ≥ dégâts du groupe : il ne meurt pas, point. On ne prolonge SURTOUT
+  // pas la division avec un plancher arbitraire — elle produirait un « 1100
+  // tours » d'apparence chiffrée qui masquerait l'unique information qui
+  // compte : le combat n'a pas de fin.
+  const invincible = regen >= partyDps;
+  const survival = invincible ? Infinity : Math.round((pv / (partyDps - regen)) * 10) / 10;
+
+  rows.push({ label: "PV", value: String(pv), points: null });
+  rows.push({ label: "Dégâts encaissés par coup", value: `${Math.round(perHit * 10) / 10}`, points: null });
+  if (regen) rows.push({ label: "Régén PV / tour", value: `+${regen}`, points: null });
+  rows.push({
+    label: `Tours de survie (groupe de ${PARTY.size}, niv. ${PARTY.level})`,
+    value: invincible ? "∞" : `${survival}`,
+    points: null
+  });
+
+  if (invincible) {
+    warnings.push(
+      `Régénération de ${regen} PV/tour contre ${Math.round(partyDps * 10) / 10} infligés par le groupe : ` +
+      `il se soigne au moins aussi vite qu'il encaisse. Le combat est ININGAGNABLE au corps à corps ` +
+      `— il lui faut une parade explicite (dégâts élémentaires auxquels il est vulnérable, effet qui ` +
+      `suspend la régénération…), ou une régén plus basse.`
+    );
+  }
+
+  // ── Menace : la meilleure attaque disponible, recharge comprise ────────
+  const spells = (actor?.items ?? []).filter(i => i.type === "spell");
+  let best = 0;
+  for (const sp of spells) {
+    const s = sp.system ?? {};
+    const dmg = s.damage ?? {};
+    if (dmg.enabled === false && !diceAverage(dmg.dice)) continue;
+
+    const sc = dmg.scaling ?? {};
+    const per = Math.max(1, n(sc.per, 10));
+    const statVal = n(sys.principales?.[String(sc.stat ?? "force")], 0);
+    const scaled = Math.floor(statVal / per) * n(sc.perStep, 0);
+
+    const raw = diceAverage(dmg.dice) + n(dmg.flat, 0) + scaled;
+    if (raw <= 0) continue;
+
+    // Mitigation côté PJ, puis dilution par la recharge.
+    const landed = Math.max(1, Math.ceil((raw - PARTY.armureFixe) * (1 - PARTY.reductionPct / 100)));
+    const cd = Math.max(1, n(s.cooldown?.max, 0) + 1);
+    const perTurn = (landed * PARTY.hitChance) / cd;
+    const targets = Math.max(1, n(s.targetCount?.max, 1));
+
+    rows.push({
+      label: `⚔ ${sp.name}`,
+      value: `${Math.round(raw * 10) / 10} brut${cd > 1 ? ` · recharge ${cd - 1}` : ""}${targets > 1 ? ` · ${targets} cibles` : ""}`,
+      points: Math.round(perTurn * targets * 10) / 10
+    });
+    best = Math.max(best, perTurn * targets);
+  }
+
+  if (!spells.length) {
+    warnings.push("Aucun sort sur ce monstre : il n'a aucune attaque. Dans ce système, les attaques d'un monstre SONT ses items `spell`.");
+  } else if (best <= 0) {
+    warnings.push("Aucune de ses capacités n'inflige de dégâts — vérifie que `damage.dice` est bien renseigné.");
+  }
+
+  const threat = Math.round(best * 10) / 10;
+
+  // Tours qu'il faut à ce monstre pour abattre UN personnage.
+  const toKill = threat > 0 ? Math.round((PARTY.pv / threat) * 10) / 10 : Infinity;
+  rows.push({ label: "Menace (dégâts / tour)", value: `${threat}`, points: null });
+  rows.push({
+    label: "Tours pour abattre un PJ",
+    value: Number.isFinite(toKill) ? `${toKill}` : "—",
+    points: null
+  });
+
+  // Un monstre qui ne meurt pas n'a pas de score : le classer « boss » avec un
+  // nombre astronomique donnerait l'illusion qu'il est simplement très fort,
+  // alors que le problème est ailleurs (voir l'alerte).
+  const encounter = invincible ? Infinity : Math.round(threat * survival * 10) / 10;
+  const tier = invincible
+    ? MONSTER_TIERS[MONSTER_TIERS.length - 1]
+    : (MONSTER_TIERS.find(t => encounter <= t.max) ?? MONSTER_TIERS[MONSTER_TIERS.length - 1]);
+
+  // Un monstre plus rapide que le groupe ne peut pas être fui : c'est une
+  // décision de design, pas un accident, mais elle doit être consciente.
+  const vitesse = n(sys.deplacement?.vitesse, 0);
+  if (vitesse > 4) {
+    warnings.push(`Vitesse ${vitesse} m : plus rapide qu'un PJ de départ (3 m). Le groupe ne pourra ni décrocher ni le distancer.`);
+  }
+
+  if (Number.isFinite(survival) && survival > 12) {
+    warnings.push(`${survival} tours pour le tuer : c'est très long. Au-delà d'une dizaine de tours, un combat lasse avant d'être dangereux.`);
+  }
+
+  return {
+    threat,
+    survival: Number.isFinite(survival) ? survival : null,
+    survivalText: Number.isFinite(survival) ? String(survival) : "∞",
+    encounter: Number.isFinite(encounter) ? encounter : null,
+    encounterText: Number.isFinite(encounter) ? String(encounter) : "∞",
+    tier, rows, warnings, partyRef: PARTY
+  };
 }

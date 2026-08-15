@@ -369,7 +369,65 @@
             {{/each}}
           </div>
           <small class="muted">Réduit les dégâts reçus du type correspondant. <b>100</b> = immunité, valeur <b>négative</b> = vulnérabilité. Tirées par la génération aléatoire si des plages sont renseignées dans l'onglet 🎲.</small>
+
+          {{!-- Total effectif : la grille au-dessus est la base INNÉE, celle
+                que le MJ saisit. Un état actif peut la modifier, et c'est le
+                total qu'un attaquant subit réellement. --}}
+          <h4 style="margin:10px 0 2px">Total effectif (inné + états actifs)</h4>
+          <div class="rpg-resist-elem-read">
+            {{#each resistElemTotalRows as |r|}}
+            <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{/if}}{{#unless r.value}} is-zero{{/unless}}">{{r.label}} {{r.text}}</span>
+            {{/each}}
+          </div>
+
+          {{!-- Résistances aux ÉTATS accordées par ses états actifs. --}}
+          <h4 style="margin:10px 0 2px">Résistances aux états</h4>
+          {{#if stateResist.total}}
+          <div class="rpg-state-resist-list">
+            {{#each stateResist.states as |r|}}
+            <div class="rpg-state-resist-row"><span class="rpg-sr-src">✨ État actif</span> {{r.text}}</div>
+            {{/each}}
+            {{#each stateResist.gear as |r|}}
+            <div class="rpg-state-resist-row"><span class="rpg-sr-src">🛡 Équipement</span> {{r.text}}</div>
+            {{/each}}
+          </div>
+          {{else}}
+          <small class="muted">Aucune — durée des états subis et dégâts sur la durée non réduits.</small>
+          {{/if}}
         </details>
+
+        {{!-- PESÉE DU MONSTRE (MJ ONLY) — `monsterValue` vaut null pour un
+              joueur, ce bloc n'existe donc pas chez lui. La fiche monstre est
+              consultable par les joueurs (pvReveal), le garde est obligatoire. --}}
+        {{#if monsterValue}}
+        <details class="rpg-item-value" style="grid-column: 1 / -1;" open>
+          <summary><b>⚖️ Pesée de rencontre (MJ)</b></summary>
+          <div class="rpg-iv-head">
+            <span class="rpg-iv-total">{{monsterValue.encounterText}}</span>
+            <span class="rpg-iv-tier rpg-iv-{{monsterValue.tier.key}}">{{monsterValue.tier.label}}</span>
+            <span style="font-size:11px;opacity:.7">{{monsterValue.tier.hint}}</span>
+          </div>
+          <table class="rpg-iv-table">
+            <thead><tr><th>Mesure</th><th>Valeur</th><th>Dégâts/tour</th></tr></thead>
+            <tbody>
+              {{#each monsterValue.rows}}
+              <tr><td>{{label}}</td><td>{{value}}</td><td>{{#if points}}{{points}}{{/if}}</td></tr>
+              {{/each}}
+            </tbody>
+          </table>
+          {{#each monsterValue.warnings}}
+          <div class="rpg-iv-alert">⚠️ {{this}}</div>
+          {{/each}}
+          <small class="rpg-iv-help">
+            Mesuré contre un groupe de référence de 3 PJ de début de partie
+            (30 PV, ~50 % de touche, 7 de dégâts par attaque à deux armes, 5 % de réduction).
+            Le total est menace × durée de vie : trivial ≤ 15, mineur ≤ 40,
+            sérieux ≤ 90, élite ≤ 180, au-delà c'est un boss.
+            Les recharges sont prises en compte — une capacité à recharge 3 ne
+            compte que pour un tour sur trois.
+          </small>
+        </details>
+        {{/if}}
 
         <section class="panel-states" style="grid-column: 1 / -1;">
           <header class="panel-title">
