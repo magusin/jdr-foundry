@@ -387,6 +387,38 @@
       </section>
     {{/if}}
 
+    {{!-- PESÉE / THÉORIECRAFT (MJ ONLY) — voir armor-sheet.hbs. `itemValue`
+          vaut null pour un joueur, le bloc n'existe donc pas chez lui. --}}
+    {{#if itemValue}}
+      <section class="card rpg-item-value">
+        <h2>⚖️ Pesée (MJ)</h2>
+        <div class="rpg-iv-head">
+          <span class="rpg-iv-total">{{itemValue.total}}</span>
+          <span class="rpg-iv-tier rpg-iv-{{itemValue.tier.key}}">{{itemValue.tier.label}}</span>
+        </div>
+        {{#if itemValue.rows.length}}
+        <table class="rpg-iv-table">
+          <thead><tr><th>Ligne</th><th>Valeur</th><th>Poids</th></tr></thead>
+          <tbody>
+            {{#each itemValue.rows}}
+            <tr{{#if warn}} class="rpg-iv-warn"{{/if}}>
+              <td>{{label}}</td><td>{{value}}</td><td>{{points}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+        {{#each itemValue.warnings}}
+        <div class="rpg-iv-alert">⚠️ {{this}}</div>
+        {{/each}}
+        <small class="rpg-iv-help">
+          Repère armes : une arme de départ pèse ~28 (1d6 nu), 36–60 pour du commun,
+          61–95 pour du rare. Les dés comptent pour l'essentiel — c'est voulu, c'est
+          la puissance d'une arme. Ne mets presque rien d'autre dessus.
+        </small>
+      </section>
+    {{/if}}
+
     {{!-- RECETTE ASSOCIÉE --}}
     {{#if canEdit}}
       <section class="card">

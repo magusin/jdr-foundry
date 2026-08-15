@@ -7,6 +7,7 @@ import {
   normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
+import { computeItemValue } from "../rules/item-value.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -155,6 +156,10 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
+
+    // Pesée (théoriecraft) — MJ uniquement, jamais placée dans le contexte
+    // rendu d'un joueur (voir item-armor-sheet-v2.js pour le raisonnement).
+    ctx.itemValue = ctx.isGM ? computeItemValue(this.document) : null;
 
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.system.amplifications = Array.isArray(ctx.system.amplifications) ? ctx.system.amplifications : [];
