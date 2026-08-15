@@ -114,7 +114,9 @@ async function onDropItem(sheetInstance, event) {
     // d'une seconde ligne dans l'inventaire — voir rules/inventory.js.
     const { addItemToActor, describeAdd } = await import("../rules/inventory.js");
     const res = await addItemToActor(actor, itemData);
-    ui.notifications?.info?.(describeAdd(res, item.name, actor.name));
+    const msg = describeAdd(res, item.name, actor.name);
+    if (res.refused) ui.notifications?.warn?.(msg);
+    else ui.notifications?.info?.(msg);
   } catch (e) {
     console.error("[RPG] Drop : création de l'item embarqué a échoué.", e);
     ui.notifications?.error?.(`Impossible d'ajouter l'objet : ${e?.message ?? e}`);

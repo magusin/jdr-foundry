@@ -439,7 +439,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const itemsObj = itemDocs.map(i => i.toObject());
 
     const categorized = this._categorizeItems(itemsObj);
-    const charge = this._calcCharge(categorized);
+    const charge = this._calcCharge();
 
     // Spells UI
     for (const s of categorized.sorts) {
@@ -580,10 +580,18 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     }
     if (ctx.system.derived?.surcharge) {
+      // Le résumé suit le palier réellement atteint : afficher « -1 Vitesse »
+      // en toutes circonstances mentait dès 100 %, où le malus est de -50 %.
+      const state = String(ctx.system.derived?.chargeState ?? "lourd");
+      const SUMMARIES = {
+        lourd:     "-1 Vitesse (charge ≥ 90 %)",
+        surcharge: "-50 % Vitesse (charge ≥ 100 %)",
+        bloque:    "-50 % Vitesse • sac plein, aucun objet ne peut être ajouté (charge ≥ 120 %)"
+      };
       autoStates.push({
-        id: "_auto_surcharge", label: "🏋️ Surchargé", type: "auto",
+        id: "_auto_surcharge", label: state === "lourd" ? "🏋️ Chargé lourd" : "🏋️ Surchargé", type: "auto",
         tag: null, permanent: true, duration: 0, remaining: 0,
-        summary: "-1 Vitesse (charge ≥ 90%)",
+        summary: SUMMARIES[state] ?? SUMMARIES.lourd,
         isBeneficial: false, isHarmful: true, isAuto: true,
         dot: { flat: 0, perTick: 0 }, mods: {}
       });
@@ -1372,24 +1380,18 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   /* -------------------------------------------- */
 
   async _updatePodsToActor() {
-    // GM-only
-    let total = 0;
-
-    for (const item of this.document.items) {
-      if (item.type === "spell" || item.type === "skill") continue;
-
-      const sys = item.system ?? {};
-      const qte = Number(sys.qte ?? 1) || 1;
-      const poids = Number(sys.poids ?? 0) || 0;
-      total += poids * qte;
-    }
-
-    total = Math.round(total * 10) / 10;
-
-    const cur = Number(this.document.system?.charge?.podsActuels ?? 0) || 0;
-    if (Math.abs(cur - total) < 0.05) return;
-
-    await this.document.update({ "system.charge.podsActuels": total });
+    // No-op délibéré : `system.charge.podsActuels` est désormais une valeur
+    // DÉRIVÉE, recalculée depuis les objets à chaque prepareDerivedData
+    // (carriedWeight(), documents/actor.js) et publiée par lui.
+    //
+    // Cette méthode persistait auparavant sa propre version du poids porté.
+    // Entretenir une copie stockée à côté d'une copie calculée est exactement
+    // ce qui a produit le bug d'origine — trois calculs du même poids, dont
+    // celui que lisait prepareDerivedData pointait sur un champ inexistant, si
+    // bien que la surcharge n'était jamais détectée. On garde la méthode et
+    // ses appelants (les recalculs déclenchés par l'inventaire restent des
+    // points d'entrée légitimes) mais elle n'écrit plus rien : la mise à jour
+    // du document par l'ajout/retrait d'objet suffit à relancer le calcul.
   }
 
   /* -------------------------------------------- */
@@ -1438,34 +1440,43 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     return out;
   }
 
-  _calcCharge(cat) {
-    const inventaire = Array.isArray(cat?.inventaire) ? cat.inventaire : [];
-    const equipe = Array.isArray(cat?.equipe) ? cat.equipe : [];
-    const nonEquipe = Array.isArray(cat?.nonEquipe) ? cat.nonEquipe : [];
-    const consommables = Array.isArray(cat?.consommables) ? cat.consommables : [];
+  _calcCharge() {
+    // Poids porté et palier viennent des données dérivées (carriedWeight /
+    // chargeTierOf, documents/actor.js). La barre les LIT, elle ne les
+    // recalcule plus : la version locale d'avant partait des listes déjà
+    // catégorisées et pouvait donc afficher un pourcentage différent de celui
+    // qui décide du malus de vitesse et du refus d'objet — un joueur bloqué à
+    // « 118 % » affiché est exactement le symptôme que ça produit.
+    const sys = this.document.system ?? {};
+    const podsActuels = Number(sys.charge?.podsActuels ?? 0) || 0;
+    const podsMax = Number(sys.charge?.podsMax ?? 0) || 0;
+    const state = String(sys.derived?.chargeState ?? "normal");
 
-    // ✅ pods = inventaire + equip + non-equip + consommables
-    // (sorts + compétences exclus)
-    const all = [].concat(inventaire, equipe, nonEquipe, consommables);
+    const pct = Math.min(999, Number(sys.derived?.chargePct ?? 0) || 0);
 
-    const podsActuels = all.reduce((acc, it) => acc + (Number(it?._derived?.poidsTotal) || 0), 0);
-    const podsMax = Number(this.document.system?.charge?.podsMax ?? 0) || 0;
+    // « Chargé » (60 %) est un palier purement visuel : il prévient sans rien
+    // appliquer. Les trois autres correspondent aux paliers mécaniques.
+    const ETATS = {
+      bloque:    { etat: "Sac plein", fill: "enc-surcharge", badge: "badge-surcharge" },
+      surcharge: { etat: "Surchargé", fill: "enc-surcharge", badge: "badge-surcharge" },
+      lourd:     { etat: "Lourd",     fill: "enc-lourd",     badge: "badge-lourd" }
+    };
+    const info = ETATS[state] ?? (podsMax > 0 && pct >= 60
+      ? { etat: "Chargé", fill: "enc-charge", badge: "badge-charge" }
+      : { etat: "Normal", fill: "", badge: "badge-normal" });
 
-    const pct = podsMax > 0 ? Math.min(999, Math.round((podsActuels / podsMax) * 100)) : 0;
-
-    let etat = "Normal";
-    if (podsMax > 0) {
-      if (pct >= 120) etat = "Surchargé";
-      else if (pct >= 90) etat = "Lourd";
-      else if (pct >= 60) etat = "Chargé";
-    }
-
-    const cssFill = pct >= 120 ? "enc-surcharge" : pct >= 90 ? "enc-lourd" : pct >= 60 ? "enc-charge" : "";
-    const cssBadge = pct >= 120 ? "badge-surcharge" : pct >= 90 ? "badge-lourd" : pct >= 60 ? "badge-charge" : "badge-normal";
-    const cssSurcharge = pct >= 120 ? "enc-surcharge" : pct >= 90 ? "enc-lourd" : "";
-    const pctCapped = Math.min(100, pct);
-
-    return { podsActuels: Number(podsActuels.toFixed(2)), podsMax, pct, pctCapped, etat, cssFill, cssBadge, cssSurcharge };
+    return {
+      podsActuels: Number(podsActuels.toFixed(2)),
+      podsMax,
+      pct,
+      pctCapped: Math.min(100, pct),
+      etat: info.etat,
+      cssFill: info.fill,
+      cssBadge: info.badge,
+      cssSurcharge: info.fill,
+      state,
+      plafond: Math.round(podsMax * 1.2 * 10) / 10
+    };
   }
 
   /* -------------------------------------------- */

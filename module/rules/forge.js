@@ -166,8 +166,12 @@ async function createResultItem(actor, recipe) {
 
   // Empilement des Objets déjà possédés (rules/inventory.js) : forger une
   // deuxième corde ajoute +1 à la pile au lieu d'ouvrir une 2e ligne.
+  // ignoreCharge : les ingrédients viennent d'être consommés (resolveCraft les
+  // retire AVANT d'appeler ceci). Refuser l'objet ici les ferait disparaître
+  // pour rien — le forgeron trop chargé repart avec un sac trop lourd, pas
+  // avec un craft escamoté.
   const { addItemToActor } = await import("./inventory.js");
-  const res = await addItemToActor(actor, itemData, { qty: 1 });
+  const res = await addItemToActor(actor, itemData, { qty: 1, ignoreCharge: true });
   return { ok: true, item: res.item, stacked: res.stacked, total: res.total };
 }
 

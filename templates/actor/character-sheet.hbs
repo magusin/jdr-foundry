@@ -136,11 +136,14 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           </div>
 
           <div class="meta">
-            <label>Vitesse</label>
-            <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
+            <label>Vitesse (m)</label>
+            {{!-- step=0.1 : la vitesse est en mètres et accepte les décimales
+                  (4,5 = 4 m 500). Sans step, le navigateur impose un pas de 1
+                  et refuse la saisie d'une valeur fractionnaire. --}}
+            <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" step="0.1" {{#if
               flags.readOnly}}disabled{{/if}} />
             {{#unless (eq system.derived.effective.vitesse system.base.vitesse)}}
-            <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}}</small>
+            <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}} m</small>
             {{/unless}}
           </div>
         </div>
@@ -194,7 +197,17 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             <div class="enc-fill {{charge.cssFill}}" style="width: {{charge.pctCapped}}%;"></div>
           </div>
           {{#if system.derived.surcharge}}
-          <div class="state-badge state-badge--orange">🏋️ Surchargé — -1 vitesse</div>
+          {{!-- Palier réellement atteint : le libellé « -1 vitesse » était figé
+                et devenait faux dès 100 %, où le malus passe à -50 %. --}}
+          <div class="state-badge state-badge--orange">
+            {{#if system.derived.chargeBloque}}
+            🏋️ Sac plein ({{charge.podsActuels}} / {{charge.plafond}}) — -50 % vitesse, aucun objet ne peut être ajouté
+            {{else if (eq system.derived.chargeState "surcharge")}}
+            🏋️ Surchargé — -50 % vitesse (plafond : {{charge.plafond}} pods)
+            {{else}}
+            🏋️ Chargé lourd — -1 vitesse
+            {{/if}}
+          </div>
           {{/if}}
         </div>
 

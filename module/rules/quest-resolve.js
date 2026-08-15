@@ -40,7 +40,10 @@ async function applyOutcomeTo(actor, questItem, success) {
         const want = Math.max(1, n(ri.qty, 1));
         // Empilement des Objets déjà possédés (rules/inventory.js) : la
         // récompense s'ajoute à la pile existante au lieu d'en créer une 2e.
-        const res = await addItemToActor(actor, data, { qty: want });
+        // ignoreCharge : la quête est déjà accomplie au moment où on paie —
+        // un refus pour cause de sac plein ferait perdre définitivement une
+        // récompense méritée, sans possibilité de la réclamer plus tard.
+        const res = await addItemToActor(actor, data, { qty: want, ignoreCharge: true });
         lines.push(`🎁 ${res.item?.name ?? src.name} ×${want}${res.stacked ? ` (total ${res.total})` : ""}`);
       } catch (e) {
         lines.push(`⚠️ Erreur objet (${ri.name || uuid})`);

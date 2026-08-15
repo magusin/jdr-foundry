@@ -22,6 +22,8 @@
 // symptôme rapporté. Les macros n'étant pas des modules ES, l'API est aussi
 // exposée sur `game.rpg.inventory` (voir init.js).
 
+import { carriedWeight, CHARGE_TIERS } from "../documents/actor.js";
+
 /** Types dont deux exemplaires identiques fusionnent en une quantité. */
 const STACKABLE_TYPES = new Set(["loot"]);
 
@@ -99,6 +101,35 @@ export function ownedQuantity(actor, data) {
 }
 
 /**
+ * L'ajout de `data` ×`added` ferait-il dépasser le plafond d'encombrement ?
+ *
+ * Le plafond est un mur : au-delà de CHARGE_TIERS.bloque (120 % de la
+ * capacité) le sac n'accepte plus rien. Entre 100 % et 120 % on peut encore
+ * charger, au prix des -50 % de vitesse (voir prepareDerivedData).
+ *
+ * Un acteur sans capacité (podsMax 0 — les monstres) n'est jamais limité :
+ * la contrainte est une règle de jeu pour les personnages, pas une propriété
+ * physique du monde.
+ *
+ * @returns {{blocked: boolean, current: number, max: number, incoming: number, ceiling: number}}
+ */
+export function chargeCheck(actor, data, added = 1) {
+  const max = Number(actor?.system?.charge?.podsMax ?? 0) || 0;
+  const current = carriedWeight(actor);
+  const poids = Number(data?.system?.poids ?? 0) || 0;
+  const incoming = Math.round(poids * Math.max(0, added) * 10) / 10;
+  const ceiling = Math.round(max * CHARGE_TIERS.bloque * 10) / 10;
+
+  // Pas de capacité définie, ou objet sans poids : rien à refuser. Un objet de
+  // poids nul ne doit jamais être bloqué, même sur un acteur déjà au-delà du
+  // plafond — sinon une quête ne pourrait plus remettre sa propre entrée de
+  // journal à un joueur trop chargé.
+  const blocked = max > 0 && incoming > 0 && (current + incoming) > ceiling;
+
+  return { blocked, current, max, incoming, ceiling };
+}
+
+/**
  * Donne `source` (Item document ou données brutes) à `actor`.
  *
  * @param {Actor} actor
@@ -106,9 +137,16 @@ export function ownedQuantity(actor, data) {
  * @param {object} [options]
  * @param {number} [options.qty] Quantité à ajouter — par défaut
  *   `system.qte` des données fournies, sinon 1.
- * @returns {Promise<{item: Item|null, stacked: boolean, added: number, total: number}>}
+ * @param {boolean} [options.ignoreCharge] Passe outre le plafond
+ *   d'encombrement. Réservé aux gains que le personnage a DÉJÀ mérités au
+ *   moment où on les lui remet — récompense de quête, résultat de forge dont
+ *   les ingrédients viennent d'être consommés : un refus y ferait disparaître
+ *   quelque chose d'irrécupérable. Le ramassage ordinaire, lui, se refuse
+ *   sans dommage (on repose l'objet par terre).
+ * @returns {Promise<{item: Item|null, stacked: boolean, added: number, total: number, refused?: boolean, reason?: string, charge?: object}>}
  *   `stacked` = la quantité d'un exemplaire existant a été augmentée
- *   (aucun doublon créé) ; `total` = quantité de la ligne après l'ajout.
+ *   (aucun doublon créé) ; `total` = quantité de la ligne après l'ajout ;
+ *   `refused` = rien n'a été ajouté, `reason` dit pourquoi.
  */
 export async function addItemToActor(actor, source, options = {}) {
   if (!actor) return { item: null, stacked: false, added: 0, total: 0 };
@@ -116,6 +154,16 @@ export async function addItemToActor(actor, source, options = {}) {
   const data = toData(source);
   const added = qty(options.qty ?? data?.system?.qte, 1);
   if (data.system) data.system.qte = added;
+
+  if (!options.ignoreCharge) {
+    const charge = chargeCheck(actor, data, added);
+    if (charge.blocked) {
+      return {
+        item: null, stacked: false, added: 0, total: 0, refused: true, charge,
+        reason: `${actor.name} est trop chargé : ${charge.current} + ${charge.incoming} pods dépasserait le plafond de ${charge.ceiling} (120 % de ${charge.max}).`
+      };
+    }
+  }
 
   const target = findStackTarget(actor, data);
   if (target) {
@@ -135,6 +183,9 @@ export async function addItemToActor(actor, source, options = {}) {
  */
 export function describeAdd(result, itemName, actorName) {
   const name = itemName ?? result?.item?.name ?? "Objet";
+  if (result?.refused) {
+    return `« ${name} » refusé — ${result.reason ?? "inventaire plein."}`;
+  }
   if (result?.stacked) {
     return `« ${name} » : quantité portée à ${result.total} sur ${actorName}.`;
   }

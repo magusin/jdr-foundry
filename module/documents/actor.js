@@ -17,6 +17,64 @@ function scoreToPct(score) {
   return Math.min(CAP, Math.round(pct));
 }
 
+/**
+ * Paliers d'encombrement, en fraction de la capacité (pods).
+ *
+ * « lourd » et « surcharge » ne se CUMULENT pas : le palier atteint remplace
+ * le précédent (à 100 %, on subit -50 % de vitesse, pas -50 % ET -1).
+ * « bloque » est le plafond dur — au-delà, plus rien n'entre dans le sac
+ * (voir chargeCheck dans rules/inventory.js) ; côté vitesse il se comporte
+ * comme « surcharge ».
+ */
+export const CHARGE_TIERS = { lourd: 0.9, surcharge: 1.0, bloque: 1.2 };
+
+/** Multiplicateur de vitesse appliqué dès 100 % de la capacité. */
+export const CHARGE_OVERLOAD_SPEED_MULT = 0.5;
+
+/** Types d'items qui ne pèsent rien (ce ne sont pas des objets transportés). */
+const WEIGHTLESS_TYPES = new Set(["spell", "skill"]);
+
+/**
+ * Arrondi des distances en mètres, au centimètre.
+ *
+ * Les vitesses sont des mètres et gardent leurs décimales (4,5 m = 4 m 500).
+ * L'arrondi ne sert qu'à absorber le bruit des flottants (un ×0,5 suivi d'un
+ * +20 % produit vite des 4.499999999999999), pas à tronquer la valeur.
+ */
+export function roundMeters(v) {
+  return Math.round((Number(v) || 0) * 100) / 100;
+}
+
+/** Palier d'encombrement correspondant à un ratio charge/capacité. */
+export function chargeTierOf(ratio) {
+  const r = Number(ratio) || 0;
+  if (r >= CHARGE_TIERS.bloque)     return "bloque";
+  if (r >= CHARGE_TIERS.surcharge)  return "surcharge";
+  if (r >= CHARGE_TIERS.lourd)      return "lourd";
+  return "normal";
+}
+
+/**
+ * Poids total porté par un acteur, sorts et compétences exclus.
+ *
+ * Unique définition du « poids porté » : prepareDerivedData s'en sert pour les
+ * paliers, la barre d'encombrement de la fiche l'affiche, et inventory.js
+ * l'interroge avant d'accepter un objet. Trois calculs séparés finissaient par
+ * diverger — un joueur bloqué à 118 % affiché est exactement le genre de bug
+ * que ça produit.
+ */
+export function carriedWeight(actor) {
+  let total = 0;
+  for (const item of actor?.items ?? []) {
+    if (WEIGHTLESS_TYPES.has(item.type)) continue;
+    const sys = item.system ?? {};
+    const poids = Number(sys.poids ?? 0) || 0;
+    const qte = Number(sys.qte ?? 1) || 1;
+    total += poids * qte;
+  }
+  return Math.round(total * 10) / 10;
+}
+
 function hpState(pct) {
   if (pct >= 100) return "En forme";
   if (pct >= 75) return "Légèrement blessé";
@@ -440,8 +498,18 @@ export class RPGActor extends Actor {
     const epuiseVitesseMalus = isEpuise ? 1 : 0;
     const epuiseToucherMalus = isEpuise ? 1 : 0;
 
-    // ✅ Surcharge : si charge >= 90% du max → -1 vitesse (état automatique)
-    const chargeCur = Number(sys.charge?.actuelle ?? sys.charge?.pods ?? 0) || 0;
+    // ✅ Surcharge — paliers, voir CHARGE_TIERS.
+    //
+    // La charge portée est recalculée ICI, depuis les objets, et publiée dans
+    // sys.charge.podsActuels : c'est la SEULE source. Elle était auparavant
+    // lue dans `sys.charge.actuelle ?? sys.charge.pods`, deux champs qui
+    // n'existent nulle part (ni dans template.json, ni écrits par le code —
+    // le seul champ réellement alimenté est `podsActuels`, par la fiche).
+    // La lecture rendait donc toujours 0, la surcharge n'était jamais
+    // détectée et son malus n'a jamais existé, alors même que la barre
+    // d'encombrement de la fiche — qui recalculait le poids de son côté —
+    // affichait correctement le dépassement.
+    const chargeCur = carriedWeight(this);
 
     // ── Capacité de charge (pods) — calculée UNE SEULE FOIS ────────────────
     // Elle sert ici (détection de surcharge) et en section 7 : la calculer
@@ -463,21 +531,53 @@ export class RPGActor extends Actor {
     sys.derived.podsFromForce = isMonster ? 0 : Math.floor((Number(effP.force) || 0) / 3);
     sys.derived.effective.podsMax = chargeMax;
 
-    const isSurcharge = chargeMax > 0 && (chargeCur / chargeMax) >= 0.9;
-    sys.derived.surcharge = isSurcharge;
-    const surchargeVitesseMalus = isSurcharge ? 1 : 0;
+    const chargeRatio = chargeMax > 0 ? (chargeCur / chargeMax) : 0;
+    const chargeState = chargeTierOf(chargeRatio);
 
-    // move — épuisement -1 vitesse + surcharge -1 vitesse
+    sys.derived.chargeRatio = chargeRatio;
+    sys.derived.chargePct = Math.round(chargeRatio * 100);
+    sys.derived.chargeState = chargeState;
+    // Conservé : la fiche et d'éventuelles macros lisent ce booléen. Il vaut
+    // « au moins Lourd », c'est-à-dire l'ancien seuil de 90 %.
+    sys.derived.surcharge = chargeState !== "normal";
+    sys.derived.chargeBloque = chargeState === "bloque";
+
+    // ≥ 90 % : -1 vitesse (plat). ≥ 100 % : -50 % à la place — les deux ne se
+    // cumulent jamais, le palier haut REMPLACE le bas.
+    const surchargeVitesseMalus = chargeState === "lourd" ? 1 : 0;
+    const surchargeVitesseMult  = (chargeState === "surcharge" || chargeState === "bloque")
+      ? CHARGE_OVERLOAD_SPEED_MULT
+      : 1;
+
+    // move — épuisement -1 vitesse + surcharge (-1 vitesse ou -50 %)
     sys.deplacement = sys.deplacement ?? {};
     const baseVit = (Number(sys.base.vitesse ?? 0) || 0) + (Number(bonus.move.vitesse ?? 0) || 0);
     // Vitesse « permanente » = base + équipement/compétences, sans les effets
     // temporaires ni les malus d'épuisement/surcharge.
     sys.derived.permanent = sys.derived.permanent ?? {};
-    sys.derived.permanent.vitesse = Math.max(0, Math.floor(baseVit));
+    // La vitesse est en MÈTRES, pas en cases : elle garde ses décimales.
+    // Un Math.floor ici transformait 4,5 m en 4 m, ce qui n'est pas un
+    // arrondi d'affichage mais une perte réelle de 50 cm de déplacement à
+    // chaque tour — toute la chaîne de mouvement (movement-tracker,
+    // drag-limit, range-overlay, movement-ruler) travaille déjà en mètres
+    // fractionnaires, c'était le seul endroit qui tronquait.
+    sys.derived.permanent.vitesse = roundMeters(Math.max(0, baseVit));
 
     let vit = baseVit + (Number(flat?.move?.vitesse ?? 0) || 0) - epuiseVitesseMalus - surchargeVitesseMalus;
+    // Les pourcentages s'appliquent APRÈS tous les plats, sur le total : un
+    // % englobe donc toujours l'intégralité de la vitesse, quel que soit
+    // l'ordre dans lequel les effets ont été posés ou lus. Les % d'effets
+    // s'additionnent entre eux (+20 % et +30 % = +50 %), puis la surcharge
+    // multiplie le résultat.
     vit = applyPct(vit, pct?.move?.vitesse);
-    sys.deplacement.vitesse = Math.max(0, Math.floor(vit));
+    // Le -50 % de surcharge est un facteur SÉPARÉ, volontairement hors du
+    // seau des pourcentages d'effets : fondu dedans, un buff de +50 %
+    // l'annulerait purement et simplement (−50 +50 = 0), alors qu'être
+    // surchargé doit dégrader la vitesse qu'on a, quelle qu'elle soit. Étant
+    // multiplicatif, il reste commutatif avec le reste — l'ordre ne change
+    // jamais le résultat.
+    vit *= surchargeVitesseMult;
+    sys.deplacement.vitesse = roundMeters(Math.max(0, vit));
     sys.derived.effective.vitesse = sys.deplacement.vitesse;
 
     // ✅ Chance de toucher (bonus direct, réduit le TN nécessaire)
@@ -533,8 +633,9 @@ export class RPGActor extends Actor {
     // 7) Pods (monstre = 0)
     // -----------------------
     sys.charge = sys.charge ?? {};
-    // Déjà calculée plus haut (une seule fois) — on ne fait que la publier.
+    // Déjà calculées plus haut (une seule fois) — on ne fait que les publier.
     sys.charge.podsMax = chargeMax;
+    sys.charge.podsActuels = chargeCur;
     sys.podsMax = chargeMax;
 
   }
