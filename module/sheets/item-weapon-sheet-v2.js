@@ -8,6 +8,7 @@ import {
 } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
+import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -163,11 +164,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.system.amplifications = Array.isArray(ctx.system.amplifications) ? ctx.system.amplifications : [];
-    ctx.EFFECT_TAGS = {
-      "": "(N'importe quel type — filtre seulement par nom d'effet)",
-      magique: "Magique", physique: "Physique",
-      feu: "Feu", air: "Air", eau: "Eau", glace: "Glace", eclair: "Éclair", terre: "Terre"
-    };
+    // Voir item-armor-sheet-v2.js : liste figée à huit types (Lumière et
+    // Obscurité manquaient), et saisie libre du nom d'effet remplacée par le
+    // catalogue réel, dont la valeur est le LIBELLÉ.
+    ctx.EFFECT_TAGS = { "": "(N'importe quel type — filtre seulement par nom d'effet)", ...EFFECT_TAGS };
+    ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "label" });
 
     // ---- Defaults infos
     ctx.system.qte = n(ctx.system.qte, 0);
@@ -231,7 +232,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.bonus = ctx.system.bonus ?? {};
     const BONUS_KEYS = [
       "force","intelligence","dexterite","acuite","endurance",
-      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse",
+      "pvMax","manaMax","fatigueMax","regenPvPct","regenManaPct","vitesse","podsMax","retraitMod",
       "armureFixe","resistanceFixe","scoreArmure","scoreResistance"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
@@ -245,8 +246,10 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       pvMax: "PV max",
       manaMax: "Mana max",
       fatigueMax: "Fatigue max",
-      regenPv: "Régén PV",
-      regenMana: "Régén Mana",
+      regenPvPct: "Régén PV %",
+      regenManaPct: "Régén Mana %",
+      podsMax: "Pods max",
+      retraitMod: "Mod. retrait d'état",
       vitesse: "Vitesse",
       armureFixe: "Armure fixe",
       resistanceFixe: "Résistance fixe",

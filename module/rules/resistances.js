@@ -9,6 +9,7 @@ const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d
 
 import { getWeatherModifierFor } from "./weather-library.js";
 import { resistTextParts } from "./damage-types.js";
+import { normalizeEffectTag } from "./effect-library.js";
 
 /**
  * Lignes lisibles des résistances aux ÉTATS portées par un objet
@@ -87,14 +88,17 @@ function getStateResistances(actor) {
  * Calcule la résistance totale d'un acteur pour un tag donné.
  */
 export function computeResistanceFor(actor, tag, effectLabel = "") {
-  const tagStr = String(tag ?? "");
+  // Normalisé des DEUX côtés : un objet saisi avant le renommage de
+  // « magique » en « neutre » porte encore l'ancienne valeur, et une simple
+  // égalité de chaînes cesserait de correspondre sans le moindre message.
+  const tagStr = normalizeEffectTag(tag);
   const labelStr = String(effectLabel ?? "").trim().toLowerCase();
 
   // Une résistance ne s'applique que si elle a au moins un critère renseigné
   // (tag et/ou effectKey) ET que ce(s) critère(s) correspondent.
   const all = [...getGearResistances(actor), ...getStateResistances(actor)]
     .filter(r => {
-      const rTag = String(r?.tag ?? "").trim();
+      const rTag = normalizeEffectTag(r?.tag);
       const rKey = String(r?.effectKey ?? "").trim().toLowerCase();
       if (!rTag && !rKey) return false; // résistance vide, ignorée
 
