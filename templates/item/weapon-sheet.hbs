@@ -255,6 +255,7 @@
 
           <div class="mm-line"><span class="mm-label">PV max</span><input class="mm-input" type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
           <div class="mm-line"><span class="mm-label">Mana max</span><input class="mm-input" type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
+          <div class="mm-line"><span class="mm-label">Fatigue max</span><input class="mm-input" type="number" name="system.bonus.fatigueMax" value="{{system.bonus.fatigueMax}}"/></div>
           <div class="mm-line"><span class="mm-label">Régén PV</span><input class="mm-input" type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}"/></div>
           <div class="mm-line"><span class="mm-label">Régén Mana</span><input class="mm-input" type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}"/></div>
           <div class="mm-line"><span class="mm-label">Vitesse</span><input class="mm-input" type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
@@ -383,6 +384,38 @@
           <div><label>Or</label><input class="mm-input" type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/></div>
         </div>
         <small style="opacity:0.85;">100 cuivre = 1 argent • 100 argent = 1 or</small>
+      </section>
+    {{/if}}
+
+    {{!-- PESÉE / THÉORIECRAFT (MJ ONLY) — voir armor-sheet.hbs. `itemValue`
+          vaut null pour un joueur, le bloc n'existe donc pas chez lui. --}}
+    {{#if itemValue}}
+      <section class="card rpg-item-value">
+        <h2>⚖️ Pesée (MJ)</h2>
+        <div class="rpg-iv-head">
+          <span class="rpg-iv-total">{{itemValue.total}}</span>
+          <span class="rpg-iv-tier rpg-iv-{{itemValue.tier.key}}">{{itemValue.tier.label}}</span>
+        </div>
+        {{#if itemValue.rows.length}}
+        <table class="rpg-iv-table">
+          <thead><tr><th>Ligne</th><th>Valeur</th><th>Poids</th></tr></thead>
+          <tbody>
+            {{#each itemValue.rows}}
+            <tr{{#if warn}} class="rpg-iv-warn"{{/if}}>
+              <td>{{label}}</td><td>{{value}}</td><td>{{points}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+        {{#each itemValue.warnings}}
+        <div class="rpg-iv-alert">⚠️ {{this}}</div>
+        {{/each}}
+        <small class="rpg-iv-help">
+          Repère armes : une arme de départ pèse ~28 (1d6 nu), 36–60 pour du commun,
+          61–95 pour du rare. Les dés comptent pour l'essentiel — c'est voulu, c'est
+          la puissance d'une arme. Ne mets presque rien d'autre dessus.
+        </small>
       </section>
     {{/if}}
 

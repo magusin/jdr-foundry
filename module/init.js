@@ -70,6 +70,7 @@ import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
 import * as ActorRoles from "./rules/actor-roles.js";
+import * as ItemValue from "./rules/item-value.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
 import * as Skills from "./rules/skills.js";
@@ -463,6 +464,27 @@ Hooks.once("init", async () => {
     hint: "Fatigue gagnée en dégainant ou rengainant en combat. 0 par défaut : l'action consommée suffit comme coût.",
     scope: "world", config: true, type: Number,
     choices: FATIGUE_CHOICES, default: 0, requiresReload: false
+  });
+
+  // ── Groupe de référence de la pesée (théoriecraft MJ) ─────────────────
+  // La « pesée de rencontre » d'un monstre mesure sa durée de vie face à un
+  // groupe type. Ce groupe ne peut pas être une constante : deux tables n'ont
+  // ni le même effectif ni le même armement, et un nombre de tours calculé
+  // sur trois personnages à deux épées courtes ne dit rien d'un groupe de
+  // cinq qui manie des haches. Ces deux réglages décrivent le groupe AU
+  // NIVEAU 1 ; la pesée les fait ensuite progresser avec le niveau du monstre.
+  game.settings.register("rpg", "peseeGroupeTaille", {
+    name: "Pesée — taille du groupe",
+    hint: "Nombre de personnages joueurs pris comme référence pour estimer la durée de vie d'un monstre. Purement indicatif : n'affecte aucune règle, seulement l'encart « Pesée de rencontre » de la fiche monstre.",
+    scope: "world", config: true, type: Number,
+    default: 3, requiresReload: false
+  });
+
+  game.settings.register("rpg", "peseeDegatsAttaque", {
+    name: "Pesée — dégâts par attaque (niveau 1)",
+    hint: "Dégâts bruts moyens d'UNE attaque d'un personnage débutant, seconde arme comprise. 7 par défaut = deux armes 1d6 (3,5 + 3,5). Monte-le si tes joueurs démarrent avec des armes plus lourdes.",
+    scope: "world", config: true, type: Number,
+    default: 7, requiresReload: false
   });
 
   // Interrupteur MJ : le MJ reste libre par défaut (poussées, téléportations,
@@ -1075,6 +1097,12 @@ Hooks.once("init", async () => {
     // fiches, réutilisé par les macros de distribution pour séparer les
     // deux catégories dans leurs listes de cibles.
     game.rpg.actorRoles = ActorRoles;
+
+    // ✅ game.rpg.itemValue : pesée d'un objet (théoriecraft MJ). Exposé pour
+    // qu'une macro puisse balayer un compendium entier et sortir un
+    // classement — la fiche ne montre qu'un objet à la fois, ce qui ne dit
+    // pas si le palier 3 est cohérent d'une pièce à l'autre.
+    game.rpg.itemValue = ItemValue;
 
     // ✅ game.rpg.combatState : K.O., fuite, fin de combat
     game.rpg.combatState = { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor };

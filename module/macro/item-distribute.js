@@ -227,6 +227,9 @@
             // partiellement, monde ouvert avant rechargement).
             if (inventoryApi?.addItemToActor) {
               const res = await inventoryApi.addItemToActor(actor, itemData);
+              // Plafond d'encombrement atteint : rien n'a été ajouté, et le
+              // nom ne doit pas apparaître dans le récapitulatif « donné à ».
+              if (res.refused) { ui.notifications?.warn?.(res.reason); continue; }
               givenNames.push(res.stacked ? `${actor.name} (×${res.total})` : actor.name);
             } else {
               await actor.createEmbeddedDocuments("Item", [foundry.utils.deepClone(itemData)]);

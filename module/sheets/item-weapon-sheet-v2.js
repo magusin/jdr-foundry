@@ -7,6 +7,7 @@ import {
   normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
+import { computeItemValue } from "../rules/item-value.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -156,6 +157,10 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
 
+    // Pesée (théoriecraft) — MJ uniquement, jamais placée dans le contexte
+    // rendu d'un joueur (voir item-armor-sheet-v2.js pour le raisonnement).
+    ctx.itemValue = ctx.isGM ? computeItemValue(this.document) : null;
+
     ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
     ctx.system.amplifications = Array.isArray(ctx.system.amplifications) ? ctx.system.amplifications : [];
     ctx.EFFECT_TAGS = {
@@ -226,7 +231,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.bonus = ctx.system.bonus ?? {};
     const BONUS_KEYS = [
       "force","intelligence","dexterite","acuite","endurance",
-      "pvMax","manaMax","regenPv","regenMana","vitesse",
+      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse",
       "armureFixe","resistanceFixe","scoreArmure","scoreResistance"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
@@ -239,6 +244,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       endurance: "Endurance",
       pvMax: "PV max",
       manaMax: "Mana max",
+      fatigueMax: "Fatigue max",
       regenPv: "Régén PV",
       regenMana: "Régén Mana",
       vitesse: "Vitesse",

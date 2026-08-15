@@ -4,6 +4,7 @@ import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositi
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
+import { computeItemValue } from "../rules/item-value.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -99,6 +100,13 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.isGM = game.user.isGM;
     ctx.isReadOnly = !ctx.canEdit;
 
+    // Pesée (théoriecraft) — calculée UNIQUEMENT pour le MJ. Ce n'est pas
+    // qu'un choix d'affichage : la valeur n'est même pas mise dans le contexte
+    // de rendu d'un joueur, donc elle n'atteint jamais son navigateur. Même
+    // règle en deux couches que la récompense de quête — masquer côté template
+    // laisserait le chiffre lisible dans les données rendues.
+    ctx.itemValue = ctx.isGM ? computeItemValue(item) : null;
+
     // Relique : même fiche que l'armure, mais l'emplacement n'est pas un
     // choix — il n'existe qu'un slot Relique, imposé ici pour qu'une relique
     // créée à la main (console, import) atterrisse toujours au bon endroit
@@ -136,6 +144,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       // Ressources
       pvMax: "PV max",
       manaMax: "Mana max",
+      fatigueMax: "Fatigue max",
       regenPv: "Régén PV",
       regenMana: "Régén Mana",
 

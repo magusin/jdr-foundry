@@ -104,6 +104,7 @@
 
           <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
           <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
+          <div><label>Fatigue max</label><input type="number" name="system.bonus.fatigueMax" value="{{system.bonus.fatigueMax}}"/></div>
           <div><label>Régén PV</label><input type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}"/></div>
           <div><label>Régén Mana</label><input type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}"/></div>
 
@@ -146,6 +147,44 @@
           <div><label>Or</label><input type="number" name="system.prix.or" value="{{system.prix.or}}" min="0"/></div>
         </div>
         <small style="opacity:0.8;">100 cuivre = 1 argent • 100 argent = 1 or</small>
+      </section>
+    {{/if}}
+
+    {{!-- PESÉE / THÉORIECRAFT (MJ ONLY)
+          `itemValue` n'est calculé que pour un MJ (voir le contrôleur) : pour
+          un joueur il vaut null, donc ce bloc n'existe pas et aucun chiffre
+          n'atteint son navigateur. --}}
+    {{#if itemValue}}
+      <hr/>
+      <section class="rpg-item-value">
+        <h2>⚖️ Pesée (MJ)</h2>
+        <div class="rpg-iv-head">
+          <span class="rpg-iv-total">{{itemValue.total}}</span>
+          <span class="rpg-iv-tier rpg-iv-{{itemValue.tier.key}}">{{itemValue.tier.label}}</span>
+        </div>
+        {{#if itemValue.rows.length}}
+        <table class="rpg-iv-table">
+          <thead><tr><th>Ligne</th><th>Valeur</th><th>Poids</th></tr></thead>
+          <tbody>
+            {{#each itemValue.rows}}
+            <tr{{#if warn}} class="rpg-iv-warn"{{/if}}>
+              <td>{{label}}</td><td>{{value}}</td><td>{{points}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{else}}
+        <small style="opacity:.8;">Aucun bonus — objet purement narratif.</small>
+        {{/if}}
+        {{#each itemValue.warnings}}
+        <div class="rpg-iv-alert">⚠️ {{this}}</div>
+        {{/each}}
+        <small class="rpg-iv-help">
+          Repère : une pièce de départ pèse 0–5, une pièce de milieu de partie 15–30.
+          Le poids estime l'impact réel d'une ligne, pas sa valeur brute — 1 d'armure fixe
+          vaut ~36 de score d'armure, parce qu'elle est retirée de chaque coup reçu.
+          Amplifications non comptées.
+        </small>
       </section>
     {{/if}}
 

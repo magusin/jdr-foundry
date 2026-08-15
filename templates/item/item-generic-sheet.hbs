@@ -50,15 +50,11 @@
 
       {{#if (eq item.type "consumable")}}
       <hr/>
+      {{!-- Pas de compteur « utilisations » : un consommable se compte en
+            QUANTITÉ, comme un objet. Consommer un exemplaire, c'est retirer 1
+            à la pile — un second compteur par exemplaire empêchait l'empilement
+            et faisait dix lignes d'inventaire pour dix rations identiques. --}}
       <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
-        <div>
-          <label>Utilisations restantes</label>
-          {{#if canEdit}}
-            <input type="number" name="system.utilisations" value="{{system.utilisations}}" min="0"/>
-          {{else}}
-            <div><b>{{system.utilisations}}</b></div>
-          {{/if}}
-        </div>
         <div>
           <label>Effet (texte libre, ce que ça fait à l'usage)</label>
           {{#if canEdit}}

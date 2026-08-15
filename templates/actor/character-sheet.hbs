@@ -136,11 +136,14 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           </div>
 
           <div class="meta">
-            <label>Vitesse</label>
-            <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" {{#if
+            <label>Vitesse (m)</label>
+            {{!-- step=0.1 : la vitesse est en mètres et accepte les décimales
+                  (4,5 = 4 m 500). Sans step, le navigateur impose un pas de 1
+                  et refuse la saisie d'une valeur fractionnaire. --}}
+            <input type="number" name="system.base.vitesse" value="{{system.base.vitesse}}" min="0" step="0.1" {{#if
               flags.readOnly}}disabled{{/if}} />
             {{#unless (eq system.derived.effective.vitesse system.base.vitesse)}}
-            <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}}</small>
+            <small style="color:#e05a00;font-size:11px;font-weight:600">⚡ Effective : {{system.derived.effective.vitesse}} m</small>
             {{/unless}}
           </div>
         </div>
@@ -194,7 +197,17 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             <div class="enc-fill {{charge.cssFill}}" style="width: {{charge.pctCapped}}%;"></div>
           </div>
           {{#if system.derived.surcharge}}
-          <div class="state-badge state-badge--orange">🏋️ Surchargé — -1 vitesse</div>
+          {{!-- Palier réellement atteint : le libellé « -1 vitesse » était figé
+                et devenait faux dès 100 %, où le malus passe à -50 %. --}}
+          <div class="state-badge state-badge--orange">
+            {{#if system.derived.chargeBloque}}
+            🏋️ Sac plein ({{charge.podsActuels}} / {{charge.plafond}}) — -50 % vitesse, aucun objet ne peut être ajouté
+            {{else if (eq system.derived.chargeState "surcharge")}}
+            🏋️ Surchargé — -50 % vitesse (plafond : {{charge.plafond}} pods)
+            {{else}}
+            🏋️ Chargé lourd — -1 vitesse
+            {{/if}}
+          </div>
           {{/if}}
         </div>
 
@@ -590,6 +603,36 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             {{else}}
             <div style="font-size:11px;opacity:.7">Aucune — l'équipement, les sorts et les états peuvent en accorder.</div>
             {{/if}}
+            {{!-- Les pastilles ne montrent que les lignes non nulles, ce qui
+                  est le bon défaut mais empêche de vérifier « je vaux quoi
+                  contre chaque type ? ». La grille complète est ici, repliée. --}}
+            <details class="rpg-resist-detail">
+              <summary>Voir les 10 types</summary>
+              <div class="rpg-resist-elem-read">
+                {{#each resistElemTotalRows as |r|}}
+                <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{/if}}{{#unless r.value}} is-zero{{/unless}}">{{r.label}} {{r.text}}</span>
+                {{/each}}
+              </div>
+            </details>
+          </div>
+
+          {{!-- Résistances aux ÉTATS : équipement porté + états actifs. Elles
+                étaient appliquées par rules/resistances.js mais n'apparaissaient
+                sur aucune fiche — il fallait ouvrir chaque objet un par un. --}}
+          <div style="margin-top:8px">
+            <label style="font-size:12px">Résistances aux états</label>
+            {{#if stateResist.total}}
+            <div class="rpg-state-resist-list">
+              {{#each stateResist.gear as |r|}}
+              <div class="rpg-state-resist-row"><span class="rpg-sr-src">🛡 Équipement</span> {{r.text}}</div>
+              {{/each}}
+              {{#each stateResist.states as |r|}}
+              <div class="rpg-state-resist-row"><span class="rpg-sr-src">✨ État actif</span> {{r.text}}</div>
+              {{/each}}
+            </div>
+            {{else}}
+            <div style="font-size:11px;opacity:.7">Aucune — durée des états subis et dégâts sur la durée non réduits.</div>
+            {{/if}}
           </div>
 
           {{#if flags.isGM}}
@@ -956,15 +999,37 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
 
         <input type="search" class="name-filter-q" data-filter-tab="consumables" placeholder="🔎 Rechercher un consommable…" style="width:100%;margin-bottom:8px" />
 
-        <ol class="items-list simple">
+        {{!-- Même présentation que l'onglet Objets : quantité, poids unitaire,
+              poids total. Un consommable est une marchandise comme une autre —
+              il s'empile, et ce qui compte pour le joueur est combien il en a
+              et ce que ça pèse dans son sac. --}}
+        <ol class="items-list">
+          <li class="items-header">
+            <span>Nom</span>
+            <span>Qté</span>
+            <span>Poids</span>
+            <span>Total</span>
+            <span></span>
+          </li>
+
           {{#each items.consommables as |it|}}
           <li class="item" data-item-id="{{it._id}}">
             <span class="name">
               <img src="{{it.img}}" alt="" />
               <a class="item-edit">{{it.name}}</a>
-              <small>Utilisations: {{it.system.utilisations}}</small>
               {{#if it.system.effet}}<div class="muted" style="font-size:11px;margin-top:2px">{{it.system.effet}}</div>{{/if}}
             </span>
+
+            {{#if ../flags.isGM}}
+            <span><input type="number" value="{{it.system.qte}}" min="0" data-field="system.qte" /></span>
+            <span><input type="number" value="{{it.system.poids}}" min="0" step="0.1"
+                data-field="system.poids" /></span>
+            {{else}}
+            <span>{{it.system.qte}}</span>
+            <span>{{it.system.poids}}</span>
+            {{/if}}
+
+            <span class="total">{{it._derived.poidsTotal}}</span>
 
             <span class="actions">
               {{#if ../flags.isGM}}

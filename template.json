@@ -238,6 +238,7 @@
           "endurance": 0,
           "pvMax": 0,
           "manaMax": 0,
+          "fatigueMax": 0,
           "vitesse": 0,
           "armureFixe": 0,
           "resistanceFixe": 0,
@@ -325,7 +326,6 @@
         "details"
       ],
       "poids": 0.2,
-      "utilisations": 1,
       "effet": ""
     },
     "spell": {

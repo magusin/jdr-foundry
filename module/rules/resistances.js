@@ -54,6 +54,23 @@ function getGearResistances(actor) {
 }
 
 /**
+ * Résistances aux ÉTATS d'un acteur, prêtes à afficher, groupées par source.
+ *
+ * Elles étaient calculées et appliquées correctement depuis toujours, mais
+ * n'apparaissaient sur AUCUNE fiche d'acteur : un joueur voyait bien ses
+ * résistances aux dégâts par type, et n'avait aucun moyen de savoir que son
+ * armure raccourcissait ses brûlures ou que son anneau le rendait immunisé au
+ * poison. Elles ne se lisaient qu'objet par objet, en ouvrant chaque fiche.
+ *
+ * @returns {{gear: Array<{text:string}>, states: Array<{text:string}>, total:number}}
+ */
+export function actorStateResistRows(actor) {
+  const gear = gearStateResistRows(getGearResistances(actor));
+  const states = gearStateResistRows(getStateResistances(actor));
+  return { gear, states, total: gear.length + states.length };
+}
+
+/**
  * Résistances fournies par des états actifs (buffs de résistance posés par sort).
  * Format attendu sur le state : state.resistance = {tag, durationReduction, dotReductionPct, immune}
  */

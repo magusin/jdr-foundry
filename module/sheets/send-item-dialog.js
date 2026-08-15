@@ -189,7 +189,8 @@ export async function promptSendItemToActors(item) {
   for (const actor of targets) {
     try {
       const res = await addItemToActor(actor, foundry.utils.deepClone(baseData));
-      if (res.item) sentTo.push(res.stacked ? `${actor.name} (×${res.total})` : actor.name);
+      if (res.refused) ui.notifications?.warn?.(res.reason);
+      else if (res.item) sentTo.push(res.stacked ? `${actor.name} (×${res.total})` : actor.name);
     } catch (e) {
       console.error(`[RPG] Envoi de "${item.name}" à ${actor.name} :`, e);
       ui.notifications?.error?.(`Échec de l'envoi à ${actor.name} — voir la console.`);
