@@ -1439,6 +1439,48 @@ Hooks.once("init", async () => {
               const caster  = game.actors.get(actorId);
               const targets = raw.targets ?? [];
 
+              // ── Un seul jet de dés pour TOUTES les cibles ──────────────
+              // Les dés appartiennent au sort : une boule de feu ne se relance
+              // pas cible par cible. On lance chaque ligne de dégâts une fois
+              // ici, et seule la mitigation (armure/%/résistance élémentaire,
+              // propre à chacune) fera diverger ce qui est réellement encaissé.
+              // `raw.blocks` est le format courant ; les messages postés avant
+              // ce changement n'ont que `tData.blocks` (mitigation déjà fondue
+              // dedans, un jet par cible) et restent résolus à l'ancienne.
+              const sharedBlocks = Array.isArray(raw.blocks) ? raw.blocks : null;
+              const sharedRaw = [];
+              if (sharedBlocks) {
+                for (const b of sharedBlocks) {
+                  let amount = Number(b.flat) || 0;
+                  if (b.dice) {
+                    const roll = await (new Roll(b.dice)).evaluate();
+                    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
+                      flavor: `🎲 ${b.label ?? "Dégâts"} — ${b.dice}`
+                            + (targets.length > 1 ? ` <span style="opacity:.7">(jet commun à ${targets.length} cibles)</span>` : "") });
+                    amount += roll.total;
+                  }
+                  sharedRaw.push(amount);
+                }
+              }
+
+              /**
+               * Mitigation d'une ligne pour une cible : armure/résistance fixe
+               * puis %, plancher à 1 ; ensuite seulement la résistance
+               * élémentaire (négative = vulnérabilité), sans replancher à 1 —
+               * une immunité doit pouvoir ramener à 0.
+               */
+              const mitigate = (rawAmount, m) => {
+                const fixe = Number(m?.fixe) || 0;
+                const pct  = Number(m?.pct)  || 0;
+                const afterFixe  = Math.max(0, rawAmount - fixe);
+                const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
+                const elemPct = Math.max(-100, Math.min(100, Number(m?.elemPct) || 0));
+                const finalDmg = elemPct
+                  ? Math.max(0, Math.ceil(afterArmor * (1 - elemPct / 100)))
+                  : afterArmor;
+                return { finalDmg, elemPct };
+              };
+
               for (const tData of targets) {
                 // ✅ Pour les tokens non-liés, utiliser le tokenUuid pour l'acteur synthétique
                 const target = tData.tokenUuid
@@ -1448,26 +1490,25 @@ Hooks.once("init", async () => {
                 let siphonTotal = 0;
                 const resultLines = [];
 
-                for (const b of (tData.blocks ?? [])) {
-                  let raw = Number(b.flat) || 0;
-                  if (b.dice) {
-                    const roll = await (new Roll(b.dice)).evaluate();
-                    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
-                      flavor: `🎲 ${b.label ?? "Dégâts"} — ${b.dice}` });
-                    raw += roll.total;
+                // Format courant : lignes partagées + mitigation par cible.
+                // Format hérité : tout est déjà dans tData.blocks.
+                const lines = sharedBlocks
+                  ? sharedBlocks.map((b, i) => ({ b, mit: (tData.mit ?? [])[i], rawAmount: sharedRaw[i] }))
+                  : (tData.blocks ?? []).map(b => ({ b, mit: b, rawAmount: null }));
+
+                for (const { b, mit, rawAmount } of lines) {
+                  let rawTotal = rawAmount;
+                  if (rawTotal === null) {
+                    // Hérité : le jet appartient à cette cible seule.
+                    rawTotal = Number(b.flat) || 0;
+                    if (b.dice) {
+                      const roll = await (new Roll(b.dice)).evaluate();
+                      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: caster }),
+                        flavor: `🎲 ${b.label ?? "Dégâts"} — ${b.dice}` });
+                      rawTotal += roll.total;
+                    }
                   }
-                  const fixe = Number(b.fixe) || 0;
-                  const pct  = Number(b.pct)  || 0;
-                  const afterFixe = Math.max(0, raw - fixe);
-                  const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
-                  // Résistance élémentaire (second étage, capturée à la
-                  // résolution du sort dans spells.js) : négative = vulné-
-                  // rabilité. Le plancher à 1 est celui de l'armure, pas
-                  // celui-ci — une immunité doit pouvoir ramener à 0.
-                  const elemPct = Math.max(-100, Math.min(100, Number(b.elemPct) || 0));
-                  const finalDmg = elemPct
-                    ? Math.max(0, Math.ceil(afterArmor * (1 - elemPct / 100)))
-                    : afterArmor;
+                  const { finalDmg, elemPct } = mitigate(rawTotal, mit);
                   totalFinal += finalDmg;
                   // Vol de vie : calculé sur les dégâts réellement encaissés,
                   // pas sur le jet brut — voler la vie d'un coup absorbé par
@@ -1475,9 +1516,9 @@ Hooks.once("init", async () => {
                   const sPct = Math.max(0, Math.min(100, Number(b.siphon) || 0));
                   if (sPct > 0) siphonTotal += Math.floor(finalDmg * sPct / 100);
                   const elemPart = elemPct
-                    ? ` <span style="opacity:.75;font-size:11px">(${b.elemLabel ?? "élément"} ${elemPct > 0 ? "−" : "+"}${Math.abs(elemPct)}%)</span>`
+                    ? ` <span style="opacity:.75;font-size:11px">(${mit?.elemLabel ?? "élément"} ${elemPct > 0 ? "−" : "+"}${Math.abs(elemPct)}%)</span>`
                     : "";
-                  resultLines.push(`${b.label}: brut <b>${raw}</b> → <b style="color:#c0392b">${finalDmg}</b>${elemPart}`);
+                  resultLines.push(`${b.label}: brut <b>${rawTotal}</b> → <b style="color:#c0392b">${finalDmg}</b>${elemPart}`);
                 }
 
                 const pvCur = tData.pvCur ?? Number(target?.system?.ressources?.pv?.valeur ?? 0);
@@ -1694,15 +1735,27 @@ Hooks.once("init", async () => {
                 if (target) await target.update({ "system.ressources.pv.valeur": d.pvNew });
 
                 // Vol de vie : soigne le lanceur dans la même validation.
+                // Le montant est appliqué en DELTA sur les PV lus à l'instant,
+                // jamais via le pvNew figé au jet : en multi-cible, chaque
+                // cible produit son propre message de confirmation, tous
+                // calculés depuis les MÊMES PV de départ (rien n'est écrit
+                // entre-temps). Écrire une valeur absolue faisait que la
+                // 2e validation écrasait la 1re — le lanceur récupérait le
+                // plus gros drain au lieu de leur somme.
                 let siphonLine = "";
                 if (d.siphon?.amount > 0) {
                   const cDoc = d.siphon.uuid
                     ? (await fromUuid(d.siphon.uuid).catch(() => null)) : null;
                   const cActor = cDoc?.actor ?? cDoc ?? game.actors.get(d.siphon.actorId);
                   if (cActor) {
-                    await cActor.update({ "system.ressources.pv.valeur": d.siphon.pvNew });
+                    const cCur = Number(cActor.system?.ressources?.pv?.valeur ?? 0) || 0;
+                    const cMax = Number(cActor.system?.ressources?.pv?.max ?? 0) || 0;
+                    const cNew = cMax > 0
+                      ? Math.min(cMax, cCur + d.siphon.amount)
+                      : cCur + d.siphon.amount;
+                    await cActor.update({ "system.ressources.pv.valeur": cNew });
                     siphonLine = `<br>🩸 <b>${d.siphon.name}</b> draine <b>${d.siphon.amount}</b> PV.`
-                               + hpSecret(cActor, ` (${d.siphon.pvCur} → <b>${d.siphon.pvNew}</b>/${d.siphon.pvMax})`);
+                               + hpSecret(cActor, ` (${cCur} → <b>${cNew}</b>/${cMax})`);
                   }
                 }
 

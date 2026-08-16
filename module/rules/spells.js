@@ -81,7 +81,44 @@ function spellGmContent(d, phase) {
         <button type="button" class="rpg-spell-resolve" data-result="fail">Échec</button>`;
     const successLabel = d.noFailOption ? "Touché" : "Réussite";
     const critLabel = d.noFailOption ? "Critique" : "Réussite Crit";
+
+    // ── Multi-cible : le MJ tranche cible par cible ─────────────────────
+    // Un seul d20 a été lancé ; chaque cible a son propre seuil. On pré-coche
+    // celles que le jet atteint (d20 >= TN, ou aucune opposition), mais rien
+    // n'est verrouillé : la case reste décochable/cochable, c'est le MJ qui a
+    // le dernier mot. Seules les cibles cochées subissent dégâts et effets.
+    const list = Array.isArray(d.targetTNs) ? d.targetTNs : [];
+    let targetsBlock = "";
+    if (list.length > 1) {
+      const d20 = Number(d.d20);
+      const hasRoll = Number.isFinite(d20);
+      const rows = list.map((t, i) => {
+        const auto    = !!t.autoSuccess;
+        const reached = auto || !hasRoll || d20 >= Number(t.tn);
+        const verdict = auto
+          ? `<span style="opacity:.7">aucun jet</span>`
+          : `seuil <b>${Number(t.tn)}+</b>`
+            + (hasRoll
+                ? ` → <b style="color:${reached ? "#1d9e75" : "#c0392b"}">${reached ? "atteint" : "raté"}</b>`
+                : ``);
+        return `<label style="display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer">
+          <input type="checkbox" class="rpg-spell-target-hit"
+            data-uuid="${htmlEsc(t.uuid ?? "")}" data-idx="${i}" ${reached ? "checked" : ""}>
+          <span><b>${htmlEsc(t.name ?? "?")}</b> — ${verdict}</span>
+        </label>`;
+      });
+      targetsBlock = `
+        <div class="rpg-spell-targets" style="margin-bottom:8px;font-size:12px">
+          <div style="font-weight:600;margin-bottom:2px">
+            🎯 Cibles touchées${hasRoll ? ` <span style="opacity:.75">(d20 = ${Number(d.d20)})</span>` : ``} :
+          </div>
+          ${rows.join("")}
+          <div style="font-size:11px;opacity:.7;margin-top:2px">Décoche une cible pour qu'elle soit épargnée.</div>
+        </div>`;
+    }
+
     return `<div class="rpg-spell-declare rpg-spell-gm">${header}
+      ${targetsBlock}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">${failButtons}
         <button type="button" class="rpg-spell-resolve" data-result="success">${successLabel}</button>
         <button type="button" class="rpg-spell-resolve" data-result="crit">${critLabel}</button>
@@ -1013,8 +1050,15 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
   // ✅ Multi-cible : si targetToken explicite, une seule cible (compat menu.js attaque) ;
   // sinon on prend TOUS les tokens actuellement ciblés (game.user.targets)
-  const targetTokens = targetToken ? [targetToken] : Array.from(game.user.targets);
-  const targetActors = targetTokens.map(t => t.actor).filter(Boolean);
+  // Les deux listes doivent rester ALIGNÉES index par index : un token sans
+  // acteur filtré d'un seul côté décalait toutes les paires suivantes (la
+  // cible n°2 recevait le seuil/les résistances de la n°3). On filtre donc
+  // les paires, jamais une des deux listes isolément.
+  const targetPairs = (targetToken ? [targetToken] : Array.from(game.user.targets))
+    .map(t => ({ token: t, actor: t?.actor ?? null }))
+    .filter(p => p.actor);
+  const targetTokens = targetPairs.map(p => p.token);
+  const targetActors = targetPairs.map(p => p.actor);
   const targetActor  = targetActors[0] ?? null; // rétrocompat (effets self/caster n'en ont pas besoin)
 
   // ── Validation nombre de cibles ───────────────────────────────────────
@@ -1150,36 +1194,80 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   const targetTokenUuids = targetTokens.map(t => t?.document?.uuid).filter(Boolean);
   const targetNamesList = targetActors.map(a => a.name).join(", ");
 
-  // Seuil de touché pour la première cible. Sans cible, le sort porte sur le
-  // lanceur : computeTN traite ce cas comme une cible amie, sans comparaison
-  // de stats — la difficulté saisie sur la fiche est alors le seuil lui-même.
-  const firstTarget = targetActors[0] ?? actor;
-  let tnInfo = null;
-  try {
-    tnInfo = computeTN(actor, firstTarget, item);
-  } catch (e) { /* pas grave si ça échoue */ }
+  // ── Seuil de touché : UN PAR CIBLE ────────────────────────────────────
+  // Chaque cible a ses propres stats (et sa propre distance au lanceur), donc
+  // son propre seuil. N'en calculer qu'un sur la première cible faisait juger
+  // le mage en robe et le chevalier en plates au même seuil — celui de la
+  // cible visée en premier, au petit bonheur de l'ordre de ciblage.
+  // Le JET, lui, reste unique : un seul d20 est comparé à chacun des seuils.
+  // Sans cible, le sort porte sur le lanceur : computeTN traite ce cas comme
+  // une cible amie, sans comparaison de stats — la difficulté saisie sur la
+  // fiche est alors le seuil lui-même.
+  const tnFor = (tActor, tTok) => {
+    try {
+      return computeTN(actor, tActor, item, { attackerToken: casterT, targetToken: tTok ?? null });
+    } catch (e) { return null; }   // pas grave si ça échoue
+  };
 
-  // Un jet de touché est nécessaire sauf pour une cible amie/soi sans
-  // opposition (autoSuccess) : dans ce cas le MJ tranche directement après
-  // avoir validé la déclaration, sans étape de jet intermédiaire.
-  let needsRoll = true;
+  /** @type {{uuid:string|null,name:string,tn:number,autoSuccess:boolean,friendly:boolean}[]} */
+  const targetTNs = targetPairs.map(({ actor: tActor, token: tTok }) => {
+    const info = tnFor(tActor, tTok);
+    return {
+      uuid: tTok?.document?.uuid ?? null,
+      name: tActor.name,
+      tn: n(info?.tnFinal, 11),
+      autoSuccess: !!info?.autoSuccess,
+      friendly: !!info?.friendly
+    };
+  });
+
+  // Sans cible : seuil du lanceur sur lui-même, gardé hors de targetTNs (il
+  // n'y a personne à cocher côté MJ, et rien à toucher).
+  const selfInfo = targetTNs.length ? null : tnFor(actor, casterT);
+
+  // Un jet de touché est nécessaire dès qu'AU MOINS une cible s'y oppose : un
+  // sort qui soigne un allié (auto) et brûle un ennemi (jet) doit être lancé.
+  const needsRoll = targetTNs.length
+    ? targetTNs.some(t => !t.autoSuccess)
+    : !(selfInfo?.autoSuccess);
+
+  const diffNote = (friendly) => friendly
+    ? `<div style="font-size:11px;opacity:.7">(difficulté ${n(sys.difficulte, 0)} du sort — la cible ne s'y oppose pas)</div>`
+    : (sys.difficulte
+        ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte, 0)} déjà incluse dans le TN)</div>`
+        : ``);
+
   let tnLine;
-  if (tnInfo?.autoSuccess) {
-    needsRoll = false;
-    tnLine = targetActors.length
+  if (!targetTNs.length) {
+    // Aucune cible : le sort porte sur le lanceur.
+    tnLine = selfInfo?.autoSuccess
+      ? `🌀 <b>Action sur soi</b> — aucun jet de touché`
+      : (selfInfo
+          ? `🎯 <b>Jet de touché</b> : il faut faire `
+            + `<b style="color:#e05a00;font-size:1.1em">${selfInfo.tnFinal}+</b> sur 1d20`
+            + diffNote(selfInfo.friendly)
+          : `🎯 <b>Jet de touché</b> : fais ton jet`
+            + (sys.difficulte ? ` (difficulté +${n(sys.difficulte, 0)})` : ``));
+  } else if (targetTNs.length === 1) {
+    const t = targetTNs[0];
+    tnLine = t.autoSuccess
       ? `🌿 <b>Action bienveillante</b> — aucun jet, le sort prend effet`
-      : `🌀 <b>Action sur soi</b> — aucun jet de touché`;
-  } else if (tnInfo) {
-    tnLine = `🎯 <b>Jet de touché</b> : il faut faire `
-           + `<b style="color:#e05a00;font-size:1.1em">${tnInfo.tnFinal}+</b> sur 1d20`
-           + (tnInfo.friendly
-               ? `<div style="font-size:11px;opacity:.7">(difficulté ${n(sys.difficulte, 0)} du sort — la cible ne s'y oppose pas)</div>`
-               : (sys.difficulte
-                   ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte, 0)} déjà incluse dans le TN)</div>`
-                   : ``));
+      : `🎯 <b>Jet de touché</b> : il faut faire `
+        + `<b style="color:#e05a00;font-size:1.1em">${t.tn}+</b> sur 1d20`
+        + diffNote(t.friendly);
   } else {
-    tnLine = `🎯 <b>Jet de touché</b> : fais ton jet`
-           + (sys.difficulte ? ` (difficulté +${n(sys.difficulte, 0)})` : ``);
+    // Multi-cible : un seuil par cible, annoncé AVANT le jet pour que le
+    // joueur sache d'un coup d'œil ce qu'il lui faut pour toucher chacune.
+    const rows = targetTNs.map(t => t.autoSuccess
+      ? `<li><b>${htmlEsc(t.name)}</b> — <span style="color:#1d9e75;font-weight:700">aucun jet</span>`
+        + `<span style="opacity:.7;font-size:11px"> (ne s'y oppose pas)</span></li>`
+      : `<li><b>${htmlEsc(t.name)}</b> — il faut `
+        + `<b style="color:#e05a00">${t.tn}+</b></li>`);
+    tnLine = `🎯 <b>Jet de touché</b> — <b>un seul d20</b> pour toutes les cibles :`
+           + `<ul style="margin:4px 0 0 18px">${rows.join("")}</ul>`
+           + (sys.difficulte
+               ? `<div style="font-size:11px;opacity:.7">(difficulté +${n(sys.difficulte, 0)} déjà incluse dans chaque seuil)</div>`
+               : ``);
   }
 
   const bodyHtml = `
@@ -1219,7 +1307,10 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     actorId: actor.id,
     needsRoll,
     noFailOption,
-    tnFinal: tnInfo?.tnFinal ?? 11,
+    // tnFinal reste le seuil de la 1re cible (compat des messages/flags déjà
+    // postés) ; targetTNs est la vraie liste, seuil par cible.
+    tnFinal: targetTNs[0]?.tn ?? n(selfInfo?.tnFinal, 11),
+    targetTNs,
     manaCost, cdMax,
     actorUuid, itemUuid, casterTokenUuid, targetTokenUuids,
     actionId: actionId ?? null,
@@ -1300,12 +1391,31 @@ export async function rollSpellDie(message) {
   const actor = game.actors.get(d.actorId);
   const tn = Number(d.tnFinal) || 11;
   const roll = await (new Roll("1d20")).evaluate();
-  const hit = roll.total >= tn;
+
+  // UN SEUL d20, comparé au seuil de CHAQUE cible. Le détail par cible reste
+  // sous gmOnly() comme le verdict simple l'était déjà : annoncer publiquement
+  // qui est touché avant que le MJ ait tranché révélerait le résultat.
+  const list = Array.isArray(d.targetTNs) ? d.targetTNs : [];
+  let head;
+  let detail;
+  if (list.length > 1) {
+    head = `🎲 <b>${actor?.name ?? "?"}</b> — ${htmlEsc(d.itemName ?? "Sort")} : <b>${roll.total}</b> sur 1d20`;
+    const rows = list.map(t => {
+      const auto    = !!t.autoSuccess;
+      const reached = auto || roll.total >= Number(t.tn);
+      return `<div>${htmlEsc(t.name ?? "?")} — ${auto ? "aucun jet" : `${Number(t.tn)}+`} `
+           + `<b style="color:${reached ? "#1d9e75" : "#c0392b"}">${reached ? "✅ touché" : "❌ raté"}</b></div>`;
+    });
+    detail = gmOnly(`<div style="font-size:11px;margin-top:2px">${rows.join("")}</div>`);
+  } else {
+    const hit = roll.total >= tn;
+    head = `🎲 <b>${actor?.name ?? "?"}</b> — ${htmlEsc(d.itemName ?? "Sort")} : <b>${roll.total}</b> vs TN <b>${tn}+</b>`;
+    detail = gmOnly(` → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`);
+  }
 
   await roll.toMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
-    flavor: `🎲 <b>${actor?.name ?? "?"}</b> — ${htmlEsc(d.itemName ?? "Sort")} : <b>${roll.total}</b> vs TN <b>${tn}+</b>`
-          + gmOnly(` → <b style="color:${hit ? "#1d9e75" : "#c0392b"}">${hit ? "✅ Touché !" : "❌ Raté"}</b>`)
+    flavor: head + detail
           + `<span style="display:block;font-size:11px;opacity:.7">En attente de la validation du MJ.</span>`
   });
 
@@ -1327,7 +1437,7 @@ export async function rollSpellDie(message) {
 /**
  * Bind des boutons MJ dans le chat (centralisé)
  */
-export async function resolveDeclaredSpellFromMessage(message, result) {
+export async function resolveDeclaredSpellFromMessage(message, result, opts = {}) {
   if (!game.user.isGM) return;
 
   const data =
@@ -1352,13 +1462,33 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     ? data.targetTokenUuids
     : (data.targetTokenUuid ? [data.targetTokenUuid] : []);
 
-  const targetTokens = [];
+  // Paires token+acteur, gardées ALIGNÉES (cf. declareSpell) : filtrer une des
+  // deux listes seule décalerait résistances et seuils d'une cible à l'autre.
+  const allPairs = [];
   for (const uuid of uuidList) {
     const doc = await fromUuidSafe(uuid);
     const tok = doc?.object ?? null;
-    if (tok) targetTokens.push(tok);
+    if (tok?.actor) allPairs.push({ uuid, token: tok, actor: tok.actor });
   }
-  const targetActors = targetTokens.map(t => t.actor).filter(Boolean);
+
+  // ── Cibles retenues par le MJ ────────────────────────────────────────
+  // opts.hitUuids vient des cases à cocher du message MJ (multi-cible) : un
+  // seul d20 a été lancé, mais chaque cible avait son propre seuil et le MJ
+  // tranche pour chacune. Absent (cible unique, ou message posté avant cette
+  // version) → toutes les cibles sont touchées, comportement d'origine.
+  //
+  // Échec / Échec Critique sont des verdicts GLOBAUX : le sort rate dans son
+  // ensemble, la notion de « cible touchée » n'a plus de sens. On ignore donc
+  // les cases — sinon les effets « Au lancement (toujours) », qui doivent
+  // partir quel que soit le résultat, seraient restreints aux cibles cochées.
+  const perTarget = (res !== "fail" && res !== "critfail");
+  const hitUuids = (perTarget && Array.isArray(opts.hitUuids)) ? opts.hitUuids : null;
+  const pairs       = hitUuids ? allPairs.filter(p => hitUuids.includes(p.uuid)) : allPairs;
+  const missedPairs = hitUuids ? allPairs.filter(p => !hitUuids.includes(p.uuid)) : [];
+
+  const targetTokens = pairs.map(p => p.token);
+  const targetActors = pairs.map(p => p.actor);
+  const missedNames  = missedPairs.map(p => p.actor.name);
 
   // Jeton du lanceur : nécessaire pour viser le bon acteur synthétique quand
   // le lanceur est un token non lié (monstre posé sur la scène).
@@ -1367,8 +1497,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     : null;
 
   // Rétrocompat : variables singulières utilisées pour les effets "self/caster"
-  const targetToken = targetTokens[0] ?? null;
-  const targetActor = targetActors[0] ?? null;
+  // Le déplacement du lanceur (charge) vise la 1re cible DÉCLARÉE, touchée ou
+  // non : il est appliqué hors du branchement sur le verdict (voir plus bas),
+  // donc il ne peut pas dépendre des cases cochées par le MJ. C'est le seul
+  // usage d'une « première cible » ici — tout le reste boucle sur les paires.
+  const chargeToken = allPairs[0]?.token ?? null;
+  const chargeActor = allPairs[0]?.actor ?? null;
 
   const targetNames = targetActors.map(a => a.name).join(", ") || null;
 
@@ -1388,12 +1522,12 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
     if (moveM > 0) {
       const fromTok = casterToken ?? actor.getActiveTokens?.()?.[0] ?? null;
       try {
-        const mv = await advanceCasterTowardTarget(fromTok, targetToken, moveM);
+        const mv = await advanceCasterTowardTarget(fromTok, chargeToken, moveM);
         if (mv.moved) {
           await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
             content: `🏃 <b>${htmlEsc(actor.name)}</b> avance de <b>${fmtMeters(mv.meters)}</b> vers `
-                   + `<b>${htmlEsc(targetActor?.name ?? "sa cible")}</b> `
+                   + `<b>${htmlEsc(chargeActor?.name ?? "sa cible")}</b> `
                    + `<span style="opacity:.7">(déplacement du sort — ne consomme ni mètres ni slot d'action)</span>`
           });
         } else if (mv.reason) {
@@ -1737,6 +1871,13 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       </button>`;
   }
 
+  // Cibles que le MJ a laissées de côté (seuil non atteint, ou décochées) :
+  // annoncées explicitement, sinon leur absence du message se lit comme un
+  // oubli plutôt que comme un raté.
+  const missedLine = missedNames.length
+    ? `<div style="margin-top:4px;font-size:12px;color:#c0392b">✗ Raté sur <b>${htmlEsc(missedNames.join(", "))}</b></div>`
+    : "";
+
   // ── Message de résolution : effets + formule dégâts + bouton joueur ──
   if (dmgBlocks.length > 0 && targetActors.length > 0) {
     // Formule lisible par ligne
@@ -1748,7 +1889,13 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       return `${b.label} : ${formula}`;
     });
 
-    // Encode les blocs + réductions pour le handler du bouton
+    // ── Un seul jet de dés, partagé par toutes les cibles ───────────────
+    // Les dés appartiennent au SORT, pas à la cible : une boule de feu fait
+    // le même jet pour tout le monde, et seule la mitigation (armure, %,
+    // résistance élémentaire) fait diverger les dégâts réellement encaissés.
+    // La charge utile est donc scindée en deux : `blocks` (les lignes de
+    // dégâts, une seule copie, lancées une fois par le handler) et, par
+    // cible, `mit[]` — sa mitigation, alignée index par index sur `blocks`.
     const targetData = targetActors.map((tActor, idx) => {
       const tSys = tActor.system ?? {};
       const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
@@ -1760,14 +1907,13 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
         name: tActor.name,
         pvCur: n(tActor.system?.ressources?.pv?.valeur, 0),
         pvMax: n(tActor.system?.ressources?.pv?.max, 0),
-        blocks: dmgBlocks.map(b => {
+        mit: dmgBlocks.map(b => {
           const isPhys = b.livraison === "physique";
           // Résistance élémentaire de la cible au type du SORT (system.tag).
           // Sans élément ("neutre"), la livraison de la ligne fait office de
           // type — voir resolveDamageType() dans damage-types.js.
           const res = resistanceFor(tActor, { tag: item.system?.tag, livraison: b.livraison });
           return {
-            ...b,
             fixe: isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0),
             pct:  isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0),
             elemPct: res.pct,
@@ -1781,6 +1927,10 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       actorId: actor.id,
       casterUuid: casterToken?.document?.uuid ?? actor.uuid,
       casterName: actor.name,
+      blocks: dmgBlocks.map(b => ({
+        dice: b.dice ?? null, flat: n(b.flat, 0), label: b.label,
+        livraison: b.livraison, siphon: n(b.siphon, 0)
+      })),
       targets: targetData
     }));
 
@@ -1793,6 +1943,7 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
       content: `
         <div style="font-size:13px">
           <b>✅ ${title}</b>${targetNames ? ` sur <b>${targetNames}</b>` : ""}<br>
+          ${missedLine}
           ${fxSection}
           <div style="margin:8px 0 4px;font-weight:600">💥 Dégâts à infliger :</div>
           ${formulaLines.map(l => `<div style="opacity:.85">${l}</div>`).join("")}
@@ -1803,13 +1954,26 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
           ${restoreSection}
         </div>`
     });
+  } else if (!targetActors.length && missedNames.length) {
+    // Toutes les cibles ont été écartées par le MJ : le sort part bien (mana,
+    // fatigue et slot déjà consommés plus haut) mais ne touche personne. Sans
+    // ce cas, le message annonçait « ✅ RÉUSSITE sur » suivi du vide.
+    const fxBody = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `<div style="font-size:13px"><b style="color:#c0392b">✗ ${htmlEsc(actor.name)} : `
+             + `${htmlEsc(item.name)} ne touche aucune cible</b>`
+             + `<div style="margin-top:4px;font-size:12px;opacity:.85">Raté sur <b>${htmlEsc(missedNames.join(", "))}</b></div>`
+             + `${fxBody}${restoreSection}</div>`,
+      flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
+    });
   } else {
     // Pas de dégâts — message de résolution simple (+ récupération éventuelle)
     const fxBody = fxResultRows.length ? `<br>${fxResultRows.join("<br>")}` : "";
     await ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor }),
       content: `<div style="font-size:13px"><b>✅ ${title}</b>`
-             + `${targetNames ? ` sur <b>${targetNames}</b>` : ""}${fxBody}${restoreSection}</div>`,
+             + `${targetNames ? ` sur <b>${targetNames}</b>` : ""}${missedLine}${fxBody}${restoreSection}</div>`,
       flags: actionId ? { rpg: { confirmedAction: true, actionId } } : {}
     });
   }
@@ -1884,11 +2048,20 @@ export function bindSpellChatButtons(htmlEl, message) {
       const result = btn.dataset.result;
       if (!result) return;
 
+      // Multi-cible : le MJ a coché les cibles réellement touchées (cases
+      // pré-remplies par comparaison du d20 unique aux seuils de chacune).
+      // Aucune case dans le DOM = cible unique ou message d'avant cette
+      // version → on n'envoie rien et resolve garde toutes les cibles.
+      const boxes = htmlEl.querySelectorAll(".rpg-spell-target-hit");
+      const opts = boxes.length
+        ? { hitUuids: Array.from(boxes).filter(cb => cb.checked).map(cb => cb.dataset.uuid) }
+        : {};
+
       // lock UI
       for (const b of buttons) b.disabled = true;
 
       try {
-        const res = await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result);
+        const res = await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result, opts);
         if (res === false) {
           // Annulé (ex: MJ a fermé le dialog Échec Critique sans valider) -> on réactive
           for (const b of buttons) b.disabled = false;
