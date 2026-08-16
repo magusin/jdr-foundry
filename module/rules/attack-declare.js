@@ -14,6 +14,7 @@
 
 import { gmOnly } from "./chat-visibility.js";
 import { checkWeaponRange } from "./weapon-range.js";
+import { fmtMeters } from "../utils/grid.js";
 
 const htmlEsc = (s) =>
   String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -125,9 +126,13 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
   // d'actions ou une fiche permettait donc de frapper une cible à l'autre
   // bout de la carte. On passe par checkWeaponRange (weapon-range.js), la
   // même définition que le menu de combat et les cercles du canevas.
+  // Les deux tokens servent ensuite au malus de distance : on les résout une
+  // fois ici plutôt que de laisser computeTN les rechercher, pour que le
+  // contrôle de portée et le calcul du seuil mesurent le MÊME couple de
+  // tokens (une attaque d'opportunité passe les siens explicitement).
+  const attackerTok = opts.attackerToken ?? attacker.getActiveTokens?.()?.[0] ?? null;
+  const targetTok   = opts.targetToken   ?? targetActor.getActiveTokens?.()?.[0] ?? null;
   {
-    const attackerTok = opts.attackerToken ?? attacker.getActiveTokens?.()?.[0] ?? null;
-    const targetTok   = opts.targetToken   ?? targetActor.getActiveTokens?.()?.[0] ?? null;
     const r = checkWeaponRange(attackerTok, targetTok, item);
     if (!r.ok) {
       ui.notifications?.warn?.(`${targetActor.name} : ${r.reason}`);
@@ -147,14 +152,22 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     ? item
     : { type: item.type, system: { ...item.system, difficulte: opts.difficulte } };
 
-  const tn = Combat?.computeTN?.(attacker, targetActor, tnItem)
+  const tn = Combat?.computeTN?.(attacker, targetActor, tnItem,
+                                { attackerToken: attackerTok, targetToken: targetTok })
     ?? { tnFinal: 11, tnBase: 11, diff: 0, livraison: item.system?.livraison ?? "physique" };
 
   // Aperçu des dégâts : total déjà calculé, sans détail interne
   const dmgPrev = Combat?.damagePreview?.(attacker, item) ?? null;
 
   const title = opts.title ?? `Attaque : <b>${htmlEsc(item.name)}</b> → <b>${htmlEsc(targetActor.name)}</b>`;
-  const diffTxt = tn.diff ? ` ; difficulté +${tn.diff}` : "";
+  // Le détail du malus de distance est annoncé séparément : un seuil qui
+  // monte tout seul parce que la cible est loin doit se lire, sinon il passe
+  // pour un bug de la fiche d'arme.
+  const rangeTxt = tn.rangeDiff
+    ? ` (dont +${tn.rangeDiff} distance${
+        Number.isFinite(tn.rangeDist) ? ` — ${fmtMeters(tn.rangeDist)}` : ""})`
+    : "";
+  const diffTxt = tn.diff ? ` ; difficulté +${tn.diff}${rangeTxt}` : "";
 
   const d = {
     title,

@@ -205,6 +205,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.range.min = n(ctx.system.range.min, 0);
     ctx.system.range.max = n(ctx.system.range.max, ctx.system.portee);
 
+    // Malus de distance : 0 = règle désactivée, ce qui est l'état de toute
+    // arme écrite avant ce champ (voir rangeDifficulty, weapon-range.js).
+    ctx.system.range.efficace = Math.max(0, n(ctx.system.range.efficace, 0));
+    ctx.system.range.tranche  = Math.max(0.1, n(ctx.system.range.tranche, 5));
+
     // Compat ancien stockage
     const legacyDice = String(ctx.system.degats ?? "1d6");
     const legacyFlat = n(ctx.system.degatsFixes, 0);
@@ -286,6 +291,16 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.ui.damageExpr = `${ctx.system.damage.dice} + (${ctx.ui.damagePreview.totalFlat})`;
     ctx.ui.critExpr = `${ctx.system.crit.damage.dice} + (${ctx.ui.critPreview.totalFlat})`;
 
+    // Barème de distance en clair : deux nombres abstraits ne disent pas ce
+    // qu'ils coûtent réellement, et le seuil de touché ne bouge que de 10
+    // valeurs au total — +1 de difficulté, c'est 5% de chance en moins.
+    const eff = ctx.system.range.efficace;
+    const tr  = ctx.system.range.tranche;
+    ctx.ui.rangePenaltyText = eff > 0
+      ? `Jusqu'à ${eff} m : aucun malus. Ensuite +1 de difficulté par tranche de ${tr} m entamée `
+        + `(${eff}–${eff + tr} m : +1 ; ${eff + tr}–${eff + 2 * tr} m : +2 …), soit −5% de chance de toucher par point.`
+      : "";
+
     return ctx;
   }
 
@@ -321,6 +336,13 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       if (expanded.system.range) {
         expanded.system.range.min = Math.max(0, n(expanded.system.range.min, 0));
         expanded.system.range.max = Math.max(0, n(expanded.system.range.max, 0));
+        if (expanded.system.range.efficace != null)
+          expanded.system.range.efficace = Math.max(0, n(expanded.system.range.efficace, 0));
+        // Une tranche à 0 diviserait par zéro : rangeDifficulty la borne déjà
+        // à 0,1, on fait pareil à l'écriture pour que la fiche ne garde pas
+        // une valeur que le moteur n'appliquera jamais telle quelle.
+        if (expanded.system.range.tranche != null)
+          expanded.system.range.tranche = Math.max(0.1, n(expanded.system.range.tranche, 5));
         // `portee` reste synchronisée sur le max pour tout le code existant
         expanded.system.portee = expanded.system.range.max;
       }

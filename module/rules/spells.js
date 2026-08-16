@@ -5,6 +5,7 @@ import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
+import { advanceCasterTowardTarget } from "./spell-move.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -532,6 +533,7 @@ async function ensureSpellDefaults(item) {
   if (sys.effectsUI === undefined) patch["system.effectsUI"] = [];
   if (sys.coutMana === undefined) patch["system.coutMana"] = 0;
   if (sys.difficulte === undefined) patch["system.difficulte"] = 0;
+  if (sys.moveSelf === undefined) patch["system.moveSelf"] = 0;
   if (sys.speed === undefined) patch["system.speed"] = "normal";
   if (sys.livraison === undefined) patch["system.livraison"] = "magique";
 
@@ -1375,6 +1377,34 @@ export async function resolveDeclaredSpellFromMessage(message, result) {
   // indéfiniment une fois le sort résolu.
   const publicMsg = data.linkedPublicId ? game.messages.get(data.linkedPublicId) : null;
   const deletePublicMsg = () => publicMsg?.delete().catch(() => {});
+
+  // ── Déplacement du lanceur (charge, bond...) ─────────────────────────
+  // Placé AVANT le branchement sur le verdict, donc appliqué quel que soit
+  // le résultat — y compris sur un échec : la bête a chargé, qu'elle touche
+  // ou non. C'est aussi ce qui rend le déplacement lisible pour la table :
+  // il ne dépend que de la validation MJ, jamais du dé.
+  {
+    const moveM = n(sys.moveSelf, 0);
+    if (moveM > 0) {
+      const fromTok = casterToken ?? actor.getActiveTokens?.()?.[0] ?? null;
+      try {
+        const mv = await advanceCasterTowardTarget(fromTok, targetToken, moveM);
+        if (mv.moved) {
+          await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            content: `🏃 <b>${htmlEsc(actor.name)}</b> avance de <b>${fmtMeters(mv.meters)}</b> vers `
+                   + `<b>${htmlEsc(targetActor?.name ?? "sa cible")}</b> `
+                   + `<span style="opacity:.7">(déplacement du sort — ne consomme ni mètres ni slot d'action)</span>`
+          });
+        } else if (mv.reason) {
+          console.debug(`[RPG] ${item.name} : déplacement du lanceur non appliqué — ${mv.reason}`);
+        }
+      } catch (e) {
+        // Un déplacement raté ne doit jamais empêcher le sort de se résoudre.
+        console.warn("[RPG] Déplacement du lanceur impossible :", e);
+      }
+    }
+  }
 
   // ── Effets/États — appliqués immédiatement après réussite ────────────
   const fxResultRows = [];

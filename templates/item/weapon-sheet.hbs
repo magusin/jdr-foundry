@@ -180,6 +180,30 @@
         </div>
 
         <div class="mm-line">
+          <span class="mm-label" title="Au-delà de cette distance, viser devient plus dur : chaque tranche entamée ajoute +1 de difficulté au seuil de touché. 0 = pas de malus de distance (comportement d'une arme de mêlée ou d'une arme écrite avant ce champ).">Portée efficace (m)</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.range.efficace" value="{{system.range.efficace}}" min="0" step="0.1"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.range.efficace}}</b> m</div>
+          {{/if}}
+        </div>
+
+        <div class="mm-line">
+          <span class="mm-label" title="Taille d'une tranche de distance au-delà de la portée efficace. Chaque tranche entamée ajoute +1 de difficulté, soit −5% de chance de toucher. Sans effet si la portée efficace vaut 0.">Tranche de malus (m)</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.range.tranche" value="{{system.range.tranche}}" min="0.1" step="0.1"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.range.tranche}}</b> m</div>
+          {{/if}}
+        </div>
+
+        {{#if ui.rangePenaltyText}}
+          <div class="preview-block">
+            <div class="preview-sub">{{ui.rangePenaltyText}}</div>
+          </div>
+        {{/if}}
+
+        <div class="mm-line">
           <span class="mm-label">Allonge (mêlée, m)</span>
           {{#if canEdit}}
             <input class="mm-input" type="number" name="system.allonge" value="{{system.allonge}}" min="0" step="0.1"

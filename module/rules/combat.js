@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/combat.js
 
 import { resistanceFor, applyResistPct } from "./damage-types.js";
+import { rangeDifficulty } from "./weapon-range.js";
 
 export const AUTO_FAIL_MAX  = 5;   // 5- échec auto
 export const AUTO_SUCC_MIN  = 16;  // 16+ succès auto
@@ -207,6 +208,13 @@ export async function computeSpellDamage(actor, item, { crit = false } = {}) {
  *
  * - physique : Dextérité attaquant vs Dextérité cible
  * - magique  : Acuité    attaquant vs Acuité    cible
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.friendly]      force la branche cible amie
+ * @param {Token}   [opts.attackerToken] token du tireur (sinon : son token actif)
+ * @param {Token}   [opts.targetToken]   token de la cible (sinon : son token actif)
+ * @param {number}  [opts.distanceM]     distance déjà mesurée, en mètres
+ * @param {number}  [opts.rangeDiff]     malus de distance imposé (court-circuite le calcul)
  */
 export function computeTN(attacker, target, item, opts = {}) {
   const livraison = String(item?.system?.livraison ?? (item?.type === "spell" ? "magique" : "physique"));
@@ -242,15 +250,57 @@ export function computeTN(attacker, target, item, opts = {}) {
   const atk = isPhys ? Number(AP.dexterite ?? 0) : Number(AP.acuite ?? 0);
   const def = isPhys ? Number(TP.dexterite ?? 0) : Number(TP.acuite ?? 0);
 
+  // ── Malus de distance (armes de tir) ──────────────────────────────────
+  // Ajouté à la difficulté AVANT applyDifficulty, jamais au seuil obtenu :
+  // c'est la même règle que la difficulté forcée d'une attaque à deux armes
+  // (attack-declare.js) — passer par applyDifficulty garde le bornage [6,16]
+  // et la branche cible amie. Volontairement absent de la branche « cible
+  // amie » plus haut : là, la difficulté EST le seuil et 0 vaut réussite
+  // automatique, donc y ajouter un malus de distance transformerait un soin
+  // à distance en jet obligatoire, ce que personne n'a demandé.
+  const rangeInfo = opts.rangeDiff !== undefined
+    ? { diff: Math.max(0, Number(opts.rangeDiff) || 0), dist: opts.distanceM ?? null }
+    : rangeDifficultyFor(attacker, target, item, opts);
+  const diffTotal = diff + rangeInfo.diff;
+
   const r       = (100 + atk) / (100 + def);
   const tnBase  = tnFromRatio(r);
-  let   tnFinal = applyDifficulty(tnBase, diff);
+  let   tnFinal = applyDifficulty(tnBase, diffTotal);
   tnFinal = clamp(tnFinal - toucherBonus, 6, 16);
 
   return {
     livraison, friendly: false, autoSuccess: false,
-    diff, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus
+    diff: diffTotal, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus,
+    // Détail du malus de distance, pour que les surfaces qui annoncent le
+    // seuil puissent dire d'où il vient plutôt qu'afficher un total opaque.
+    rangeDiff: rangeInfo.diff, rangeDist: rangeInfo.dist
   };
+}
+
+/**
+ * Malus de distance d'un item, à partir des acteurs.
+ *
+ * Isolé dans son propre helper pour que computeTN reste lisible et surtout
+ * pour que TOUTE surface annonçant un seuil hérite du malus sans avoir à
+ * penser à le demander : le menu de combat, la fiche de monstre et la macro
+ * « Lancer un Sort » appellent computeTN sans passer de token, et c'est
+ * précisément ce genre d'écart qui a déjà fait diverger le bouton et le
+ * cercle dessiné sur la carte.
+ *
+ * Tout est défensif : hors canevas (harnais de test), sans token, ou si le
+ * module de portée n'expose pas la fonction, on rend un malus nul.
+ */
+function rangeDifficultyFor(attacker, target, item, opts = {}) {
+  const none = { diff: 0, dist: null };
+  try {
+    const from = opts.attackerToken ?? attacker?.getActiveTokens?.()?.[0] ?? null;
+    const to   = opts.targetToken   ?? target?.getActiveTokens?.()?.[0]   ?? null;
+    if (!from || !to) return none;
+    const r = rangeDifficulty(item, from, to, opts.distanceM);
+    return { diff: Math.max(0, Number(r?.diff) || 0), dist: r?.dist ?? null };
+  } catch (e) {
+    return none;
+  }
 }
 
 /**

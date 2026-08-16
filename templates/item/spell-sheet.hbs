@@ -111,6 +111,12 @@
         </div>
 
         <div>
+          <label title="Charge, bond, ruée : au moment où le MJ valide le sort, le lanceur avance en ligne droite vers sa cible, d'au plus ce nombre de mètres, et s'arrête au contact. Ce déplacement NE consomme ni sa réserve de mètres du tour ni son slot d'action Déplacement — il fait partie du sort. Il ne déclenche donc ni attaque d'opportunité ni piège traversé. 0 = aucun déplacement.">Déplacement du lanceur (m)</label>
+          {{#if canEdit}}<input type="number" name="system.moveSelf" value="{{system.moveSelf}}" min="0" step="0.1" style="width:100%"/>
+          {{else}}<div><b>{{system.moveSelf}}</b></div>{{/if}}
+        </div>
+
+        <div>
           <label title="Nombre de tokens que le lanceur doit avoir visés. 0 = pas de minimum (sort sur soi).">Nb de cibles — min</label>
           {{#if canEdit}}<input type="number" name="system.targetCount.min" value="{{system.targetCount.min}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.targetCount.min}}</b></div>{{/if}}

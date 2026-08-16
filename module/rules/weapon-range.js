@@ -103,6 +103,55 @@ export function checkWeaponRange(fromToken, toToken, weapon) {
   };
 }
 
+/**
+ * Difficulté SUPPLÉMENTAIRE due à la distance, pour une arme de tir.
+ *
+ * Deux champs sur la fiche d'arme, tous deux sous `system.range` :
+ *   - `efficace` : portée efficace, en mètres. En deçà, aucun malus. À 0 (le
+ *                  défaut, et la valeur de toute arme écrite avant ce champ)
+ *                  la règle est DÉSACTIVÉE — c'est ce qui garde le
+ *                  comportement historique pour l'arsenal existant.
+ *   - `tranche`  : chaque tranche entamée au-delà de la portée efficace ajoute
+ *                  +1 de difficulté. 5 m par défaut.
+ *
+ * `efficace` à 0 ne peut pas vouloir dire « malus dès le premier mètre » : ce
+ * serait imposer rétroactivement un malus à toutes les armes du monde, dont
+ * aucune n'a jamais rempli ce champ. Une arme réellement inutilisable au-delà
+ * du contact se décrit avec sa portée max, pas avec ce malus.
+ *
+ * La distance est celle du reste du système : BORD À BORD, en mètres
+ * (utils/grid.js). Sans token ni canevas, on ne sait pas mesurer : on rend 0
+ * plutôt que d'inventer un malus — même parti pris que checkWeaponRange, qui
+ * laisse passer quand il ne peut pas mesurer.
+ *
+ * @param {Item}   weapon
+ * @param {Token}  [fromToken]
+ * @param {Token}  [toToken]
+ * @param {number} [distOverride] distance déjà mesurée, en mètres
+ * @returns {{diff:number, dist:number|null, efficace:number, tranche:number}}
+ */
+export function rangeDifficulty(weapon, fromToken, toToken, distOverride) {
+  const rng      = weapon?.system?.range ?? {};
+  const efficace = Math.max(0, num(rng.efficace, 0));
+  const tranche  = Math.max(0.1, num(rng.tranche, 5));
+
+  const none = { diff: 0, dist: null, efficace, tranche };
+  if (efficace <= 0) return none;               // règle désactivée
+
+  const dist = Number.isFinite(distOverride)
+    ? Number(distOverride)
+    : (fromToken && toToken ? rangeDistanceMeters(fromToken, toToken) : null);
+
+  if (dist === null || !Number.isFinite(dist)) return none;
+
+  const over = dist - efficace;
+  // Pile sur la portée efficace = encore dans la zone sans malus. La marge
+  // absorbe les arrondis du calcul de distance (0,999999 m).
+  if (over <= 0.001) return { diff: 0, dist, efficace, tranche };
+
+  return { diff: Math.ceil(over / tranche), dist, efficace, tranche };
+}
+
 /** Même test, à partir des acteurs : prend leur token actif sur la scène. */
 export function checkWeaponRangeForActors(attacker, target, weapon) {
   const from = attacker?.getActiveTokens?.()?.[0] ?? null;

@@ -107,7 +107,7 @@ const SYNC_FIELDS = {
     "system.effects", "system.resistances", "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description",
     "system.speed", "system.range", "system.targetCount", "system.fatigueCost", "system.coutMana",
-    "system.difficulte", "system.livraison", "system.damage", "system.damageCrit",
+    "system.difficulte", "system.moveSelf", "system.livraison", "system.damage", "system.damageCrit",
     "system.damages", "system.restores", "system.effectsUI", "system.tag",
     "system.cooldown.max",
     "system.aura.target", "system.aura.key", "system.aura.range",
