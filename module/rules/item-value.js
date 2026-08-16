@@ -474,6 +474,71 @@ const MONSTER_TIERS = [
   { max: Infinity, key: "boss", label: "Boss",     hint: "⚠️ vérifie que le groupe peut le blesser" }
 ];
 
+/**
+ * Nombre de capacités qu'un monstre peut sortir dans un tour.
+ *
+ * Défaut 2, qui n'est pas un chiffre arbitraire : c'est `slotsTotal.max` du
+ * budget d'action (rules/action-budget.js). Réglable en monde pour les
+ * créatures épiques jouées seules contre tout le groupe.
+ *
+ * ⚠️ Ce réglage ne change QUE la pesée — c'est une hypothèse de calcul, pas
+ * une règle. Le budget réel reste à 2 slots pour tout le monde en jeu.
+ */
+function monsterActionSlots() {
+  try {
+    return Math.max(1, Math.min(6, n(game.settings.get("rpg", "peseeActionsMonstre"), 2)));
+  } catch (e) {
+    return 2;   // hors Foundry, ou réglage pas encore enregistré
+  }
+}
+
+/**
+ * Dégâts bruts moyens d'une capacité de monstre, en un seul nombre.
+ *
+ * Lit `system.damages[]` — le format de la fiche actuelle, où une capacité
+ * peut porter PLUSIEURS lignes de dégâts qui s'appliquent toutes, donc on les
+ * somme. L'ancien bloc unique `system.damage` n'est lu qu'en repli, et
+ * seulement s'il est encore actif.
+ *
+ * C'est le bug que cette fonction existe pour corriger : la pesée ne lisait
+ * que `system.damage`. Or `ensureSpellDefaults` (spells.js) migre l'ancien
+ * bloc vers `damages[]` puis se contente de poser `enabled: false` — sans
+ * effacer `dice`, qui reste à sa valeur par défaut « 1d6 ». L'ancien garde
+ * (`enabled === false && !diceAverage(dice)`) ne se déclenchait donc jamais :
+ * la pesée retombait sur ce 1d6 fantôme et notait TOUTES les capacités
+ * écrites sur la fiche actuelle comme des attaques à 3,5 de moyenne, quelle
+ * que soit leur vraie puissance. Menace sous-évaluée, palier de rencontre
+ * faux, exactement là où l'outil sert le plus.
+ *
+ * Le scaling de stat suit la même règle qu'à la résolution : stat du monstre
+ * ÷ per × perStep, ligne par ligne (chaque ligne a sa propre stat).
+ */
+function spellRawDamage(s, sys) {
+  const statBonus = (stat, per, perStep) => {
+    const key = String(stat ?? "");
+    if (!key || !perStep) return 0;
+    return Math.floor(n(sys?.principales?.[key], 0) / Math.max(1, n(per, 10))) * n(perStep, 0);
+  };
+
+  const lines = Array.isArray(s?.damages) ? s.damages : [];
+  if (lines.length) {
+    let total = 0;
+    for (const d of lines) {
+      if (!d) continue;
+      total += diceAverage(d.dice) + n(d.flat, 0) + statBonus(d.stat, d.per, d.perStep);
+    }
+    return Math.max(0, total);
+  }
+
+  // Repli : ancien bloc unique, uniquement s'il est encore actif.
+  const dmg = s?.damage ?? {};
+  if (dmg.enabled === false) return 0;
+  const sc = dmg.scaling ?? {};
+  const raw = diceAverage(dmg.dice) + n(dmg.flat, 0)
+            + statBonus(sc.stat ?? "force", sc.per, sc.perStep);
+  return Math.max(0, raw);
+}
+
 /** Réduction en % rendue par un score de défense (miroir de actor.js). */
 function scorePct(score) {
   const S = Math.max(0, n(score, 0));
@@ -546,49 +611,122 @@ export function computeMonsterValue(actor) {
     );
   }
 
-  // ── Menace : la meilleure attaque disponible, recharge comprise ────────
+  // ── Menace : ce qu'il peut réellement sortir en UN tour ────────────────
+  // Un monstre n'utilise pas son meilleur sort, il utilise les N meilleurs
+  // qu'il peut caser dans son budget d'action — et un bestiaire à vingt
+  // capacités ne frappe pas dix fois plus fort qu'un autre à deux. N vient du
+  // budget réel (action-budget.js : slotsTotal.max = 2), réglable en monde
+  // pour les créatures épiques jouées seules face au groupe.
   const spells = (actor?.items ?? []).filter(i => i.type === "spell");
-  let best = 0;
+  const slots = monsterActionSlots();
+
+  const abilities = [];
   for (const sp of spells) {
     const s = sp.system ?? {};
-    const dmg = s.damage ?? {};
-    if (dmg.enabled === false && !diceAverage(dmg.dice)) continue;
+    // Un passif n'est pas une action : il ne prend aucune place dans le tour.
+    if (String(s.speed ?? "normal") === "passif") continue;
 
-    const sc = dmg.scaling ?? {};
-    const per = Math.max(1, n(sc.per, 10));
-    const statVal = n(sys.principales?.[String(sc.stat ?? "force")], 0);
-    const scaled = Math.floor(statVal / per) * n(sc.perStep, 0);
-
-    const raw = diceAverage(dmg.dice) + n(dmg.flat, 0) + scaled;
+    const raw = spellRawDamage(s, sys);
     if (raw <= 0) continue;
 
-    // Mitigation côté PJ, puis dilution par la recharge.
+    // Dégâts d'UNE utilisation, mitigation côté PJ comprise. Pas de division
+    // par la recharge ici : c'est la simulation ci-dessous qui gère la
+    // disponibilité, tour par tour.
     const landed = Math.max(1, Math.ceil((raw - PARTY.armureFixe) * (1 - PARTY.reductionPct / 100)));
-    const cd = Math.max(1, n(s.cooldown?.max, 0) + 1);
-    const perTurn = (landed * PARTY.hitChance) / cd;
     const targets = Math.max(1, n(s.targetCount?.max, 1));
+    const cdMax = Math.max(0, n(s.cooldown?.max, 0));
 
-    rows.push({
-      label: `⚔ ${sp.name}`,
-      value: `${Math.round(raw * 10) / 10} brut${cd > 1 ? ` · recharge ${cd - 1}` : ""}${targets > 1 ? ` · ${targets} cibles` : ""}`,
-      points: Math.round(perTurn * targets * 10) / 10
+    // Un sort RAPIDE occupe deux places (SLOT_DEFS : sortRapide max 2) — mais
+    // seulement s'il n'a pas de recharge, sinon sa deuxième utilisation dans
+    // le même tour serait justement bloquée par elle.
+    const uses = (String(s.speed ?? "normal") === "rapide" && cdMax === 0) ? 2 : 1;
+
+    abilities.push({
+      name: sp.name, raw, targets, cdMax, uses,
+      perUse: landed * PARTY.hitChance * targets,
+      readyAt: 0, turnsUsed: 0, totalUses: 0
     });
-    best = Math.max(best, perTurn * targets);
+  }
+
+  // Simulation sur SIM_TURNS tours : à chaque tour la créature remplit ses
+  // places avec les meilleures capacités DISPONIBLES, puis met les recharges
+  // à jour. La moyenne sur le cycle est sa menace par tour.
+  //
+  // C'est ce qui distingue ce modèle de « la somme des N meilleures valeurs
+  // déjà divisées par leur recharge » : cette somme-là laisse une place VIDE
+  // les tours où la grosse capacité recharge, alors qu'en vrai la créature
+  // enchaîne avec la suivante. Mesuré sur le même bestiaire, l'écart était de
+  // ~25 % — systématiquement à la baisse, donc un monstre sous-évalué.
+  //
+  // 12 tours parce que c'est divisible par 1, 2, 3, 4 et 6 : les cycles de
+  // recharge courants retombent juste, sans reste qui fausserait la moyenne.
+  const SIM_TURNS = 12;
+  let total = 0;
+  // Ce que reçoit UNE cible, pour « tours pour abattre un PJ » : les dégâts
+  // d'une capacité de zone se répartissent, ils ne s'empilent pas sur le même
+  // personnage.
+  let focusTotal = 0;
+  for (let t = 0; t < SIM_TURNS; t++) {
+    const avail = abilities
+      .filter(a => a.readyAt <= t)
+      .sort((a, b) => b.perUse - a.perUse);
+
+    let slotsLeft = slots;
+    for (const a of avail) {
+      if (slotsLeft <= 0) break;
+      const times = Math.min(a.uses, slotsLeft);
+      total += a.perUse * times;
+      focusTotal += (a.perUse / a.targets) * times;
+      slotsLeft -= times;
+      a.turnsUsed += 1;
+      a.totalUses += times;
+      if (a.cdMax > 0) a.readyAt = t + 1 + a.cdMax;
+    }
+  }
+  const best = total / SIM_TURNS;
+
+  for (const a of abilities.slice().sort((x, y) => y.totalUses - x.totalUses || y.perUse - x.perUse)) {
+    const parts = [`${round1(a.raw)} brut`];
+    if (a.cdMax > 0) parts.push(`recharge ${a.cdMax}`);
+    if (a.targets > 1) parts.push(`${a.targets} cibles`);
+    if (a.uses > 1) parts.push("rapide ×2");
+    parts.push(a.turnsUsed ? `joué ${a.turnsUsed}/${SIM_TURNS} tours` : "jamais joué : trop faible");
+    rows.push({
+      label: `${a.turnsUsed ? "⚔" : "▫"} ${a.name}`,
+      value: parts.join(" · "),
+      points: a.totalUses ? round1(a.perUse * a.totalUses / SIM_TURNS) : null
+    });
   }
 
   if (!spells.length) {
     warnings.push("Aucun sort sur ce monstre : il n'a aucune attaque. Dans ce système, les attaques d'un monstre SONT ses items `spell`.");
   } else if (best <= 0) {
-    warnings.push("Aucune de ses capacités n'inflige de dégâts — vérifie que `damage.dice` est bien renseigné.");
+    warnings.push("Aucune de ses capacités n'inflige de dégâts — vérifie que la ligne de dégâts (dés) est bien renseignée.");
+  }
+
+  const jamais = abilities.filter(a => !a.turnsUsed).length;
+  if (jamais > 0) {
+    warnings.push(
+      `${jamais} capacité(s) ne sortent jamais : ses ${slots} places par tour sont toujours prises par de ` +
+      `meilleures. Elles n'ajoutent aucune puissance — c'est de la variété, pas de la menace. Empiler des ` +
+      `sorts sur un monstre ne le renforce qu'à partir du moment où ils battent ceux déjà retenus.`
+    );
   }
 
   const threat = Math.round(best * 10) / 10;
 
-  // Tours qu'il faut à ce monstre pour abattre UN personnage.
-  const toKill = threat > 0 ? Math.round((PARTY.pv / threat) * 10) / 10 : Infinity;
-  rows.push({ label: "Menace (dégâts / tour)", value: `${threat}`, points: null });
+  // Tours qu'il faut à ce monstre pour abattre UN personnage — calculé sur
+  // les dégâts que reçoit UNE cible, pas sur le total encaissé par le groupe.
+  // Les deux se confondaient jusqu'ici, et l'écart n'est pas anecdotique :
+  // une capacité à 3 cibles compte trois fois dans la menace (c'est correct,
+  // le groupe prend bien tout ça) mais chaque PJ n'en reçoit qu'un tiers. Un
+  // monstre à dégâts de zone paraissait donc capable d'abattre un PJ trois
+  // fois plus vite qu'il ne le peut réellement.
+  const focus = focusTotal / SIM_TURNS;
+  const toKill = focus > 0 ? Math.round((PARTY.pv / focus) * 10) / 10 : Infinity;
+  rows.push({ label: "Menace (dégâts / tour, groupe entier)", value: `${threat}`, points: null });
   rows.push({
-    label: "Tours pour abattre un PJ",
+    label: "Tours pour abattre un PJ (s'il concentre)",
     value: Number.isFinite(toKill) ? `${toKill}` : "—",
     points: null
   });

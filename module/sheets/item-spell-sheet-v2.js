@@ -538,6 +538,9 @@ static PARTS = foundry.utils.mergeObject(
       if (tmax > 0) ctx.playerInfo.push({ icon: "👥", label: "Cibles",
         value: tmin === tmax ? `${tmax}` : `${tmin} – ${tmax}` });
       add("🎲", "Difficulté", n(ctx.system.difficulte, 0), " au seuil");
+      const moveSelf = n(ctx.system.moveSelf, 0);
+      if (moveSelf > 0) ctx.playerInfo.push({ icon: "🏃", label: "Charge",
+        value: `avance jusqu'à ${moveSelf} m vers la cible` });
       const cdMax = n(ctx.system.cooldown?.max, 0);
       const cdRest = n(ctx.system.cooldown?.restant, 0);
       if (cdMax > 0) ctx.playerInfo.push({ icon: "⏳", label: "Recharge",
@@ -592,6 +595,8 @@ static PARTS = foundry.utils.mergeObject(
     // defaults
     ctx.system.speed = ctx.system.speed ?? "normal";
     ctx.system.range = ctx.system.range ?? { min: 0, max: 0 };
+    // Déplacement du lanceur (charge) — voir rules/spell-move.js.
+    ctx.system.moveSelf = Math.max(0, n(ctx.system.moveSelf, 0));
     ctx.system.cooldown = ctx.system.cooldown ?? { max: 0, restant: 0 };
 
     ctx.system.aura = ctx.system.aura ?? {};
