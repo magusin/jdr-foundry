@@ -376,12 +376,18 @@
                 </select>
               </div>
               <div>
-                <label title="Sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), uniquement sur un critique, ou dès le lancement quel que soit le résultat — y compris sur un échec.">⚡ Se déclenche</label>
+                <label title="Sur toute touche réussie (critique compris), sur une touche normale seulement (pas sur un critique), ou uniquement sur un critique. Dans tous les cas l'effet ne part que si le MJ valide la touche sur cette cible : un sort raté, annulé, ou une cible non cochée en multi-cible ne reçoit rien.">⚡ Se déclenche</label>
                 <select data-fx-field="when">
                   <option value="hit"     {{#if (eq fx.when "hit")}}selected{{/if}}>Touche normale + crit</option>
                   <option value="hitOnly" {{#if (eq fx.when "hitOnly")}}selected{{/if}}>Touche normale uniquement</option>
                   <option value="crit"    {{#if (eq fx.when "crit")}}selected{{/if}}>Critique uniquement</option>
-                  <option value="cast"    {{#if (eq fx.when "cast")}}selected{{/if}}>Au lancement (même sur échec)</option>
+                  {{!-- « Au lancement (même sur échec) » retiré : un effet ne
+                        part plus jamais sur un échec. Un sort déjà écrit avec
+                        cette valeur reste sélectionné ci-dessous et se
+                        comporte comme « Touche normale + crit ». --}}
+                  {{#if (eq fx.when "cast")}}
+                  <option value="cast" selected>Au lancement (obsolète — se comporte comme « Touche + crit »)</option>
+                  {{/if}}
                 </select>
               </div>
               <div>
