@@ -487,6 +487,18 @@ Hooks.once("init", async () => {
     default: 7, requiresReload: false
   });
 
+  // Combien de capacités un monstre sort réellement dans un tour. Sans ce
+  // plafond, la pesée notait la menace sur la SEULE meilleure attaque, ce qui
+  // sous-estimait tout monstre à deux bonnes capacités — et, à l'inverse,
+  // laissait croire qu'en empiler vingt ne changeait rien. Le défaut 2 est le
+  // budget d'action réel (action-budget.js, slotsTotal.max).
+  game.settings.register("rpg", "peseeActionsMonstre", {
+    name: "Pesée — actions d'un monstre par tour",
+    hint: "Nombre de capacités qu'un monstre est censé enchaîner dans un tour. 2 = le budget d'action normal ; monte à 3 pour peser une créature épique jouée seule contre tout le groupe. Purement indicatif : ne change QUE l'encart « Pesée de rencontre », jamais le budget d'action en jeu.",
+    scope: "world", config: true, type: Number,
+    default: 2, requiresReload: false
+  });
+
   // Interrupteur MJ : le MJ reste libre par défaut (poussées, téléportations,
   // repositionnements), et active la limite à la volée quand il veut jouer un
   // monstre « à la règle ». Basculé par le raccourci clavier ci-dessous.
