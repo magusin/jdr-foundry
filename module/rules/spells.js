@@ -385,11 +385,22 @@ function effectsForResult(item, result) {
   const arr = Array.isArray(item?.system?.effectsUI) ? item.system.effectsUI : [];
   const res = String(result);
 
+  // Un effet ne part QUE sur une touche validée par le MJ. Un sort raté ne
+  // pose rien : ni sur la cible, ni sur le lanceur. Échec et échec critique
+  // ne retiennent donc aucun effet — pas même « au lancement », qui partait
+  // auparavant quel que soit le résultat et posait des états sur un sort qui
+  // n'avait rien touché.
+  if (res !== "success" && res !== "crit") return [];
+
   const allowWhen = new Set();
-  allowWhen.add("cast"); // toujours
   // "hit"     = toute touche réussie, critique compris
   // "hitonly" = touche normale seulement (exclu sur un critique)
   // "crit"    = critique uniquement
+  // "cast"    = ancienne valeur « au lancement (même sur échec) ». L'option
+  //             n'existe plus sur la fiche ; les sorts déjà écrits avec elle
+  //             sont traités comme "hit" plutôt qu'ignorés en silence — leur
+  //             effet part toujours, mais désormais seulement s'ils touchent.
+  allowWhen.add("cast");
   if (res === "success") { allowWhen.add("hit"); allowWhen.add("hitonly"); }
   if (res === "crit")    { allowWhen.add("hit"); allowWhen.add("crit"); }
 
@@ -902,7 +913,9 @@ export async function castSpell(actor, item, { targetToken = null, casterToken =
 
 const PREVIEW_WHEN_LABELS = {
   hit: "Touché + crit", hitonly: "Touché normal", crit: "Crit uniquement",
-  cast: "Au lancement"
+  // Ancien « au lancement (même sur échec) » : se comporte comme "hit"
+  // depuis qu'un effet ne part plus jamais sur un échec.
+  cast: "Touché + crit"
 };
 
 /**
@@ -1111,10 +1124,12 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
   const fxAll     = Array.isArray(sys.effectsUI) ? sys.effectsUI : [];
   const whenOf    = (f) => String(f?.when ?? "hit").toLowerCase();
-  const fxHit     = fxAll.filter(f => whenOf(f) === "hit");
+  // "cast" est l'ancienne valeur « au lancement (même sur échec) » : elle se
+  // comporte maintenant comme "hit", donc elle est annoncée avec elle plutôt
+  // que dans une rubrique séparée qui promettrait un déclenchement sur échec.
+  const fxHit     = fxAll.filter(f => whenOf(f) === "hit" || whenOf(f) === "cast");
   const fxHitOnly = fxAll.filter(f => whenOf(f) === "hitonly");
   const fxCrit    = fxAll.filter(f => whenOf(f) === "crit");
-  const fxCast    = fxAll.filter(f => whenOf(f) === "cast");
 
   const summarizeFxList = (list) => {
     if (!list?.length) return null;
@@ -1288,7 +1303,6 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
       ${restoreLines.map(l => `${l}<br>`).join("")}
     </div>
 
-    ${summarizeFxList(fxCast) ? `<div style="margin-top:6px;"><b>Effets (au lancement)</b>${summarizeFxList(fxCast)}</div>` : ``}
     ${summarizeFxList(fxHit)  ? `<div style="margin-top:6px;"><b>Effets (touché + crit)</b>${summarizeFxList(fxHit)}</div>`   : ``}
     ${summarizeFxList(fxHitOnly) ? `<div style="margin-top:6px;"><b>Effets (touché normal uniquement)</b>${summarizeFxList(fxHitOnly)}</div>` : ``}
     ${summarizeFxList(fxCrit) ? `<div style="margin-top:6px;"><b>Effets (crit uniquement)</b>${summarizeFxList(fxCrit)}</div>`     : ``}
@@ -1478,9 +1492,10 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
   // version) → toutes les cibles sont touchées, comportement d'origine.
   //
   // Échec / Échec Critique sont des verdicts GLOBAUX : le sort rate dans son
-  // ensemble, la notion de « cible touchée » n'a plus de sens. On ignore donc
-  // les cases — sinon les effets « Au lancement (toujours) », qui doivent
-  // partir quel que soit le résultat, seraient restreints aux cibles cochées.
+  // ensemble et ne pose plus rien sur personne (effectsForResult renvoie une
+  // liste vide, et aucune ligne de dégâts n'est produite). Les cases n'ont
+  // donc plus rien à filtrer ; on garde la liste complète pour que le message
+  // d'échec nomme bien toutes les cibles visées.
   const perTarget = (res !== "fail" && res !== "critfail");
   const hitUuids = (perTarget && Array.isArray(opts.hitUuids)) ? opts.hitUuids : null;
   const pairs       = hitUuids ? allPairs.filter(p => hitUuids.includes(p.uuid)) : allPairs;
@@ -1546,13 +1561,19 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
 
   /**
    * Applique les effets secondaires correspondant à un résultat donné.
-   * Extrait de la branche « réussite » pour que les effets marqués
-   * « Au lancement (toujours) » partent AUSSI sur un échec : c'est le sens
-   * même de l'option, et jusqu'ici la branche échec sortait avant d'avoir
-   * appliqué le moindre effet.
+   * Ne pose quelque chose que sur une touche validée : effectsForResult()
+   * renvoie une liste vide pour un échec ou un échec critique, et la liste
+   * des cibles a déjà été réduite à celles que le MJ a cochées.
    */
   const applyEffectsFor = async (outcome) => {
     const fxList = effectsForResult(item, outcome);
+
+    // Le sort visait des cibles et le MJ n'en a validé aucune : il n'a rien
+    // touché, donc il ne pose rien — pas même le buff « sur soi » du lanceur,
+    // qui sinon serait le seul morceau du sort à survivre à un raté complet.
+    // Un sort SANS cible (Repos, buff personnel) n'est pas concerné : sa liste
+    // de cibles est vide dès le départ, pas vidée par le MJ.
+    if (allPairs.length > 0 && targetActors.length === 0) return;
 
     for (const fx of fxList) {
       const mods = buildModsFromFxMods(fx.mods);
@@ -1672,8 +1693,9 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     const choice = await promptCritFailConsequence({ kind: "spell", actorName: actor.name });
     if (!choice) return false; // MJ a annulé — message conservé, boutons réactivés
 
-    // Effets « Au lancement (toujours) » : ils partent même ici — le sort a
-    // bien été lancé, seul son résultat est catastrophique.
+    // Aucun effet sur un échec critique : le sort n'a rien touché, il ne pose
+    // donc rien. L'appel est conservé pour que la conséquence choisie par le
+    // MJ reste la seule chose qui s'applique ici.
     await applyEffectsFor("critfail");
 
     const actionId = data.actionId ?? null;
@@ -1706,8 +1728,8 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
 
   // ── Échec ────────────────────────────────────────────────────────────
   if (res === "fail") {
-    // Idem : seuls les effets « Au lancement (toujours) » sont retenus par
-    // effectsForResult() pour un échec ; tous les autres sont ignorés.
+    // Idem : effectsForResult() ne retient plus rien sur un échec, donc aucun
+    // état n'est posé. Le sort a coûté son mana et sa fatigue, rien de plus.
     await applyEffectsFor("fail");
 
     const actionId = data.actionId ?? null;

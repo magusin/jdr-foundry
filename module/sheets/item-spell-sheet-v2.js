@@ -61,7 +61,10 @@ const WHEN_LABELS = {
   hit: "⚡ Touche + crit",
   hitonly: "⚡ Touche normale",
   crit: "✦ Crit uniquement",
-  cast: "🪄 Au lancement"
+  // Valeur obsolète (« au lancement, même sur échec ») : plus proposée à la
+  // création, conservée en lecture pour les sorts déjà écrits, où elle se
+  // comporte désormais comme "hit" — voir effectsForResult() dans spells.js.
+  cast: "⚡ Touche + crit (ancien « au lancement »)"
 };
 
 const AURA_TARGET_LABELS = { allies: "alliés", enemies: "ennemis", both: "tous" };
