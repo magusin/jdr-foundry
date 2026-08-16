@@ -159,6 +159,7 @@
     },
     "monster": {
       "pvReveal": "none",
+      "peseeReveal": "none",
       "templates": [
         "base"
       ],

@@ -12,7 +12,7 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
 import { actorStateResistRows } from "../rules/resistances.js";
-import { computeMonsterValue } from "../rules/item-value.js";
+import { computeMonsterValue, computeMonsterBandValues } from "../rules/item-value.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -220,10 +220,52 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     // porte pas d'équipement) — invisibles jusque-là, comme sur la fiche PJ.
     ctx.stateResist = actorStateResistRows(actor);
 
-    // Pesée du monstre (théoriecraft) — MJ uniquement, et jamais placée dans
-    // le contexte rendu d'un joueur : la fiche monstre est consultable par
-    // les joueurs (pvReveal), donc le garde doit être ici, pas au template.
-    ctx.monsterValue = game.user.isGM ? computeMonsterValue(actor) : null;
+    // ── Pesée du monstre (théoriecraft) ───────────────────────────────────
+    // Le détail (lignes de calcul, capacités, stats, alertes) est réservé au
+    // MJ et n'est JAMAIS placé dans le contexte rendu d'un joueur : la fiche
+    // monstre est consultable par les joueurs (pvReveal), donc le garde doit
+    // être ici, pas au template.
+    const peseeMode = String(sys.peseeReveal ?? "none");
+    // Une fiche d'origine qui porte des plages de génération ne décrit AUCUNE
+    // créature réelle : chaque token retire ses stats à la création
+    // (preCreateToken → buildRandomUpdatesForActor). Le score calculé ici est
+    // donc faux pour la table, et on ne le montre pas au joueur — le réglage,
+    // lui, se transmet aux tokens comme n'importe quel champ système, et c'est
+    // là qu'il produira le bon chiffre.
+    const genBands = Object.keys(actor.system?.gen?.bands ?? {}).length > 0;
+    const statsAreReal = ctx.isToken || !genBands;
+    const peseeShown = (peseeMode === "tier" || peseeMode === "score") && statsAreReal;
+    // Rien à calculer si personne ne doit le lire.
+    const value = (game.user.isGM || peseeShown) ? computeMonsterValue(actor) : null;
+    ctx.monsterValue = game.user.isGM ? value : null;
+
+    // Sur la fiche D'ORIGINE, les stats affichées ne sont pas celles que la
+    // table affrontera : la génération les tire dans `system.gen.bands` au
+    // moment où le token est posé, et la fiche garde ses valeurs d'avant —
+    // souvent des zéros. Peser cette fiche-là ne dit rien d'utile ; on pèse
+    // donc aussi les PLAGES, niveau par niveau. Sur un token, la question ne
+    // se pose pas : ses stats sont les vraies, tirées à sa création.
+    ctx.bandValues = (game.user.isGM && !ctx.isToken) ? computeMonsterBandValues(actor) : null;
+    ctx.hasBandValues = !!ctx.bandValues?.length;
+
+    // ── Ce que le joueur a le droit de lire de cette pesée ────────────────
+    // Le MJ choisit, monstre par monstre (ou token par token, le champ vit
+    // dans le delta comme pvReveal) : rien, le palier seul, ou le palier et
+    // son score. Jamais le détail — ni les capacités, ni les stats, ni le
+    // calcul : c'est justement ce que le joueur ne doit pas déduire.
+    //
+    // `tier.hint` reste MJ : « mini-boss, un seul suffit », « vérifie que le
+    // groupe peut le blesser » sont des conseils de dosage, pas une
+    // information de jeu — les donner reviendrait à annoncer à la table le
+    // nombre de créatures que le MJ compte poser.
+    ctx.peseeReveal = {
+      mode: peseeMode,
+      show: peseeShown && !!value,
+      showScore: peseeMode === "score",
+      score: value?.encounterText ?? "",
+      tierKey: value?.tier?.key ?? "",
+      tierLabel: value?.tier?.label ?? ""
+    };
 
     const itemDocs = Array.from(actor.items);
     const itemsObj = itemDocs.map(i => i.toObject());

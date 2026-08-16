@@ -6,6 +6,7 @@ import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog
 import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
 } from "../rules/damage-types.js";
+import { computeSpellValue } from "../rules/item-value.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -419,6 +420,20 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       removeRestoreLine: async function(event) { await this._actionRemoveRestoreLine(event); },
       addMod:        async function(event) { await this._actionAddMod(event); },
       removeMod:     async function(event) { await this._actionRemoveMod(event); },
+      // La pesée est calculée dans _prepareContext, donc au rendu. La saisie
+      // d'un champ, elle, enregistre SANS re-rendre (_bindLiveSave, pour ne
+      // pas faire sauter le curseur) : sans ce bouton, le MJ devrait fermer
+      // et rouvrir la fiche pour voir l'effet de ce qu'il vient d'écrire.
+      //
+      // On soumet AVANT de re-rendre. Le `change` du dernier champ part au
+      // blur, juste avant le clic, et son `document.update` est asynchrone :
+      // rendre tout de suite afficherait la pesée d'avant la dernière valeur
+      // tapée. La soumission relit le DOM (valeur comprise) et écrit sans
+      // re-render, donc les deux écritures disent la même chose.
+      refreshValue:  async function(event) {
+        try { await this.submit(); } catch (e) { console.warn("[RPG] pesée : soumission avant recalcul", e); }
+        await this.render({ force: true });
+      },
     }
 },
 { inplace: false }   // ✅ IMPORTANT
@@ -735,6 +750,14 @@ static PARTS = foundry.utils.mergeObject(
 
     ctx.ui.damageStatBonus = ctx.system?.damage?.preview?.scalingBonus ?? 0;
     ctx.ui.damageCritStatBonus = ctx.system?.damageCrit?.preview?.scalingBonus ?? 0;
+
+    // ── Pesée du sort (théoriecraft) — MJ UNIQUEMENT ──────────────────────
+    // Même garde en deux temps que la pesée d'un objet ou d'une quête : le
+    // bloc du template est conditionné, mais c'est CE garde-ci qui compte,
+    // parce qu'un gabarit conditionné laisse quand même les valeurs dans les
+    // données rendues du joueur. Un joueur peut ouvrir la fiche d'un sort
+    // qu'il possède : rien de tout ceci ne doit y arriver.
+    ctx.spellValue = game.user.isGM ? computeSpellValue(item, { actor }) : null;
 
     return ctx;
   }
