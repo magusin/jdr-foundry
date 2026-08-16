@@ -2,6 +2,14 @@
 //
 // Pesée d'un objet — outil de théoriecraft RÉSERVÉ AU MJ.
 //
+// Ce fichier pèse TROIS choses avec la même monnaie (« points de puissance ») :
+// un objet (computeItemValue), un SORT (computeSpellValue) et un monstre
+// (computeMonsterValue). Elles partagent volontairement le même barème —
+// STAT_WEIGHTS, RESIST_WEIGHTS, DAMAGE_POINT, partyRefFor — parce que la seule
+// question qui vaille est comparative : « ce sort pèse-t-il plus lourd que
+// l'épée que porte le groupe ? ». Trois barèmes séparés rendraient la réponse
+// impossible à lire.
+//
 // Donne une valeur chiffrée à une arme / armure / relique pour répondre à une
 // seule question : « celui que je viens d'écrire est-il abusé ? ». Rien de
 // tout ça n'entre dans les règles : aucune valeur calculée ici n'est stockée,
@@ -47,6 +55,13 @@
 // D'où la projection « ×9 » renvoyée à côté du total : elle répond à
 // « et si tout son équipement portait ça ? », qui est la seule question qui
 // compte pour ces champs-là.
+
+// Le seuil de touché n'est PAS recopié ici : `tnFromRatio` et `applyDifficulty`
+// sont importés de combat.js, qui reste la définition unique de la formule
+// (voir computeTN). La pesée ne peut pas appeler computeTN elle-même — elle
+// n'a pas de vrais documents attaquant/cible sous la main, seulement un groupe
+// de référence chiffré — mais elle doit au moins partager le calcul.
+import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -399,6 +414,535 @@ export function isWeighable(type) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// SOCLE COMMUN AUX SORTS ET AUX MONSTRES
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Durée du combat de référence, en tours.
+ *
+ * Sert à deux endroits, et pour la même raison. STAT_WEIGHTS chiffre un bonus
+ * PERMANENT (une pièce d'équipement portée tout le combat) ; un buff de 3 tours
+ * n'en vaut donc qu'une fraction, et cette fraction est `durée / REF_TURNS`.
+ * C'est aussi la longueur sur laquelle on étale la valeur d'un effet
+ * « permanent », qui sinon vaudrait l'infini.
+ *
+ * 5 tours : un combat de table qui se passe bien. Monter ce chiffre revalorise
+ * mécaniquement tous les buffs longs face aux dégâts immédiats.
+ */
+const REF_TURNS = 5;
+
+/**
+ * Nombre de créatures qu'une aura est censée toucher, faute de savoir qui sera
+ * réellement à portée. Volontairement bas : une aura de 3 m attrape rarement
+ * plus de deux personnes dans une escarmouche ordinaire.
+ */
+const AURA_REF_TARGETS = 2;
+
+/**
+ * Ce que vaut UN point rendu, relativement à un point de dégât (DAMAGE_POINT).
+ *
+ *  - PV : 0,8. Soigner vaut un peu moins que blesser — un soin peut déborder
+ *    au-dessus du max, et il ne retire aucune action à l'adversaire.
+ *  - Mana : 0,6, le même rapport que manaMax (1,5) à pvMax (2) dans STAT_WEIGHTS.
+ *  - Fatigue : 1,5, même rapport que fatigueMax (3) à pvMax (2). Un point de
+ *    fatigue rendu, c'est une action de plus avant l'épuisement.
+ */
+const RESTORE_WEIGHTS = { pv: 0.8, mana: 0.6, fatigue: 1.5 };
+
+/**
+ * Ordre de grandeur habituel de chaque stat, pour convertir un modificateur
+ * en POURCENTAGE (mode "pct") en son équivalent plat. « +20 % de Force » ne
+ * veut rien dire tant qu'on ne sait pas sur quelle Force. Ces valeurs sont
+ * celles d'un personnage de milieu de campagne ; elles n'ont pas besoin d'être
+ * justes, seulement d'être du bon ordre.
+ */
+const PCT_REF = {
+  force: 10, intelligence: 10, dexterite: 10, acuite: 10, endurance: 10,
+  armureFixe: 2, resistanceFixe: 2, scoreArmure: 20, scoreResistance: 20,
+  toucherPhysique: 1, toucherMagique: 1, initiativeMod: 5,
+  vitesse: 3, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
+  fatigueMax: 10, podsMax: 50
+};
+
+/**
+ * Chance de toucher pour un seuil donné, d20 : 5- échec automatique,
+ * 16+ succès automatique (combat.js). Le seuil est borné avant lecture, donc
+ * le résultat vit toujours entre 25 % et 75 % — c'est la bande réelle du jeu,
+ * et c'est pour ça qu'un point de toucher vaut si cher dans STAT_WEIGHTS.
+ */
+export function hitChanceForTN(tn) {
+  const t = clamp(n(tn, 11), AUTO_FAIL_MAX + 1, AUTO_SUCC_MIN);
+  return (21 - t) / 20;
+}
+
+/** Part des jets qui sont des critiques (20 naturel). */
+const CRIT_SHARE = 0.05;
+
+/**
+ * Seuil de touché d'un sort contre le groupe de référence.
+ *
+ * Reproduit computeTN (combat.js) avec un adversaire chiffré au lieu d'un
+ * document : même `tnFromRatio`, même `applyDifficulty`, même bornage, même
+ * branche « cible amie » — là, la difficulté EST le seuil et 0 vaut réussite
+ * automatique. Le malus de distance n'y figure pas : il dépend de la position
+ * des tokens, qui n'existe pas au moment où l'on pèse une fiche.
+ */
+function spellTNAgainst(sys, { stats, toucherPhysique = 0, toucherMagique = 0, party, friendly = false }) {
+  const livraison = String(sys?.livraison ?? "magique");
+  const isPhys = livraison === "physique";
+  const diff = Math.max(0, n(sys?.difficulte, 0));
+  const toucher = isPhys ? n(toucherPhysique, 0) : n(toucherMagique, 0);
+
+  if (friendly) {
+    const autoSuccess = diff <= 0;
+    return {
+      livraison, friendly: true, autoSuccess, diff,
+      tn: autoSuccess ? 0 : clamp(diff - toucher, 6, 16),
+      chance: autoSuccess ? 1 : hitChanceForTN(diff - toucher)
+    };
+  }
+
+  const atk = isPhys ? n(stats?.dexterite, 0) : n(stats?.acuite, 0);
+  const def = isPhys ? n(party?.dexterite, 0) : n(party?.acuite, 0);
+  const tnBase = tnFromRatio((100 + atk) / (100 + def));
+  const tn = clamp(applyDifficulty(tnBase, diff) - toucher, 6, 16);
+  return { livraison, friendly: false, autoSuccess: false, diff, tnBase, tn, chance: hitChanceForTN(tn) };
+}
+
+/** Lignes de dégâts d'un sort : `damages[]`, l'ancien bloc unique en repli. */
+function spellDamageLines(sys) {
+  const lines = Array.isArray(sys?.damages) ? sys.damages.filter(Boolean) : [];
+  if (lines.length) return lines;
+  const legacy = sys?.damage ?? {};
+  if (legacy.enabled === false) return [];
+  const sc = legacy.scaling ?? {};
+  return [{
+    dice: legacy.dice, flat: legacy.flat,
+    stat: sc.stat ?? "intelligence", per: sc.per, perStep: sc.perStep,
+    livraison: sys?.livraison ?? "magique",
+    critDice: sys?.damageCrit?.enabled ? sys.damageCrit.dice : "",
+    critFlat: sys?.damageCrit?.enabled ? sys.damageCrit.flat : legacy.flat
+  }];
+}
+
+/**
+ * Le sort vise-t-il un ADVERSAIRE ?
+ *
+ * La question n'est pas cosmétique : computeTN traite une cible amie
+ * entièrement à part (aucune comparaison de stats, la difficulté EST le seuil,
+ * 0 = réussite automatique). Se tromper de branche fait passer un sort de
+ * 50 % de touche à 100 %, ou l'inverse.
+ *
+ * À la table, c'est la DISPOSITION du token qui tranche — une information qui
+ * n'existe pas quand on pèse une fiche. On lit donc l'intention du sort :
+ * des dégâts, un effet par tour qui blesse la cible, ou un malus posé sur elle
+ * suffisent à en faire une attaque. Un sort qui ne fait que rendre des PV ou
+ * poser un bonus est considéré comme du soutien.
+ */
+function spellIsHostile(sys) {
+  if (spellDamageLines(sys).some(d => diceAverage(d?.dice) + n(d?.flat, 0) + n(d?.perStep, 0) > 0)) return true;
+  for (const fx of (Array.isArray(sys?.effectsUI) ? sys.effectsUI : [])) {
+    if (!fx || String(fx.target ?? "target") !== "target") continue;
+    if (String(fx.tick?.mode ?? "none") === "damage") return true;
+    if ((Array.isArray(fx.mods) ? fx.mods : []).some(m => (m?.sens === "malus") || n(m?.value, 0) < 0)) return true;
+    if (n(fx.resistDamagePct, 0) < 0) return true;   // vulnérabilité imposée
+  }
+  return false;
+}
+
+/** Bonus de dégâts d'une ligne, depuis la stat du lanceur (stat/per × perStep). */
+function statScale(stats, stat, per, perStep) {
+  const key = String(stat ?? "");
+  if (!key || !n(perStep, 0)) return 0;
+  return Math.floor(n(stats?.[key], 0) / Math.max(1, n(per, 10))) * n(perStep, 0);
+}
+
+/** Mitigation d'un coup par le groupe de référence (armure fixe puis %). */
+function landedAgainstParty(raw, party) {
+  const r = n(raw, 0);
+  if (r <= 0) return 0;
+  return Math.max(1, Math.ceil((r - n(party.armureFixe, 0)) * (1 - n(party.reductionPct, 0) / 100)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PESÉE D'UN SORT
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Même intention que pour un objet : dire au MJ si ce qu'il vient d'écrire est
+// abusé. Mais un sort a beaucoup plus de leviers qu'une épée, et ils ne se
+// lisent pas les uns sans les autres : 2d6 sur trois cibles toutes les deux
+// rondes, ce n'est pas « 2d6 ». Tous les facteurs de la fiche entrent donc
+// dans le calcul :
+//
+//   dés + plat + scaling de stat · critique (5 % des jets) · vol de vie ·
+//   nombre de cibles · récupérations (PV/mana/fatigue, sur soi et/ou la cible) ·
+//   effets (dégâts ou soin par tour, modificateurs de stats, aura, résistances
+//   accordées, durée, permanence) · déplacement du lanceur · portée ·
+//   difficulté (via le seuil de touché réel) · vitesse (rapide/normal/passif) ·
+//   recharge · coût en mana et en fatigue.
+//
+// Deux chiffres sortent de là, et le second est celui qui compte :
+//
+//   PAR UTILISATION  ce que le sort délivre quand il part
+//   PAR TOUR         le même, ramené à ce qu'il peut réellement sortir chaque
+//                    tour (recharge, sort rapide joué deux fois, passif étalé
+//                    sur le combat de référence)
+//
+// C'est « par tour » qui se compare à une arme, à un autre sort, et au barème.
+
+/**
+ * Paliers d'un sort, lus sur la puissance PAR TOUR.
+ *
+ * Calibrés sur UN repère, et il est concret : une attaque à l'arme ordinaire
+ * — celle que n'importe quel personnage porte à chaque tour, gratuitement —
+ * pèse environ 28 points par tour au niveau 1 (7 de dégâts bruts, ~50 % de
+ * touche). C'est la valeur renvoyée dans `weaponRef`, recalculée à chaque
+ * pesée d'après les réglages du monde : un sort qui pèse moins que ça ne
+ * mérite pas d'occuper une place d'action, un sort qui pèse le double doit
+ * se payer quelque part (mana, recharge, difficulté).
+ */
+export const SPELL_TIERS = [
+  { max: 12,  key: "village",    label: "Mineur",     hint: "moins qu'une attaque à l'arme : utilitaire ou appoint" },
+  { max: 30,  key: "commun",     label: "Standard",   hint: "l'équivalent d'une attaque à l'arme" },
+  { max: 60,  key: "rare",       label: "Fort",       hint: "un sort de spécialiste, à faire payer" },
+  { max: 110, key: "epique",     label: "Très fort",  hint: "doit coûter cher ou recharger longtemps" },
+  { max: Infinity, key: "legendaire", label: "Démesuré", hint: "⚠️ vérifie recharge, coût et nombre de cibles" }
+];
+
+const SPEED_LABELS = { normal: "Normal", rapide: "Rapide", passif: "Passif" };
+
+/**
+ * Pèse un sort.
+ *
+ * @param {Item|object} item   Item de type `spell` (document ou données brutes).
+ * @param {object}      opts
+ * @param {Actor}       opts.actor   Porteur, pour le scaling de stat. À défaut,
+ *                                   `item.parent`, puis une stat de référence.
+ * @param {object}      opts.stats   Principales à utiliser (pesée d'un band de
+ *                                   génération, où aucun acteur n'existe encore).
+ * @param {number}      opts.level   Niveau du groupe de référence.
+ * @returns {{perUse:number, perTurn:number, total:number, rows:Array, tier:object,
+ *            warnings:Array, hit:object, damagePerUse:number, focusPerUse:number,
+ *            healSelfPerUse:number, manaCost:number, fatigueCost:number,
+ *            cooldown:number, usesPerTurn:number, targets:number, partyRef:object}}
+ */
+export function computeSpellValue(item, opts = {}) {
+  const sys = item?.system ?? {};
+  const actor = opts.actor ?? item?.parent ?? null;
+  const level = n(opts.level, n(actor?.system?.niveau, 1));
+  const PARTY = opts.party ?? partyRefFor(level);
+  const rows = [];
+  const warnings = [];
+
+  // Stats du lanceur : les effectives (états compris) si on a un acteur, celles
+  // qu'on nous passe (band de génération) sinon, et à défaut une valeur de
+  // référence — la même que pour le scaling d'une arme sans porteur.
+  const stats = opts.stats
+    ?? actor?.system?.derived?.effective?.principales
+    ?? actor?.system?.principales
+    ?? { force: SCALING_REF_STAT, intelligence: SCALING_REF_STAT, dexterite: SCALING_REF_STAT,
+         acuite: SCALING_REF_STAT, endurance: SCALING_REF_STAT };
+  const hasCaster = !!(opts.stats || actor);
+
+  const speed = String(sys.speed ?? "normal");
+  const isPassif = speed === "passif";
+  const targets = Math.max(1, n(sys.targetCount?.max, 1));
+  const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
+
+  // ── Dégâts ────────────────────────────────────────────────────────────
+  const lines = spellDamageLines(sys);
+  let rawNormal = 0, rawCrit = 0, siphonPct = 0;
+  for (const d of lines) {
+    const scale = statScale(stats, d.stat, d.per, d.perStep);
+    const base = diceAverage(d.dice) + n(d.flat, 0) + scale;
+    // Sur critique, critDice REMPLACE les dés (s'il est renseigné) et critFlat
+    // remplace le plat — c'est exactement ce que fait la résolution (spells.js).
+    const critDice = String(d.critDice ?? "").trim();
+    const crit = diceAverage(critDice || d.dice) + n(d.critFlat, 0) + scale;
+    rawNormal += base;
+    rawCrit += crit;
+    // Le vol de vie porte sur les dégâts de SA ligne ; on garde le maximum,
+    // faute de pouvoir répartir sans alourdir tout le reste.
+    siphonPct = Math.max(siphonPct, Math.max(0, Math.min(100, n(d.siphon, 0))));
+  }
+
+  // ── Seuil de touché ───────────────────────────────────────────────────
+  // Un sort de soutien vise un allié : la branche « cible amie » de computeTN
+  // s'applique, la difficulté saisie EST le seuil, et 0 vaut réussite
+  // automatique. Un sort hostile, lui, compare les stats.
+  const isSupport = !spellIsHostile(sys);
+  const hit = isPassif
+    ? { friendly: false, autoSuccess: true, tn: 0, chance: 1, livraison: String(sys.livraison ?? "magique"), diff: 0 }
+    : spellTNAgainst(sys, {
+        stats, party: PARTY, friendly: isSupport,
+        // Toucher inné du lanceur : celui d'un monstre est tiré par la
+        // génération (base.toucher*), donc il peut être fourni directement
+        // quand on pèse un band, sans acteur derrière.
+        toucherPhysique: n(opts.toucherPhysique, n(actor?.system?.derived?.toucherPhysique, 0)),
+        toucherMagique: n(opts.toucherMagique, n(actor?.system?.derived?.toucherMagique, 0))
+      });
+  const chance = hit.chance;
+  const critShare = Math.min(chance, CRIT_SHARE);
+
+  const landedNormal = landedAgainstParty(rawNormal, PARTY);
+  const landedCrit = landedAgainstParty(rawCrit, PARTY);
+  // Ce que reçoit UNE cible en moyenne (crit compris), puis le total du groupe.
+  const focusDamage = (chance - critShare) * landedNormal + critShare * landedCrit;
+  const damagePerUse = focusDamage * targets;
+
+  let points = 0;
+  const add = (label, value, pts, opts2 = {}) => {
+    points += pts;
+    rows.push({ label, value: String(value), points: round1(pts), warn: !!opts2.warn });
+  };
+
+  if (rawNormal > 0) {
+    add(`Dégâts moyens (par cible${targets > 1 ? `, ×${targets}` : ""})`,
+        `${round1(rawNormal)} brut → ${round1(landedNormal)} encaissé`,
+        damagePerUse * DAMAGE_POINT);
+    if (rawCrit !== rawNormal) {
+      rows.push({ label: "Dont critique (5 % des jets)", value: `${round1(rawCrit)} brut`, points: null });
+    }
+  }
+
+  // ── Vol de vie ────────────────────────────────────────────────────────
+  let healSelf = 0;
+  if (siphonPct > 0 && damagePerUse > 0) {
+    const stolen = damagePerUse * siphonPct / 100;
+    healSelf += stolen;
+    add("Vol de vie", `${round1(siphonPct)} % → ${round1(stolen)} PV`,
+        stolen * DAMAGE_POINT * RESTORE_WEIGHTS.pv);
+  }
+
+  // ── Récupérations (PV / mana / fatigue rendus) ────────────────────────
+  for (const r of (Array.isArray(sys.restores) ? sys.restores : [])) {
+    if (!r) continue;
+    const avg = diceAverage(r.dice) + n(r.flat, 0) + statScale(stats, r.stat, r.per, r.perStep);
+    if (avg <= 0) continue;
+    const resource = ["pv", "mana", "fatigue"].includes(String(r.resource)) ? String(r.resource) : "pv";
+    const cible = String(r.cible ?? "self");
+    // « both » = soi + chaque cible ; « target » = chaque cible.
+    const heads = cible === "both" ? 1 + targets : (cible === "target" ? targets : 1);
+    const total = avg * heads * chance;
+    if (resource === "pv" && cible !== "target") healSelf += avg * chance;
+    add(`Rend ${resource} (${cible === "both" ? "soi + cible" : cible === "target" ? "cible" : "soi"})`,
+        `${round1(avg)} × ${heads}`,
+        total * DAMAGE_POINT * RESTORE_WEIGHTS[resource]);
+  }
+
+  // ── Effets ────────────────────────────────────────────────────────────
+  let tickDamagePerUse = 0;
+  for (const fx of (Array.isArray(sys.effectsUI) ? sys.effectsUI : [])) {
+    if (!fx) continue;
+    const label = String(fx.label ?? "Effet");
+    const permanent = !!fx.permanent;
+    // Un effet permanent ne vaut pas l'infini : on l'étale sur le combat de
+    // référence, et on le signale — c'est un choix de design, pas un détail.
+    const rawDur = permanent ? REF_TURNS : Math.max(1, n(fx.duration, 1));
+    const dur = Math.min(rawDur, REF_TURNS);
+    const durFactor = dur / REF_TURNS;
+
+    const ben = ["self", "both", "target"].includes(String(fx.target)) ? String(fx.target) : "target";
+    // Combien de créatures le subissent, et est-ce à leur avantage ?
+    // « self » et « both » touchent le lanceur, donc un bonus y est un gain ;
+    // « target » ne l'est que si le sort est de soutien (la cible est alors un
+    // allié). Sur une cible adverse, c'est le MALUS qui vaut positif.
+    const onAlly = (ben !== "target") || isSupport;
+    const heads = ben === "self" ? 1 : (ben === "both" ? 1 + targets : targets);
+    const auraMult = fx.isAura ? AURA_REF_TARGETS : 1;
+    const affected = heads * auraMult;
+
+    // Effet par tour : dégâts ou soin, pendant toute sa durée.
+    const tick = fx.tick ?? {};
+    const tickMode = String(tick.mode ?? "none");
+    if (tickMode === "damage" || tickMode === "heal") {
+      const per = Math.abs(n(tick.flat, 0)) + statScale(stats, tick.stat, tick.per, tick.perStep);
+      if (per > 0) {
+        const perTick = tickMode === "damage" ? landedAgainstParty(per, PARTY) : per;
+        const total = perTick * dur * affected * chance;
+        if (tickMode === "damage") tickDamagePerUse += perTick * dur * affected * chance;
+        if (tickMode === "heal" && ben !== "target") healSelf += per * dur * chance;
+        add(`${label} · ${tickMode === "damage" ? "dégâts" : "soin"} par tour`,
+            `${round1(per)} × ${dur} tour(s)${affected > 1 ? ` × ${affected}` : ""}`,
+            total * DAMAGE_POINT * (tickMode === "damage" ? 1 : RESTORE_WEIGHTS.pv));
+      }
+    }
+
+    // Modificateurs de stats : le barème de l'équipement, au prorata de la
+    // durée — STAT_WEIGHTS chiffre un bonus porté tout le combat.
+    for (const m of (Array.isArray(fx.mods) ? fx.mods : [])) {
+      const stat = String(m?.stat ?? "");
+      const weight = STAT_WEIGHTS[stat];
+      if (!stat || weight === undefined) continue;
+      const signed = n(m?.value, 0);
+      const isBonus = (m?.sens === "malus") ? false : (m?.sens === "bonus" ? true : signed >= 0);
+      const qty = Math.abs(signed);
+      if (!qty) continue;
+      // Un "%" n'a de sens que rapporté à une valeur : PCT_REF donne l'ordre
+      // de grandeur habituel de la stat visée.
+      const flatEq = String(m?.mode) === "pct" ? (qty / 100) * n(PCT_REF[stat], 10) : qty;
+      // Ce qui compte pour le lanceur : un bonus sur un allié et un malus sur
+      // un adversaire valent tous deux POSITIF ; les deux croisements sont des
+      // maluses pour lui, et pèsent donc négativement.
+      const sign = (onAlly === isBonus) ? 1 : -1;
+      // × chance : un effet n'est posé QUE sur une touche validée par le MJ
+      // (voir effectsForResult dans spells.js). Un sort dur à placer accorde
+      // donc son bonus moins souvent, et cela doit se voir.
+      const pts = sign * flatEq * weight * durFactor * affected * chance;
+      add(`${label} · ${LABELS[stat] ?? stat}`,
+          `${isBonus ? "+" : "−"}${round1(qty)}${String(m?.mode) === "pct" ? " %" : ""} · ${dur} tour(s)`,
+          pts);
+    }
+
+    // Résistance aux DÉGÂTS accordée (ou vulnérabilité imposée).
+    const rdTag = String(fx.resistDamageTag ?? "");
+    const rdPct = n(fx.resistDamagePct, 0);
+    if (rdTag && rdPct) {
+      const w = n(RESIST_WEIGHTS[rdTag], 0.4);
+      const sign = (onAlly === (rdPct > 0)) ? 1 : -1;
+      add(`${label} · résist. ${rdTag}`, `${rdPct > 0 ? "+" : ""}${round1(rdPct)} % · ${dur} tour(s)`,
+          sign * Math.abs(rdPct) * w * durFactor * affected * chance);
+    }
+
+    // Résistance aux ÉTATS accordée — le même barème que sur une pièce d'équipement.
+    const rtag = String(fx.resistTag ?? "") || String(fx.effectKey ?? "");
+    if (rtag) {
+      if (fx.resistImmune) {
+        add(`${label} · immunité ${rtag}`, `${dur} tour(s)`,
+            (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * chance);
+      }
+      const rd = n(fx.resistDurationReduction, 0);
+      if (rd) {
+        add(`${label} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
+            (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * chance);
+      }
+      const rp = n(fx.resistDotPct, 0);
+      if (rp) {
+        add(`${label} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
+            (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * chance);
+      }
+    }
+
+    if (fx.movementTypeGrant) {
+      add(`${label} · déplacement accordé`, String(fx.movementTypeGrant),
+          (onAlly ? 1 : -1) * 3 * durFactor * affected * chance);
+    }
+
+    if (permanent) {
+      warnings.push(
+        `« ${label} » est PERMANENT : il ne s'enlève jamais tout seul. Pesé ici sur ${REF_TURNS} tours ` +
+        `(le combat de référence), sa vraie valeur est celle d'un bonus d'équipement gratuit — à comparer ` +
+        `à la pesée d'une armure, pas à celle d'un sort.`
+      );
+    }
+    if (rawDur > REF_TURNS && !permanent) {
+      warnings.push(
+        `« ${label} » dure ${rawDur} tours, au-delà du combat de référence (${REF_TURNS}) : ` +
+        `pesé sur ${REF_TURNS}, il vaut en réalité davantage dans un combat qui s'éternise.`
+      );
+    }
+  }
+
+  // ── Déplacement du lanceur (charge) ───────────────────────────────────
+  // Gratuit : il ne consomme ni le compteur de mouvement ni la place d'action
+  // (spell-move.js). Un mètre offert vaut donc plus qu'un mètre de vitesse
+  // permanente rapporté au tour, mais beaucoup moins qu'un point de vitesse.
+  const moveSelf = Math.max(0, n(sys.moveSelf, 0));
+  if (moveSelf > 0) add("Charge (déplacement offert)", `${round1(moveSelf)} m`, moveSelf * 1.5);
+
+  // ── Portée ────────────────────────────────────────────────────────────
+  const portee = Math.max(0, n(sys.range?.max, 0) - 1.5);
+  if (portee > 0) add("Portée", `${round1(n(sys.range?.max, 0))} m`, portee * 0.3);
+
+  // ── Coûts ─────────────────────────────────────────────────────────────
+  const manaCost = Math.max(0, n(sys.coutMana, 0));
+  const fatigueCost = Math.max(0, n(sys.fatigueCost, 1));
+  if (!isPassif) {
+    if (manaCost) add("Coût en mana", `−${round1(manaCost)}`, -manaCost * STAT_WEIGHTS.manaMax);
+    if (fatigueCost) add("Coût en fatigue", `−${round1(fatigueCost)}`, -fatigueCost * STAT_WEIGHTS.fatigueMax);
+  }
+
+  const perUse = round1(points);
+
+  // ── Disponibilité : ce qu'il rend RÉELLEMENT chaque tour ──────────────
+  // Un sort rapide sans recharge occupe deux places du budget (SLOT_DEFS :
+  // sortRapide max 2) ; avec une recharge, sa deuxième utilisation serait
+  // justement bloquée par elle. Un passif ne prend aucune place et vaut sur
+  // toute la durée du combat, d'où l'étalement.
+  const usesPerTurn = (speed === "rapide" && cdMax === 0) ? 2 : 1;
+  const perTurn = isPassif
+    ? points / REF_TURNS
+    : (cdMax > 0 ? points / (1 + cdMax) : points * usesPerTurn);
+
+  rows.push({ label: "Vitesse", value: SPEED_LABELS[speed] ?? speed, points: null });
+  if (!isPassif) {
+    rows.push({
+      label: "Seuil de touché (groupe de référence)",
+      value: hit.autoSuccess ? "réussite automatique"
+           : `${hit.tn}+ · ${Math.round(chance * 100)} % de touche${hit.friendly ? " (cible amie)" : ""}`,
+      points: null
+    });
+  }
+  if (cdMax > 0) rows.push({ label: "Recharge", value: `${cdMax} tour(s) → 1 lancement sur ${cdMax + 1}`, points: null });
+  if (usesPerTurn > 1) rows.push({ label: "Rapide sans recharge", value: "2 lancements par tour", points: null });
+
+  // Ce qu'un PJ prend réellement dans la figure, en part de ses PV : c'est la
+  // ligne que le MJ lit en premier pour savoir s'il vient d'écrire un
+  // one-shot.
+  if (focusDamage > 0) {
+    const pctPv = Math.round((focusDamage / Math.max(1, PARTY.pv)) * 100);
+    rows.push({
+      label: `Part des PV d'un PJ (${PARTY.pv} PV, niv. ${PARTY.level})`,
+      value: `${pctPv} % par utilisation`,
+      points: null, warn: pctPv >= 50
+    });
+    if (pctPv >= 50) {
+      warnings.push(
+        `Une seule utilisation retire ${pctPv} % des PV d'un personnage de niveau ${PARTY.level}. ` +
+        `Deux lancements l'abattent : c'est un sort qui décide du combat à lui seul.`
+      );
+    }
+  }
+
+  if (!lines.length && !(sys.restores ?? []).length && !(sys.effectsUI ?? []).length) {
+    warnings.push("Ce sort ne fait rien de mesurable : ni dégâts, ni récupération, ni effet. Vérifie qu'une ligne de dégâts est bien renseignée.");
+  }
+  if (targets > 1 && rawNormal > 0 && cdMax === 0) {
+    warnings.push(
+      `${targets} cibles sans aucune recharge : la puissance est multipliée par ${targets} à chaque tour. ` +
+      `Un sort de zone se paie normalement par une recharge ou un coût en mana élevé.`
+    );
+  }
+  if (isPassif) {
+    warnings.push("Sort PASSIF : il ne consomme aucune place du budget d'action. Sa valeur est comptée comme une capacité permanente, étalée sur le combat de référence.");
+  }
+  if (!hasCaster && lines.some(d => n(d.perStep, 0))) {
+    warnings.push(`Scaling de stat pesé sur une caractéristique de référence (${SCALING_REF_STAT}), faute de porteur : sur un lanceur réel, le sort vaut davantage.`);
+  }
+
+  const total = round1(perTurn);
+  const tier = SPELL_TIERS.find(t => total <= t.max) ?? SPELL_TIERS[SPELL_TIERS.length - 1];
+
+  // Le repère : ce que pèse une attaque à l'arme ordinaire, par tour. C'est
+  // lui qui rend le total lisible — « 40 » ne veut rien dire, « une fois et
+  // demie une attaque à l'arme » veut tout dire.
+  const weaponRef = round1(landedAgainstParty(PARTY.damagePerHit, PARTY) * PARTY.hitChance * DAMAGE_POINT);
+
+  rows.sort((a, b) => Math.abs(n(b.points, 0)) - Math.abs(n(a.points, 0)));
+
+  return {
+    perUse, perTurn: total, total, rows, tier, warnings, hit, weaponRef,
+    vsWeapon: weaponRef > 0 ? Math.round((total / weaponRef) * 100) / 100 : null,
+    damagePerUse: round1(damagePerUse),
+    focusPerUse: round1(focusDamage),
+    tickDamagePerUse: round1(tickDamagePerUse),
+    healSelfPerUse: round1(healSelf),
+    manaCost, fatigueCost, cooldown: cdMax, usesPerTurn, targets,
+    speed, isSupport, partyRef: PARTY
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // PESÉE D'UN MONSTRE
 // ─────────────────────────────────────────────────────────────────────────
 //
@@ -453,7 +997,18 @@ export function partyRefFor(level = 1) {
     damagePerHit: Math.max(1, dmg + step),         // +1 de dégât moyen par niveau
     pv: 30 + step * 4,
     armureFixe: 0,
-    reductionPct: Math.min(45, 5 + step * 3)
+    reductionPct: Math.min(45, 5 + step * 3),
+    // Dextérité / Acuité du groupe : ce contre quoi se calcule le seuil de
+    // touché d'un monstre (computeTN compare les principales, r = (100+atk)/
+    // (100+def)). Sans elles, la pesée supposait 50 % de touche pour TOUT
+    // monstre — une créature bâtie sur l'Acuité et une créature bâtie sur les
+    // PV frappaient donc aussi souvent l'une que l'autre, et son toucher inné
+    // (base.toucherPhysique / toucherMagique, tiré par la génération) ne
+    // servait à rien. Rien dans les règles ne fait monter les principales
+    // automatiquement : cette progression est une hypothèse de table, comme
+    // le reste de cette référence.
+    dexterite: 5 + step * 2,
+    acuite: 5 + step * 2
   };
 }
 
@@ -492,51 +1047,118 @@ function monsterActionSlots() {
   }
 }
 
+
 /**
- * Dégâts bruts moyens d'une capacité de monstre, en un seul nombre.
+ * Profil chiffré d'un monstre — la SEULE forme que lit la pesée.
  *
- * Lit `system.damages[]` — le format de la fiche actuelle, où une capacité
- * peut porter PLUSIEURS lignes de dégâts qui s'appliquent toutes, donc on les
- * somme. L'ancien bloc unique `system.damage` n'est lu qu'en repli, et
- * seulement s'il est encore actif.
+ * Elle existe parce que les stats d'un monstre vivent à deux endroits
+ * différents, et que celui qu'on lit d'ordinaire est le mauvais :
  *
- * C'est le bug que cette fonction existe pour corriger : la pesée ne lisait
- * que `system.damage`. Or `ensureSpellDefaults` (spells.js) migre l'ancien
- * bloc vers `damages[]` puis se contente de poser `enabled: false` — sans
- * effacer `dice`, qui reste à sa valeur par défaut « 1d6 ». L'ancien garde
- * (`enabled === false && !diceAverage(dice)`) ne se déclenchait donc jamais :
- * la pesée retombait sur ce 1d6 fantôme et notait TOUTES les capacités
- * écrites sur la fiche actuelle comme des attaques à 3,5 de moyenne, quelle
- * que soit leur vraie puissance. Menace sous-évaluée, palier de rencontre
- * faux, exactement là où l'outil sert le plus.
+ *   - Sur un TOKEN posé (acteur synthétique), les stats sont les vraies :
+ *     tirées par la génération au moment où le token a été créé.
+ *   - Sur la FICHE D'ORIGINE, elles ne le sont pas. Un monstre dont tout le
+ *     dossier est écrit dans `system.gen.bands` garde sur sa fiche les
+ *     valeurs d'avant la génération — souvent zéro partout. Peser cette
+ *     fiche-là revient à peser une créature qui n'existera jamais.
  *
- * Le scaling de stat suit la même règle qu'à la résolution : stat du monstre
- * ÷ per × perStep, ligne par ligne (chaque ligne a sa propre stat).
+ * D'où `monsterProfileFromBand()` : sur la fiche d'origine, la pesée doit se
+ * faire sur les PLAGES de génération, niveau par niveau (voir
+ * computeMonsterBandValues).
+ *
+ * Les valeurs DÉRIVÉES priment quand elles existent (`derived.effective.*`,
+ * `derived.resistancesElem`, `derived.toucher*`) : ce sont elles que subit
+ * réellement un attaquant, états actifs compris.
  */
-function spellRawDamage(s, sys) {
-  const statBonus = (stat, per, perStep) => {
-    const key = String(stat ?? "");
-    if (!key || !perStep) return 0;
-    return Math.floor(n(sys?.principales?.[key], 0) / Math.max(1, n(per, 10))) * n(perStep, 0);
+export function monsterProfileFromActor(actor) {
+  const sys = actor?.system ?? {};
+  const eff = sys.derived?.effective ?? {};
+  const P = eff.principales ?? sys.principales ?? {};
+  const D = eff.defenses ?? sys.defenses ?? {};
+  return {
+    label: actor?.name ?? "Monstre",
+    niveau: Math.max(1, n(sys.niveau, 1)),
+    pv: Math.max(1, n(sys.ressources?.pv?.max, n(sys.base?.pvMax, 1))),
+    regenPv: n(sys.regeneration?.pv, 0),
+    vitesse: n(sys.deplacement?.vitesse, 0),
+    fatigueMax: Math.max(1, n(sys.ressources?.fatigue?.max, n(sys.base?.fatigueMax, 10))),
+    manaMax: n(sys.ressources?.mana?.max, 0),
+    allonge: n(sys.allonge, 1),
+    principales: {
+      force: n(P.force, 0), intelligence: n(P.intelligence, 0),
+      dexterite: n(P.dexterite, 0), acuite: n(P.acuite, 0), endurance: n(P.endurance, 0)
+    },
+    defenses: {
+      armureFixe: n(D.armureFixe, 0), resistanceFixe: n(D.resistanceFixe, 0),
+      // `derived.effective.defenses` contient DÉJÀ le score rendu par
+      // l'Endurance (actor.js, SCORE_PER_END_STEP). Ne pas le rajouter ici :
+      // c'est le drapeau `endInScores` qui dit lequel des deux cas on lit.
+      scoreArmure: n(D.scoreArmure, 0), scoreResistance: n(D.scoreResistance, 0)
+    },
+    endInScores: !!eff.defenses,
+    toucherPhysique: n(sys.derived?.toucherPhysique, n(sys.base?.toucherPhysique, 0)),
+    toucherMagique: n(sys.derived?.toucherMagique, n(sys.base?.toucherMagique, 0)),
+    resistancesElem: sys.derived?.resistancesElem ?? sys.resistancesElem ?? {}
   };
+}
 
-  const lines = Array.isArray(s?.damages) ? s.damages : [];
-  if (lines.length) {
-    let total = 0;
-    for (const d of lines) {
-      if (!d) continue;
-      total += diceAverage(d.dice) + n(d.flat, 0) + statBonus(d.stat, d.per, d.perStep);
-    }
-    return Math.max(0, total);
-  }
+/** Milieu d'une plage `[min, max]` de la génération. */
+function bandMid(range, fallback = 0) {
+  if (!Array.isArray(range) || !range.length) return fallback;
+  const a = n(range[0], fallback), b = n(range[1], a);
+  return (a + b) / 2;
+}
+/** Extrémité d'une plage : "min", "max" ou "mid". */
+function bandPick(range, which, fallback = 0) {
+  if (!Array.isArray(range) || !range.length) return fallback;
+  const a = n(range[0], fallback), b = n(range[1], a);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  return which === "min" ? lo : which === "max" ? hi : (lo + hi) / 2;
+}
 
-  // Repli : ancien bloc unique, uniquement s'il est encore actif.
-  const dmg = s?.damage ?? {};
-  if (dmg.enabled === false) return 0;
-  const sc = dmg.scaling ?? {};
-  const raw = diceAverage(dmg.dice) + n(dmg.flat, 0)
-            + statBonus(sc.stat ?? "force", sc.per, sc.perStep);
-  return Math.max(0, raw);
+/**
+ * Profil tiré d'un band de génération (`system.gen.bands[<niveau>]`), sans
+ * qu'aucun tirage n'ait eu lieu. `which` choisit le bas, le haut ou le milieu
+ * de chaque plage : le milieu donne la créature typique, les deux extrêmes
+ * donnent la fourchette dans laquelle tomberont les tokens réellement posés.
+ */
+export function monsterProfileFromBand(band, lvl, which = "mid", label = "Monstre") {
+  const s = band?.stats ?? {};
+  const d = band?.defenses ?? {};
+  const pick = (r, fb = 0) => bandPick(r, which, fb);
+  const endurance = Math.max(0, pick(s.endurance));
+  const pvBase = Math.max(1, pick(band?.pv, 30));
+  return {
+    label,
+    niveau: Math.max(1, n(lvl, 1)),
+    // Miroir de monster-gen.js : les PV posés valent la plage + 1 PV par
+    // tranche de 5 d'Endurance.
+    pv: Math.max(1, Math.round(pvBase + Math.floor(endurance / 5))),
+    regenPv: Math.max(0, pick(band?.regenPv)),
+    vitesse: Math.max(0, pick(band?.vitesse, 3)),
+    fatigueMax: Math.max(1, pick(band?.fatigueMax, 10)),
+    manaMax: 0,
+    // L'allonge n'est pas tirée par la génération : elle reste celle de la
+    // fiche, et c'est l'appelant qui la fournit.
+    allonge: n(band?.allonge, 1),
+    principales: {
+      force: Math.max(0, pick(s.force)), intelligence: Math.max(0, pick(s.intelligence)),
+      dexterite: Math.max(0, pick(s.dexterite)), acuite: Math.max(0, pick(s.acuite)),
+      endurance
+    },
+    defenses: {
+      armureFixe: Math.max(0, pick(d.armureFixe)), resistanceFixe: Math.max(0, pick(d.resistanceFixe)),
+      scoreArmure: Math.max(0, pick(d.scoreArmure)), scoreResistance: Math.max(0, pick(d.scoreResistance))
+    },
+    // Un band écrit les scores AVANT l'apport de l'Endurance : il faut donc
+    // l'ajouter, contrairement à un profil lu sur `derived.effective`.
+    endInScores: false,
+    toucherPhysique: pick(band?.toucherPhysique),
+    toucherMagique: pick(band?.toucherMagique),
+    resistancesElem: Object.fromEntries(
+      Object.entries(band?.resistancesElem ?? {}).map(([k, r]) => [k, bandMid(r, 0)])
+    ),
+    xpReward: Math.max(0, pick(band?.xpReward))
+  };
 }
 
 /** Réduction en % rendue par un score de défense (miroir de actor.js). */
@@ -546,27 +1168,74 @@ function scorePct(score) {
 }
 
 /**
+ * Ce qu'une capacité de monstre vaut, par utilisation.
+ *
+ * Tout passe par computeSpellValue : c'est la MÊME pesée que celle affichée
+ * sur la fiche du sort, avec les stats du monstre comme lanceur. Un monstre
+ * n'a pas d'armes dans ce système — ses attaques SONT ses items `spell` — et
+ * une capacité qui soigne, qui pose une brûlure ou qui affaiblit le groupe
+ * pèse autant qu'une qui frappe. L'ancienne version ne lisait que les lignes
+ * de dégâts directs : une créature bâtie sur les DOT ou sur ses propres soins
+ * était comptée pour zéro et sortait « Trivial ».
+ */
+function evaluateMonsterAbility(sp, profile, PARTY) {
+  const s = sp?.system ?? {};
+  // Le seuil de touché d'un monstre dépend de SES stats ET de son toucher
+  // inné — les deux tirés par la génération. Les passer ici, plutôt que de
+  // laisser computeSpellValue lire un acteur qui n'existe pas quand on pèse
+  // un band, est ce qui remplace le 50 % forfaitaire d'avant.
+  const value = computeSpellValue(sp, {
+    stats: profile.principales,
+    level: profile.niveau,
+    party: PARTY,
+    toucherPhysique: profile.toucherPhysique,
+    toucherMagique: profile.toucherMagique
+  });
+  const cdMax = Math.max(0, n(s.cooldown?.max, 0));
+  const targets = Math.max(1, n(s.targetCount?.max, 1));
+
+  return {
+    name: sp?.name ?? "Capacité",
+    speed: String(s.speed ?? "normal"),
+    cdMax, targets,
+    // Un sort rapide sans recharge occupe deux places (SLOT_DEFS).
+    uses: (String(s.speed ?? "normal") === "rapide" && cdMax === 0) ? 2 : 1,
+    manaCost: value.manaCost,
+    fatigueCost: value.fatigueCost,
+    hit: value.hit,
+    // Dégâts réellement encaissés par le groupe : directs + effets par tour.
+    damage: value.damagePerUse + value.tickDamagePerUse,
+    focus: value.focusPerUse + value.tickDamagePerUse / targets,
+    healSelf: value.healSelfPerUse,
+    points: value.perUse,
+    value,
+    readyAt: 0, turnsUsed: 0, totalUses: 0
+  };
+}
+
+/**
  * Pèse un monstre : menace, durée de vie, et poids de rencontre.
  *
- * Lit les items `spell` du monstre pour ses attaques — un monstre n'a pas
- * d'armes dans ce système, ses attaques SONT ses sorts. On retient la
- * meilleure attaque disponible chaque tour, en tenant compte de la recharge :
- * une capacité à recharge 3 ne sort qu'un tour sur trois, et la compter à
- * plein régime surestimerait très largement des créatures dont tout le
- * dossier tient dans un coup spécial.
- *
  * @param {Actor|object} actor
- * @returns {{threat:number, survival:number, encounter:number, tier:object, rows:Array, warnings:Array}}
+ * @param {object} opts
+ * @param {object} opts.profile  Profil chiffré à peser à la place des stats de
+ *                               la fiche (voir monsterProfileFromBand).
+ * @param {Array}  opts.spells   Capacités à peser (défaut : les items `spell`).
+ * @returns {{threat:number, survival:number|null, encounter:number|null, tier:object,
+ *            rows:Array, warnings:Array, partyRef:object, profile:object}}
  */
-export function computeMonsterValue(actor) {
-  const sys = actor?.system ?? {};
+export function computeMonsterValue(actor, opts = {}) {
+  const profile = opts.profile ?? monsterProfileFromActor(actor);
   const rows = [];
   const warnings = [];
-  const PARTY = partyRefFor(sys.niveau);
+  const PARTY = partyRefFor(profile.niveau);
 
   // ── Durée de vie : PV effectifs face aux dégâts du groupe ──────────────
-  const pv = Math.max(1, n(sys.ressources?.pv?.max, n(sys.base?.pvMax, 1)));
-  const endBonus = Math.floor(n(sys.principales?.endurance, 0) / 3);
+  const pv = Math.max(1, n(profile.pv, 1));
+  // L'Endurance rend du score de défense (actor.js, 3 END = +1). Sur un profil
+  // lu depuis `derived.effective`, c'est déjà compris : l'ajouter deux fois
+  // gonflerait la survie de tout monstre endurant.
+  const endBonus = profile.endInScores ? 0 : Math.floor(n(profile.principales.endurance, 0) / 3);
 
   // Un groupe frappe des DEUX livraisons : les armes en physique, les sorts en
   // magique. Ne tester que l'armure surestimait la survie d'un monstre bien
@@ -577,39 +1246,14 @@ export function computeMonsterValue(actor) {
     const afterFixe = Math.max(1, Math.ceil((PARTY.damagePerHit - n(fixe, 0)) * (1 - scorePct(score) / 100)));
     return Math.max(1, afterFixe * (1 - Math.min(99, n(elemPct, 0)) / 100));
   };
-  const hitPhys = mitigate(sys.defenses?.armureFixe, n(sys.defenses?.scoreArmure, 0) + endBonus,
-                           sys.resistancesElem?.physique);
-  const hitMag  = mitigate(sys.defenses?.resistanceFixe, n(sys.defenses?.scoreResistance, 0) + endBonus,
-                           sys.resistancesElem?.magique);
+  const hitPhys = mitigate(profile.defenses.armureFixe, n(profile.defenses.scoreArmure, 0) + endBonus,
+                           profile.resistancesElem?.physique);
+  const hitMag  = mitigate(profile.defenses.resistanceFixe, n(profile.defenses.scoreResistance, 0) + endBonus,
+                           profile.resistancesElem?.magique);
   const perHit = (hitPhys + hitMag) / 2;
 
   const partyDps = PARTY.size * PARTY.hitChance * perHit;
-  const regen = n(sys.regeneration?.pv, 0);
-
-  // Régén ≥ dégâts du groupe : il ne meurt pas, point. On ne prolonge SURTOUT
-  // pas la division avec un plancher arbitraire — elle produirait un « 1100
-  // tours » d'apparence chiffrée qui masquerait l'unique information qui
-  // compte : le combat n'a pas de fin.
-  const invincible = regen >= partyDps;
-  const survival = invincible ? Infinity : Math.round((pv / (partyDps - regen)) * 10) / 10;
-
-  rows.push({ label: "PV", value: String(pv), points: null });
-  rows.push({ label: "Dégâts encaissés par coup", value: `${Math.round(perHit * 10) / 10}`, points: null });
-  if (regen) rows.push({ label: "Régén PV / tour", value: `+${regen}`, points: null });
-  rows.push({
-    label: `Tours de survie (groupe de ${PARTY.size}, niv. ${PARTY.level})`,
-    value: invincible ? "∞" : `${survival}`,
-    points: null
-  });
-
-  if (invincible) {
-    warnings.push(
-      `Régénération de ${regen} PV/tour contre ${Math.round(partyDps * 10) / 10} infligés par le groupe : ` +
-      `il se soigne au moins aussi vite qu'il encaisse. Le combat est ININGAGNABLE au corps à corps ` +
-      `— il lui faut une parade explicite (dégâts élémentaires auxquels il est vulnérable, effet qui ` +
-      `suspend la régénération…), ou une régén plus basse.`
-    );
-  }
+  const regen = n(profile.regenPv, 0);
 
   // ── Menace : ce qu'il peut réellement sortir en UN tour ────────────────
   // Un monstre n'utilise pas son meilleur sort, il utilise les N meilleurs
@@ -617,35 +1261,21 @@ export function computeMonsterValue(actor) {
   // capacités ne frappe pas dix fois plus fort qu'un autre à deux. N vient du
   // budget réel (action-budget.js : slotsTotal.max = 2), réglable en monde
   // pour les créatures épiques jouées seules face au groupe.
-  const spells = (actor?.items ?? []).filter(i => i.type === "spell");
+  const spells = opts.spells ?? (actor?.items ? Array.from(actor.items).filter(i => i.type === "spell") : []);
   const slots = monsterActionSlots();
 
   const abilities = [];
+  const passives = [];
   for (const sp of spells) {
-    const s = sp.system ?? {};
-    // Un passif n'est pas une action : il ne prend aucune place dans le tour.
-    if (String(s.speed ?? "normal") === "passif") continue;
-
-    const raw = spellRawDamage(s, sys);
-    if (raw <= 0) continue;
-
-    // Dégâts d'UNE utilisation, mitigation côté PJ comprise. Pas de division
-    // par la recharge ici : c'est la simulation ci-dessous qui gère la
-    // disponibilité, tour par tour.
-    const landed = Math.max(1, Math.ceil((raw - PARTY.armureFixe) * (1 - PARTY.reductionPct / 100)));
-    const targets = Math.max(1, n(s.targetCount?.max, 1));
-    const cdMax = Math.max(0, n(s.cooldown?.max, 0));
-
-    // Un sort RAPIDE occupe deux places (SLOT_DEFS : sortRapide max 2) — mais
-    // seulement s'il n'a pas de recharge, sinon sa deuxième utilisation dans
-    // le même tour serait justement bloquée par elle.
-    const uses = (String(s.speed ?? "normal") === "rapide" && cdMax === 0) ? 2 : 1;
-
-    abilities.push({
-      name: sp.name, raw, targets, cdMax, uses,
-      perUse: landed * PARTY.hitChance * targets,
-      readyAt: 0, turnsUsed: 0, totalUses: 0
-    });
+    const s = sp?.system ?? {};
+    const ev = evaluateMonsterAbility(sp, profile, PARTY);
+    // Un passif n'est pas une action : il ne prend aucune place dans le tour,
+    // mais il n'est pas gratuit pour autant — il est compté à part.
+    if (String(s.speed ?? "normal") === "passif") { passives.push(ev); continue; }
+    // Une capacité qui ne fait rien de mesurable n'occupe pas de place : elle
+    // serait sinon jouée à la place d'une vraie attaque.
+    if (ev.points <= 0 && ev.damage <= 0 && ev.healSelf <= 0) continue;
+    abilities.push(ev);
   }
 
   // Simulation sur SIM_TURNS tours : à chaque tour la créature remplit ses
@@ -666,27 +1296,85 @@ export function computeMonsterValue(actor) {
   // d'une capacité de zone se répartissent, ils ne s'empilent pas sur le même
   // personnage.
   let focusTotal = 0;
+  let healTotal = 0;
+  let manaTotal = 0;
+  let fatigueTotal = 0;
   for (let t = 0; t < SIM_TURNS; t++) {
+    // Le tri se fait sur la VALEUR de la capacité (dégâts, effets, soins),
+    // pas sur ses seuls dégâts : un monstre qui se soigne à mi-combat joue
+    // bien son soin, et cette place-là n'est plus disponible pour frapper.
     const avail = abilities
       .filter(a => a.readyAt <= t)
-      .sort((a, b) => b.perUse - a.perUse);
+      .sort((a, b) => b.points - a.points);
 
     let slotsLeft = slots;
     for (const a of avail) {
       if (slotsLeft <= 0) break;
       const times = Math.min(a.uses, slotsLeft);
-      total += a.perUse * times;
-      focusTotal += (a.perUse / a.targets) * times;
+      total += a.damage * times;
+      focusTotal += a.focus * times;
+      healTotal += a.healSelf * times;
+      manaTotal += a.manaCost * times;
+      fatigueTotal += a.fatigueCost * times;
       slotsLeft -= times;
       a.turnsUsed += 1;
       a.totalUses += times;
       if (a.cdMax > 0) a.readyAt = t + 1 + a.cdMax;
     }
   }
-  const best = total / SIM_TURNS;
+  // Les passifs sont toujours actifs : leurs dégâts (aura brûlante, riposte…)
+  // s'ajoutent sans occuper de place. Ils s'ajoutent APRÈS la moyenne du
+  // cycle, pas dedans : ce sont déjà des valeurs étalées sur le combat de
+  // référence, les diviser une seconde fois par les 12 tours de simulation
+  // les réduirait à rien.
+  let passiveDamage = 0, passiveFocus = 0, passiveHeal = 0;
+  for (const p of passives) {
+    passiveDamage += p.damage / REF_TURNS;
+    passiveFocus += p.focus / REF_TURNS;
+    passiveHeal += p.healSelf / REF_TURNS;
+  }
+  const threat = Math.round((total / SIM_TURNS + passiveDamage) * 10) / 10;
+  const healPerTurn = healTotal / SIM_TURNS + passiveHeal;
+  const manaPerTurn = manaTotal / SIM_TURNS;
+  const fatiguePerTurn = fatigueTotal / SIM_TURNS;
 
-  for (const a of abilities.slice().sort((x, y) => y.totalUses - x.totalUses || y.perUse - x.perUse)) {
-    const parts = [`${round1(a.raw)} brut`];
+  // ── Durée de vie, soins compris ───────────────────────────────────────
+  // Un monstre qui se soigne se bat plus longtemps, exactement comme un
+  // monstre qui régénère. Les deux étaient traités différemment : la régén
+  // comptait, le sort de soin ne comptait pas du tout.
+  const sustain = regen + healPerTurn;
+
+  // Régén ≥ dégâts du groupe : il ne meurt pas, point. On ne prolonge SURTOUT
+  // pas la division avec un plancher arbitraire — elle produirait un « 1100
+  // tours » d'apparence chiffrée qui masquerait l'unique information qui
+  // compte : le combat n'a pas de fin.
+  const invincible = sustain >= partyDps;
+  const survival = invincible ? Infinity : Math.round((pv / (partyDps - sustain)) * 10) / 10;
+
+  rows.push({ label: "PV", value: String(Math.round(pv)), points: null });
+  rows.push({ label: "Dégâts encaissés par coup", value: `${Math.round(perHit * 10) / 10}`, points: null });
+  if (regen) rows.push({ label: "Régén PV / tour", value: `+${round1(regen)}`, points: null });
+  if (healPerTurn > 0) rows.push({ label: "Soins qu'il se rend / tour", value: `+${round1(healPerTurn)}`, points: null });
+  rows.push({
+    label: `Tours de survie (groupe de ${PARTY.size}, niv. ${PARTY.level})`,
+    value: invincible ? "∞" : `${survival}`,
+    points: null
+  });
+
+  if (invincible) {
+    warnings.push(
+      `Il se remet ${round1(sustain)} PV/tour (régén${healPerTurn > 0 ? " + ses propres soins" : ""}) contre ` +
+      `${Math.round(partyDps * 10) / 10} infligés par le groupe : il se soigne au moins aussi vite qu'il ` +
+      `encaisse. Le combat est ININGAGNABLE au corps à corps — il lui faut une parade explicite (dégâts ` +
+      `élémentaires auxquels il est vulnérable, effet qui suspend la régénération…), ou moins de soins.`
+    );
+  }
+
+  // ── Détail des capacités ──────────────────────────────────────────────
+  for (const a of abilities.slice().sort((x, y) => y.totalUses - x.totalUses || y.points - x.points)) {
+    const parts = [`${Math.round(a.hit.chance * 100)} % de touche`];
+    if (a.damage > 0) parts.push(`${round1(a.damage)} dégâts`);
+    if (a.healSelf > 0) parts.push(`${round1(a.healSelf)} soin`);
     if (a.cdMax > 0) parts.push(`recharge ${a.cdMax}`);
     if (a.targets > 1) parts.push(`${a.targets} cibles`);
     if (a.uses > 1) parts.push("rapide ×2");
@@ -694,13 +1382,22 @@ export function computeMonsterValue(actor) {
     rows.push({
       label: `${a.turnsUsed ? "⚔" : "▫"} ${a.name}`,
       value: parts.join(" · "),
-      points: a.totalUses ? round1(a.perUse * a.totalUses / SIM_TURNS) : null
+      // Colonne « dégâts/tour » : vide pour une capacité qui n'en fait pas
+      // (un soin, un buff), plutôt qu'un « 0 » qu'on lirait comme une erreur.
+      points: (a.totalUses && a.damage > 0) ? round1(a.damage * a.totalUses / SIM_TURNS) : null
+    });
+  }
+  for (const p of passives) {
+    rows.push({
+      label: `♾️ ${p.name} (passif)`,
+      value: `aucune place d'action${p.damage > 0 ? ` · ${round1(p.damage / REF_TURNS)} dégâts/tour` : ""}`,
+      points: p.damage > 0 ? round1(p.damage / REF_TURNS) : null
     });
   }
 
   if (!spells.length) {
     warnings.push("Aucun sort sur ce monstre : il n'a aucune attaque. Dans ce système, les attaques d'un monstre SONT ses items `spell`.");
-  } else if (best <= 0) {
+  } else if (threat <= 0 && healPerTurn <= 0) {
     warnings.push("Aucune de ses capacités n'inflige de dégâts — vérifie que la ligne de dégâts (dés) est bien renseignée.");
   }
 
@@ -713,7 +1410,75 @@ export function computeMonsterValue(actor) {
     );
   }
 
-  const threat = Math.round(best * 10) / 10;
+  // ── Ce qui limite le monstre en dehors des PV ─────────────────────────
+  // Fatigue : chaque capacité en coûte, et au-delà du maximum la créature est
+  // ÉPUISÉE (−1 toucher, −1 vitesse — actor.js). Un monstre à 10 de fatigue
+  // qui dépense 2 par tour ne tient que 5 tours à plein régime, ce qui ne se
+  // voyait nulle part.
+  if (fatiguePerTurn > 0) {
+    const turnsBeforeExhaustion = profile.fatigueMax / fatiguePerTurn;
+    rows.push({
+      label: "Fatigue dépensée / tour",
+      value: `${round1(fatiguePerTurn)} sur ${round1(profile.fatigueMax)} → épuisé au tour ${Math.floor(turnsBeforeExhaustion)}`,
+      points: null,
+      warn: Number.isFinite(survival) && turnsBeforeExhaustion < survival
+    });
+    if (Number.isFinite(survival) && turnsBeforeExhaustion < survival) {
+      warnings.push(
+        `Il s'épuise au bout de ${Math.floor(turnsBeforeExhaustion)} tours (fatigue max ${round1(profile.fatigueMax)}, ` +
+        `${round1(fatiguePerTurn)} dépensés par tour) alors qu'il lui en faut ${survival} pour tomber : ` +
+        `la fin du combat se jouera avec un monstre épuisé (−1 toucher, −1 vitesse). Monte sa fatigue max ` +
+        `ou baisse le coût de ses capacités.`
+      );
+    }
+  }
+  // Mana : une capacité qui coûte du mana à un monstre qui n'en a pas ne
+  // partira jamais. Rien ne le signalait.
+  if (manaPerTurn > 0 && profile.manaMax <= 0) {
+    warnings.push(
+      `Ses capacités coûtent du mana (${round1(manaPerTurn)}/tour) mais il n'a aucun mana maximum : ` +
+      `à la table, elles seront refusées ou joueront à découvert.`
+    );
+  }
+
+  // ── Stats qui ne pèsent pas dans le score mais changent le combat ─────
+  const vitesse = n(profile.vitesse, 0);
+  rows.push({ label: "Vitesse", value: `${round1(vitesse)} m`, points: null, warn: vitesse > 4 });
+  if (vitesse > 4) {
+    warnings.push(`Vitesse ${round1(vitesse)} m : plus rapide qu'un PJ de départ (3 m). Le groupe ne pourra ni décrocher ni le distancer.`);
+  }
+  rows.push({
+    label: "Toucher inné (physique / magique)",
+    value: `${profile.toucherPhysique > 0 ? "+" : ""}${round1(profile.toucherPhysique)} / ${profile.toucherMagique > 0 ? "+" : ""}${round1(profile.toucherMagique)}`,
+    points: null
+  });
+  rows.push({
+    label: "Dex / Acuité (seuil de touché)",
+    value: `${round1(profile.principales.dexterite)} / ${round1(profile.principales.acuite)} contre ${PARTY.dexterite} / ${PARTY.acuite} au groupe`,
+    points: null
+  });
+  // L'allonge décide de sa zone de menace : à 0, il ne déclenche aucune
+  // attaque d'opportunité et le groupe se désengage librement.
+  const allonge = n(profile.allonge, 1);
+  rows.push({ label: "Allonge (zone de menace)", value: `${round1(allonge)} m`, points: null, warn: allonge <= 0 });
+  if (allonge <= 0) {
+    warnings.push("Allonge à 0 : il ne menace personne. Le groupe pourra le contourner et se désengager sans jamais subir d'attaque d'opportunité.");
+  }
+
+  // Résistances élémentaires notables : elles ne changent pas la survie
+  // calculée (le groupe frappe en physique/magique) mais décident si un
+  // lanceur de sorts sert à quelque chose dans ce combat.
+  const notable = Object.entries(profile.resistancesElem ?? {})
+    .filter(([k, v]) => n(v, 0) !== 0 && k !== "physique" && k !== "magique")
+    .map(([k, v]) => `${k} ${n(v, 0) > 0 ? "+" : ""}${round1(n(v, 0))} %`);
+  if (notable.length) {
+    rows.push({ label: "Résistances élémentaires", value: notable.join(" · "), points: null });
+  }
+  for (const [k, v] of Object.entries(profile.resistancesElem ?? {})) {
+    if (n(v, 0) >= 100) {
+      warnings.push(`Immunité totale à « ${k} » (100 %) : tout dégât de ce type est annulé, sans plancher. Vérifie que le groupe a autre chose sous la main.`);
+    }
+  }
 
   // Tours qu'il faut à ce monstre pour abattre UN personnage — calculé sur
   // les dégâts que reçoit UNE cible, pas sur le total encaissé par le groupe.
@@ -722,7 +1487,7 @@ export function computeMonsterValue(actor) {
   // le groupe prend bien tout ça) mais chaque PJ n'en reçoit qu'un tiers. Un
   // monstre à dégâts de zone paraissait donc capable d'abattre un PJ trois
   // fois plus vite qu'il ne le peut réellement.
-  const focus = focusTotal / SIM_TURNS;
+  const focus = focusTotal / SIM_TURNS + passiveFocus;
   const toKill = focus > 0 ? Math.round((PARTY.pv / focus) * 10) / 10 : Infinity;
   rows.push({ label: "Menace (dégâts / tour, groupe entier)", value: `${threat}`, points: null });
   rows.push({
@@ -739,13 +1504,6 @@ export function computeMonsterValue(actor) {
     ? MONSTER_TIERS[MONSTER_TIERS.length - 1]
     : (MONSTER_TIERS.find(t => encounter <= t.max) ?? MONSTER_TIERS[MONSTER_TIERS.length - 1]);
 
-  // Un monstre plus rapide que le groupe ne peut pas être fui : c'est une
-  // décision de design, pas un accident, mais elle doit être consciente.
-  const vitesse = n(sys.deplacement?.vitesse, 0);
-  if (vitesse > 4) {
-    warnings.push(`Vitesse ${vitesse} m : plus rapide qu'un PJ de départ (3 m). Le groupe ne pourra ni décrocher ni le distancer.`);
-  }
-
   if (Number.isFinite(survival) && survival > 12) {
     warnings.push(`${survival} tours pour le tuer : c'est très long. Au-delà d'une dizaine de tours, un combat lasse avant d'être dangereux.`);
   }
@@ -756,6 +1514,61 @@ export function computeMonsterValue(actor) {
     survivalText: Number.isFinite(survival) ? String(survival) : "∞",
     encounter: Number.isFinite(encounter) ? encounter : null,
     encounterText: Number.isFinite(encounter) ? String(encounter) : "∞",
-    tier, rows, warnings, partyRef: PARTY
+    tier, rows, warnings, partyRef: PARTY, profile,
+    healPerTurn: round1(healPerTurn),
+    focusPerTurn: round1(focus)
   };
+}
+
+/**
+ * Pèse un monstre NIVEAU PAR NIVEAU, sur ses plages de génération.
+ *
+ * C'est la pesée qui compte sur la fiche d'origine. Les stats affichées là ne
+ * sont pas celles que la table affrontera : `randomizeMonster` les tire dans
+ * `system.gen.bands[<niveau>]` au moment où le token est posé, et la fiche
+ * garde ses valeurs d'avant (souvent des zéros). Peser cette fiche revenait
+ * donc à peser une créature qui n'existe pas — « Trivial » pour un monstre
+ * dont les plages annoncent un boss.
+ *
+ * Pour chaque niveau configuré on rend la créature MOYENNE (milieu de chaque
+ * plage) et la fourchette de poids de rencontre entre le plus faible et le
+ * plus fort tirage possible. Les capacités, elles, sont les mêmes à tous les
+ * niveaux : ce sont les items du monstre.
+ *
+ * @returns {Array<{lvl:number, value:object, min:string, max:string}>}
+ */
+export function computeMonsterBandValues(actor) {
+  const bands = actor?.system?.gen?.bands ?? {};
+  const spells = actor?.items ? Array.from(actor.items).filter(i => i.type === "spell") : [];
+  const levels = Object.keys(bands)
+    .map(k => parseInt(k, 10))
+    .filter(v => Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b);
+
+  const out = [];
+  for (const lvl of levels) {
+    const band = bands[String(lvl)];
+    if (!band) continue;
+    const mk = (which) => computeMonsterValue(actor, {
+      profile: {
+        ...monsterProfileFromBand(band, lvl, which, actor?.name),
+        // L'allonge et le mana ne sont pas tirés par la génération : ils
+        // restent ceux de la fiche, quel que soit le niveau.
+        allonge: n(actor?.system?.allonge, 1),
+        manaMax: n(actor?.system?.ressources?.mana?.max, 0)
+      },
+      spells
+    });
+    const value = mk("mid");
+    const lo = mk("min");
+    const hi = mk("max");
+    out.push({
+      lvl,
+      value,
+      minText: lo.encounterText,
+      maxText: hi.encounterText,
+      spread: lo.encounterText !== hi.encounterText
+    });
+  }
+  return out;
 }

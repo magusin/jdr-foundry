@@ -80,6 +80,22 @@
         </div>
       </section>
       {{/if}}
+      {{!-- Dangerosité : le MJ l'ouvre monstre par monstre (system.peseeReveal).
+            Le score et le palier, rien d'autre — le détail du calcul reste MJ. --}}
+      {{#if peseeReveal.show}}
+      <section class="card rpg-item-value">
+        <h2>⚖️ Dangerosité estimée</h2>
+        <div class="rpg-iv-head">
+          {{#if peseeReveal.showScore}}
+          <span class="rpg-iv-total">{{peseeReveal.score}}</span>
+          {{/if}}
+          <span class="rpg-iv-tier rpg-iv-{{peseeReveal.tierKey}}">{{peseeReveal.tierLabel}}</span>
+        </div>
+        <small class="rpg-iv-help">
+          Estimation de la menace que représente cette créature pour un groupe de votre niveau.
+        </small>
+      </section>
+      {{/if}}
       <section class="card">
         <h2>Description</h2>
         {{#if system.description}}
@@ -133,6 +149,29 @@
                 <option value="exact" {{#if (eq system.pvReveal "exact")}}selected{{/if}}>Valeurs exactes</option>
               </select>
             </div>
+            {{!-- Même mécanique que les PV : réglé ici sur la fiche d'origine,
+                  ou directement sur un token pour ne dévoiler que celui-là.
+                  Le joueur ne reçoit que le palier (et le score si on le
+                  choisit) — jamais le détail des capacités, des stats ni du
+                  calcul, qui lui dirait comment battre la créature. --}}
+            <div class="mm-line">
+              <span title="Ce que les joueurs lisent de la pesée de rencontre. Seul le palier (et éventuellement le score) leur est transmis : jamais les capacités, les stats ni le détail du calcul.">⚖️ Pesée montrée aux joueurs</span>
+              <select name="system.peseeReveal">
+                <option value="none"  {{#if (eq system.peseeReveal "none")}}selected{{/if}}>Masquée</option>
+                <option value="tier"  {{#if (eq system.peseeReveal "tier")}}selected{{/if}}>Palier seul</option>
+                <option value="score" {{#if (eq system.peseeReveal "score")}}selected{{/if}}>Palier + score</option>
+              </select>
+            </div>
+            {{#if hasBandValues}}
+            <div class="mm-line" style="grid-column:1 / -1">
+              <small style="opacity:.7;font-size:10.5px;line-height:1.4">
+                Ce monstre est généré : chaque token tire ses propres stats en arrivant sur la scène.
+                Le réglage ci-dessus suit les tokens et leur montrera <b>leur</b> pesée ; sur cette
+                fiche d'origine, rien n'est montré au joueur, puisque ses stats ne sont celles
+                d'aucune créature réelle.
+              </small>
+            </div>
+            {{/if}}
             <div class="mm-line">
               <span>⚔️ Allonge / menace (mêlée, m)</span>
               <input type="number" name="system.allonge" value="{{system.allonge}}" min="0" step="0.1"
@@ -396,12 +435,51 @@
           {{/if}}
         </details>
 
+        {{!-- PESÉE DES PLAGES DE GÉNÉRATION (MJ ONLY) — la seule qui vaille sur
+              la fiche d'origine. Les stats affichées ci-dessus ne sont pas
+              celles que la table affrontera : la génération les tire dans ces
+              plages au moment où le token est posé. Absente sur un token, dont
+              les stats sont déjà les vraies. --}}
+        {{#if hasBandValues}}
+        <details class="rpg-item-value" style="grid-column: 1 / -1;" open>
+          <summary><b>⚖️ Pesée par niveau de génération (MJ)</b></summary>
+          <small class="rpg-iv-help" style="margin-top:0">
+            C'est <b>cette</b> pesée qui compte tant que le monstre n'est pas généré : la fiche
+            d'origine garde ses stats d'avant le tirage (souvent des zéros), alors que chaque token
+            posé recevra les valeurs ci-dessous. La fourchette donne le tirage le plus faible et le
+            plus fort possible ; le gros chiffre est la créature moyenne.
+          </small>
+          <table class="rpg-iv-table" style="margin-top:6px">
+            <thead><tr><th>Niveau</th><th>Menace · survie · PV</th><th>Rencontre</th></tr></thead>
+            <tbody>
+              {{#each bandValues}}
+              <tr>
+                <td><b>Niv. {{this.lvl}}</b> <span class="rpg-iv-tier rpg-iv-{{this.value.tier.key}}">{{this.value.tier.label}}</span></td>
+                <td>
+                  {{this.value.threat}} dég./tour · {{this.value.survivalText}} tours · {{this.value.profile.pv}} PV
+                  {{#if this.spread}}<br /><span style="opacity:.65">fourchette {{this.minText}} – {{this.maxText}}</span>{{/if}}
+                </td>
+                <td>{{this.value.encounterText}}</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+          {{#each bandValues}}
+          {{#each this.value.warnings}}
+          <div class="rpg-iv-alert">⚠️ <b>Niv. {{../lvl}}</b> — {{this}}</div>
+          {{/each}}
+          {{/each}}
+        </details>
+        {{/if}}
+
         {{!-- PESÉE DU MONSTRE (MJ ONLY) — `monsterValue` vaut null pour un
               joueur, ce bloc n'existe donc pas chez lui. La fiche monstre est
-              consultable par les joueurs (pvReveal), le garde est obligatoire. --}}
+              consultable par les joueurs (pvReveal), le garde est obligatoire.
+              Repliée par défaut quand des plages existent : ce sont elles qui
+              décrivent la créature réelle, pas les stats de cette fiche. --}}
         {{#if monsterValue}}
-        <details class="rpg-item-value" style="grid-column: 1 / -1;" open>
-          <summary><b>⚖️ Pesée de rencontre (MJ)</b></summary>
+        <details class="rpg-item-value" style="grid-column: 1 / -1;" {{#unless hasBandValues}}open{{/unless}}>
+          <summary><b>⚖️ Pesée de rencontre (MJ){{#if hasBandValues}} — stats actuelles de la fiche{{/if}}</b></summary>
           <div class="rpg-iv-head">
             <span class="rpg-iv-total">{{monsterValue.encounterText}}</span>
             <span class="rpg-iv-tier rpg-iv-{{monsterValue.tier.key}}">{{monsterValue.tier.label}}</span>
@@ -421,16 +499,21 @@
           <small class="rpg-iv-help">
             Mesuré contre un groupe de <b>{{monsterValue.partyRef.size}} PJ de niveau
             {{monsterValue.partyRef.level}}</b> ({{monsterValue.partyRef.pv}} PV,
-            ~50 % de touche, {{monsterValue.partyRef.damagePerHit}} de dégâts bruts par attaque,
-            {{monsterValue.partyRef.reductionPct}} % de réduction) — la référence suit le niveau du
+            {{monsterValue.partyRef.damagePerHit}} de dégâts bruts par attaque,
+            {{monsterValue.partyRef.reductionPct}} % de réduction,
+            {{monsterValue.partyRef.dexterite}} en Dex/Acuité) — la référence suit le niveau du
             monstre, et sa taille comme ses dégâts se règlent dans les paramètres du monde
             (« Pesée — taille du groupe » / « dégâts par attaque »), parce qu'ils dépendent
             entièrement de l'armement réel de tes joueurs.
             Le total est menace × durée de vie : trivial ≤ 3, mineur ≤ 12,
             sérieux ≤ 35, élite ≤ 90, au-delà c'est un boss.
-            Les recharges sont prises en compte — une capacité à recharge 3 ne
-            compte que pour un tour sur trois. Le groupe frappe des deux livraisons :
-            armure et résistance comptent chacune pour moitié.
+            Toutes ses stats entrent dans le calcul : PV, Endurance, armure et résistance (fixes
+            et scores), résistances élémentaires, régénération, Dextérité/Acuité et toucher inné
+            (qui donnent sa vraie chance de toucher, capacité par capacité, au lieu d'un 50 %
+            forfaitaire), Force/Intelligence (scaling des dégâts), fatigue max et vitesse.
+            Chaque capacité est pesée comme sur sa propre fiche — dégâts directs, effets par tour,
+            soins qu'elle lui rend, malus posés sur le groupe — puis la créature remplit ses
+            places d'action tour par tour avec les meilleures disponibles, recharges comprises.
           </small>
         </details>
         {{/if}}

@@ -165,6 +165,55 @@
     </section>
     {{/if}}
 
+    {{!-- ═══ PESÉE DU SORT (MJ UNIQUEMENT) ═══
+         `spellValue` vaut null pour un joueur — le contrôleur ne le met même
+         pas dans son contexte — donc ce bloc n'existe pas chez lui. --}}
+    {{#if spellValue}}
+    <section class="card rpg-item-value">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2>⚖️ Force du sort (MJ)</h2>
+        <button type="button" data-action="refreshValue" style="cursor:pointer;padding:2px 8px;font-size:11px"
+          title="La pesée est calculée au rendu de la fiche : après avoir tapé des valeurs, clique ici pour la recalculer.">🔄 Recalculer</button>
+      </div>
+      <div class="rpg-iv-head">
+        <span class="rpg-iv-total">{{spellValue.perTurn}}</span>
+        <span class="rpg-iv-tier rpg-iv-{{spellValue.tier.key}}">{{spellValue.tier.label}}</span>
+        <span style="font-size:11px;opacity:.7">{{spellValue.tier.hint}}</span>
+      </div>
+      <div style="font-size:11px;opacity:.85;margin-bottom:6px">
+        <b>{{spellValue.perUse}}</b> par utilisation · <b>{{spellValue.perTurn}}</b> par tour
+        (recharge et vitesse comprises) · une attaque à l'arme ordinaire en pèse
+        <b>{{spellValue.weaponRef}}</b>{{#if spellValue.vsWeapon}} → ce sort vaut <b>×{{spellValue.vsWeapon}}</b> une attaque{{/if}}.
+      </div>
+      <table class="rpg-iv-table">
+        <thead><tr><th>Facteur</th><th>Valeur</th><th>Poids</th></tr></thead>
+        <tbody>
+          {{#each spellValue.rows}}
+          <tr{{#if warn}} class="rpg-iv-warn"{{/if}}>
+            <td>{{label}}</td><td>{{value}}</td><td>{{#if points}}{{points}}{{/if}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+      {{#each spellValue.warnings}}
+      <div class="rpg-iv-alert">⚠️ {{this}}</div>
+      {{/each}}
+      <small class="rpg-iv-help">
+        Tous les facteurs de la fiche entrent dans ce chiffre : dés, plat, scaling de stat,
+        critique, vol de vie, nombre de cibles, récupérations, effets (dégâts/soin par tour,
+        modificateurs de stats, aura, résistances accordées, durée), charge, portée, difficulté
+        (via le seuil de touché réel), vitesse, recharge, mana et fatigue.
+        Mesuré contre un groupe de <b>{{spellValue.partyRef.size}} PJ de niveau
+        {{spellValue.partyRef.level}}</b> ({{spellValue.partyRef.pv}} PV,
+        {{spellValue.partyRef.reductionPct}} % de réduction) — taille et dégâts du groupe se
+        règlent dans les paramètres du monde. C'est <b>par tour</b> qui se compare :
+        mineur ≤ 12, standard ≤ 30, fort ≤ 60, très fort ≤ 110, au-delà c'est démesuré.
+        Un effet n'est posé que sur une touche validée, donc tout est pondéré par la chance de
+        toucher. Rien de tout ceci n'est stocké ni lu par un jet : c'est une loupe, pas une règle.
+      </small>
+    </section>
+    {{/if}}
+
     {{!-- ═══ DÉGÂTS (multiples lignes) — MJ uniquement ═══
          Le joueur retrouve la formule dans le résumé du haut : lui montrer
          la grille de saisie revenait à le laisser modifier le sort.      --}}
