@@ -752,6 +752,26 @@ export function computeSpellValue(item, opts = {}) {
     const auraMult = fx.isAura ? AURA_REF_TARGETS : 1;
     const affected = heads * auraMult;
 
+    // ── Quand l'effet part-il réellement ? ──────────────────────────────
+    // effectsForResult() (spells.js) ne pose un effet que sur le résultat
+    // qu'il déclare : "crit" n'arrive que sur un 20 naturel, "hitonly" est au
+    // contraire exclu du critique. Peser tous les effets à la chance de touche
+    // gonflait un sort dont la brûlure ne part qu'un jet sur vingt — elle
+    // comptait alors comme si elle partait à chaque touche.
+    // Un passif ne fait aucun jet : son effet est toujours là.
+    const when = String(fx.when ?? "hit").toLowerCase();
+    const fxChance = isPassif ? chance
+      : when === "crit"    ? critShare
+      : when === "hitonly" ? Math.max(0, chance - critShare)
+      : chance;
+    // Le déclencheur se lit sur chaque ligne de l'effet, sinon un total divisé
+    // par vingt ressemble à un bug.
+    const whenTag = isPassif ? ""
+      : when === "crit"    ? ` · crit seul (${Math.round(critShare * 100)} % des jets)`
+      : when === "hitonly" ? ` · touche normale (${Math.round(fxChance * 100)} %)`
+      : "";
+    const fxLabel = `${label}${whenTag}`;
+
     // Effet par tour : dégâts ou soin, pendant toute sa durée.
     const tick = fx.tick ?? {};
     const tickMode = String(tick.mode ?? "none");
@@ -759,10 +779,10 @@ export function computeSpellValue(item, opts = {}) {
       const per = Math.abs(n(tick.flat, 0)) + statScale(stats, tick.stat, tick.per, tick.perStep);
       if (per > 0) {
         const perTick = tickMode === "damage" ? landedAgainstParty(per, PARTY) : per;
-        const total = perTick * dur * affected * chance;
-        if (tickMode === "damage") tickDamagePerUse += perTick * dur * affected * chance;
-        if (tickMode === "heal" && ben !== "target") healSelf += per * dur * chance;
-        add(`${label} · ${tickMode === "damage" ? "dégâts" : "soin"} par tour`,
+        const total = perTick * dur * affected * fxChance;
+        if (tickMode === "damage") tickDamagePerUse += perTick * dur * affected * fxChance;
+        if (tickMode === "heal" && ben !== "target") healSelf += per * dur * fxChance;
+        add(`${fxLabel} · ${tickMode === "damage" ? "dégâts" : "soin"} par tour`,
             `${round1(per)} × ${dur} tour(s)${affected > 1 ? ` × ${affected}` : ""}`,
             total * DAMAGE_POINT * (tickMode === "damage" ? 1 : RESTORE_WEIGHTS.pv));
       }
@@ -785,11 +805,12 @@ export function computeSpellValue(item, opts = {}) {
       // un adversaire valent tous deux POSITIF ; les deux croisements sont des
       // maluses pour lui, et pèsent donc négativement.
       const sign = (onAlly === isBonus) ? 1 : -1;
-      // × chance : un effet n'est posé QUE sur une touche validée par le MJ
-      // (voir effectsForResult dans spells.js). Un sort dur à placer accorde
-      // donc son bonus moins souvent, et cela doit se voir.
-      const pts = sign * flatEq * weight * durFactor * affected * chance;
-      add(`${label} · ${LABELS[stat] ?? stat}`,
+      // × fxChance : un effet n'est posé QUE sur le résultat qu'il déclare, et
+      // seulement si le MJ valide la touche (voir effectsForResult dans
+      // spells.js). Un sort dur à placer — ou un effet réservé au critique —
+      // accorde donc son bonus moins souvent, et cela doit se voir.
+      const pts = sign * flatEq * weight * durFactor * affected * fxChance;
+      add(`${fxLabel} · ${LABELS[stat] ?? stat}`,
           `${isBonus ? "+" : "−"}${round1(qty)}${String(m?.mode) === "pct" ? " %" : ""} · ${dur} tour(s)`,
           pts);
     }
@@ -800,32 +821,32 @@ export function computeSpellValue(item, opts = {}) {
     if (rdTag && rdPct) {
       const w = n(RESIST_WEIGHTS[rdTag], 0.4);
       const sign = (onAlly === (rdPct > 0)) ? 1 : -1;
-      add(`${label} · résist. ${rdTag}`, `${rdPct > 0 ? "+" : ""}${round1(rdPct)} % · ${dur} tour(s)`,
-          sign * Math.abs(rdPct) * w * durFactor * affected * chance);
+      add(`${fxLabel} · résist. ${rdTag}`, `${rdPct > 0 ? "+" : ""}${round1(rdPct)} % · ${dur} tour(s)`,
+          sign * Math.abs(rdPct) * w * durFactor * affected * fxChance);
     }
 
     // Résistance aux ÉTATS accordée — le même barème que sur une pièce d'équipement.
     const rtag = String(fx.resistTag ?? "") || String(fx.effectKey ?? "");
     if (rtag) {
       if (fx.resistImmune) {
-        add(`${label} · immunité ${rtag}`, `${dur} tour(s)`,
-            (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * chance);
+        add(`${fxLabel} · immunité ${rtag}`, `${dur} tour(s)`,
+            (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * fxChance);
       }
       const rd = n(fx.resistDurationReduction, 0);
       if (rd) {
-        add(`${label} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
-            (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * chance);
+        add(`${fxLabel} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
+            (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * fxChance);
       }
       const rp = n(fx.resistDotPct, 0);
       if (rp) {
-        add(`${label} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
-            (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * chance);
+        add(`${fxLabel} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
+            (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * fxChance);
       }
     }
 
     if (fx.movementTypeGrant) {
-      add(`${label} · déplacement accordé`, String(fx.movementTypeGrant),
-          (onAlly ? 1 : -1) * 3 * durFactor * affected * chance);
+      add(`${fxLabel} · déplacement accordé`, String(fx.movementTypeGrant),
+          (onAlly ? 1 : -1) * 3 * durFactor * affected * fxChance);
     }
 
     if (permanent) {
