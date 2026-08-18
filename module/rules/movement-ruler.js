@@ -12,6 +12,7 @@
 
 import { calculateMovementCost } from "./region-behaviors.js";
 import { getBudget, movementRemaining } from "./action-budget.js";
+import { BASE_VITESSE } from "./base-speed.js";
 
 function fmtM(m) {
   const v = Math.round((Number(m) || 0) * 10) / 10;
@@ -60,7 +61,7 @@ export function installRPGTokenRuler() {
                          ?? combat.combatants.find(c => c.actorId === actor.id);
           if (combatant) {
             const budget    = getBudget(combat, combatant.id);
-            const vitesse   = Number(actor.system?.deplacement?.vitesse ?? 6) || 6;
+            const vitesse   = Number(actor.system?.deplacement?.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
             const remaining = movementRemaining(budget, vitesse);
             const after     = Math.max(0, remaining - cost);
 

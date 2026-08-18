@@ -264,6 +264,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 /* -------------------------------------------- */
 
 import { setupActorItemDrop } from "./drop-helper.js";
+import { BASE_VITESSE } from "../rules/base-speed.js";
 import {
   applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
   restoreScrollPositions, uniqueSheetOptions,
@@ -680,7 +681,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
         const combatant = combat.combatants.find(c => c.actorId === actor.id);
         if (combatant) {
           const budget    = getBudget(combat, combatant.id);
-          const vitesse   = Number(actor.system?.deplacement?.vitesse ?? 6) || 6;
+          const vitesse   = Number(actor.system?.deplacement?.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
           const remaining = movementRemaining(budget, vitesse);
           const spent     = movementSpent(budget);
           const r1 = (x) => Math.round((Number(x) || 0) * 10) / 10;

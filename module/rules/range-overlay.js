@@ -19,6 +19,7 @@
 import { getMeleeReach, areOpposedDisp } from "./movement-tracker.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
 import { checkRange } from "../utils/grid.js";
+import { BASE_VITESSE } from "./base-speed.js";
 
 let _gfx = null;         // calque de l'affichage éphémère (survol)
 let _pinnedTokenId = null;
@@ -359,7 +360,7 @@ export async function showMovementLimit(token) {
     let remaining = 0;
     try {
       const { getBudget, movementRemaining } = await import("./action-budget.js");
-      const vitesse = Number(token.actor.system?.deplacement?.vitesse ?? 6) || 6;
+      const vitesse = Number(token.actor.system?.deplacement?.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
       remaining = movementRemaining(getBudget(combat, cbt.id), vitesse);
     } catch (e) {
       console.warn("[RPG] réserve de déplacement :", e);

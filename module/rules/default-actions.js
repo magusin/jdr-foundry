@@ -21,8 +21,8 @@ const FLAG_KEY   = "defaultActions";
 // Incrémenté à chaque nouvelle action de base — ou à chaque RETRAIT : le
 // rattrapage au chargement repasse alors sur les acteurs déjà traités par une
 // version antérieure, pour compléter ce qui manque et supprimer ce qui n'a
-// plus lieu d'être (v5 : « Attaquer » retiré des monstres).
-const VERSION    = 5;
+// plus lieu d'être (v5 : « Attaquer » retiré des monstres ; v6 : « Sprint »).
+const VERSION    = 6;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -147,6 +147,74 @@ function swapActionData() {
 }
 
 /**
+ * Sprint — double la vitesse de déplacement pour le tour en cours.
+ *
+ * Aucune mécanique dédiée : l'effet pose sur le lanceur un état « +100 % de
+ * vitesse » d'un tour, et tout le reste suit tout seul. La réserve de
+ * déplacement n'est pas figée en début de tour — `movementRemaining()`
+ * (action-budget.js) la recalcule à chaque pas comme
+ * `vitesse effective − mètres déjà parcourus` — donc sprinter APRÈS avoir
+ * marché rend bien les mètres manquants, et sprinter avant double la réserve
+ * dès le premier pas.
+ *
+ * Coût en actions, tel que demandé à la table : le sort en consomme une (slot
+ * « sortNormal »), se déplacer en consomme une autre (slot « déplacement »,
+ * réservé au premier pas du tour et pas aux suivants) — soit les 2 actions du
+ * tour pour un personnage qui sprinte et court. Rien de plus n'est à réserver
+ * ici : le budget est prélevé par le circuit normal de déclaration des sorts.
+ *
+ * Durée 1 : les états sont décrémentés au DÉBUT du tour de leur porteur
+ * (turn-effects.js), donc un état d'un tour posé pendant son propre tour dure
+ * exactement jusqu'à son tour suivant — « ce tour-ci », sans reliquat.
+ */
+function sprintActionData() {
+  return {
+    name: "Sprint",
+    type: "spell",
+    img: "icons/skills/movement/figure-running-gray.webp",
+    system: {
+      speed: "normal",
+      livraison: "physique",
+      tag: "neutre",
+      coutMana: 0,
+      fatigueCost: 0,          // le prix est l'action dépensée, pas le souffle
+      difficulte: 0,
+      range: { min: 0, max: 0 },
+      targetCount: { min: 0, max: 0 },   // sur soi, aucune cible requise
+      cooldown: { max: 0, restant: 0 },
+      damages: [], restores: [],
+      effectsUI: [{
+        id: "sprint-vitesse",
+        label: "Sprint",
+        effectKey: "",
+        tag: "",
+        when: "hit",
+        target: "self",
+        duration: 1,
+        permanent: false,
+        removeBaseTN: 0,
+        retraitMod: 0,
+        resistDamageTag: "", resistDamagePct: 0,
+        resistTag: "", resistDurationReduction: 0, resistDotPct: 0, resistImmune: false,
+        movementTypeGrant: "",
+        fatigueDot: 0,
+        tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "physique" },
+        isAura: false, auraMin: 0, auraMax: 0, auraTarget: "allies",
+        mods: [{ stat: "vitesse", mode: "pct", sens: "bonus", value: 100 }]
+      }],
+      description: "<p>Le personnage pique un sprint : sa <b>vitesse de "
+                 + "déplacement est doublée jusqu'à la fin du tour</b>.</p>"
+                 + "<p>Coûte une action. Se déplacer en coûte une autre : "
+                 + "sprinter puis courir occupe donc les 2 actions du tour. "
+                 + "Sprinter après avoir déjà marché fonctionne aussi — la "
+                 + "réserve du tour double, les mètres déjà parcourus restent "
+                 + "déduits.</p>"
+    },
+    flags: { [FLAG_SCOPE]: { [ACTION_KEY_FLAG]: "sprint" } }
+  };
+}
+
+/**
  * Retirer un état — choisit parmi les états actifs retirables, le MJ valide
  * la tentative, puis le TN à battre (difficulté de retrait de l'état,
  * ajustée par les bonus/malus de retrait des équipements et effets actifs)
@@ -184,6 +252,7 @@ const DEFAULT_ACTIONS = {
   repos: restActionData,
   attaquer: attackActionData,
   changerArme: swapActionData,
+  sprint: sprintActionData,
   retirerEtat: removeStateActionData
 };
 

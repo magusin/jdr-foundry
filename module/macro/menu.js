@@ -529,7 +529,9 @@
         <!-- Bouton déplacement rapide -->
         ${(() => {
           const hasDepl = isMyTurn(actor) && canAct(actor) && canUseSlot(actor, "deplacement");
-          const vitesse = actor.system?.deplacement?.vitesse ?? 6;
+          // Repli aligné sur BASE_VITESSE (rules/base-speed.js) : une macro
+          // n'est pas un module ES et ne peut pas l'importer.
+          const vitesse = actor.system?.deplacement?.vitesse ?? 8;
           // Terrain à la position actuelle du token
           let terrainInfo = "";
           try {

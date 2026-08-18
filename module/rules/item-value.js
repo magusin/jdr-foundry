@@ -30,8 +30,10 @@
 //     10 valeurs seulement : chaque point vaut 5 points de % de touche fermes.
 //
 // Les poids ci-dessous sont donc des estimations de l'IMPACT RÉEL d'une unité,
-// calibrées sur un personnage de référence de début de partie (30 PV, 3 m de
+// calibrées sur un personnage de référence de début de partie (30 PV, 8 m de
 // vitesse, 10 de fatigue, ~50 % de chance de toucher, coups reçus d'environ 6).
+// La vitesse de base vient de base-speed.js : la changer change ce barème,
+// puisque ce que vaut « +1 m » dépend entièrement de ce à quoi on l'ajoute.
 // Ils ne prétendent pas à l'exactitude : ils prétendent à la bonne échelle,
 // ce qui suffit pour repérer une ligne qui pèse dix fois ses voisines.
 //
@@ -62,6 +64,7 @@
 // n'a pas de vrais documents attaquant/cible sous la main, seulement un groupe
 // de référence chiffré — mais elle doit au moins partager le calcul.
 import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
+import { BASE_VITESSE } from "./base-speed.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -99,9 +102,11 @@ export const STAT_WEIGHTS = {
   toucherPhysique: 10,
   toucherMagique: 10,
 
-  // ── Mobilité : sur une base de 3 m, +1 m est un tiers de déplacement en
-  // plus. Décide qui engage, qui décroche, qui atteint le mage.
-  vitesse: 12,
+  // ── Mobilité : sur une base de 8 m (BASE_VITESSE), +1 m est un huitième de
+  // déplacement en plus. Décide qui engage, qui décroche, qui atteint le mage.
+  // Le poids suivait la base de 3 m d'avant (12) : le garder aurait payé un
+  // mètre au même prix alors qu'il vaut désormais deux fois et demie moins.
+  vitesse: 4.5,
 
   // ── Ressources : linéaires mais sans effet de seuil.
   pvMax: 2,
@@ -222,7 +227,10 @@ const LINEAR_FIELDS = new Set([
 const STACK_CAPS = {
   armureFixe: 8, resistanceFixe: 8,
   toucherPhysique: 2, toucherMagique: 2,
-  vitesse: 2, fatigueMax: 3,
+  // Cumul de tout un équipement : au plus la moitié d'un déplacement de base
+  // en cadeau. Le plafond était de 2 m quand la base valait 3 — la même
+  // proportion sur une base de 8 en donne 4.
+  vitesse: 4, fatigueMax: 3,
   regenPvPct: 30, regenManaPct: 30
 };
 
@@ -460,7 +468,7 @@ const PCT_REF = {
   force: 10, intelligence: 10, dexterite: 10, acuite: 10, endurance: 10,
   armureFixe: 2, resistanceFixe: 2, scoreArmure: 20, scoreResistance: 20,
   toucherPhysique: 1, toucherMagique: 1, initiativeMod: 5,
-  vitesse: 3, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
+  vitesse: BASE_VITESSE, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
   fatigueMax: 10, podsMax: 50
 };
 
@@ -1029,7 +1037,14 @@ export function partyRefFor(level = 1) {
     // automatiquement : cette progression est une hypothèse de table, comme
     // le reste de cette référence.
     dexterite: 5 + step * 2,
-    acuite: 5 + step * 2
+    acuite: 5 + step * 2,
+    // Vitesse du groupe : la vitesse de base d'un personnage (base-speed.js).
+    // Rien ne la fait monter avec le niveau — un mètre de plus se gagne par
+    // l'équipement, pas par l'expérience. Elle sert à dire si un monstre peut
+    // rattraper le groupe, ce qui n'a de sens que comparé à sa vraie valeur :
+    // le seuil était écrit en dur (« plus rapide qu'un PJ de départ (3 m) »)
+    // et serait devenu faux le jour où la base bouge — c'est arrivé.
+    vitesse: BASE_VITESSE
   };
 }
 
@@ -1464,9 +1479,11 @@ export function computeMonsterValue(actor, opts = {}) {
 
   // ── Stats qui ne pèsent pas dans le score mais changent le combat ─────
   const vitesse = n(profile.vitesse, 0);
-  rows.push({ label: "Vitesse", value: `${round1(vitesse)} m`, points: null, warn: vitesse > 4 });
-  if (vitesse > 4) {
-    warnings.push(`Vitesse ${round1(vitesse)} m : plus rapide qu'un PJ de départ (3 m). Le groupe ne pourra ni décrocher ni le distancer.`);
+  const vitesseGroupe = n(PARTY.vitesse, BASE_VITESSE);
+  const tropRapide = vitesse > vitesseGroupe;
+  rows.push({ label: "Vitesse", value: `${round1(vitesse)} m`, points: null, warn: tropRapide });
+  if (tropRapide) {
+    warnings.push(`Vitesse ${round1(vitesse)} m : plus rapide qu'un PJ (${round1(vitesseGroupe)} m). Le groupe ne pourra ni décrocher ni le distancer.`);
   }
   rows.push({
     label: "Toucher inné (physique / magique)",

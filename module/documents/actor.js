@@ -3,6 +3,7 @@ import { sumActiveEffectMods } from "../rules/status-effects.js";
 import {
   DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
 } from "../rules/damage-types.js";
+import { BASE_VITESSE } from "../rules/base-speed.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -243,7 +244,7 @@ export class RPGActor extends Actor {
     // plus bas), jamais une vraie base. La vraie base éditable vit dans sys.base.vitesse
     // — initialisée une fois depuis l'ancienne valeur pour ne rien perdre.
     if (sys.base.vitesse === undefined) {
-      sys.base.vitesse = Number(baseMove.vitesse ?? 6) || 6;
+      sys.base.vitesse = Number(baseMove.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
     }
 
     // BONUS items / sorts passifs

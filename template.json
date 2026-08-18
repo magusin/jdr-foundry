@@ -48,7 +48,7 @@
           "mana": 1.0
         },
         "deplacement": {
-          "vitesse": 6,
+          "vitesse": 8,
           "type": "terrestre",
           "typesExtra": []
         },
