@@ -161,14 +161,15 @@ export const STAT_WEIGHTS = {
   scoreArmure: 0.3,
   scoreResistance: 0.3,
 
-  // ── Régénération : un POURCENTAGE DE LA RÉGÉN DE BASE, pas des PV max.
-  // La régén de base vaut 1 PV/tour et le calcul est
-  // `floor(base × (1 + pct/100))` — il faut donc +100 % pour gagner un seul
-  // PV par tour, et tout ce qui est en dessous est mangé par l'arrondi.
-  // D'où un poids minuscule, et l'alerte levée plus bas pour un bonus qui
-  // n'atteint pas le seuil : il coûte une ligne sur la fiche et ne fait rien.
-  regenPvPct: 0.1,
-  regenManaPct: 0.05
+  // ── Régénération : des POINTS PAR TOUR, ajoutés à la base (ce fut un
+  // pourcentage, inutilisable : sur une base de 1 PV/tour, tout ce qui était
+  // sous +100 % disparaissait dans l'arrondi). Un point de régén rendu à
+  // chaque tour vaut, sur le combat de référence, REF_TURNS points de vie —
+  // d'où un poids proche de REF_TURNS × pvMax, légèrement en dessous parce
+  // qu'un combat court le paie moins. Le mana suit le rapport que lui donne
+  // déjà manaMax face à pvMax.
+  regenPv: 8,
+  regenMana: 6
 };
 
 /**
@@ -220,7 +221,7 @@ const TIERS = {
  */
 const LINEAR_FIELDS = new Set([
   "armureFixe", "resistanceFixe", "toucherPhysique", "toucherMagique",
-  "vitesse", "fatigueMax", "regenPvPct", "regenManaPct"
+  "vitesse", "fatigueMax", "regenPv", "regenMana"
 ]);
 
 /** Plafond conseillé pour le CUMUL des 9 emplacements. Au-delà : alerte. */
@@ -231,7 +232,9 @@ const STACK_CAPS = {
   // en cadeau. Le plafond était de 2 m quand la base valait 3 — la même
   // proportion sur une base de 8 en donne 4.
   vitesse: 4, fatigueMax: 3,
-  regenPvPct: 30, regenManaPct: 30
+  // Régén : en points par tour désormais. Un équipement complet qui rend
+  // 2 PV/tour de plus double déjà la régénération d'un personnage de départ.
+  regenPv: 2, regenMana: 3
 };
 
 const LABELS = {
@@ -242,7 +245,7 @@ const LABELS = {
   force: "Force", intelligence: "Intelligence",
   dexterite: "Dextérité", acuite: "Acuité", endurance: "Endurance",
   scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
-  regenPvPct: "Régén PV %", regenManaPct: "Régén Mana %"
+  regenPv: "Régén PV", regenMana: "Régén Mana"
 };
 
 /**
@@ -324,17 +327,8 @@ export function computeItemValue(item) {
         );
       }
     }
-    // Régén : le calcul est `floor(base × (1 + pct/100))` sur une base de 1
-    // PV/tour. En dessous de +100 %, l'arrondi avale tout le bonus — la ligne
-    // s'affiche sur la fiche de l'objet et ne produit rien du tout.
-    if ((key === "regenPvPct" || key === "regenManaPct") && v > 0 && v < 100) {
-      warn = true;
-      warnings.push(
-        `${LABELS[key] ?? key} : +${round1(v)} % est absorbé par l'arrondi. ` +
-        `La régén de base vaut 1/tour et le calcul l'arrondit à l'entier inférieur : ` +
-        `il faut +100 % pour gagner le premier point.`
-      );
-    }
+    // (L'alerte « ce pourcentage de régén ne rend rien » n'a plus lieu d'être :
+    // la régén se saisit en points par tour, et le premier point compte.)
 
     add(LABELS[key] ?? key, v, weight, { key, warn });
   }
@@ -360,10 +354,15 @@ export function computeItemValue(item) {
   for (const r of (Array.isArray(sys.resistances) ? sys.resistances : [])) {
     const tag = r?.tag || r?.effectKey || "état";
     if (r?.immune) add(`Immunité ${tag}`, 1, STATE_RESIST_WEIGHTS.immune, { text: "immunisé" });
+    // Une valeur NÉGATIVE est une vulnérabilité : l'effet dure plus longtemps
+    // ou fait plus mal. Le signe affiché est donc inversé par rapport au champ
+    // (« réduction de −2 » = « +2 tours subis »), comme dans resistTextParts,
+    // et les points partent naturellement en négatif.
+    const signed = (v, unit = "") => `${v > 0 ? "−" : "+"}${Math.abs(round1(v))}${unit}`;
     const dur = n(r?.durationReduction, 0);
-    if (dur) add(`Durée ${tag}`, dur, STATE_RESIST_WEIGHTS.durationReduction, { text: `-${round1(dur)} tour(s)` });
+    if (dur) add(`Durée ${tag}`, dur, STATE_RESIST_WEIGHTS.durationReduction, { text: `${signed(dur)} tour(s)` });
     const dot = n(r?.dotReductionPct, 0);
-    if (dot) add(`DOT ${tag}`, dot, STATE_RESIST_WEIGHTS.dotReductionPct, { text: `-${round1(dot)} %` });
+    if (dot) add(`DOT ${tag}`, dot, STATE_RESIST_WEIGHTS.dotReductionPct, { text: signed(dot, " %") });
   }
 
   // ── Spécifique aux armes ──────────────────────────────────────────────

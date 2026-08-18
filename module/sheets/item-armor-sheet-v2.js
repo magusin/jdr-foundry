@@ -148,8 +148,8 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       pvMax: "PV max",
       manaMax: "Mana max",
       fatigueMax: "Fatigue max",
-      regenPvPct: "Régén PV %",
-      regenManaPct: "Régén Mana %",
+      regenPv: "Régén PV",
+      regenMana: "Régén Mana",
       retraitMod: "Mod. retrait d'état",
 
       // Autres
@@ -231,6 +231,12 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       for (const [k, v] of Object.entries(expanded.system.bonus)) {
         expanded.system.bonus[k] = n(v, 0);
       }
+      // Ancien couple en pourcentage : la régén se saisit désormais en points
+      // par tour (system.bonus.regenPv/regenMana). sumBonuses lit encore
+      // l'ancien champ en repli pour ne rien casser sur un objet jamais
+      // rouvert ; on le retire ici, à la première sauvegarde de la fiche.
+      expanded.system.bonus["-=regenPvPct"] = null;
+      expanded.system.bonus["-=regenManaPct"] = null;
     }
 
     if (expanded?.system?.prix) {
@@ -247,7 +253,12 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         if (!r) continue;
         r.tag = String(r.tag ?? "").trim();
         r.durationReduction = n(r.durationReduction, 0);
-        r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
+        // Négatif = VULNÉRABILITÉ (l'effet fait plus mal), bornée comme du côté
+        // moteur : computeResistanceFor (resistances.js) clampe déjà la somme
+        // à [-100, 100]. Le plancher à 0 d'avant rendait le malus impossible
+        // à écrire sur un équipement, alors que le calcul le gère depuis
+        // toujours (c'est ainsi que l'amplification météo fonctionne).
+        r.dotReductionPct = Math.min(100, Math.max(-100, n(r.dotReductionPct, 0)));
         r.immune = !!r.immune;
       }
     }

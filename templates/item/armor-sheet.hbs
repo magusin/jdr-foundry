@@ -138,8 +138,8 @@
           <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
           <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
           <div><label>Fatigue max</label><input type="number" name="system.bonus.fatigueMax" value="{{system.bonus.fatigueMax}}"/></div>
-          <div><label title="Pourcentage ajouté à la régénération de base (1 PV/tour). Le calcul arrondit à l'entier inférieur : en dessous de +100 %, le bonus ne rend rien.">Régén PV %</label><input type="number" name="system.bonus.regenPvPct" value="{{system.bonus.regenPvPct}}"/></div>
-          <div><label title="Pourcentage ajouté à la régénération de mana de base. Même arrondi que la régén PV.">Régén Mana %</label><input type="number" name="system.bonus.regenManaPct" value="{{system.bonus.regenManaPct}}"/></div>
+          <div><label title="Points de vie regagnés en plus à chaque tour. Valeur ferme, en entier : +1 = un PV de plus par tour.">Régén PV</label><input type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}" step="1"/></div>
+          <div><label title="Mana regagné en plus à chaque tour. Valeur ferme, en entier.">Régén Mana</label><input type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}" step="1"/></div>
 
           <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
           <div><label>Pods max</label><input type="number" name="system.bonus.podsMax" value="{{system.bonus.podsMax}}"/></div>
@@ -320,8 +320,10 @@
               </optgroup>
               {{/each}}
             </select>
-            <label style="font-size:11px;white-space:nowrap">Durée -<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" min="0" style="width:50px"/></label>
-            <label style="font-size:11px;white-space:nowrap">DOT -<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="0" max="100" style="width:50px"/>%</label>
+            <label style="font-size:11px;white-space:nowrap"
+              title="Tours retirés à l'effet reçu. POSITIF = il dure moins longtemps (résistance) ; NÉGATIF = il dure plus longtemps (vulnérabilité).">Durée −<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" step="1" style="width:50px"/></label>
+            <label style="font-size:11px;white-space:nowrap"
+              title="Pourcentage retiré aux dégâts par tour de l'effet reçu. POSITIF = il fait moins mal (résistance) ; NÉGATIF = il fait plus mal (vulnérabilité).">DOT −<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="-100" max="100" step="5" style="width:50px"/>%</label>
             <label style="font-size:11px;white-space:nowrap"><input type="checkbox" name="system.resistances.{{idx}}.immune" {{#if r.immune}}checked{{/if}}/> Immunité</label>
             <button type="button" data-action="removeResistance" data-idx="{{idx}}" title="Retirer">✕</button>
           </div>
@@ -331,6 +333,8 @@
         <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">
           Réduit la durée et/ou les dégâts par tour des effets portant le tag choisi (ex: Brûlure = Feu).
           Cochez Immunité pour bloquer totalement les effets de ce tag.
+          <b>Une valeur négative est une vulnérabilité</b> : l'effet dure plus longtemps ou fait plus mal —
+          de quoi écrire une armure de métal qui conduit la foudre.
         </div>
       </section>
     {{/if}}
