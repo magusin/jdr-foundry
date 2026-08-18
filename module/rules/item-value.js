@@ -399,6 +399,21 @@ export function computeItemValue(item) {
     const fc = n(sys.fatigueCost, 1);
     if (fc !== 1) add("Coût fatigue", -(fc - 1), 4, { text: `${round1(fc)}` });
 
+    // Recharge : une arbalète qui tire un tour sur deux ne vaut pas une épée
+    // qui frappe à chaque tour. On retire la part de dégâts que la recharge
+    // fait perdre, plutôt que de diviser le total — les bonus d'équipement,
+    // eux, sont portés en permanence et ne se rechargent pas.
+    const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
+    if (cdMax > 0) {
+      const damagePoints = rows
+        .filter(r => /Dégâts|Scaling|Critique/.test(r.label))
+        .reduce((sum, r) => sum + n(r.points, 0), 0);
+      const perdu = damagePoints * (1 - 1 / (1 + cdMax));
+      if (perdu > 0) {
+        add("Recharge", -perdu, 1, { text: `${cdMax} tour(s) → 1 tir sur ${cdMax + 1}` });
+      }
+    }
+
     if (sys.twoHands) {
       warnings.push(
         "Arme à deux mains : elle occupe deux emplacements pour un seul jeu de bonus. " +

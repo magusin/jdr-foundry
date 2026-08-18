@@ -140,6 +140,21 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     }
   }
 
+  // ── Recharge ──────────────────────────────────────────────────────────
+  // Une arbalète, un arc long, une arme à un coup : `system.cooldown.max`
+  // impose un délai entre deux tirs, exactement comme pour un sort. Le contrôle
+  // vit ICI, au point de passage obligé de toute attaque (menu de combat, fiche,
+  // barre d'actions, attaque d'opportunité) — le griser dans le menu ne
+  // fermerait que l'une des quatre portes.
+  {
+    const rest = Number(item.system?.cooldown?.restant ?? 0) || 0;
+    if (rest > 0) {
+      ui.notifications?.warn?.(
+        `${item.name} est en recharge — encore ${rest} tour(s).`);
+      return null;
+    }
+  }
+
   const Combat = game.rpg?.combat;
   const offhand = opts.offhand ?? null;
 

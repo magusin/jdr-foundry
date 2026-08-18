@@ -274,6 +274,10 @@
       "twoHands": false,
       "difficulte": 0,
       "fatigueCost": 1,
+      "cooldown": {
+        "max": 0,
+        "restant": 0
+      },
       "livraison": "physique",
       "tag": "",
       "portee": 1,

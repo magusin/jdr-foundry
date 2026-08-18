@@ -515,6 +515,16 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
                reason: `${target.actor.name} : ${reach.reason?.toLowerCase() ?? "hors portée"}.` };
     }
 
+    // Recharge de l'arme (arbalète, arc long…). declareAttack refuse déjà le
+    // tir, mais il faut le savoir AVANT de réserver le slot d'attaque plus
+    // bas : un refus après réservation consommerait l'action sans rien
+    // déclarer.
+    const cdRest = Number(weapon.system?.cooldown?.restant ?? 0) || 0;
+    if (cdRest > 0) {
+      return { handled: true, ok: false,
+               reason: `${weapon.name} est en recharge — encore ${cdRest} tour(s).` };
+    }
+
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
     // dire laquelle a servi.
     const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")

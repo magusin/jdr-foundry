@@ -290,14 +290,22 @@
       const targets = Array.from(game.user.targets ?? []);
       const tooManyTargets = targets.length > 1;
 
+      // Recharge de l'arme (arbalète, arc long…) : même champ que pour un sort.
+      // declareAttack refuse déjà le tir, le menu ne fait que le dire avant le
+      // clic — un bouton actif qui répond « en recharge » se lit comme un bug.
+      const cdRest = n(w.system?.cooldown?.restant, 0);
+      const cdMax  = n(w.system?.cooldown?.max, 0);
+      const reloading = cdRest > 0;
+
       const reasons = [];
+      if (reloading) reasons.push(`En recharge — encore ${cdRest} tour(s)`);
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
       if (outOfRange) reasons.push(rangeCheck.reason ?? "Hors portée");
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
-      const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange;
+      const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange && !reloading;
       if (!myTurn) reasons.unshift("Pas ton tour");
       if (isKO(actor)) reasons.unshift("K.O. (0 PV)");
       else if (needsAgonieCheckFirst(actor)) reasons.unshift("Jet de Volonté requis avant d'agir");
@@ -313,6 +321,7 @@
               <div class="rpg-badges">
                 <span class="badge b-ok">${livr}</span>
                 <span class="badge b-info">${twoH}</span>
+                ${reloading ? `<span class="badge b-bad">RECHARGE ${cdRest}</span>` : ""}
                 ${atkBlocked ? `<span class="badge b-bad">SLOT ✗</span>` :
                   outOfRange ? `<span class="badge b-bad">PORTÉE ✗</span>` :
                   hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
@@ -322,6 +331,7 @@
               <span>⚔️ Dégâts <b>${dmgTxt}</b></span>
               <span>${tnTxt}</span>
               <span>📏 Portée <b>${fmtMeters(porteeMax)} m</b>${dist !== null ? ` (cible à ${fmtMeters(dist)} m)` : ""}</span>
+              ${cdMax > 0 ? `<span>🔄 Recharge <b>${cdMax} tour(s)</b></span>` : ""}
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>

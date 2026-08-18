@@ -44,6 +44,27 @@
       <h2>Équipement</h2>
       <label>Emplacement</label>
 
+      {{!-- « Relique » n'est pas un emplacement d'armure mais un TYPE d'objet
+           à part entière (il a son propre slot, hors des pièces d'armure) :
+           il n'a donc rien à faire dans la liste ci-dessous. Le chercher là
+           est le premier réflexe, d'où ce bouton, qui convertit l'objet sans
+           le retaper. --}}
+      {{#if isGM}}
+        <div style="margin:0 0 8px">
+          <button type="button" data-action="convertType" style="cursor:pointer;padding:4px 10px">
+            {{#if isRelic}}⬅️ Convertir en armure{{else}}✨ Convertir en relique{{/if}}
+          </button>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">
+            {{#if isRelic}}
+              Rendra à cet objet un emplacement d'armure ordinaire.
+            {{else}}
+              Une relique occupe l'emplacement « Relique », jamais une pièce
+              d'armure. Bonus, résistances et description sont conservés.
+            {{/if}}
+          </div>
+        </div>
+      {{/if}}
+
       {{#if isRelic}}
         {{!-- Une relique n'a qu'un emplacement possible : pas de choix à
              offrir, et surtout aucun moyen de la ranger par erreur dans un
@@ -65,7 +86,17 @@
           <option value="mains"  {{#if (eq system.emplacement "mains")}}selected{{/if}}>Mains</option>
           <option value="jambes" {{#if (eq system.emplacement "jambes")}}selected{{/if}}>Jambes</option>
           <option value="pieds"  {{#if (eq system.emplacement "pieds")}}selected{{/if}}>Pieds</option>
+          <option value="mainGauche" {{#if (eq system.emplacement "mainGauche")}}selected{{/if}}>Main gauche (bouclier)</option>
+          <option value="mainDroite" {{#if (eq system.emplacement "mainDroite")}}selected{{/if}}>Main droite (bouclier)</option>
         </select>
+        <div style="font-size:11px;opacity:.7;margin-top:4px">
+          Un <b>bouclier</b> occupe une main : choisis-la ici. Il protège sans
+          jamais frapper — pour un bouclier qui peut aussi cogner, crée-le en
+          <b>arme</b> (petit dé, ex. 1d4) : une arme porte exactement la même
+          grille de bonus défensifs que cette fiche.
+          Une main occupée par un bouclier est libérée par une arme à deux mains,
+          et inversement.
+        </div>
       {{else}}
         <div style="margin-top:4px;">
           <b>
@@ -76,6 +107,8 @@
             {{#if (eq system.emplacement "mains")}}Mains{{/if}}
             {{#if (eq system.emplacement "jambes")}}Jambes{{/if}}
             {{#if (eq system.emplacement "pieds")}}Pieds{{/if}}
+            {{#if (eq system.emplacement "mainGauche")}}Main gauche (bouclier){{/if}}
+            {{#if (eq system.emplacement "mainDroite")}}Main droite (bouclier){{/if}}
             {{#unless system.emplacement}}—{{/unless}}
           </b>
         </div>

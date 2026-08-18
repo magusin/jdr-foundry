@@ -122,7 +122,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         addResistance: async function (event) { await this._actionAddResistance(event); },
         removeResistance: async function (event) { await this._actionRemoveResistance(event); },
         addAmplification: async function (event) { await this._actionAddAmplification(event); },
-        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); }
+        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); },
+        resetCooldown: async function (event) { await this._actionResetCooldown(event); }
       }
     },
     { inplace: false }
@@ -176,6 +177,17 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.emplacement = String(ctx.system.emplacement ?? "mainDroite");
     ctx.system.twoHands = b(ctx.system.twoHands);
     ctx.system.difficulte = n(ctx.system.difficulte, 0);
+
+    // ---- Recharge (arbalète, arc long…). Même forme que celle d'un sort :
+    // `max` est la définition, `restant` l'état de CETTE copie — le décompte
+    // au début du tour du porteur est déjà générique (turn-effects.js parcourt
+    // tous les objets qui portent system.cooldown.restant, pas seulement les
+    // sorts).
+    ctx.system.cooldown = {
+      max: Math.max(0, n(ctx.system.cooldown?.max, 0)),
+      restant: Math.max(0, n(ctx.system.cooldown?.restant, 0))
+    };
+    ctx.cooldownRestant = ctx.system.cooldown.restant;
 
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
@@ -347,6 +359,15 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         expanded.system.portee = expanded.system.range.max;
       }
 
+      // recharge : seul `max` se saisit ici. `restant` est l'état de la copie,
+      // écrit par la résolution de l'attaque et décompté au tour — l'écraser
+      // depuis le formulaire rendrait l'arme disponible à chaque frappe de
+      // touche dans un autre champ.
+      if (expanded.system.cooldown?.max != null) {
+        expanded.system.cooldown.max = Math.max(0, n(expanded.system.cooldown.max, 0));
+        delete expanded.system.cooldown.restant;
+      }
+
       // bonus
       if (expanded.system.bonus) {
         for (const [k, v] of Object.entries(expanded.system.bonus)) expanded.system.bonus[k] = n(v, 0);
@@ -470,6 +491,19 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const effects = foundry.utils.deepClone(this.document.system.effects ?? []);
     effects.splice(idx, 1);
     await this.document.update({ "system.effects": effects }, { render: true });
+  }
+
+  /**
+   * Remet l'arme disponible tout de suite.
+   *
+   * Une recharge se décompte au début du tour de son porteur : hors combat,
+   * rien ne la fait descendre, et une arbalète tirée en fin de combat resterait
+   * bloquée jusqu'au combat suivant. Ce bouton est la sortie de secours du MJ.
+   */
+  async _actionResetCooldown(event) {
+    event?.preventDefault?.();
+    if (!this.isEditable) return;
+    await this.document.update({ "system.cooldown.restant": 0, "system.recharge.restant": 0 });
   }
 
   async _actionAddResistance(event) {

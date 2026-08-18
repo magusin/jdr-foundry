@@ -82,6 +82,31 @@
           {{/if}}
         </div>
 
+        {{!-- Recharge : arbalète, arc long, arme à un seul coup. Même champ et
+             même décompte que pour un sort (un tour au début du tour du
+             porteur) ; 0 = arme utilisable à chaque attaque. --}}
+        <div class="mm-line">
+          <span class="mm-label" title="Nombre de tours d'attente entre deux tirs. 0 = aucune. Une arbalète à 1 tire un tour sur deux. Le décompte tombe au début du tour du porteur, comme la recharge d'un sort.">Recharge (tours)</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.cooldown.max" value="{{system.cooldown.max}}" min="0"/>
+          {{else}}
+            <div class="mm-value"><b>{{#if system.cooldown.max}}{{system.cooldown.max}} tour(s){{else}}—{{/if}}</b></div>
+          {{/if}}
+        </div>
+
+        {{#if cooldownRestant}}
+          <div class="mm-line">
+            <span class="mm-label">En recharge</span>
+            <div class="mm-value" style="display:flex;gap:8px;align-items:center">
+              <b>{{cooldownRestant}} tour(s)</b>
+              {{#if canEdit}}
+                <button type="button" data-action="resetCooldown"
+                  style="font-size:11px;padding:2px 8px;cursor:pointer">↻ Rendre disponible</button>
+              {{/if}}
+            </div>
+          </div>
+        {{/if}}
+
         <p class="hint">
           Les dégâts réels sont : <b>bonus stat</b> + <b>dé</b> + <b>fixe</b> (+ effets).<br/>
           (Le calcul final est affiché au moment de l’attaque dans le chat.)
