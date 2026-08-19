@@ -512,11 +512,28 @@ export async function rollAttackDamage(message) {
     ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%${elemPart}`
     : `🛡️ Aucune mitigation`;
 
+  // Bonus de dégâts accordés par un état (attack-bonus.js) : ceux qui se
+  // fondent dans le coup s'ajoutent au brut, ceux qui ont leur propre nature
+  // ou leur propre élément forment leur ligne — avec leur mitigation à eux,
+  // sinon un « +1d6 de feu » sur une cible immunisée resterait invisible.
+  const bonusSame = Number(dmgResult.bonusSame) || 0;
+  const bonusExtra = Array.isArray(dmgResult.bonusLines) ? dmgResult.bonusLines : [];
+  const bonusSameLine = bonusSame
+    ? `<br>✨ Bonus d'effet : <b>+${bonusSame}</b> <span style="opacity:.7">(fondu dans le coup)</span>`
+    : "";
+  const bonusExtraLines = bonusExtra.map(l => {
+    const el = Number(l.elemPct) || 0;
+    const elTxt = el ? ` <span style="opacity:.7">(${l.elemLabel} ${el > 0 ? "−" : "+"}${Math.abs(el)}%)</span>` : "";
+    return `<br>✨ ${l.label} : brut <b>${l.raw}</b> → <b style="color:#c0392b">${l.final}</b>${elTxt}`;
+  }).join("");
+
   const baseContent =
     `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
-    `${bonusLine}<br>` +
+    `${bonusLine}${bonusSameLine}<br>` +
     `${mitigLine}<br>` +
-    `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>`;
+    `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>${dmgResult.mainFinal ?? dmgResult.final}</b>` +
+    `${bonusExtraLines}` +
+    (bonusExtra.length ? `<br>💥 <b>Total : ${dmgResult.final}</b>` : "");
 
   await message.delete();
 

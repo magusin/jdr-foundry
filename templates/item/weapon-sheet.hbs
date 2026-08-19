@@ -56,6 +56,19 @@
         </div>
 
         <div class="mm-line">
+          <span class="mm-label" title="Mêlée, jet (couteau, javelot) ou tir (arc, arbalète). Sert aux sorts qui n'améliorent qu'une famille d'armes — « +1d6 aux armes de jet » ne doit pas toucher l'épée. Ne change rien aux portées, qui restent l'allonge et la portée max ci-dessous.">Catégorie</span>
+          {{#if canEdit}}
+            <select class="mm-input" name="system.categorie">
+              {{#each weaponCategoryChoices as |c|}}
+                <option value="{{c.key}}" {{#if c.selected}}selected{{/if}}>{{c.label}}</option>
+              {{/each}}
+            </select>
+          {{else}}
+            <div class="mm-value"><b>{{categorieLabel}}</b></div>
+          {{/if}}
+        </div>
+
+        <div class="mm-line">
           <span class="mm-label">Arme à 2 mains</span>
           {{#if canEdit}}
             <input type="checkbox" name="system.twoHands" value="1" {{#if system.twoHands}}checked{{/if}}/>

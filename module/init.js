@@ -1466,6 +1466,12 @@ Hooks.once("init", async () => {
               // ce changement n'ont que `tData.blocks` (mitigation déjà fondue
               // dedans, un jet par cible) et restent résolus à l'ancienne.
               const sharedBlocks = Array.isArray(raw.blocks) ? raw.blocks : null;
+              // Bonus en % accordé par un état du lanceur (attack-bonus.js) :
+              // il porte sur le brut des lignes DU SORT, jamais sur les lignes
+              // de bonus elles-mêmes — sinon un bonus se paierait deux fois.
+              // Il ne peut être appliqué qu'ici : au moment où le message a
+              // été posté, les dés n'étaient pas encore lancés.
+              const bonusPct = Number(raw.bonusPct) || 0;
               const sharedRaw = [];
               if (sharedBlocks) {
                 for (const b of sharedBlocks) {
@@ -1477,6 +1483,7 @@ Hooks.once("init", async () => {
                             + (targets.length > 1 ? ` <span style="opacity:.7">(jet commun à ${targets.length} cibles)</span>` : "") });
                     amount += roll.total;
                   }
+                  if (bonusPct && !b.isBonus) amount += Math.floor(amount * bonusPct / 100);
                   sharedRaw.push(amount);
                 }
               }

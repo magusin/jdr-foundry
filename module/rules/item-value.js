@@ -65,6 +65,7 @@
 // de référence chiffré — mais elle doit au moins partager le calcul.
 import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
 import { BASE_VITESSE } from "./base-speed.js";
+import { normalizeAttackBonus } from "./attack-bonus.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -835,6 +836,31 @@ export function computeSpellValue(item, opts = {}) {
       add(`${fxLabel} · ${LABELS[stat] ?? stat}`,
           `${isBonus ? "+" : "−"}${round1(qty)}${String(m?.mode) === "pct" ? " %" : ""} · ${dur} tour(s)`,
           pts);
+    }
+
+    // Bonus de dégâts accordé aux attaques du porteur (attack-bonus.js).
+    // Il vaut ce qu'il ajoute à CHAQUE attaque, pendant toute sa durée : on
+    // compte une attaque par tour (le budget en autorise deux, mais la
+    // seconde place part le plus souvent en déplacement). Un bonus en % est
+    // ramené en points via l'attaque de référence du groupe — c'est justement
+    // ce qui le rend difficile à équilibrer : il monte avec l'arme.
+    const atk = normalizeAttackBonus({
+      scope: fx.atkScope, categories: fx.atkCategories,
+      flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
+      livraison: fx.atkLivraison, tag: fx.atkTag
+    });
+    if (atk) {
+      const parAttaque = diceAverage(atk.dice) + n(atk.flat, 0)
+                       + (n(atk.pct, 0) / 100) * n(PARTY.damagePerHit, 7);
+      if (parAttaque) {
+        // Une portée restreinte à une ou deux catégories d'arme ne vaut pas
+        // une portée générale : le porteur doit tenir la bonne arme.
+        const couverture = atk.scope === "toutes" ? 1
+          : (atk.categories.length ? 0.6 + 0.1 * atk.categories.length : 0.9);
+        add(`${fxLabel} · bonus de dégâts`,
+            `${round1(parAttaque)} par attaque × ${dur} tour(s)`,
+            (onAlly ? 1 : -1) * parAttaque * dur * couverture * affected * DAMAGE_POINT * fxChance);
+      }
     }
 
     // Résistance aux DÉGÂTS accordée (ou vulnérabilité imposée).

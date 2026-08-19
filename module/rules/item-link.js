@@ -79,7 +79,7 @@ const SYNC_FIELDS = {
     "system.effects", "system.resistances", "system.resistancesElem",
     "system.recetteAssociee", "system.bonus",
     "system.lore", "system.description",
-    "system.twoHands", "system.difficulte", "system.fatigueCost", "system.livraison",
+    "system.twoHands", "system.categorie", "system.difficulte", "system.fatigueCost", "system.livraison",
     // Recharge : `max` est de la définition (une arbalète se recharge en un
     // tour, sur toutes les copies), `restant` est l'état de CETTE copie — le
     // synchroniser rendrait toutes les arbalètes du monde indisponibles dès

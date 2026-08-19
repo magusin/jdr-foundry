@@ -137,6 +137,12 @@ export function decorateStates(states) {
     // la fiche de sort (damage-types.js).
     parts.push(...stateResistTextParts(e).all);
 
+    // Bonus de dégâts accordé aux attaques (attack-bonus.js) : même
+    // formulation que la fiche de sort et que le chat, pour que le joueur
+    // relise sur sa fiche exactement ce que le sort lui a promis.
+    const atkTxt = attackBonusText(e?.attackBonus);
+    if (atkTxt) parts.push(atkTxt);
+
     e.summary = parts.join(" • ");
 
     // tags buff/debuff
@@ -265,6 +271,7 @@ import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeX
 
 import { setupActorItemDrop } from "./drop-helper.js";
 import { BASE_VITESSE } from "../rules/base-speed.js";
+import { attackBonusText } from "../rules/attack-bonus.js";
 import {
   applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
   restoreScrollPositions, uniqueSheetOptions,

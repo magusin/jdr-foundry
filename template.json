@@ -271,6 +271,7 @@
       ],
       "poids": 1,
       "emplacement": "mainDroite",
+      "categorie": "melee",
       "twoHands": false,
       "difficulte": 0,
       "fatigueCost": 1,

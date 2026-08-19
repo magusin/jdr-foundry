@@ -8,6 +8,7 @@ import {
 } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
+import { WEAPON_CATEGORIES, weaponCategory } from "../rules/attack-bonus.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
@@ -176,6 +177,14 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.emplacement = String(ctx.system.emplacement ?? "mainDroite");
     ctx.system.twoHands = b(ctx.system.twoHands);
+
+    // ---- Catégorie (mêlée / jet / tir) : lue par les bonus de dégâts d'un
+    // effet, qui peuvent ne viser qu'une famille d'armes (attack-bonus.js).
+    ctx.system.categorie = weaponCategory({ system: ctx.system });
+    ctx.weaponCategoryChoices = Object.entries(WEAPON_CATEGORIES).map(([key, label]) => ({
+      key, label, selected: key === ctx.system.categorie
+    }));
+    ctx.categorieLabel = WEAPON_CATEGORIES[ctx.system.categorie] ?? ctx.system.categorie;
     ctx.system.difficulte = n(ctx.system.difficulte, 0);
 
     // ---- Recharge (arbalète, arc long…). Même forme que celle d'un sort :
