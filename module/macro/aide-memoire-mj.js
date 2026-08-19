@@ -71,10 +71,11 @@
       title: "🏃 Déplacement (1m/case)",
       color: "#16a085",
       rows: [
-        "Vitesse base : 6m/tour",
-        "Terrain difficile/boue : ×0.5 → 3m effectifs",
-        "Eau peu profonde : ×0.67 → 4m effectifs",
-        "Eau profonde : ×0.33 → 2m effectifs",
+        "Vitesse base : 8m/tour",
+        "Terrain difficile/boue : ×0.5 → 4m effectifs",
+        "Eau peu profonde : ×0.67 → 5,4m effectifs",
+        "Eau profonde : ×0.33 → 2,6m effectifs",
+        "Sprint : 1 action, ×2 la vitesse du tour",
         "🦅 Volant : ignore TOUT terrain"
       ]
     },

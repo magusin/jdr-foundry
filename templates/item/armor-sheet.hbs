@@ -44,6 +44,27 @@
       <h2>Équipement</h2>
       <label>Emplacement</label>
 
+      {{!-- « Relique » n'est pas un emplacement d'armure mais un TYPE d'objet
+           à part entière (il a son propre slot, hors des pièces d'armure) :
+           il n'a donc rien à faire dans la liste ci-dessous. Le chercher là
+           est le premier réflexe, d'où ce bouton, qui convertit l'objet sans
+           le retaper. --}}
+      {{#if isGM}}
+        <div style="margin:0 0 8px">
+          <button type="button" data-action="convertType" style="cursor:pointer;padding:4px 10px">
+            {{#if isRelic}}⬅️ Convertir en armure{{else}}✨ Convertir en relique{{/if}}
+          </button>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">
+            {{#if isRelic}}
+              Rendra à cet objet un emplacement d'armure ordinaire.
+            {{else}}
+              Une relique occupe l'emplacement « Relique », jamais une pièce
+              d'armure. Bonus, résistances et description sont conservés.
+            {{/if}}
+          </div>
+        </div>
+      {{/if}}
+
       {{#if isRelic}}
         {{!-- Une relique n'a qu'un emplacement possible : pas de choix à
              offrir, et surtout aucun moyen de la ranger par erreur dans un
@@ -65,7 +86,17 @@
           <option value="mains"  {{#if (eq system.emplacement "mains")}}selected{{/if}}>Mains</option>
           <option value="jambes" {{#if (eq system.emplacement "jambes")}}selected{{/if}}>Jambes</option>
           <option value="pieds"  {{#if (eq system.emplacement "pieds")}}selected{{/if}}>Pieds</option>
+          <option value="mainGauche" {{#if (eq system.emplacement "mainGauche")}}selected{{/if}}>Main gauche (bouclier)</option>
+          <option value="mainDroite" {{#if (eq system.emplacement "mainDroite")}}selected{{/if}}>Main droite (bouclier)</option>
         </select>
+        <div style="font-size:11px;opacity:.7;margin-top:4px">
+          Un <b>bouclier</b> occupe une main : choisis-la ici. Il protège sans
+          jamais frapper — pour un bouclier qui peut aussi cogner, crée-le en
+          <b>arme</b> (petit dé, ex. 1d4) : une arme porte exactement la même
+          grille de bonus défensifs que cette fiche.
+          Une main occupée par un bouclier est libérée par une arme à deux mains,
+          et inversement.
+        </div>
       {{else}}
         <div style="margin-top:4px;">
           <b>
@@ -76,6 +107,8 @@
             {{#if (eq system.emplacement "mains")}}Mains{{/if}}
             {{#if (eq system.emplacement "jambes")}}Jambes{{/if}}
             {{#if (eq system.emplacement "pieds")}}Pieds{{/if}}
+            {{#if (eq system.emplacement "mainGauche")}}Main gauche (bouclier){{/if}}
+            {{#if (eq system.emplacement "mainDroite")}}Main droite (bouclier){{/if}}
             {{#unless system.emplacement}}—{{/unless}}
           </b>
         </div>
@@ -105,8 +138,8 @@
           <div><label>PV max</label><input type="number" name="system.bonus.pvMax" value="{{system.bonus.pvMax}}"/></div>
           <div><label>Mana max</label><input type="number" name="system.bonus.manaMax" value="{{system.bonus.manaMax}}"/></div>
           <div><label>Fatigue max</label><input type="number" name="system.bonus.fatigueMax" value="{{system.bonus.fatigueMax}}"/></div>
-          <div><label title="Pourcentage ajouté à la régénération de base (1 PV/tour). Le calcul arrondit à l'entier inférieur : en dessous de +100 %, le bonus ne rend rien.">Régén PV %</label><input type="number" name="system.bonus.regenPvPct" value="{{system.bonus.regenPvPct}}"/></div>
-          <div><label title="Pourcentage ajouté à la régénération de mana de base. Même arrondi que la régén PV.">Régén Mana %</label><input type="number" name="system.bonus.regenManaPct" value="{{system.bonus.regenManaPct}}"/></div>
+          <div><label title="Points de vie regagnés en plus à chaque tour. Valeur ferme, en entier : +1 = un PV de plus par tour.">Régén PV</label><input type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}" step="1"/></div>
+          <div><label title="Mana regagné en plus à chaque tour. Valeur ferme, en entier.">Régén Mana</label><input type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}" step="1"/></div>
 
           <div><label>Vitesse</label><input type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
           <div><label>Pods max</label><input type="number" name="system.bonus.podsMax" value="{{system.bonus.podsMax}}"/></div>
@@ -287,8 +320,10 @@
               </optgroup>
               {{/each}}
             </select>
-            <label style="font-size:11px;white-space:nowrap">Durée -<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" min="0" style="width:50px"/></label>
-            <label style="font-size:11px;white-space:nowrap">DOT -<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="0" max="100" style="width:50px"/>%</label>
+            <label style="font-size:11px;white-space:nowrap"
+              title="Tours retirés à l'effet reçu. POSITIF = il dure moins longtemps (résistance) ; NÉGATIF = il dure plus longtemps (vulnérabilité).">Durée −<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" step="1" style="width:50px"/></label>
+            <label style="font-size:11px;white-space:nowrap"
+              title="Pourcentage retiré aux dégâts par tour de l'effet reçu. POSITIF = il fait moins mal (résistance) ; NÉGATIF = il fait plus mal (vulnérabilité).">DOT −<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="-100" max="100" step="5" style="width:50px"/>%</label>
             <label style="font-size:11px;white-space:nowrap"><input type="checkbox" name="system.resistances.{{idx}}.immune" {{#if r.immune}}checked{{/if}}/> Immunité</label>
             <button type="button" data-action="removeResistance" data-idx="{{idx}}" title="Retirer">✕</button>
           </div>
@@ -298,6 +333,8 @@
         <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">
           Réduit la durée et/ou les dégâts par tour des effets portant le tag choisi (ex: Brûlure = Feu).
           Cochez Immunité pour bloquer totalement les effets de ce tag.
+          <b>Une valeur négative est une vulnérabilité</b> : l'effet dure plus longtemps ou fait plus mal —
+          de quoi écrire une armure de métal qui conduit la foudre.
         </div>
       </section>
     {{/if}}

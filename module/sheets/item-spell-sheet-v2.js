@@ -7,6 +7,7 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
+import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText } from "../rules/attack-bonus.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -117,6 +118,15 @@ function decorateMod(m) {
  * ne divergent jamais.
  */
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
+/** Bonus de dégâts porté par cet effet, format normalisé (attack-bonus.js). */
+function fxAttackBonus(fx) {
+  return normalizeAttackBonus({
+    scope: fx?.atkScope, categories: fx?.atkCategories,
+    flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
+    livraison: fx?.atkLivraison, tag: fx?.atkTag
+  });
+}
+
 function buildResistSummary(fx) {
   // Formulation partagée avec l'aperçu des effets d'un sort et la liste des
   // états actifs d'un acteur — voir fxResistTextParts() dans damage-types.js.
@@ -152,6 +162,14 @@ function buildFxUi(fx) {
       ? `🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+`
       : null,
     uiResist: buildResistSummary(fx),
+    // Bonus de dégâts aux attaques : même formateur que la fiche de
+    // personnage et le chat, pour que le sort promette exactement ce que le
+    // jet appliquera.
+    uiAttackBonus: attackBonusText(fxAttackBonus(fx)) || null,
+    atkCatChoices: Object.entries(WEAPON_CATEGORIES).map(([key, label]) => ({
+      key, label,
+      checked: (Array.isArray(fx?.atkCategories) ? fx.atkCategories : []).includes(key)
+    })),
     mods
   };
 }
@@ -663,6 +681,10 @@ static PARTS = foundry.utils.mergeObject(
     }));
     ctx.tagLabel = tagLabel(String(ctx.system.tag ?? "neutre") || "neutre");
 
+    // Listes du bonus de dégâts (partie 8 d'un effet).
+    ctx.bonusScopeChoices = Object.entries(BONUS_SCOPES).map(([key, label]) => ({ key, label }));
+    ctx.weaponCategoryChoices = Object.entries(WEAPON_CATEGORIES).map(([key, label]) => ({ key, label }));
+
     ctx.system.damage = normDamage(ctx.system.damage);
     ctx.system.damageCrit = normDamage(ctx.system.damageCrit);
 
@@ -706,6 +728,17 @@ static PARTS = foundry.utils.mergeObject(
       fx.resistDotPct = n(fx.resistDotPct, 0);
       fx.resistImmune = !!fx.resistImmune;
 
+      // Bonus de dégâts aux attaques du porteur (partie 8). Stocké à plat sur
+      // l'effet (atk*) et regroupé à l'écriture de l'état — voir spells.js.
+      fx.atkScope = BONUS_SCOPES[String(fx.atkScope ?? "")] ? String(fx.atkScope) : "";
+      fx.atkCategories = (Array.isArray(fx.atkCategories) ? fx.atkCategories : [])
+        .map(String).filter(c => WEAPON_CATEGORIES[c]);
+      fx.atkFlat = n(fx.atkFlat, 0);
+      fx.atkPct = n(fx.atkPct, 0);
+      fx.atkDice = String(fx.atkDice ?? "").trim();
+      fx.atkLivraison = (fx.atkLivraison === "physique" || fx.atkLivraison === "magique") ? fx.atkLivraison : "";
+      fx.atkTag = String(fx.atkTag ?? "");
+
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
       // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
       // l'affichage seulement, le sens (bonus/malus) et la quantité positive.
@@ -734,7 +767,7 @@ static PARTS = foundry.utils.mergeObject(
       // ── Résumé lisible (pastilles) : visible replié pour le MJ et
       //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
       Object.assign(fx, buildFxUi(fx));
-      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.uiResist || fx.mods.length);
+      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.uiResist || fx.uiAttackBonus || fx.mods.length);
     }
 
     // ui flags joueur
@@ -840,6 +873,17 @@ static PARTS = foundry.utils.mergeObject(
         resistDurationReduction: num("resistDurationReduction", 0),
         resistDotPct:            num("resistDotPct", 0),
         resistImmune:            bool("resistImmune"),
+        // Bonus de dégâts aux attaques du porteur (partie 8). Les catégories
+        // sont des cases à cocher : elles n'ont pas de champ unique, on les
+        // relit sur la carte. Aucune cochée = toutes les armes.
+        atkScope:      str("atkScope", prev.atkScope ?? ""),
+        atkCategories: Array.from(card.querySelectorAll('[data-fx-field="atkCat"]'))
+                            .filter(c => c.checked).map(c => String(c.dataset.cat)),
+        atkFlat:       num("atkFlat", 0),
+        atkPct:        num("atkPct", 0),
+        atkDice:       str("atkDice", prev.atkDice ?? ""),
+        atkLivraison:  str("atkLivraison", prev.atkLivraison ?? ""),
+        atkTag:        str("atkTag", prev.atkTag ?? ""),
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
         // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
         // via la stat « Fatigue max » dans les bonus/malus.
@@ -1275,6 +1319,10 @@ static PARTS = foundry.utils.mergeObject(
       auraTarget: "allies",
       details: "",
       tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
+      // Bonus de dégâts aux attaques : éteint tant qu'aucune portée n'est
+      // choisie (partie 8).
+      atkScope: "", atkCategories: [], atkFlat: 0, atkPct: 0, atkDice: "",
+      atkLivraison: "", atkTag: "",
       mods: []
     });
     await this._updateAndKeepView({ "system.effectsUI": effects });

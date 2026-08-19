@@ -6,6 +6,7 @@ import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/dama
 import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
+import { RELIC_SLOT } from "./character-sheet-v2.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -57,7 +58,8 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         addResistance:    async function (event) { await this._actionAddResistance(event); },
         removeResistance: async function (event) { await this._actionRemoveResistance(event); },
         addAmplification:    async function (event) { await this._actionAddAmplification(event); },
-        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); }
+        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); },
+        convertType:         async function (event) { await this._actionConvertType(event); }
       }
     },
     { inplace: false }
@@ -146,8 +148,8 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       pvMax: "PV max",
       manaMax: "Mana max",
       fatigueMax: "Fatigue max",
-      regenPvPct: "Régén PV %",
-      regenManaPct: "Régén Mana %",
+      regenPv: "Régén PV",
+      regenMana: "Régén Mana",
       retraitMod: "Mod. retrait d'état",
 
       // Autres
@@ -229,6 +231,12 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       for (const [k, v] of Object.entries(expanded.system.bonus)) {
         expanded.system.bonus[k] = n(v, 0);
       }
+      // Ancien couple en pourcentage : la régén se saisit désormais en points
+      // par tour (system.bonus.regenPv/regenMana). sumBonuses lit encore
+      // l'ancien champ en repli pour ne rien casser sur un objet jamais
+      // rouvert ; on le retire ici, à la première sauvegarde de la fiche.
+      expanded.system.bonus["-=regenPvPct"] = null;
+      expanded.system.bonus["-=regenManaPct"] = null;
     }
 
     if (expanded?.system?.prix) {
@@ -245,7 +253,12 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         if (!r) continue;
         r.tag = String(r.tag ?? "").trim();
         r.durationReduction = n(r.durationReduction, 0);
-        r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
+        // Négatif = VULNÉRABILITÉ (l'effet fait plus mal), bornée comme du côté
+        // moteur : computeResistanceFor (resistances.js) clampe déjà la somme
+        // à [-100, 100]. Le plancher à 0 d'avant rendait le malus impossible
+        // à écrire sur un équipement, alors que le calcul le gère depuis
+        // toujours (c'est ainsi que l'amplification météo fonctionne).
+        r.dotReductionPct = Math.min(100, Math.max(-100, n(r.dotReductionPct, 0)));
         r.immune = !!r.immune;
       }
     }
@@ -314,6 +327,70 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
+  }
+
+  /**
+   * Bascule l'objet entre `armor` et `relic`.
+   *
+   * Foundry n'offre aucun moyen de changer le type d'un document existant, et
+   * `update({type})` est refusé : la seule voie est de recréer l'objet. On le
+   * fait avec `keepId`, pour que l'id reste le même — un lien @UUID, une
+   * référence de recette ou une entrée du codex qui pointait dessus continue
+   * donc de fonctionner.
+   *
+   * `system.emplacement` est le seul champ réécrit : les deux types ne
+   * partagent pas la même liste d'emplacements (une relique n'en a qu'un,
+   * `artefact`), et laisser « torse » sur une relique la rendrait invisible
+   * dans son propre slot. Tout le reste — bonus, résistances, description,
+   * prix, image — est transporté tel quel, puisque les deux types sont bâtis
+   * sur les mêmes gabarits (baseItem/equipBonus/details).
+   */
+  async _actionConvertType(event) {
+    event?.preventDefault?.();
+    if (!game.user.isGM || !this.isEditable) return;
+
+    const item = this.document;
+    const toRelic = item.type !== "relic";
+    const nextType = toRelic ? "relic" : "armor";
+    const DialogV2 = foundry.applications.api.DialogV2;
+
+    const ok = await DialogV2.confirm({
+      window: { title: toRelic ? "Convertir en relique" : "Convertir en armure" },
+      content: `<p><b>${item.name}</b> deviendra ${toRelic ? "une <b>relique</b>" : "une <b>armure</b>"}.</p>
+                <p style="opacity:.75;font-size:12px;margin:6px 0 0">
+                  Bonus, résistances et description sont conservés ; l'emplacement est réinitialisé
+                  (${toRelic ? "emplacement « Relique »" : "à choisir dans la liste des pièces d'armure"}).
+                  ${item.isEmbedded ? "L'objet sera déséquipé." : ""}
+                </p>`,
+      rejectClose: false, modal: true
+    });
+    if (!ok) return;
+
+    const src = item.toObject();
+    src.type = nextType;
+    src.system = src.system ?? {};
+    src.system.emplacement = toRelic ? RELIC_SLOT : "";
+    // Un objet équipé dans un slot qui n'existe plus pour son nouveau type
+    // resterait « porté » sans apparaître nulle part : on le repose dans le sac.
+    src.system.equipe = false;
+
+    try {
+      await this.close();
+      let created;
+      if (item.isEmbedded) {
+        const parent = item.parent;
+        await parent.deleteEmbeddedDocuments("Item", [item.id]);
+        [created] = await parent.createEmbeddedDocuments("Item", [src], { keepId: true });
+      } else {
+        await item.delete();
+        created = await getDocumentClass("Item").create(src, { keepId: true, pack: item.pack ?? null });
+      }
+      created?.sheet?.render(true);
+      ui.notifications?.info?.(`${src.name} est maintenant ${toRelic ? "une relique" : "une armure"}.`);
+    } catch (e) {
+      console.error("[RPG] conversion armure/relique :", e);
+      ui.notifications?.error?.("Conversion impossible — voir la console (F12).");
+    }
   }
 
   async _actionAddAmplification(event) {

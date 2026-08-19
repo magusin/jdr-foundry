@@ -3,6 +3,7 @@ import { sumActiveEffectMods } from "../rules/status-effects.js";
 import {
   DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
 } from "../rules/damage-types.js";
+import { BASE_VITESSE } from "../rules/base-speed.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -89,7 +90,7 @@ function sumBonuses(actor) {
     principales: { force: 0, intelligence: 0, dexterite: 0, acuite: 0, endurance: 0 },
     defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
     ressources: { pvMax: 0, manaMax: 0, fatigueMax: 0 },
-    regen: { pvPct: 0, manaPct: 0 },
+    regen: { pv: 0, mana: 0 },
     move: { vitesse: 0 },
     charge: { podsMax: 0 },
     combat: { toucherPhysique: 0, toucherMagique: 0 },
@@ -141,8 +142,19 @@ function sumBonuses(actor) {
     totals.defenses.scoreArmure += Number(b.scoreArmure ?? 0) || 0;
     totals.defenses.scoreResistance += Number(b.scoreResistance ?? 0) || 0;
 
-    totals.regen.pvPct += Number(b.regenPvPct ?? 0) || 0;
-    totals.regen.manaPct += Number(b.regenManaPct ?? 0) || 0;
+    // Régén : des POINTS PAR TOUR, pas un pourcentage. Le pourcentage était
+    // inutilisable en pratique — il multipliait une base de 1 ou 2 puis
+    // arrondissait à l'entier inférieur, donc tout ce qui était sous +100 %
+    // ne rendait rien du tout (la pesée le signalait comme un bonus mort).
+    // L'ancien champ reste lu en repli, converti au même résultat qu'il
+    // produisait sur une base de 1 (+100 % = +1) : un objet écrit avant ce
+    // changement continue de donner ce qu'il donnait, et se nettoie tout seul
+    // au prochain enregistrement de sa fiche.
+    const legacyRegen = (pct) => Math.floor((Number(pct ?? 0) || 0) / 100);
+    totals.regen.pv += (b.regenPv !== undefined)
+      ? (Number(b.regenPv) || 0) : legacyRegen(b.regenPvPct);
+    totals.regen.mana += (b.regenMana !== undefined)
+      ? (Number(b.regenMana) || 0) : legacyRegen(b.regenManaPct);
 
     totals.combat.toucherPhysique += Number(b.toucherPhysique ?? 0) || 0;
     totals.combat.toucherMagique += Number(b.toucherMagique ?? 0) || 0;
@@ -243,7 +255,7 @@ export class RPGActor extends Actor {
     // plus bas), jamais une vraie base. La vraie base éditable vit dans sys.base.vitesse
     // — initialisée une fois depuis l'ancienne valeur pour ne rien perdre.
     if (sys.base.vitesse === undefined) {
-      sys.base.vitesse = Number(baseMove.vitesse ?? 6) || 6;
+      sys.base.vitesse = Number(baseMove.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
     }
 
     // BONUS items / sorts passifs
@@ -399,7 +411,13 @@ export class RPGActor extends Actor {
     ) || 1;
     const regenPvBase = baseRegenPv + Math.floor(effP.dexterite / REGEN_STEP);
 
-    let regenPv = Math.floor(regenPvBase * (1 + (Number(bonus.regen.pvPct ?? 0) || 0) / 100));
+    // Équipement : des points fermes, ajoutés à la base. Puis les états :
+    // leur part plate, puis leur part en pourcentage — et le tout est arrondi
+    // à l'entier INFÉRIEUR, y compris quand le pourcentage est un malus
+    // (Math.floor arrondit vers le bas des deux côtés de zéro). La régén ne
+    // descend jamais sous 0 : une régénération négative serait un DOT, ce
+    // qu'un état sait déjà faire proprement.
+    let regenPv = regenPvBase + (Number(bonus.regen.pv ?? 0) || 0);
     regenPv += Number(flat?.regen?.pv ?? 0) || 0;
     regenPv = applyPct(regenPv, pct?.regen?.pv);
     regenPv = Math.max(0, Math.floor(regenPv));
@@ -415,7 +433,7 @@ export class RPGActor extends Actor {
       ) || 1;
       const regenManaBase = baseRegenMana + Math.floor(effP.acuite / REGEN_STEP);
 
-      regenMana = Math.floor(regenManaBase * (1 + (Number(bonus.regen.manaPct ?? 0) || 0) / 100));
+      regenMana = regenManaBase + (Number(bonus.regen.mana ?? 0) || 0);
       regenMana += Number(flat?.regen?.mana ?? 0) || 0;
       regenMana = applyPct(regenMana, pct?.regen?.mana);
       regenMana = Math.max(0, Math.floor(regenMana));

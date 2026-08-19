@@ -28,6 +28,7 @@ import { installDefaultActions, grantDefaultActions, backfillDefaultActions,
          bindSwapChatButtons } from "./rules/default-actions.js";
 import { bindRemoveStateChatButtons } from "./rules/remove-state.js";
 import { installCodex } from "./rules/codex.js";
+import { BASE_VITESSE, migrateBaseSpeed } from "./rules/base-speed.js";
 
 import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
@@ -473,6 +474,14 @@ Hooks.once("init", async () => {
   // sur trois personnages à deux épées courtes ne dit rien d'un groupe de
   // cinq qui manie des haches. Ces deux réglages décrivent le groupe AU
   // NIVEAU 1 ; la pesée les fait ensuite progresser avec le niveau du monstre.
+  // Version de la migration de vitesse de base déjà appliquée à ce monde.
+  // Caché : ce n'est pas un choix de table, c'est un marqueur de passage —
+  // sans lui, la migration repasserait sur les personnages à chaque `ready`
+  // et écraserait une vitesse que le MJ aurait rebaissée entre-temps.
+  game.settings.register("rpg", "baseSpeedVersion", {
+    scope: "world", config: false, type: Number, default: 0
+  });
+
   game.settings.register("rpg", "peseeGroupeTaille", {
     name: "Pesée — taille du groupe",
     hint: "Nombre de personnages joueurs pris comme référence pour estimer la durée de vie d'un monstre. Purement indicatif : n'affecte aucune règle, seulement l'encart « Pesée de rencontre » de la fiche monstre.",
@@ -789,9 +798,12 @@ Hooks.once("init", async () => {
       setIfUndef(`defenses.${k}`, 0);
     }
 
-    // ✅ Vitesse = 3 (system.deplacement.vitesse)
-    setIfUndef("deplacement", { vitesse: 3 });
-    setIfUndef("deplacement.vitesse", 3);
+    // ✅ Vitesse de base (system.deplacement.vitesse) — voir base-speed.js.
+    //    Elle valait 3 ici et 6 dans template.json : selon l'ordre de fusion
+    //    des données à la création, un personnage naissait à l'une ou à
+    //    l'autre. Les deux lisent maintenant la même constante.
+    setIfUndef("deplacement", { vitesse: BASE_VITESSE });
+    setIfUndef("deplacement.vitesse", BASE_VITESSE);
 
     // ✅ Pods max = 50 (PJ) / 0 (monstre) + podsActuels 0
     setIfUndef("charge", { podsActuels: 0, podsMax: 0 });
@@ -905,6 +917,12 @@ Hooks.once("init", async () => {
     // ✅ Actions de base (Repos…) : rattrapage sur les acteurs déjà créés
     try { await backfillDefaultActions(); }
     catch (e) { console.warn("[RPG] actions de base:", e); }
+
+    // ✅ Vitesse de base : rattrapage sur les personnages créés avant le
+    //    passage à 8 m. Ne touche qu'aux vitesses restées sur un ancien
+    //    défaut, une seule fois par monde (réglage baseSpeedVersion).
+    try { await migrateBaseSpeed(); }
+    catch (e) { console.warn("[RPG] vitesse de base:", e); }
 
     // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
     //    (y compris les dialogues de macro) héritent des variables de thème.
@@ -1448,6 +1466,12 @@ Hooks.once("init", async () => {
               // ce changement n'ont que `tData.blocks` (mitigation déjà fondue
               // dedans, un jet par cible) et restent résolus à l'ancienne.
               const sharedBlocks = Array.isArray(raw.blocks) ? raw.blocks : null;
+              // Bonus en % accordé par un état du lanceur (attack-bonus.js) :
+              // il porte sur le brut des lignes DU SORT, jamais sur les lignes
+              // de bonus elles-mêmes — sinon un bonus se paierait deux fois.
+              // Il ne peut être appliqué qu'ici : au moment où le message a
+              // été posté, les dés n'étaient pas encore lancés.
+              const bonusPct = Number(raw.bonusPct) || 0;
               const sharedRaw = [];
               if (sharedBlocks) {
                 for (const b of sharedBlocks) {
@@ -1459,6 +1483,7 @@ Hooks.once("init", async () => {
                             + (targets.length > 1 ? ` <span style="opacity:.7">(jet commun à ${targets.length} cibles)</span>` : "") });
                     amount += roll.total;
                   }
+                  if (bonusPct && !b.isBonus) amount += Math.floor(amount * bonusPct / 100);
                   sharedRaw.push(amount);
                 }
               }

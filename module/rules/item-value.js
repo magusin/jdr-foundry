@@ -30,8 +30,10 @@
 //     10 valeurs seulement : chaque point vaut 5 points de % de touche fermes.
 //
 // Les poids ci-dessous sont donc des estimations de l'IMPACT RÉEL d'une unité,
-// calibrées sur un personnage de référence de début de partie (30 PV, 3 m de
+// calibrées sur un personnage de référence de début de partie (30 PV, 8 m de
 // vitesse, 10 de fatigue, ~50 % de chance de toucher, coups reçus d'environ 6).
+// La vitesse de base vient de base-speed.js : la changer change ce barème,
+// puisque ce que vaut « +1 m » dépend entièrement de ce à quoi on l'ajoute.
 // Ils ne prétendent pas à l'exactitude : ils prétendent à la bonne échelle,
 // ce qui suffit pour repérer une ligne qui pèse dix fois ses voisines.
 //
@@ -62,6 +64,8 @@
 // n'a pas de vrais documents attaquant/cible sous la main, seulement un groupe
 // de référence chiffré — mais elle doit au moins partager le calcul.
 import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
+import { BASE_VITESSE } from "./base-speed.js";
+import { normalizeAttackBonus } from "./attack-bonus.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -99,9 +103,11 @@ export const STAT_WEIGHTS = {
   toucherPhysique: 10,
   toucherMagique: 10,
 
-  // ── Mobilité : sur une base de 3 m, +1 m est un tiers de déplacement en
-  // plus. Décide qui engage, qui décroche, qui atteint le mage.
-  vitesse: 12,
+  // ── Mobilité : sur une base de 8 m (BASE_VITESSE), +1 m est un huitième de
+  // déplacement en plus. Décide qui engage, qui décroche, qui atteint le mage.
+  // Le poids suivait la base de 3 m d'avant (12) : le garder aurait payé un
+  // mètre au même prix alors qu'il vaut désormais deux fois et demie moins.
+  vitesse: 4.5,
 
   // ── Ressources : linéaires mais sans effet de seuil.
   pvMax: 2,
@@ -156,14 +162,15 @@ export const STAT_WEIGHTS = {
   scoreArmure: 0.3,
   scoreResistance: 0.3,
 
-  // ── Régénération : un POURCENTAGE DE LA RÉGÉN DE BASE, pas des PV max.
-  // La régén de base vaut 1 PV/tour et le calcul est
-  // `floor(base × (1 + pct/100))` — il faut donc +100 % pour gagner un seul
-  // PV par tour, et tout ce qui est en dessous est mangé par l'arrondi.
-  // D'où un poids minuscule, et l'alerte levée plus bas pour un bonus qui
-  // n'atteint pas le seuil : il coûte une ligne sur la fiche et ne fait rien.
-  regenPvPct: 0.1,
-  regenManaPct: 0.05
+  // ── Régénération : des POINTS PAR TOUR, ajoutés à la base (ce fut un
+  // pourcentage, inutilisable : sur une base de 1 PV/tour, tout ce qui était
+  // sous +100 % disparaissait dans l'arrondi). Un point de régén rendu à
+  // chaque tour vaut, sur le combat de référence, REF_TURNS points de vie —
+  // d'où un poids proche de REF_TURNS × pvMax, légèrement en dessous parce
+  // qu'un combat court le paie moins. Le mana suit le rapport que lui donne
+  // déjà manaMax face à pvMax.
+  regenPv: 8,
+  regenMana: 6
 };
 
 /**
@@ -215,15 +222,20 @@ const TIERS = {
  */
 const LINEAR_FIELDS = new Set([
   "armureFixe", "resistanceFixe", "toucherPhysique", "toucherMagique",
-  "vitesse", "fatigueMax", "regenPvPct", "regenManaPct"
+  "vitesse", "fatigueMax", "regenPv", "regenMana"
 ]);
 
 /** Plafond conseillé pour le CUMUL des 9 emplacements. Au-delà : alerte. */
 const STACK_CAPS = {
   armureFixe: 8, resistanceFixe: 8,
   toucherPhysique: 2, toucherMagique: 2,
-  vitesse: 2, fatigueMax: 3,
-  regenPvPct: 30, regenManaPct: 30
+  // Cumul de tout un équipement : au plus la moitié d'un déplacement de base
+  // en cadeau. Le plafond était de 2 m quand la base valait 3 — la même
+  // proportion sur une base de 8 en donne 4.
+  vitesse: 4, fatigueMax: 3,
+  // Régén : en points par tour désormais. Un équipement complet qui rend
+  // 2 PV/tour de plus double déjà la régénération d'un personnage de départ.
+  regenPv: 2, regenMana: 3
 };
 
 const LABELS = {
@@ -234,7 +246,7 @@ const LABELS = {
   force: "Force", intelligence: "Intelligence",
   dexterite: "Dextérité", acuite: "Acuité", endurance: "Endurance",
   scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
-  regenPvPct: "Régén PV %", regenManaPct: "Régén Mana %"
+  regenPv: "Régén PV", regenMana: "Régén Mana"
 };
 
 /**
@@ -316,17 +328,8 @@ export function computeItemValue(item) {
         );
       }
     }
-    // Régén : le calcul est `floor(base × (1 + pct/100))` sur une base de 1
-    // PV/tour. En dessous de +100 %, l'arrondi avale tout le bonus — la ligne
-    // s'affiche sur la fiche de l'objet et ne produit rien du tout.
-    if ((key === "regenPvPct" || key === "regenManaPct") && v > 0 && v < 100) {
-      warn = true;
-      warnings.push(
-        `${LABELS[key] ?? key} : +${round1(v)} % est absorbé par l'arrondi. ` +
-        `La régén de base vaut 1/tour et le calcul l'arrondit à l'entier inférieur : ` +
-        `il faut +100 % pour gagner le premier point.`
-      );
-    }
+    // (L'alerte « ce pourcentage de régén ne rend rien » n'a plus lieu d'être :
+    // la régén se saisit en points par tour, et le premier point compte.)
 
     add(LABELS[key] ?? key, v, weight, { key, warn });
   }
@@ -352,10 +355,15 @@ export function computeItemValue(item) {
   for (const r of (Array.isArray(sys.resistances) ? sys.resistances : [])) {
     const tag = r?.tag || r?.effectKey || "état";
     if (r?.immune) add(`Immunité ${tag}`, 1, STATE_RESIST_WEIGHTS.immune, { text: "immunisé" });
+    // Une valeur NÉGATIVE est une vulnérabilité : l'effet dure plus longtemps
+    // ou fait plus mal. Le signe affiché est donc inversé par rapport au champ
+    // (« réduction de −2 » = « +2 tours subis »), comme dans resistTextParts,
+    // et les points partent naturellement en négatif.
+    const signed = (v, unit = "") => `${v > 0 ? "−" : "+"}${Math.abs(round1(v))}${unit}`;
     const dur = n(r?.durationReduction, 0);
-    if (dur) add(`Durée ${tag}`, dur, STATE_RESIST_WEIGHTS.durationReduction, { text: `-${round1(dur)} tour(s)` });
+    if (dur) add(`Durée ${tag}`, dur, STATE_RESIST_WEIGHTS.durationReduction, { text: `${signed(dur)} tour(s)` });
     const dot = n(r?.dotReductionPct, 0);
-    if (dot) add(`DOT ${tag}`, dot, STATE_RESIST_WEIGHTS.dotReductionPct, { text: `-${round1(dot)} %` });
+    if (dot) add(`DOT ${tag}`, dot, STATE_RESIST_WEIGHTS.dotReductionPct, { text: signed(dot, " %") });
   }
 
   // ── Spécifique aux armes ──────────────────────────────────────────────
@@ -390,6 +398,21 @@ export function computeItemValue(item) {
     // quand l'arme est maniée avec une seconde (les deux coûts s'additionnent).
     const fc = n(sys.fatigueCost, 1);
     if (fc !== 1) add("Coût fatigue", -(fc - 1), 4, { text: `${round1(fc)}` });
+
+    // Recharge : une arbalète qui tire un tour sur deux ne vaut pas une épée
+    // qui frappe à chaque tour. On retire la part de dégâts que la recharge
+    // fait perdre, plutôt que de diviser le total — les bonus d'équipement,
+    // eux, sont portés en permanence et ne se rechargent pas.
+    const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
+    if (cdMax > 0) {
+      const damagePoints = rows
+        .filter(r => /Dégâts|Scaling|Critique/.test(r.label))
+        .reduce((sum, r) => sum + n(r.points, 0), 0);
+      const perdu = damagePoints * (1 - 1 / (1 + cdMax));
+      if (perdu > 0) {
+        add("Recharge", -perdu, 1, { text: `${cdMax} tour(s) → 1 tir sur ${cdMax + 1}` });
+      }
+    }
 
     if (sys.twoHands) {
       warnings.push(
@@ -460,7 +483,7 @@ const PCT_REF = {
   force: 10, intelligence: 10, dexterite: 10, acuite: 10, endurance: 10,
   armureFixe: 2, resistanceFixe: 2, scoreArmure: 20, scoreResistance: 20,
   toucherPhysique: 1, toucherMagique: 1, initiativeMod: 5,
-  vitesse: 3, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
+  vitesse: BASE_VITESSE, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
   fatigueMax: 10, podsMax: 50
 };
 
@@ -752,6 +775,26 @@ export function computeSpellValue(item, opts = {}) {
     const auraMult = fx.isAura ? AURA_REF_TARGETS : 1;
     const affected = heads * auraMult;
 
+    // ── Quand l'effet part-il réellement ? ──────────────────────────────
+    // effectsForResult() (spells.js) ne pose un effet que sur le résultat
+    // qu'il déclare : "crit" n'arrive que sur un 20 naturel, "hitonly" est au
+    // contraire exclu du critique. Peser tous les effets à la chance de touche
+    // gonflait un sort dont la brûlure ne part qu'un jet sur vingt — elle
+    // comptait alors comme si elle partait à chaque touche.
+    // Un passif ne fait aucun jet : son effet est toujours là.
+    const when = String(fx.when ?? "hit").toLowerCase();
+    const fxChance = isPassif ? chance
+      : when === "crit"    ? critShare
+      : when === "hitonly" ? Math.max(0, chance - critShare)
+      : chance;
+    // Le déclencheur se lit sur chaque ligne de l'effet, sinon un total divisé
+    // par vingt ressemble à un bug.
+    const whenTag = isPassif ? ""
+      : when === "crit"    ? ` · crit seul (${Math.round(critShare * 100)} % des jets)`
+      : when === "hitonly" ? ` · touche normale (${Math.round(fxChance * 100)} %)`
+      : "";
+    const fxLabel = `${label}${whenTag}`;
+
     // Effet par tour : dégâts ou soin, pendant toute sa durée.
     const tick = fx.tick ?? {};
     const tickMode = String(tick.mode ?? "none");
@@ -759,10 +802,10 @@ export function computeSpellValue(item, opts = {}) {
       const per = Math.abs(n(tick.flat, 0)) + statScale(stats, tick.stat, tick.per, tick.perStep);
       if (per > 0) {
         const perTick = tickMode === "damage" ? landedAgainstParty(per, PARTY) : per;
-        const total = perTick * dur * affected * chance;
-        if (tickMode === "damage") tickDamagePerUse += perTick * dur * affected * chance;
-        if (tickMode === "heal" && ben !== "target") healSelf += per * dur * chance;
-        add(`${label} · ${tickMode === "damage" ? "dégâts" : "soin"} par tour`,
+        const total = perTick * dur * affected * fxChance;
+        if (tickMode === "damage") tickDamagePerUse += perTick * dur * affected * fxChance;
+        if (tickMode === "heal" && ben !== "target") healSelf += per * dur * fxChance;
+        add(`${fxLabel} · ${tickMode === "damage" ? "dégâts" : "soin"} par tour`,
             `${round1(per)} × ${dur} tour(s)${affected > 1 ? ` × ${affected}` : ""}`,
             total * DAMAGE_POINT * (tickMode === "damage" ? 1 : RESTORE_WEIGHTS.pv));
       }
@@ -785,13 +828,39 @@ export function computeSpellValue(item, opts = {}) {
       // un adversaire valent tous deux POSITIF ; les deux croisements sont des
       // maluses pour lui, et pèsent donc négativement.
       const sign = (onAlly === isBonus) ? 1 : -1;
-      // × chance : un effet n'est posé QUE sur une touche validée par le MJ
-      // (voir effectsForResult dans spells.js). Un sort dur à placer accorde
-      // donc son bonus moins souvent, et cela doit se voir.
-      const pts = sign * flatEq * weight * durFactor * affected * chance;
-      add(`${label} · ${LABELS[stat] ?? stat}`,
+      // × fxChance : un effet n'est posé QUE sur le résultat qu'il déclare, et
+      // seulement si le MJ valide la touche (voir effectsForResult dans
+      // spells.js). Un sort dur à placer — ou un effet réservé au critique —
+      // accorde donc son bonus moins souvent, et cela doit se voir.
+      const pts = sign * flatEq * weight * durFactor * affected * fxChance;
+      add(`${fxLabel} · ${LABELS[stat] ?? stat}`,
           `${isBonus ? "+" : "−"}${round1(qty)}${String(m?.mode) === "pct" ? " %" : ""} · ${dur} tour(s)`,
           pts);
+    }
+
+    // Bonus de dégâts accordé aux attaques du porteur (attack-bonus.js).
+    // Il vaut ce qu'il ajoute à CHAQUE attaque, pendant toute sa durée : on
+    // compte une attaque par tour (le budget en autorise deux, mais la
+    // seconde place part le plus souvent en déplacement). Un bonus en % est
+    // ramené en points via l'attaque de référence du groupe — c'est justement
+    // ce qui le rend difficile à équilibrer : il monte avec l'arme.
+    const atk = normalizeAttackBonus({
+      scope: fx.atkScope, categories: fx.atkCategories,
+      flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
+      livraison: fx.atkLivraison, tag: fx.atkTag
+    });
+    if (atk) {
+      const parAttaque = diceAverage(atk.dice) + n(atk.flat, 0)
+                       + (n(atk.pct, 0) / 100) * n(PARTY.damagePerHit, 7);
+      if (parAttaque) {
+        // Une portée restreinte à une ou deux catégories d'arme ne vaut pas
+        // une portée générale : le porteur doit tenir la bonne arme.
+        const couverture = atk.scope === "toutes" ? 1
+          : (atk.categories.length ? 0.6 + 0.1 * atk.categories.length : 0.9);
+        add(`${fxLabel} · bonus de dégâts`,
+            `${round1(parAttaque)} par attaque × ${dur} tour(s)`,
+            (onAlly ? 1 : -1) * parAttaque * dur * couverture * affected * DAMAGE_POINT * fxChance);
+      }
     }
 
     // Résistance aux DÉGÂTS accordée (ou vulnérabilité imposée).
@@ -800,32 +869,32 @@ export function computeSpellValue(item, opts = {}) {
     if (rdTag && rdPct) {
       const w = n(RESIST_WEIGHTS[rdTag], 0.4);
       const sign = (onAlly === (rdPct > 0)) ? 1 : -1;
-      add(`${label} · résist. ${rdTag}`, `${rdPct > 0 ? "+" : ""}${round1(rdPct)} % · ${dur} tour(s)`,
-          sign * Math.abs(rdPct) * w * durFactor * affected * chance);
+      add(`${fxLabel} · résist. ${rdTag}`, `${rdPct > 0 ? "+" : ""}${round1(rdPct)} % · ${dur} tour(s)`,
+          sign * Math.abs(rdPct) * w * durFactor * affected * fxChance);
     }
 
     // Résistance aux ÉTATS accordée — le même barème que sur une pièce d'équipement.
     const rtag = String(fx.resistTag ?? "") || String(fx.effectKey ?? "");
     if (rtag) {
       if (fx.resistImmune) {
-        add(`${label} · immunité ${rtag}`, `${dur} tour(s)`,
-            (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * chance);
+        add(`${fxLabel} · immunité ${rtag}`, `${dur} tour(s)`,
+            (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * fxChance);
       }
       const rd = n(fx.resistDurationReduction, 0);
       if (rd) {
-        add(`${label} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
-            (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * chance);
+        add(`${fxLabel} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
+            (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * fxChance);
       }
       const rp = n(fx.resistDotPct, 0);
       if (rp) {
-        add(`${label} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
-            (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * chance);
+        add(`${fxLabel} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
+            (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * fxChance);
       }
     }
 
     if (fx.movementTypeGrant) {
-      add(`${label} · déplacement accordé`, String(fx.movementTypeGrant),
-          (onAlly ? 1 : -1) * 3 * durFactor * affected * chance);
+      add(`${fxLabel} · déplacement accordé`, String(fx.movementTypeGrant),
+          (onAlly ? 1 : -1) * 3 * durFactor * affected * fxChance);
     }
 
     if (permanent) {
@@ -1008,7 +1077,14 @@ export function partyRefFor(level = 1) {
     // automatiquement : cette progression est une hypothèse de table, comme
     // le reste de cette référence.
     dexterite: 5 + step * 2,
-    acuite: 5 + step * 2
+    acuite: 5 + step * 2,
+    // Vitesse du groupe : la vitesse de base d'un personnage (base-speed.js).
+    // Rien ne la fait monter avec le niveau — un mètre de plus se gagne par
+    // l'équipement, pas par l'expérience. Elle sert à dire si un monstre peut
+    // rattraper le groupe, ce qui n'a de sens que comparé à sa vraie valeur :
+    // le seuil était écrit en dur (« plus rapide qu'un PJ de départ (3 m) »)
+    // et serait devenu faux le jour où la base bouge — c'est arrivé.
+    vitesse: BASE_VITESSE
   };
 }
 
@@ -1443,9 +1519,11 @@ export function computeMonsterValue(actor, opts = {}) {
 
   // ── Stats qui ne pèsent pas dans le score mais changent le combat ─────
   const vitesse = n(profile.vitesse, 0);
-  rows.push({ label: "Vitesse", value: `${round1(vitesse)} m`, points: null, warn: vitesse > 4 });
-  if (vitesse > 4) {
-    warnings.push(`Vitesse ${round1(vitesse)} m : plus rapide qu'un PJ de départ (3 m). Le groupe ne pourra ni décrocher ni le distancer.`);
+  const vitesseGroupe = n(PARTY.vitesse, BASE_VITESSE);
+  const tropRapide = vitesse > vitesseGroupe;
+  rows.push({ label: "Vitesse", value: `${round1(vitesse)} m`, points: null, warn: tropRapide });
+  if (tropRapide) {
+    warnings.push(`Vitesse ${round1(vitesse)} m : plus rapide qu'un PJ (${round1(vitesseGroupe)} m). Le groupe ne pourra ni décrocher ni le distancer.`);
   }
   rows.push({
     label: "Toucher inné (physique / magique)",

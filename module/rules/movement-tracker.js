@@ -12,6 +12,7 @@ import {
   measureSegmentMeters
 } from "./region-behaviors.js";
 import { triggerZoneEffectsForToken } from "./zone-effects.js";
+import { BASE_VITESSE } from "./base-speed.js";
 import { checkRange, virtualToken } from "../utils/grid.js";
 
 const htmlEsc = (s) =>
@@ -94,7 +95,7 @@ const NOTIFY_COOLDOWN_MS = 1200;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getVitesse(actor) {
-  return Number(actor?.system?.deplacement?.vitesse ?? 6) || 6;
+  return Number(actor?.system?.deplacement?.vitesse ?? BASE_VITESSE) || BASE_VITESSE;
 }
 
 /**

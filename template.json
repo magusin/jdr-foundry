@@ -48,7 +48,7 @@
           "mana": 1.0
         },
         "deplacement": {
-          "vitesse": 6,
+          "vitesse": 8,
           "type": "terrestre",
           "typesExtra": []
         },
@@ -246,8 +246,8 @@
           "resistanceFixe": 0,
           "scoreArmure": 0,
           "scoreResistance": 0,
-          "regenPvPct": 0,
-          "regenManaPct": 0,
+          "regenPv": 0,
+          "regenMana": 0,
           "retraitMod": 0,
           "toucherPhysique": 0,
           "toucherMagique": 0
@@ -271,9 +271,14 @@
       ],
       "poids": 1,
       "emplacement": "mainDroite",
+      "categorie": "melee",
       "twoHands": false,
       "difficulte": 0,
       "fatigueCost": 1,
+      "cooldown": {
+        "max": 0,
+        "restant": 0
+      },
       "livraison": "physique",
       "tag": "",
       "portee": 1,

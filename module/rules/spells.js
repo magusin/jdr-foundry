@@ -5,6 +5,7 @@ import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
+import { collectAttackBonuses, attackBonusText, normalizeAttackBonus } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
 
 /* ------------------------------------------------------------ */
@@ -952,6 +953,15 @@ export function buildSpellEffectsPreview({ actor, item }) {
     // la liste des états actifs d'un acteur (damage-types.js).
     parts.push(...fxResistTextParts(fx).all);
 
+    // Bonus de dégâts accordé aux attaques (partie 8 de l'effet) : même
+    // formateur que la fiche de sort, la fiche de personnage et le chat.
+    const atkTxt = attackBonusText({
+      scope: fx.atkScope, categories: fx.atkCategories,
+      flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
+      livraison: fx.atkLivraison, tag: fx.atkTag
+    });
+    if (atkTxt) parts.push(atkTxt);
+
     list.push({
       label: str(fx.label, "Effet"),
       when: PREVIEW_WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? str(fx.when, "Touché"),
@@ -1635,7 +1645,16 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           resistanceDamage: {
             tag: String(fx.resistDamageTag ?? "").trim() || null,
             pct: n(fx.resistDamagePct, 0)
-          }
+          },
+          // Bonus de dégâts accordé aux ATTAQUES du porteur (attack-bonus.js).
+          // Normalisé ici, une fois : les points d'application (jet d'arme,
+          // résolution de sort) lisent une forme unique et n'ont pas à
+          // connaître les champs à plat de la fiche.
+          attackBonus: normalizeAttackBonus({
+            scope: fx.atkScope, categories: fx.atkCategories,
+            flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
+            livraison: fx.atkLivraison, tag: fx.atkTag
+          })
         };
         if (isAura) state.aura = {
           min: n(fx.auraMin, 0),
@@ -1797,6 +1816,38 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     });
   }
 
+  // ── Bonus de dégâts accordés par un état actif du lanceur ────────────
+  // « Puissance arcanique », « Lames aiguisées » réglée sur « Armes et sorts ».
+  // Un bonus qui porte sa PROPRE nature (physique/magique) ou son PROPRE
+  // élément devient une ligne à part : il sera opposé à la résistance
+  // correspondante de la cible, pas à celle du sort. Un bonus sans type
+  // renseigné se fond dans la première ligne du sort, qu'il partage.
+  // Le pourcentage, lui, n'est pas une ligne : il multiplie le brut au moment
+  // du jet (voir bonusPct plus bas et le handler de « Lancer les dégâts »).
+  const atkBonus = collectAttackBonuses(actor, { kind: "sort" });
+  const bonusPct = n(atkBonus.pct, 0);
+  if (dmgBlocks.length) {
+    if (atkBonus.flatSame || atkBonus.sameDice.length) {
+      const dice = atkBonus.sameDice.map(d => d.dice).filter(Boolean).join(" + ");
+      dmgBlocks.push({
+        dice: dice || null, flat: n(atkBonus.flatSame, 0),
+        livraison: dmgBlocks[0].livraison,
+        tag: sys.tag ?? null,
+        label: `Bonus — ${atkBonus.entries.map(e => e.label).join(", ")}`,
+        isBonus: true
+      });
+    }
+    for (const e of atkBonus.own) {
+      dmgBlocks.push({
+        dice: e.dice || null, flat: n(e.flat, 0),
+        livraison: e.livraison || String(sys.livraison ?? "magique"),
+        tag: e.tag || sys.tag || null,
+        label: `Bonus — ${e.label}`,
+        isBonus: true
+      });
+    }
+  }
+
   // ── Lignes de récupération (PV / mana / fatigue rendus) ──────────────
   // Symétrique de damages[] : même formule dés + plat + stat/per × perStep,
   // mais on RE-DONNE au lieu de retirer. Le bénéficiaire est le lanceur
@@ -1934,7 +1985,11 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           // Résistance élémentaire de la cible au type du SORT (system.tag).
           // Sans élément ("neutre"), la livraison de la ligne fait office de
           // type — voir resolveDamageType() dans damage-types.js.
-          const res = resistanceFor(tActor, { tag: item.system?.tag, livraison: b.livraison });
+          // L'élément de la LIGNE d'abord : un bonus « +1d6 de feu » sur un
+          // sort de glace est encaissé par la résistance au feu de la cible,
+          // pas par sa résistance à la glace. Sans élément propre, la ligne
+          // retombe sur celui du sort — le comportement d'avant.
+          const res = resistanceFor(tActor, { tag: b.tag ?? item.system?.tag, livraison: b.livraison });
           return {
             fixe: isPhys ? n(effD.armureFixe, 0) : n(effD.resistanceFixe, 0),
             pct:  isPhys ? n(red.physiquePct, 0)  : n(red.magiquePct, 0),
@@ -1951,8 +2006,13 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
       casterName: actor.name,
       blocks: dmgBlocks.map(b => ({
         dice: b.dice ?? null, flat: n(b.flat, 0), label: b.label,
-        livraison: b.livraison, siphon: n(b.siphon, 0)
+        livraison: b.livraison, tag: b.tag ?? null,
+        siphon: n(b.siphon, 0), isBonus: !!b.isBonus
       })),
+      // Pourcentage de bonus : appliqué au brut de chaque ligne PROPRE au sort
+      // au moment du jet — il ne peut pas l'être ici, les dés ne sont pas
+      // encore lancés (c'est le joueur qui les lance).
+      bonusPct,
       targets: targetData
     }));
 

@@ -658,6 +658,77 @@
             <small class="fx-hint">Agit sur la <b>durée</b> et les <b>dégâts par tour</b> des états du type visé (brûlure, poison, gel...), jamais sur les dégâts directs. Une fois l'effet actif sur une cible, s'applique à tous les états de ce type qu'elle reçoit ensuite, pas seulement ceux de ce sort-ci.</small>
           </fieldset>
 
+          {{!-- 8 · BONUS DE DÉGÂTS AUX ATTAQUES --}}
+          <fieldset class="fx-fieldset">
+            <legend>8 · Bonus de dégâts aux attaques (optionnel)</legend>
+            <div class="fx-grid-4">
+              <div>
+                <label title="Quelles attaques du porteur reçoivent ce bonus.">🎯 S'applique à</label>
+                <select data-fx-field="atkScope">
+                  <option value="" {{#unless fx.atkScope}}selected{{/unless}}>— Aucun bonus —</option>
+                  {{#each @root.bonusScopeChoices as |c|}}
+                    <option value="{{c.key}}" {{#if (eq fx.atkScope c.key)}}selected{{/if}}>{{c.label}}</option>
+                  {{/each}}
+                </select>
+              </div>
+              <div>
+                <label title="Dés ajoutés à chaque attaque concernée. Ils sont lancés à part et visibles dans le chat.">🎲 Dés ajoutés</label>
+                <input type="text" data-fx-field="atkDice" value="{{fx.atkDice}}" placeholder="ex : 1d6"/>
+              </div>
+              <div>
+                <label title="Dégâts fermes ajoutés à chaque attaque concernée.">➕ Dégâts fixes</label>
+                <input type="number" data-fx-field="atkFlat" value="{{fx.atkFlat}}" step="1" placeholder="0"/>
+              </div>
+              <div>
+                <label title="Pourcentage des dégâts BRUTS de l'attaque, ajouté avant l'armure de la cible. Attention : il monte avec l'arme du porteur.">📈 Dégâts en %</label>
+                <input type="number" data-fx-field="atkPct" value="{{fx.atkPct}}" step="5" placeholder="0"/>
+              </div>
+            </div>
+            <div class="fx-grid-4" style="margin-top:6px">
+              <div>
+                <label title="Ne concerne que les armes. Aucune case cochée = toutes les armes.">⚔️ Catégories d'arme</label>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-top:4px">
+                  {{!-- Cases précalculées côté contrôleur : pas de helper
+                       « includes » à supposer présent dans Handlebars. --}}
+                  {{#each fx.atkCatChoices as |c|}}
+                    <label class="fx-check" style="gap:3px">
+                      <input type="checkbox" data-fx-field="atkCat" data-cat="{{c.key}}"
+                        {{#if c.checked}}checked{{/if}} />
+                      <span>{{c.label}}</span>
+                    </label>
+                  {{/each}}
+                </div>
+              </div>
+              <div>
+                <label title="Vide = les dégâts ajoutés sont de la même nature que l'attaque (encaissés comme elle). Sinon ils forment leur PROPRE ligne : « magique » sur un coup d'épée sera opposé à la résistance de la cible, pas à son armure.">🔮 Nature des dégâts ajoutés</label>
+                <select data-fx-field="atkLivraison">
+                  <option value="" {{#unless fx.atkLivraison}}selected{{/unless}}>— Comme l'attaque —</option>
+                  <option value="physique" {{#if (eq fx.atkLivraison "physique")}}selected{{/if}}>Physique</option>
+                  <option value="magique" {{#if (eq fx.atkLivraison "magique")}}selected{{/if}}>Magique</option>
+                </select>
+              </div>
+              <div>
+                <label title="Élément des dégâts ajoutés. Il décide de la résistance élémentaire opposée par la cible — un +1d6 de feu est terrible sur un golem de pierre et inutile sur un élémentaire de feu.">🔥 Élément ajouté</label>
+                <select data-fx-field="atkTag">
+                  <option value="" {{#unless fx.atkTag}}selected{{/unless}}>— Comme l'attaque —</option>
+                  {{#each @root.damageTypeChoices as |c|}}
+                    <option value="{{c.key}}" {{#if (eq fx.atkTag c.key)}}selected{{/if}}>{{c.label}}</option>
+                  {{/each}}
+                </select>
+              </div>
+              <div>
+                <label>&nbsp;</label>
+                <div class="fx-hint" style="padding-top:6px">{{#if fx.uiAttackBonus}}{{fx.uiAttackBonus}}{{else}}—{{/if}}</div>
+              </div>
+            </div>
+            <small class="fx-hint">
+              Ajoute des dégâts à <b>chaque attaque</b> du porteur tant que l'effet dure — pas seulement à la prochaine.
+              Une <b>nature</b> ou un <b>élément</b> renseigné sort les dégâts ajoutés du coup principal : ils sont alors
+              mitigés à part, par la résistance correspondante de la cible. C'est ce qui permet « ton épée inflige en plus
+              1d6 de feu ». Laisse les deux vides pour un simple « +2 aux dégâts ».
+            </small>
+          </fieldset>
+
         </div>
         {{else}}
         {{!-- ════════ VUE JOUEUR — lecture seule, sans formulaire ════════ --}}
@@ -670,6 +741,7 @@
             {{#if fx.uiMove}}<li>{{fx.uiMove}}</li>{{/if}}
             {{#if fx.uiRemove}}<li>{{fx.uiRemove}}</li>{{/if}}
             {{#if fx.uiResist}}<li>{{fx.uiResist}}</li>{{/if}}
+            {{#if fx.uiAttackBonus}}<li>{{fx.uiAttackBonus}}</li>{{/if}}
           </ul>
           {{else}}
           <div class="fx-hint">Aucun effet chiffré — voir la description du sort.</div>

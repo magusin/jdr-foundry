@@ -8,6 +8,7 @@ import {
 } from "../rules/damage-types.js";
 import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
+import { WEAPON_CATEGORIES, weaponCategory } from "../rules/attack-bonus.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
@@ -122,7 +123,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         addResistance: async function (event) { await this._actionAddResistance(event); },
         removeResistance: async function (event) { await this._actionRemoveResistance(event); },
         addAmplification: async function (event) { await this._actionAddAmplification(event); },
-        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); }
+        removeAmplification: async function (event) { await this._actionRemoveAmplification(event); },
+        resetCooldown: async function (event) { await this._actionResetCooldown(event); }
       }
     },
     { inplace: false }
@@ -175,7 +177,26 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.emplacement = String(ctx.system.emplacement ?? "mainDroite");
     ctx.system.twoHands = b(ctx.system.twoHands);
+
+    // ---- Catégorie (mêlée / jet / tir) : lue par les bonus de dégâts d'un
+    // effet, qui peuvent ne viser qu'une famille d'armes (attack-bonus.js).
+    ctx.system.categorie = weaponCategory({ system: ctx.system });
+    ctx.weaponCategoryChoices = Object.entries(WEAPON_CATEGORIES).map(([key, label]) => ({
+      key, label, selected: key === ctx.system.categorie
+    }));
+    ctx.categorieLabel = WEAPON_CATEGORIES[ctx.system.categorie] ?? ctx.system.categorie;
     ctx.system.difficulte = n(ctx.system.difficulte, 0);
+
+    // ---- Recharge (arbalète, arc long…). Même forme que celle d'un sort :
+    // `max` est la définition, `restant` l'état de CETTE copie — le décompte
+    // au début du tour du porteur est déjà générique (turn-effects.js parcourt
+    // tous les objets qui portent system.cooldown.restant, pas seulement les
+    // sorts).
+    ctx.system.cooldown = {
+      max: Math.max(0, n(ctx.system.cooldown?.max, 0)),
+      restant: Math.max(0, n(ctx.system.cooldown?.restant, 0))
+    };
+    ctx.cooldownRestant = ctx.system.cooldown.restant;
 
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
@@ -237,7 +258,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.bonus = ctx.system.bonus ?? {};
     const BONUS_KEYS = [
       "force","intelligence","dexterite","acuite","endurance",
-      "pvMax","manaMax","fatigueMax","regenPvPct","regenManaPct","vitesse","podsMax","retraitMod",
+      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse","podsMax","retraitMod",
       "armureFixe","resistanceFixe","scoreArmure","scoreResistance"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
@@ -251,8 +272,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       pvMax: "PV max",
       manaMax: "Mana max",
       fatigueMax: "Fatigue max",
-      regenPvPct: "Régén PV %",
-      regenManaPct: "Régén Mana %",
+      regenPv: "Régén PV",
+      regenMana: "Régén Mana",
       podsMax: "Pods max",
       retraitMod: "Mod. retrait d'état",
       vitesse: "Vitesse",
@@ -347,9 +368,25 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         expanded.system.portee = expanded.system.range.max;
       }
 
+      // recharge : seul `max` se saisit ici. `restant` est l'état de la copie,
+      // écrit par la résolution de l'attaque et décompté au tour — l'écraser
+      // depuis le formulaire rendrait l'arme disponible à chaque frappe de
+      // touche dans un autre champ.
+      if (expanded.system.cooldown?.max != null) {
+        expanded.system.cooldown.max = Math.max(0, n(expanded.system.cooldown.max, 0));
+        delete expanded.system.cooldown.restant;
+      }
+
       // bonus
       if (expanded.system.bonus) {
         for (const [k, v] of Object.entries(expanded.system.bonus)) expanded.system.bonus[k] = n(v, 0);
+        // Ancien couple en pourcentage : la régén se saisit désormais en
+        // points par tour (system.bonus.regenPv/regenMana). sumBonuses lit
+        // encore l'ancien champ en repli pour ne rien casser sur un objet
+        // jamais rouvert ; on le retire ici, à la première sauvegarde de la
+        // fiche, pour qu'il ne coexiste pas avec le nouveau.
+        expanded.system.bonus["-=regenPvPct"] = null;
+        expanded.system.bonus["-=regenManaPct"] = null;
       }
 
       // damage
@@ -390,7 +427,12 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
           if (!r) continue;
           r.tag = String(r.tag ?? "").trim();
           r.durationReduction = n(r.durationReduction, 0);
-          r.dotReductionPct = Math.min(100, Math.max(0, n(r.dotReductionPct, 0)));
+          // Négatif = VULNÉRABILITÉ (l'effet fait plus mal), bornée comme du côté
+        // moteur : computeResistanceFor (resistances.js) clampe déjà la somme
+        // à [-100, 100]. Le plancher à 0 d'avant rendait le malus impossible
+        // à écrire sur un équipement, alors que le calcul le gère depuis
+        // toujours (c'est ainsi que l'amplification météo fonctionne).
+        r.dotReductionPct = Math.min(100, Math.max(-100, n(r.dotReductionPct, 0)));
           r.immune = !!r.immune;
         }
       }
@@ -470,6 +512,19 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const effects = foundry.utils.deepClone(this.document.system.effects ?? []);
     effects.splice(idx, 1);
     await this.document.update({ "system.effects": effects }, { render: true });
+  }
+
+  /**
+   * Remet l'arme disponible tout de suite.
+   *
+   * Une recharge se décompte au début du tour de son porteur : hors combat,
+   * rien ne la fait descendre, et une arbalète tirée en fin de combat resterait
+   * bloquée jusqu'au combat suivant. Ce bouton est la sortie de secours du MJ.
+   */
+  async _actionResetCooldown(event) {
+    event?.preventDefault?.();
+    if (!this.isEditable) return;
+    await this.document.update({ "system.cooldown.restant": 0, "system.recharge.restant": 0 });
   }
 
   async _actionAddResistance(event) {

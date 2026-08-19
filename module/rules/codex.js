@@ -104,6 +104,37 @@ function hideGmOnlyFolders(root, pack) {
 }
 
 /**
+ * Retire les dossiers qui ne contiennent plus rien de visible.
+ *
+ * Le filtre codex retire des LIGNES, pas les dossiers qui les portaient : un
+ * dossier « Monstre » dans un compendium de sorts restait donc affiché, vide,
+ * chez le joueur — et son nom seul suffit à révéler ce qu'on voulait cacher.
+ * C'est le cas rapporté, et il n'exige aucun réglage : un dossier dont le
+ * joueur ne connaît aucune entrée n'a rien à lui montrer.
+ *
+ * Le marquage explicite « dossier MJ » (macro « Dossiers Compendium (MJ) »)
+ * reste utile et n'est pas remplacé : il masque le dossier même quand le
+ * joueur en connaît une entrée, et il vaut pour les compendiums que le codex
+ * ne filtre pas (acteurs, tables…).
+ *
+ * Les dossiers sont traités du plus profond au moins profond : un parent ne
+ * peut être jugé vide qu'une fois ses enfants retirés.
+ */
+function hideEmptyFolders(root) {
+  const depth = (el) => {
+    let d = 0;
+    for (let n = el.parentElement; n; n = n.parentElement) d++;
+    return d;
+  };
+  const folders = Array.from(root.querySelectorAll("[data-folder-id]"));
+  folders.sort((a, b) => depth(b) - depth(a));
+  for (const el of folders) {
+    if (!el.isConnected) continue;   // retiré avec un ancêtre
+    if (!el.querySelector("[data-entry-id], [data-document-id]")) el.remove();
+  }
+}
+
+/**
  * Filtre l'affichage d'un compendium ouvert.
  * Appelé depuis le hook « renderCompendium ».
  */
@@ -117,7 +148,12 @@ export function filterCompendium(app, html) {
 
   hideGmOnlyFolders(root, pack);
 
-  if (pack.documentName !== "Item") return;   // règles, tables, acteurs… pas de codex
+  if (pack.documentName !== "Item") {
+    // Pas de filtre codex sur ce type de compendium, mais un dossier vide
+    // reste un dossier vide : il n'apprend rien au joueur, sinon son nom.
+    hideEmptyFolders(root);
+    return;
+  }
 
   const known = codexForCurrentUser();
   const packId = pack.collection ?? pack.metadata?.id ?? "";
@@ -130,6 +166,11 @@ export function filterCompendium(app, html) {
     const uuid = `Compendium.${packId}.Item.${id}`;
     if (!isKnown(known, { uuid, id, name })) { li.remove(); hidden++; }
   });
+
+  // Un dossier dont toutes les entrées viennent d'être retirées ne doit pas
+  // rester dans l'arbre — c'est exactement le dossier « Monstre » d'un
+  // compendium de sorts.
+  hideEmptyFolders(root);
 
   if (hidden) {
     const note = document.createElement("p");

@@ -1,6 +1,7 @@
 // systems/rpg/module/documents/item.js
 
 import { resistanceFor, applyResistPct } from "../rules/damage-types.js";
+import { rollAttackBonuses } from "../rules/attack-bonus.js";
 
 function ceil(n) {
   return Math.ceil(Number(n) || 0);
@@ -168,9 +169,23 @@ export class RPGItem extends Item {
       }
     }
 
+    // ── 3 ter) Bonus de dégâts accordés par un état actif ─────────────
+    // « Lames aiguisées », « Arme enflammée » : un effet peut ajouter des
+    // dégâts à chaque attaque, et n'en viser qu'une famille (mêlée / jet /
+    // tir, voir system.categorie). Deux sorts de bonus :
+    //   • sans type propre → ils se fondent dans le coup et sont encaissés
+    //     comme lui ;
+    //   • avec une nature ou un élément à eux → une ligne séparée, mitigée
+    //     par la résistance correspondante de la cible (c'est tout l'intérêt
+    //     d'un « +1d6 de feu » : l'armure n'y peut rien).
+    const attackRaw = rawBrut + critBonus + offhandTotal;
+    const bonus = await rollAttackBonuses(attackerActor, {
+      kind: "arme", weapon: this, rawBase: attackRaw
+    });
+
     // La mitigation s'applique au coup entier, pas arme par arme : c'est une
     // seule attaque, l'armure ne l'absorbe qu'une fois.
-    const beforeMitigation = rawBrut + critBonus + offhandTotal;
+    const beforeMitigation = attackRaw + bonus.same;
 
     // ── 4) Mitigation cible ───────────────────────────────────────
     let fixe = 0;
@@ -202,10 +217,51 @@ export class RPGItem extends Item {
     const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
     // Le plancher à 1 est celui de l'armure : une immunité (100 %) doit
     // pouvoir ramener le coup à 0.
-    const final = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
+    const mainFinal = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
+
+    // Lignes de bonus au type propre : chacune passe par SA mitigation.
+    // Le plancher à 1 est celui de l'armure et ne s'applique donc qu'une fois
+    // par ligne, jamais après la résistance élémentaire — une immunité doit
+    // pouvoir ramener une ligne à 0 sans annuler le coup entier.
+    const bonusLines = [];
+    for (const blk of bonus.blocks) {
+      const blkLivr = blk.livraison ?? type;
+      const isMagic = blkLivr === "magique";
+      // L'armure/résistance FIXE est une absorption par coup, pas par ligne :
+      // le coup principal l'a déjà payée. Ne la reprendre que si la ligne
+      // relève de l'AUTRE défense (magique quand le coup est physique) —
+      // celle-là n'a rien absorbé encore. Sans cette distinction, un « +1d6
+      // de feu » sur une épée était amputé une seconde fois de toute l'armure
+      // et ne rendait presque rien.
+      const memePool = blkLivr === type;
+      let bFixe = 0, bPct = 0;
+      if (targetActor) {
+        const tSys = targetActor.system ?? {};
+        const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+        const red  = tSys.derived?.reductions ?? {};
+        bFixe = memePool ? 0
+              : (isMagic ? (Number(effD.resistanceFixe) || 0) : (Number(effD.armureFixe) || 0));
+        bPct  = isMagic ? (Number(red.magiquePct) || 0)      : (Number(red.physiquePct) || 0);
+      }
+      const bElem = targetActor
+        ? resistanceFor(targetActor, { tag: blk.tag, livraison: blk.livraison ?? type })
+        : { pct: 0, label: "" };
+      const bAfterFixe = Math.max(0, blk.amount - bFixe);
+      const bAfterArmor = Math.max(1, Math.ceil(bAfterFixe * (1 - bPct / 100)));
+      const bFinal = bElem.pct ? applyResistPct(bAfterArmor, bElem.pct) : bAfterArmor;
+      bonusLines.push({
+        label: blk.label, raw: blk.amount, final: bFinal,
+        livraison: blk.livraison ?? type, tag: blk.tag,
+        elemPct: bElem.pct, elemLabel: bElem.label
+      });
+    }
+    const final = mainFinal + bonusLines.reduce((sum, l) => sum + l.final, 0);
 
     return {
       brut:             rawBrut,
+      bonusSame:        bonus.same,
+      bonusLines,
+      mainFinal,
       critBonus,
       beforeMitigation,
       fixe,
@@ -279,7 +335,11 @@ export class RPGItem extends Item {
       if (d?.livraison) livraison = String(d.livraison);
     }
 
-    const beforeMitigation = Math.max(0, rawBrut);
+    // Bonus de dégâts accordés par un état actif de l'attaquant. Une
+    // compétence de monstre est un sort : c'est la portée « sorts » qui la
+    // couvre, pas celle des armes (le monstre n'en porte pas).
+    const bonus = await rollAttackBonuses(attackerActor, { kind: "sort", rawBase: rawBrut });
+    const beforeMitigation = Math.max(0, rawBrut + bonus.same);
 
     let fixe = 0, pct = 0;
     let elem = { type: null, label: "", pct: 0 };
@@ -297,12 +357,44 @@ export class RPGItem extends Item {
 
     const afterFixe = Math.max(0, beforeMitigation - fixe);
     const afterArmor = Math.max(1, Math.ceil(afterFixe * (1 - pct / 100)));
-    const final = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
+    const mainFinal = elem.pct ? applyResistPct(afterArmor, elem.pct) : afterArmor;
+
+    // Lignes de bonus au type propre : mitigées chacune par la résistance qui
+    // la concerne, comme du côté des armes.
+    const bonusLines = [];
+    for (const blk of bonus.blocks) {
+      const blkLivr = blk.livraison ?? livraison;
+      const isMagic = blkLivr === "magique";
+      // Même règle que pour une arme : la part fixe n'est reprise que si la
+      // ligne relève de l'autre défense (voir rollDamage plus haut).
+      const memePool = blkLivr === livraison;
+      let bFixe = 0, bPct = 0;
+      if (targetActor) {
+        const tSys = targetActor.system ?? {};
+        const effD = tSys.derived?.effective?.defenses ?? tSys.defenses ?? {};
+        const red  = tSys.derived?.reductions ?? {};
+        bFixe = memePool ? 0
+              : (isMagic ? (Number(effD.resistanceFixe) || 0) : (Number(effD.armureFixe) || 0));
+        bPct  = isMagic ? (Number(red.magiquePct) || 0)      : (Number(red.physiquePct) || 0);
+      }
+      const bElem = targetActor
+        ? resistanceFor(targetActor, { tag: blk.tag, livraison: blk.livraison ?? livraison })
+        : { pct: 0, label: "" };
+      const bAfterArmor = Math.max(1, Math.ceil(Math.max(0, blk.amount - bFixe) * (1 - bPct / 100)));
+      const bFinal = bElem.pct ? applyResistPct(bAfterArmor, bElem.pct) : bAfterArmor;
+      bonusLines.push({ label: blk.label, raw: blk.amount, final: bFinal,
+                        livraison: blk.livraison ?? livraison, tag: blk.tag,
+                        elemPct: bElem.pct, elemLabel: bElem.label });
+    }
+    const final = mainFinal + bonusLines.reduce((sum, l) => sum + l.final, 0);
 
     return {
       brut: rawBrut,
       critBonus: 0,          // le critique est déjà intégré dans les lignes
       beforeMitigation,
+      bonusSame: bonus.same,
+      bonusLines,
+      mainFinal,
       fixe, pct, final,
       elemPct: elem.pct, elemType: elem.type, elemLabel: elem.label,
       statBonus,

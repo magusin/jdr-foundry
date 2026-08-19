@@ -317,6 +317,28 @@ export function bindAttackChatButtons(htmlEl, message) {
  * intacts jusqu'à ce que le MJ clique sur « Appliquer les dégâts » (voir applyAttackDamage).
  * Confirme le slot de budget dans tous les cas (échec compris).
  */
+/**
+ * Met une arme (ou une compétence de monstre) en recharge.
+ *
+ * Appelée à la RÉSOLUTION, quel que soit le verdict : un carreau parti est
+ * parti, qu'il touche ou non — c'est la même logique que la fatigue et la
+ * place d'action, confirmées elles aussi « l'action a été tentée ». Elle vaut
+ * pour les deux camps : `system.cooldown` existe sur l'arme comme sur le sort
+ * qui sert d'attaque à un monstre.
+ *
+ * L'arme « Mains nues » est reconstruite à la volée et n'existe dans aucun
+ * inventaire : elle n'a pas d'`update`, d'où le garde-fou.
+ */
+async function startWeaponCooldown(weapon) {
+  const cdMax = Number(weapon?.system?.cooldown?.max ?? 0) || 0;
+  if (cdMax <= 0 || typeof weapon?.update !== "function") return;
+  try {
+    await weapon.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
+  } catch (e) {
+    console.warn("[RPG] recharge de l'arme non posée :", e);
+  }
+}
+
 export async function resolveAttack(message, result, { actionId = null } = {}) {
   if (!game.user.isGM) return;
 
@@ -375,6 +397,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
 
       await confirmBudgetSlot(realActionId);
       await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
+      await startWeaponCooldown(weapon);
 
       await message.delete();
 
@@ -412,6 +435,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   // Confirme le slot de budget (échec compris : l'action a été tentée)
   await confirmBudgetSlot(realActionId);
   await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
+  await startWeaponCooldown(weapon);
 
   await message.delete();
 
@@ -462,14 +486,11 @@ export async function rollAttackDamage(message) {
     offhand:       flags.offhandId ? resolveWeapon(attacker, flags.offhandId) : null
   });
 
-  // Une compétence de monstre (item type "spell", ex: attaque d'opportunité)
-  // part en recharge comme un sort normalement lancé — sinon rien ne
-  // l'empêche d'être réutilisée à la prochaine opportunité du même tour.
-  // Les armes n'ont pas ce champ, donc inoffensif pour une attaque classique.
-  const cdMax = Number(weapon.system?.cooldown?.max ?? 0) || 0;
-  if (weapon.type === "spell" && cdMax > 0) {
-    await weapon.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
-  }
+  // La recharge a déjà été posée par resolveAttack, au moment où le MJ a
+  // tranché : ici on ne fait que lancer les dés. La poser une seconde fois
+  // était sans effet (même valeur écrite), mais surtout elle ne partait QUE
+  // sur une touche — une compétence ratée, ou une arbalète qui manque sa
+  // cible, se retrouvait immédiatement réutilisable.
 
   const label = flags.label ?? (isCrit ? "✦ CRITIQUE !" : "✔ TOUCHÉ");
   const col   = flags.col ?? (isCrit ? "gold" : "#27ae60");
@@ -491,11 +512,28 @@ export async function rollAttackDamage(message) {
     ? `🛡️ Mitigation : −${dmgResult.fixe} fixe, −${dmgResult.pct}%${elemPart}`
     : `🛡️ Aucune mitigation`;
 
+  // Bonus de dégâts accordés par un état (attack-bonus.js) : ceux qui se
+  // fondent dans le coup s'ajoutent au brut, ceux qui ont leur propre nature
+  // ou leur propre élément forment leur ligne — avec leur mitigation à eux,
+  // sinon un « +1d6 de feu » sur une cible immunisée resterait invisible.
+  const bonusSame = Number(dmgResult.bonusSame) || 0;
+  const bonusExtra = Array.isArray(dmgResult.bonusLines) ? dmgResult.bonusLines : [];
+  const bonusSameLine = bonusSame
+    ? `<br>✨ Bonus d'effet : <b>+${bonusSame}</b> <span style="opacity:.7">(fondu dans le coup)</span>`
+    : "";
+  const bonusExtraLines = bonusExtra.map(l => {
+    const el = Number(l.elemPct) || 0;
+    const elTxt = el ? ` <span style="opacity:.7">(${l.elemLabel} ${el > 0 ? "−" : "+"}${Math.abs(el)}%)</span>` : "";
+    return `<br>✨ ${l.label} : brut <b>${l.raw}</b> → <b style="color:#c0392b">${l.final}</b>${elTxt}`;
+  }).join("");
+
   const baseContent =
     `<b style="color:${col}">${label}</b> — ${attackerName} touche ${targetName} avec <b>${weapon.name}</b><br>` +
-    `${bonusLine}<br>` +
+    `${bonusLine}${bonusSameLine}<br>` +
     `${mitigLine}<br>` +
-    `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>Final : ${dmgResult.final}</b>`;
+    `💥 Dégâts bruts : ${dmgResult.beforeMitigation} → <b>${dmgResult.mainFinal ?? dmgResult.final}</b>` +
+    `${bonusExtraLines}` +
+    (bonusExtra.length ? `<br>💥 <b>Total : ${dmgResult.final}</b>` : "");
 
   await message.delete();
 
