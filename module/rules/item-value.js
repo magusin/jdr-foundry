@@ -196,7 +196,17 @@ const DAMAGE_POINT = 8;
 /** Stat de référence pour évaluer un scaling d'arme hors de tout porteur. */
 const SCALING_REF_STAT = 4;
 
-/** Paliers, par catégorie. Une arme part de plus haut : ses dés comptent. */
+/**
+ * Paliers, par catégorie. Une arme part de plus haut : ses dés comptent.
+ *
+ * Le barème des armes a été divisé par ~1,8 le jour où leurs dés ont cessé
+ * d'être pesés en brut pour l'être en ENCAISSÉ × chance de toucher, comme
+ * ceux d'un sort (voir le bloc « Spécifique aux armes »). Rien n'a changé
+ * dans le classement relatif des armes — toutes ont été multipliées par le
+ * même facteur — mais les seuils devaient suivre, sinon tout l'arsenal
+ * existant se serait mis à afficher « en dessous d'une arme de départ ».
+ * Repères actuels : 1d6 nu = 16, 1d8+1 = 24, 1d10+2 = 32, 2d6+2 = 36.
+ */
 const TIERS = {
   gear: [
     { max: 5,   key: "village",    label: "Village" },
@@ -206,10 +216,10 @@ const TIERS = {
     { max: Infinity, key: "legendaire", label: "Légendaire" }
   ],
   weapon: [
-    { max: 35,  key: "village",    label: "Village" },
-    { max: 60,  key: "commun",     label: "Commun" },
-    { max: 95,  key: "rare",       label: "Rare" },
-    { max: 140, key: "epique",     label: "Épique" },
+    { max: 20,  key: "village",    label: "Village" },
+    { max: 35,  key: "commun",     label: "Commun" },
+    { max: 55,  key: "rare",       label: "Rare" },
+    { max: 80,  key: "epique",     label: "Épique" },
     { max: Infinity, key: "legendaire", label: "Légendaire" }
   ]
 };
@@ -369,20 +379,58 @@ export function computeItemValue(item) {
   // ── Spécifique aux armes ──────────────────────────────────────────────
   const isWeapon = type === "weapon";
   if (isWeapon) {
+    // Les dés d'une arme sont pesés EXACTEMENT comme ceux d'un sort : pas le
+    // brut écrit sur la fiche, mais ce qui arrive vraiment dans la figure du
+    // groupe de référence — mitigation appliquée (landedAgainstParty) puis
+    // multiplié par la chance de toucher.
+    //
+    // Ce n'était pas le cas, et l'écart n'était pas lisible : une attaque
+    // d'arme et un sort offensif passent par le MÊME computeTN (Dex/Dex ou
+    // Acuité/Acuité selon la livraison), donc ils touchent aussi souvent l'un
+    // que l'autre — mais l'arme était comptée en brut et le sort en encaissé
+    // × chance de touche. Un 1d6 d'épée pesait 28 quand un 1d6 de sort pesait
+    // 17,6, et le bloc « Force du sort » invite explicitement à comparer les
+    // deux (« une attaque à l'arme ordinaire en pèse 28 → ce sort vaut
+    // ×0.32 ») : le MJ concluait, à raison, que le système punissait les
+    // sorts. Les deux écrans sont maintenant dans la même monnaie.
+    //
+    // La chance de toucher vient du PORTEUR, pas de l'arme : elle est donc la
+    // même pour toutes (celle du groupe de référence) et ne change RIEN au
+    // classement des armes entre elles — seul le barème (TIERS.weapon) a été
+    // divisé d'autant. Ce qui appartient vraiment à l'arme, son toucher*, est
+    // pesé à part dans la grille de bonus, comme avant.
+    const PARTY = partyRefFor(1);
+    const W = DAMAGE_POINT * PARTY.hitChance;   // un point ENCAISSÉ, pondéré par la touche
+    const hitPct = Math.round(PARTY.hitChance * 100);
+
     const dmg = sys.damage ?? {};
     const avg = diceAverage(dmg.dice) + n(dmg.flat, 0);
-    if (avg) add("Dégâts (moyenne)", avg, DAMAGE_POINT, { text: `${round1(avg)}` });
+    const landedAvg = landedAgainstParty(avg, PARTY);
+    if (avg) add("Dégâts (moyenne)", landedAvg, W, {
+      text: `${round1(avg)} brut → ${round1(landedAvg)} encaissé · ${hitPct} % de touche`
+    });
 
     // Scaling : évalué sur une caractéristique de référence, faute de porteur.
     const sc = dmg.scaling ?? {};
     const per = Math.max(1, n(sc.per, 10));
     const perStep = n(sc.perStep, 0);
     const scaled = Math.floor(SCALING_REF_STAT / per) * perStep;
-    if (scaled) add(`Scaling (${sc.stat ?? "?"} réf. ${SCALING_REF_STAT})`, scaled, DAMAGE_POINT, { text: `+${round1(scaled)}` });
+    // Chaque ligne suivante est pesée comme un INCRÉMENT du même coup, jamais
+    // comme un coup séparé : l'armure fixe et le plancher à 1 de
+    // landedAgainstParty s'appliquent une fois par coup reçu, et les repayer
+    // ligne par ligne gonflerait un +1 de scaling autant qu'un dé entier.
+    const landedScaled = landedAgainstParty(avg + scaled, PARTY) - landedAvg;
+    if (scaled) add(`Scaling (${sc.stat ?? "?"} réf. ${SCALING_REF_STAT})`, landedScaled, W, { text: `+${round1(scaled)}` });
 
     // Critique : ne se déclenche que sur un 20 naturel, soit 5 % des jets.
+    // Il n'est PAS multiplié par la chance de toucher — un 20 naturel touche
+    // toujours — et il s'AJOUTE au coup au lieu de le remplacer, contrairement
+    // au critique d'un sort (cf. rollAttackDamage : le dé de crit est un dé de
+    // plus, posé à côté du dé principal). D'où une ligne distincte ici, quand
+    // computeSpellValue fond la sienne dans la moyenne pondérée.
     const critAvg = diceAverage(sys.crit?.damage?.dice) + n(sys.crit?.damage?.flat, 0);
-    if (critAvg) add("Critique (5 % des jets)", critAvg, DAMAGE_POINT * 0.05, { text: `${round1(critAvg)}` });
+    const landedCrit = landedAgainstParty(avg + scaled + critAvg, PARTY) - landedAgainstParty(avg + scaled, PARTY);
+    if (critAvg) add("Critique (5 % des jets)", landedCrit, DAMAGE_POINT * 0.05, { text: `${round1(critAvg)}` });
 
     // Allonge au-delà du corps à corps standard : décide qui peut frapper
     // sans être à portée de riposte.
