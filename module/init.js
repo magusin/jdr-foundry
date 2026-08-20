@@ -13,6 +13,7 @@ import { RPGSpellSheetV2 } from "./sheets/item-spell-sheet-v2.js";
 // import { RPGGenericItemSheet } from "./sheets/item-generic-sheet.js";
 import { RPGGenericItemSheetV2 } from "./sheets/item-generic-sheet-v2.js";
 import { RPGRecipeSheetV2 } from "./sheets/item-recipe-sheet-v2.js";
+import { RPGTalentSheetV2 } from "./sheets/item-talent-sheet-v2.js";
 import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { checkRange, pointDistanceMeters, fmtMeters } from "./utils/grid.js";
@@ -71,6 +72,7 @@ import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
 import * as ActorRoles from "./rules/actor-roles.js";
+import * as Loadout from "./rules/loadout.js";
 import * as ItemValue from "./rules/item-value.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
 import { hasRolledAgonieCheck, bindAgonieChatButtons, declareAgonieCheck } from "./rules/agonie-resolve.js";
@@ -747,6 +749,7 @@ Hooks.once("init", async () => {
   Items.registerSheet("rpg", RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
   Items.registerSheet("rpg", RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
   Items.registerSheet("rpg", RPGQuestSheetV2, { types: ["quest"], makeDefault: true });
+  Items.registerSheet("rpg", RPGTalentSheetV2, { types: ["talent"], makeDefault: true });
 
   // Initiative — formule volontairement SIMPLE et robuste : @init est un nombre
   // garanti fourni par getRollData() (défaut 0). Évite tout terme non résolu
@@ -1127,6 +1130,12 @@ Hooks.once("init", async () => {
     // fiches, réutilisé par les macros de distribution pour séparer les
     // deux catégories dans leurs listes de cibles.
     game.rpg.actorRoles = ActorRoles;
+
+    // ✅ game.rpg.loadout : les deux emplacements (Talent, Passif). Exposé
+    // parce que macro/menu.js n'est pas un module ES et ne peut pas importer
+    // rules/loadout.js — sans ce pont, la bascule d'un passif dans le menu
+    // de combat écrirait à côté de l'emplacement et casserait l'exclusivité.
+    game.rpg.loadout = Loadout;
 
     // ✅ game.rpg.itemValue : pesée d'un objet (théoriecraft MJ). Exposé pour
     // qu'une macro puisse balayer un compendium entier et sortir un
@@ -2128,6 +2137,19 @@ Hooks.once("init", async () => {
         content: hpSecret(actor, `<b>Régénération</b> → +${regenPv} PV, +${regenMana} Mana`),
         speaker: ChatMessage.getSpeaker({ actor })
       });
+    }
+
+    // ✅ Passif porté : son coût en mana est prélevé UNE FOIS, au premier
+    // tour de cet acteur dans ce combat (loadout.js). Volontairement APRÈS
+    // la régénération ci-dessus : le porteur doit encaisser sa régen avant
+    // de payer, sinon son premier tour lui coûte plus cher que s'il avait
+    // équipé le passif au tour suivant. Sans passif porté, il n'y a rien à
+    // payer — l'emplacement vide est un choix.
+    try {
+      const { chargePassifOnFirstTurn } = await import("./rules/loadout.js");
+      await chargePassifOnFirstTurn(actor, combat);
+    } catch (e) {
+      console.warn("[RPG] prélèvement du passif :", e);
     }
   });
 

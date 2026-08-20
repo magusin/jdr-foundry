@@ -4,6 +4,7 @@ import {
   DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
 } from "../rules/damage-types.js";
 import { BASE_VITESSE } from "../rules/base-speed.js";
+import { isPassif, equippedPassif } from "../rules/loadout.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -93,7 +94,12 @@ function sumBonuses(actor) {
     regen: { pv: 0, mana: 0 },
     move: { vitesse: 0 },
     charge: { podsMax: 0 },
-    combat: { toucherPhysique: 0, toucherMagique: 0 },
+    // initiativeMod : prepareDerivedData lisait déjà `bonus.combat.initiativeMod`
+    // (deux fois : effective.initiative et derived.initiativeMod) alors que rien
+    // ne l'alimentait — ni ce cumul, ni un champ dans equipBonus, ni une entrée
+    // sur les fiches. Exactement la même mort silencieuse que fatigueMax et
+    // podsMax avant lui : la lecture valait 0 pour toujours.
+    combat: { toucherPhysique: 0, toucherMagique: 0, initiativeMod: 0 },
     // Résistances élémentaires apportées par l'équipement porté — même règle
     // que les autres bonus : il faut que l'objet soit équipé, et un monstre
     // ne porte pas d'équipement (voir isEquip plus bas).
@@ -101,6 +107,7 @@ function sumBonuses(actor) {
   };
 
   const isMonster = actor.type === "monster";
+  const wornPassif = equippedPassif(actor);
 
   for (const item of actor.items) {
     const t = item.type;
@@ -109,11 +116,25 @@ function sumBonuses(actor) {
     // ✅ Monstres: pas d'équipement weapon/armor/relic (on ignore)
     const isEquip = !isMonster && (t === "weapon" || t === "armor" || t === "relic") && !!sys.equipe;
 
-    // ✅ PJ + Monstres: sorts passifs (buff/aura) actifs => pris en compte
-    // Sort passif : speed="passif" OU aura.active (rétrocompat)
-    const isPassiveSpell = (t === "spell") && (sys?.speed === "passif" || !!sys?.aura?.active);
+    // Le TALENT porté est une source de résistances au même titre qu'une
+    // pièce d'équipement (rules/loadout.js). Ses BONUS DE STATS, eux, ne
+    // passent pas par ici : ils vivent dans `system.mods` et sont lus par
+    // sumActiveEffectMods, ce qui leur donne l'initiative et le mode
+    // pourcentage que cette grille-ci ne connaît pas. Seule la partie
+    // resistancesElem / resistances a besoin de ce chemin.
+    const isWornTalent = t === "talent" && !!sys.equipe;
 
-    if (!isEquip && !isPassiveSpell) continue;
+    // ✅ PJ + Monstres: le sort passif PORTÉ (un seul emplacement, loadout.js)
+    // Repli pour les données antérieures à l'emplacement : tant qu'aucun
+    // passif n'est marqué porté, tous comptent comme avant — sinon un
+    // personnage perdrait ses bonus au chargement du monde. Le premier
+    // équipement fait basculer sur la nouvelle règle.
+    // `aura.active` reste accepté pour les sorts non passifs qui s'en
+    // servaient comme bascule (rétrocompat).
+    const isPassiveSpell = (t === "spell")
+      && (isPassif(item) ? (!wornPassif || item.id === wornPassif.id) : !!sys?.aura?.active);
+
+    if (!isEquip && !isPassiveSpell && !isWornTalent) continue;
 
     const b = sys.bonus ?? {};
 
@@ -158,6 +179,7 @@ function sumBonuses(actor) {
 
     totals.combat.toucherPhysique += Number(b.toucherPhysique ?? 0) || 0;
     totals.combat.toucherMagique += Number(b.toucherMagique ?? 0) || 0;
+    totals.combat.initiativeMod += Number(b.initiativeMod ?? 0) || 0;
 
     // ⚠️ system.resistancesElem, PAS system.bonus.* : les résistances
     // élémentaires d'un objet vivent à côté de system.resistances (états),

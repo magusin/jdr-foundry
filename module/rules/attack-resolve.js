@@ -12,6 +12,7 @@
 
 import { hpSecret } from "./chat-visibility.js";
 import { confirmAttackDeclaration, rollAttackDie, resolveDeclaredActor } from "./attack-declare.js";
+import { collectAttackBonusEffects } from "./attack-bonus.js";
 
 const MISS_MESSAGES_MELEE = [
   "{target} esquive l'attaque au dernier moment !",
@@ -38,9 +39,88 @@ function pickRandom(list) {
  *
  * @returns {Promise<string[]>} lignes à afficher dans le message de résolution
  */
+/**
+ * Construit l'état à poser et l'insère dans la liste de la cible.
+ *
+ * Partagé par les deux sources d'état d'une attaque — l'arme elle-même
+ * (`weapon.system.effects[]`) et les états du porteur qui accordent un effet
+ * à ses attaques (`attackBonus.effect`, voir attack-bonus.js). Les deux
+ * doivent produire un état de forme IDENTIQUE : c'est la même chose du point
+ * de vue de la cible, qui n'a pas à savoir si le poison venait de la lame ou
+ * d'un sort lancé sur le porteur trois tours plus tôt.
+ *
+ * L'`id` est déterministe, d'où le remplacement plutôt que l'empilement :
+ * frapper deux fois la même cible rafraîchit la durée du poison, il n'en
+ * pose pas deux qui se décomptent chacun de leur côté.
+ */
+function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, effP }) {
+  const stat = String(dot?.stat ?? "").trim();
+  const per  = Math.max(1, n(dot?.per, 10) || 10);
+  const base = Math.abs(n(dot?.base, 0));
+  const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) : 0;
+  const mode = String(dot?.mode ?? "").toLowerCase();
+
+  // La nature (dégâts / soin) est explicite ; la quantité reste positive.
+  // En interne un perTick négatif = soin.
+  let perTick;
+  if (mode === "none" || !mode) perTick = 0;
+  else if (mode === "damage")   perTick = base + bonus;
+  else if (mode === "heal")     perTick = -(base + bonus);
+  else perTick = n(dot?.base, 0) + bonus;   // ancien format signé
+
+  const state = {
+    id, label, type: "weaponEffect",
+    duration, remaining: duration,
+    // 0 = aucun jet ne peut le retirer. removableStates() (remove-state.js)
+    // ne propose que les états portant un TN, donc c'est bien un choix, pas
+    // une valeur par défaut anodine.
+    cleanseDC: Math.max(0, n(removeBaseTN, 0)),
+    removeBaseTN: Math.max(0, n(removeBaseTN, 0)),
+    tag: String(tag ?? "") || null,
+    dot: { flat: perTick, perTick, formula: "", fatiguePerTick: 0 },
+    mods: {}
+  };
+
+  const idx = states.findIndex(st => String(st?.id) === id);
+  if (idx >= 0) states[idx] = { ...states[idx], ...state };
+  else states.push(state);
+  return perTick;
+}
+
+/** Résumé chat d'un état posé. */
+function hitStateLine(icon, label, targetName, perTick, duration, note = "") {
+  const tick = perTick
+    ? ` (${perTick > 0 ? `${perTick} dég` : `${Math.abs(perTick)} soin`}/tour)`
+    : "";
+  return `${icon} <b>${label}</b> → ${targetName}${tick} — ${duration} tour(s)${note}`;
+}
+
+/**
+ * Applique à la cible touchée les états venus des DEUX sources : l'arme
+ * elle-même et les bonus d'attaque actifs sur l'attaquant.
+ *
+ * Chaque effet porte un déclencheur `when` :
+ *   - "hit"     : toute touche réussie, critique compris
+ *   - "hitonly" : touche normale seulement
+ *   - "crit"    : uniquement sur coup critique
+ * Le DOT vaut base + (stat de l'attaquant ÷ per), figé au moment du coup.
+ *
+ * @returns {Promise<string[]>} lignes à afficher dans le message de résolution
+ */
 async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
+  if (!target) return [];
+
   const list = Array.isArray(weapon?.system?.effects) ? weapon.system.effects : [];
-  if (!list.length || !target) return [];
+  // Bonus accordés par un état du porteur (« ta lame empoisonne pendant 5
+  // tours ») : filtrés sur la portée, la catégorie d'arme et le déclencheur
+  // par attack-bonus.js, exactement comme la part dégâts du même bonus.
+  let granted = [];
+  try {
+    granted = collectAttackBonusEffects(attacker, { kind: "arme", weapon, isCrit: !!isCrit });
+  } catch (e) {
+    console.warn("[RPG] effets accordés aux attaques :", e);
+  }
+  if (!list.length && !granted.length) return [];
 
   // "hit" = toute touche réussie (critique compris)
   // "hitOnly" = touche normale seulement, "crit" = critique seulement
@@ -53,40 +133,43 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
   const states = Array.isArray(target.system?.etatsActifs)
     ? foundry.utils.deepClone(target.system.etatsActifs) : [];
 
+  // ── 1) Effets écrits sur l'arme ───────────────────────────────────────
   for (const fx of list) {
     if (!allowed.has(String(fx?.when ?? "hit").toLowerCase())) continue;
 
-    const label = String(fx?.label ?? weapon.name ?? "Effet").trim() || "Effet";
+    const label = String(fx?.label ?? weapon?.name ?? "Effet").trim() || "Effet";
     const duration = Math.max(1, n(fx?.duration, 1));
+    const perTick = upsertHitState(states, {
+      id: `weapon_${weapon?.id}_${fx?.id ?? label}_${target.id}`,
+      label, duration,
+      // Sur une arme le champ s'appelle cleanseDC depuis toujours ; c'est le
+      // même nombre que le removeBaseTN d'un bonus accordé.
+      removeBaseTN: fx?.cleanseDC,
+      tag: fx?.tag,
+      dot: fx?.dot, effP
+    });
 
-    // La nature (dégâts / soin) est explicite ; la quantité reste positive.
-    // En interne un perTick négatif = soin. Ancien format sans `mode` :
-    // on garde le signe de la base pour ne rien casser.
-    const base = n(fx?.dot?.base, 0);
-    const stat = String(fx?.dot?.stat ?? "").trim();
-    const per  = Math.max(1, n(fx?.dot?.per, 10) || 10);
-    const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) : 0;
-    const mode = String(fx?.dot?.mode ?? "").toLowerCase();
-    let perTick;
-    if (mode === "none") perTick = 0;
-    else if (mode === "damage") perTick = Math.abs(base) + Math.abs(bonus);
-    else if (mode === "heal")   perTick = -(Math.abs(base) + Math.abs(bonus));
-    else perTick = base + bonus; // ancien format signé
+    rows.push(hitStateLine("✨", label, target.name, perTick, duration,
+      isCrit && String(fx?.when).toLowerCase() === "crit" ? " <i>(crit)</i>" : ""));
+  }
 
-    const id = `weapon_${weapon.id}_${fx?.id ?? label}_${target.id}`;
-    const state = {
-      id, label, type: "weaponEffect",
-      duration, remaining: duration,
-      cleanseDC: Math.max(0, n(fx?.cleanseDC, 0)),
-      dot: { flat: perTick, perTick, formula: "", fatiguePerTick: 0 },
-      mods: {}
-    };
+  // ── 2) États accordés par un bonus d'attaque ──────────────────────────
+  for (const g of granted) {
+    const fx = g.effect;
+    // L'id porte l'état SOURCE : deux buffs différents qui posent chacun un
+    // poison en posent bien deux, alors que la même lame qui frappe deux fois
+    // rafraîchit le sien.
+    const perTick = upsertHitState(states, {
+      id: `atkfx_${g.stateId}_${target.id}`,
+      label: fx.label,
+      duration: fx.duration,
+      removeBaseTN: fx.removeBaseTN,
+      tag: fx.tag,
+      dot: fx.dot, effP
+    });
 
-    const idx = states.findIndex(s => String(s?.id) === id);
-    if (idx >= 0) states[idx] = { ...states[idx], ...state };
-    else states.push(state);
-
-    rows.push(`✨ <b>${label}</b> → ${target.name}${perTick ? ` (${perTick > 0 ? `${perTick} dég` : `${Math.abs(perTick)} soin`}/tour)` : ""} — ${duration} tour(s)${isCrit && String(fx?.when).toLowerCase() === "crit" ? " <i>(crit)</i>" : ""}`);
+    rows.push(hitStateLine("🧪", fx.label, target.name, perTick, fx.duration,
+      ` <span style="opacity:.7">(${g.label})</span>`));
   }
 
   if (rows.length) {

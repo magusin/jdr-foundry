@@ -154,6 +154,7 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
       // Autres
       vitesse: "Vitesse",
+      initiativeMod: "Initiative",
       podsMax: "Pods max",
 
       // Combat

@@ -679,8 +679,13 @@
     return spellsPassif.map((s) => {
       const sys      = s.system ?? {};
       const isActive = sys.speed === "passif"; // toujours actif par défaut
-      // Le toggle contrôle si le passif est inclus dans sumBonuses via aura.active
-      const toggled  = sys.aura?.active !== false; // true par défaut
+      // Un seul passif PORTÉ à la fois (rules/loadout.js) : la bascule lit
+      // désormais `system.equipe`, la même source que la fiche et que les
+      // calculs de stats. Elle lisait `aura.active`, qu'aucun calcul ne
+      // consultait — le bouton disait « désactivé » et les bonus restaient.
+      // Le repli sur aura.active garde lisibles les données saisies avant
+      // l'emplacement.
+      const toggled  = !!sys.equipe || (sys.equipe === undefined && sys.aura?.active === true);
       const color    = toggled ? "#1d9e75" : "#888";
 
       // Résumé des bonus du passif
@@ -1274,8 +1279,13 @@
           }));
         }
 
-        // Toggle l'état
-        await item.update({ "system.aura.active": newState });
+        // Toggle l'état — en passant par l'EMPLACEMENT (rules/loadout.js) :
+        // un seul passif porté à la fois. Écrire `system.aura.active` tout
+        // seul, comme avant, ne suffit plus (et ne suffisait déjà pas : ni
+        // sumBonuses ni passiveSpellStates ne lisaient ce champ, donc
+        // « désactiver » un passif ne retirait rien du tout). Activer l'un
+        // déséquipe donc désormais les autres, en une seule écriture.
+        await game.rpg?.loadout?.setEquippedPassif?.(actor, newState ? item.id : null);
 
         // Message dans le chat (logué pour MJ)
         await ChatMessage.create({

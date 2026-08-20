@@ -7,7 +7,7 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
-import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText } from "../rules/attack-bonus.js";
+import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN } from "../rules/attack-bonus.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -123,7 +123,16 @@ function fxAttackBonus(fx) {
   return normalizeAttackBonus({
     scope: fx?.atkScope, categories: fx?.atkCategories,
     flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
-    livraison: fx?.atkLivraison, tag: fx?.atkTag
+    livraison: fx?.atkLivraison, tag: fx?.atkTag,
+    effect: {
+      label: fx?.atkFxLabel, when: fx?.atkFxWhen,
+      duration: fx?.atkFxDuration, removeBaseTN: fx?.atkFxRemoveTN,
+      tag: fx?.atkFxTag,
+      dot: {
+        mode: fx?.atkFxDotMode, base: fx?.atkFxDotBase,
+        stat: fx?.atkFxDotStat, per: fx?.atkFxDotPer
+      }
+    }
   });
 }
 
@@ -739,6 +748,21 @@ static PARTS = foundry.utils.mergeObject(
       fx.atkLivraison = (fx.atkLivraison === "physique" || fx.atkLivraison === "magique") ? fx.atkLivraison : "";
       fx.atkTag = String(fx.atkTag ?? "");
 
+      // État posé sur la CIBLE quand une attaque du porteur porte (« tes
+      // lames empoisonnent »). Sans nom, tout ce bloc est inerte : c'est
+      // normalizeBonusEffect (attack-bonus.js) qui rend null, et le bonus
+      // reste purement chiffré comme avant l'existence du champ.
+      fx.atkFxLabel = String(fx.atkFxLabel ?? "").trim();
+      fx.atkFxWhen = BONUS_FX_WHEN[String(fx.atkFxWhen ?? "")] ? String(fx.atkFxWhen) : "hit";
+      fx.atkFxDuration = Math.max(1, n(fx.atkFxDuration, 1));
+      fx.atkFxRemoveTN = Math.max(0, n(fx.atkFxRemoveTN, 0));
+      fx.atkFxTag = String(fx.atkFxTag ?? "");
+      fx.atkFxDotMode = ["damage", "heal", "none"].includes(String(fx.atkFxDotMode))
+        ? String(fx.atkFxDotMode) : "none";
+      fx.atkFxDotBase = Math.max(0, n(fx.atkFxDotBase, 0));
+      fx.atkFxDotStat = String(fx.atkFxDotStat ?? "").trim();
+      fx.atkFxDotPer = Math.max(1, n(fx.atkFxDotPer, 10) || 10);
+
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
       // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
       // l'affichage seulement, le sens (bonus/malus) et la quantité positive.
@@ -884,6 +908,15 @@ static PARTS = foundry.utils.mergeObject(
         atkDice:       str("atkDice", prev.atkDice ?? ""),
         atkLivraison:  str("atkLivraison", prev.atkLivraison ?? ""),
         atkTag:        str("atkTag", prev.atkTag ?? ""),
+        atkFxLabel:    str("atkFxLabel", prev.atkFxLabel ?? ""),
+        atkFxWhen:     str("atkFxWhen", prev.atkFxWhen ?? "hit"),
+        atkFxDuration: num("atkFxDuration", n(prev.atkFxDuration, 1)),
+        atkFxRemoveTN: num("atkFxRemoveTN", n(prev.atkFxRemoveTN, 0)),
+        atkFxTag:      str("atkFxTag", prev.atkFxTag ?? ""),
+        atkFxDotMode:  str("atkFxDotMode", prev.atkFxDotMode ?? "none"),
+        atkFxDotBase:  num("atkFxDotBase", n(prev.atkFxDotBase, 0)),
+        atkFxDotStat:  str("atkFxDotStat", prev.atkFxDotStat ?? ""),
+        atkFxDotPer:   num("atkFxDotPer", n(prev.atkFxDotPer, 10)),
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
         // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
         // via la stat « Fatigue max » dans les bonus/malus.
@@ -1323,6 +1356,8 @@ static PARTS = foundry.utils.mergeObject(
       // choisie (partie 8).
       atkScope: "", atkCategories: [], atkFlat: 0, atkPct: 0, atkDice: "",
       atkLivraison: "", atkTag: "",
+      atkFxLabel: "", atkFxWhen: "hit", atkFxDuration: 1, atkFxRemoveTN: 0,
+      atkFxTag: "", atkFxDotMode: "none", atkFxDotBase: 0, atkFxDotStat: "", atkFxDotPer: 10,
       mods: []
     });
     await this._updateAndKeepView({ "system.effectsUI": effects });

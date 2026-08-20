@@ -1293,3 +1293,40 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* ── Onglet Talents / Passif (rules/loadout.js) ─────────────────────────
+   Une ligne = un choix. Le bouton entier est cliquable : viser une petite
+   case à cocher dans une liste est pénible, et l'exclusivité rend le geste
+   « je prends celui-ci » plus naturel qu'un cocher/décocher. */
+.rpg-loadout-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--ink-3, rgba(255,255,255,.15));
+  border-radius: 8px;
+  background: var(--ink-2, rgba(255,255,255,.04));
+  color: inherit;
+}
+.rpg-loadout-row:hover { border-color: var(--brass, #c8a349); }
+.rpg-loadout-row.is-worn {
+  border-color: var(--brass, #c8a349);
+  box-shadow: inset 0 0 0 1px var(--brass, #c8a349);
+}
+.rpg-loadout-row[disabled] { opacity: .5; cursor: default; }
+.rpg-loadout-img {
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border-radius: 6px; object-fit: cover;
+}
+.rpg-loadout-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rpg-loadout-name { font-weight: 600; }
+.rpg-loadout-sum { font-size: 11px; opacity: .8; line-height: 1.4; }
+.rpg-loadout-cost { font-size: 11px; opacity: .8; white-space: nowrap; }
+.rpg-loadout-badge {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  padding: 2px 6px; border-radius: 999px; white-space: nowrap;
+  background: var(--brass, #c8a349); color: var(--ink, #16130d);
+}

@@ -256,10 +256,16 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
 
     // ---- Bonus équipement (+ regen)
     ctx.system.bonus = ctx.system.bonus ?? {};
+    // Toutes les clés de equipBonus.bonus (template.json). Une clé absente
+    // d'ici rend son champ vide sur la fiche (undefined au lieu de 0) et
+    // l'exclut du résumé lisible par le joueur — c'est le cinquième endroit
+    // où un bonus peut mourir en silence, après les quatre de CLAUDE.md.
     const BONUS_KEYS = [
       "force","intelligence","dexterite","acuite","endurance",
-      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse","podsMax","retraitMod",
-      "armureFixe","resistanceFixe","scoreArmure","scoreResistance"
+      "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse","initiativeMod",
+      "podsMax","retraitMod",
+      "armureFixe","resistanceFixe","scoreArmure","scoreResistance",
+      "toucherPhysique","toucherMagique"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
 
@@ -277,6 +283,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       podsMax: "Pods max",
       retraitMod: "Mod. retrait d'état",
       vitesse: "Vitesse",
+      initiativeMod: "Initiative",
       armureFixe: "Armure fixe",
       resistanceFixe: "Résistance fixe",
       scoreArmure: "Score Armure",

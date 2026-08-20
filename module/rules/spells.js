@@ -5,12 +5,35 @@ import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
-import { collectAttackBonuses, attackBonusText, normalizeAttackBonus } from "./attack-bonus.js";
+import {
+  collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus
+} from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
 /* ------------------------------------------------------------ */
+
+/**
+ * Quantité par tour d'un état accordé par un bonus d'attaque.
+ *
+ * Même calcul que `upsertHitState` côté arme (attack-resolve.js) : base +
+ * (stat du porteur ÷ per), figée au moment du coup, positive pour des dégâts
+ * et négative pour un soin. Les deux chemins doivent donner le MÊME nombre —
+ * c'est le même effet, seule la façon de le déclencher change.
+ */
+function grantedTick(effect, actor) {
+  const effP = actor?.system?.derived?.effective?.principales
+            ?? actor?.system?.principales ?? {};
+  const stat = String(effect?.dot?.stat ?? "").trim();
+  const per  = Math.max(1, Number(effect?.dot?.per) || 10);
+  const base = Math.abs(Number(effect?.dot?.base) || 0);
+  const bonus = stat ? Math.floor((Number(effP?.[stat]) || 0) / per) : 0;
+  const mode = String(effect?.dot?.mode ?? "none");
+  if (mode === "damage") return base + bonus;
+  if (mode === "heal")   return -(base + bonus);
+  return 0;
+}
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -1653,7 +1676,20 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           attackBonus: normalizeAttackBonus({
             scope: fx.atkScope, categories: fx.atkCategories,
             flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-            livraison: fx.atkLivraison, tag: fx.atkTag
+            livraison: fx.atkLivraison, tag: fx.atkTag,
+            // État posé sur la cible quand une attaque du porteur porte —
+            // « tes lames empoisonnent ». Sans nom (atkFxLabel vide),
+            // normalizeBonusEffect rend null et le bonus reste purement
+            // chiffré, comme avant l'existence de ce champ.
+            effect: {
+              label: fx.atkFxLabel, when: fx.atkFxWhen,
+              duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
+              tag: fx.atkFxTag,
+              dot: {
+                mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
+                stat: fx.atkFxDotStat, per: fx.atkFxDotPer
+              }
+            }
           })
         };
         if (isAura) state.aura = {
@@ -1695,6 +1731,43 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
         if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
         const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
         fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
+      }
+    }
+
+    // États accordés aux ATTAQUES du lanceur par un bonus actif (« tes coups
+    // empoisonnent »), quand ce bonus porte aussi sur les sorts. Sans ce
+    // branchement, un bonus réglé sur « Armes et sorts » aurait posé son état
+    // à l'épée et rien du tout au sort — une moitié muette, invisible.
+    // Le déclencheur de l'effet est jugé sur le verdict du MJ, comme pour une
+    // arme : `outcome` vaut ici "crit" ou "success" (un échec n'atteint jamais
+    // cette ligne, effectsForResult renvoie une liste vide).
+    if (outcome === "success" || outcome === "crit") {
+      try {
+        const granted = collectAttackBonusEffects(actor, { kind: "sort", isCrit: outcome === "crit" });
+        for (const g of granted) {
+          for (const tActor of targetActors) {
+            await upsertState(tActor, {
+              id: `atkfx_${g.stateId}_${tActor.id}`,
+              label: g.effect.label,
+              duration: g.effect.duration,
+              remaining: g.effect.duration,
+              cleanseDC: g.effect.removeBaseTN,
+              removeBaseTN: g.effect.removeBaseTN,
+              tag: g.effect.tag || null,
+              dot: {
+                flat: grantedTick(g.effect, actor),
+                perTick: grantedTick(g.effect, actor),
+                formula: "", fatiguePerTick: 0
+              },
+              mods: {}
+            });
+            fxResultRows.push(
+              `🧪 <b>${htmlEsc(g.effect.label)}</b> → ${htmlEsc(tActor.name)} — `
+            + `${g.effect.duration} tour(s) <span style="opacity:.7">(${htmlEsc(g.label)})</span>`);
+          }
+        }
+      } catch (e) {
+        console.warn("[RPG] états accordés aux sorts :", e);
       }
     }
 
