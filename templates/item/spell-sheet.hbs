@@ -727,6 +727,84 @@
               mitigés à part, par la résistance correspondante de la cible. C'est ce qui permet « ton épée inflige en plus
               1d6 de feu ». Laisse les deux vides pour un simple « +2 aux dégâts ».
             </small>
+
+            {{!-- État posé sur la CIBLE quand une attaque du porteur touche.
+                  Même poseur d'état que les effets écrits sur une arme
+                  (weapon.system.effects[]) — voir applyWeaponEffects dans
+                  attack-resolve.js : les deux sources doivent produire un
+                  état de forme identique. --}}
+            <div class="fx-sub" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--ink-3,rgba(255,255,255,.15))">
+              <label style="font-weight:700;font-size:12px">🧪 État posé sur la cible touchée (optionnel)</label>
+              <div class="fx-grid-4" style="margin-top:6px">
+                <div>
+                  <label title="Nom de l'état tel qu'il apparaîtra sur la fiche de la cible. VIDE = ce bonus n'ajoute que des dégâts, il ne pose aucun état.">Nom de l'état</label>
+                  <input type="text" data-fx-field="atkFxLabel" value="{{fx.atkFxLabel}}" placeholder="ex. Venin"/>
+                </div>
+                <div>
+                  <label title="Quand l'état est posé. Un critique déclenche aussi « Touche + crit », mais pas « Touche normale ».">Déclencheur</label>
+                  <select data-fx-field="atkFxWhen">
+                    <option value="hit" {{#if (eq fx.atkFxWhen "hit")}}selected{{/if}}>⚡ Touche + crit</option>
+                    <option value="hitonly" {{#if (eq fx.atkFxWhen "hitonly")}}selected{{/if}}>⚡ Touche normale</option>
+                    <option value="crit" {{#if (eq fx.atkFxWhen "crit")}}selected{{/if}}>✦ Critique seulement</option>
+                  </select>
+                </div>
+                <div>
+                  <label title="Durée de l'état posé sur la cible, en tours.">Durée (tours)</label>
+                  <input type="number" data-fx-field="atkFxDuration" value="{{fx.atkFxDuration}}" min="1" step="1"/>
+                </div>
+                <div>
+                  <label title="Seuil à faire sur 1d20 pour que la cible s'en débarrasse avec l'action « Retirer un état ». 0 = AUCUN jet ne peut le retirer : la cible le subit jusqu'à expiration.">Retrait (TN)</label>
+                  <input type="number" data-fx-field="atkFxRemoveTN" value="{{fx.atkFxRemoveTN}}" min="0" max="20" step="1"/>
+                </div>
+              </div>
+              <div class="fx-grid-4" style="margin-top:6px">
+                <div>
+                  <label title="Ce que l'état fait à chaque tour de son porteur.">Par tour</label>
+                  <select data-fx-field="atkFxDotMode">
+                    <option value="none" {{#if (eq fx.atkFxDotMode "none")}}selected{{/if}}>— Rien —</option>
+                    <option value="damage" {{#if (eq fx.atkFxDotMode "damage")}}selected{{/if}}>💥 Dégâts</option>
+                    <option value="heal" {{#if (eq fx.atkFxDotMode "heal")}}selected{{/if}}>💚 Soin</option>
+                  </select>
+                </div>
+                <div>
+                  <label title="Part fixe par tour, toujours positive — c'est « Par tour » qui donne le sens.">Base</label>
+                  <input type="number" data-fx-field="atkFxDotBase" value="{{fx.atkFxDotBase}}" min="0" step="1"/>
+                </div>
+                <div>
+                  <label title="Caractéristique du PORTEUR qui renforce l'état, figée au moment du coup. Avec Dextérité et 20 ci-contre : +1 par tranche de 20 en Dextérité.">Stat du porteur</label>
+                  <select data-fx-field="atkFxDotStat">
+                    <option value="" {{#unless fx.atkFxDotStat}}selected{{/unless}}>— Aucune —</option>
+                    <option value="force" {{#if (eq fx.atkFxDotStat "force")}}selected{{/if}}>Force</option>
+                    <option value="dexterite" {{#if (eq fx.atkFxDotStat "dexterite")}}selected{{/if}}>Dextérité</option>
+                    <option value="intelligence" {{#if (eq fx.atkFxDotStat "intelligence")}}selected{{/if}}>Intelligence</option>
+                    <option value="acuite" {{#if (eq fx.atkFxDotStat "acuite")}}selected{{/if}}>Acuité</option>
+                    <option value="endurance" {{#if (eq fx.atkFxDotStat "endurance")}}selected{{/if}}>Endurance</option>
+                  </select>
+                </div>
+                <div>
+                  <label title="Diviseur du scaling : la stat est divisée par ce nombre, arrondi à l'inférieur.">Par tranche de</label>
+                  <input type="number" data-fx-field="atkFxDotPer" value="{{fx.atkFxDotPer}}" min="1" step="1"/>
+                </div>
+              </div>
+              <div class="fx-grid-4" style="margin-top:6px">
+                <div>
+                  <label title="Élément de l'état posé. Sert aux résistances aux ÉTATS de la cible (durée réduite, tick réduit, immunité) — pas aux résistances aux dégâts.">Élément de l'état</label>
+                  <select data-fx-field="atkFxTag">
+                    <option value="" {{#unless fx.atkFxTag}}selected{{/unless}}>— Aucun —</option>
+                    {{#each @root.damageTypeChoices as |c|}}
+                      <option value="{{c.key}}" {{#if (eq fx.atkFxTag c.key)}}selected{{/if}}>{{c.label}}</option>
+                    {{/each}}
+                  </select>
+                </div>
+              </div>
+              <small class="fx-hint">
+                C'est ce qui permet « <b>tes lames empoisonnent</b> » : l'état est posé sur la cible
+                quand une attaque du porteur touche, filtrée par la <b>portée</b> et les <b>catégories d'arme</b>
+                choisies plus haut. Laisse le <b>nom vide</b> si ce bonus ne doit ajouter que des dégâts.
+                <br>⚠️ Un <b>Retrait (TN) à 0</b> rend l'état impossible à enlever par un jet — parfait pour un
+                buff, redoutable pour un poison que la victime ne pourra jamais soigner.
+              </small>
+            </div>
           </fieldset>
 
         </div>

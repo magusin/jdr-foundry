@@ -61,6 +61,62 @@ export const BONUS_SCOPES = {
   toutes: "Armes et sorts"
 };
 
+/**
+ * Déclencheurs d'un état accordé à l'attaque. Mêmes clés et même sens que le
+ * `when` des effets d'une arme (`weapon.system.effects[]`, voir
+ * applyWeaponEffects dans attack-resolve.js) — les deux sources aboutissent
+ * au même poseur d'état, elles ne peuvent pas parler deux langues.
+ */
+export const BONUS_FX_WHEN = {
+  hit:     "⚡ Touche + crit",
+  hitonly: "⚡ Touche normale",
+  crit:    "✦ Critique seulement"
+};
+
+/**
+ * État posé sur la CIBLE quand l'attaque porte — « ta lame empoisonne ».
+ *
+ * C'est le seul champ du bonus qui ne parle pas de dégâts. Il existe parce
+ * qu'un bonus d'attaque ne pouvait transporter QUE des dégâts : « +1d4 de
+ * terre » se lisait comme du poison sans jamais en poser un, et la seule
+ * façon d'empoisonner était d'écrire l'effet sur l'arme elle-même
+ * (`weapon.system.effects[]`) — donc impossible à accorder par un sort.
+ *
+ * Le DOT reprend exactement la forme d'un effet d'arme, scaling compris
+ * (`base + stat ÷ per`), parce que c'est la seule structure du système qui
+ * sache déjà faire monter un état avec une caractéristique du porteur : les
+ * `mods` d'un effet de sort, eux, sont plats ou en pourcentage et n'ont
+ * aucun scaling.
+ */
+function normalizeBonusEffect(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const label = String(raw.label ?? "").trim();
+  // Sans nom, l'état serait illisible sur la fiche de la cible — et un état
+  // qu'on ne sait pas nommer est un état qu'on ne saura pas retirer.
+  if (!label) return null;
+
+  const whenRaw = String(raw.when ?? "hit").toLowerCase();
+  const modeRaw = String(raw.dot?.mode ?? "none").toLowerCase();
+
+  return {
+    label,
+    when: BONUS_FX_WHEN[whenRaw] ? whenRaw : "hit",
+    duration: Math.max(1, n(raw.duration, 1)),
+    // 0 = l'état n'est retirable par aucun jet. C'est volontairement le
+    // défaut côté buff « indéboulonnable », mais c'est aussi le piège côté
+    // malus : removableStates() (remove-state.js) ne propose que les états
+    // portant un TN, donc un poison à 0 ne se soigne jamais.
+    removeBaseTN: Math.max(0, n(raw.removeBaseTN, 0)),
+    tag: DAMAGE_TYPES[String(raw.tag ?? "")] ? String(raw.tag) : "",
+    dot: {
+      mode: ["damage", "heal", "none"].includes(modeRaw) ? modeRaw : "none",
+      base: Math.max(0, n(raw.dot?.base, 0)),
+      stat: String(raw.dot?.stat ?? "").trim(),
+      per:  Math.max(1, n(raw.dot?.per, 10) || 10)
+    }
+  };
+}
+
 /** Normalise une entrée de bonus, quelle que soit sa provenance. */
 export function normalizeAttackBonus(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -76,11 +132,15 @@ export function normalizeAttackBonus(raw) {
     dice: String(raw.dice ?? "").trim(),
     // "" = les dégâts ajoutés suivent la nature de l'attaque.
     livraison: (raw.livraison === "physique" || raw.livraison === "magique") ? raw.livraison : "",
-    tag: DAMAGE_TYPES[String(raw.tag ?? "")] ? String(raw.tag) : ""
+    tag: DAMAGE_TYPES[String(raw.tag ?? "")] ? String(raw.tag) : "",
+    // État posé sur la cible touchée. null = ce bonus n'ajoute que des dégâts.
+    effect: normalizeBonusEffect(raw.effect)
   };
   // Un bonus qui n'ajoute rien n'est pas un bonus : le laisser passer
-  // remplirait le chat d'une ligne « +0 ».
-  if (!out.flat && !out.pct && !out.dice) return null;
+  // remplirait le chat d'une ligne « +0 ». Un bonus qui ne pose QU'UN ÉTAT
+  // est en revanche parfaitement valide — c'est même le cas d'usage type
+  // (« tes coups empoisonnent », sans un point de dégât supplémentaire).
+  if (!out.flat && !out.pct && !out.dice && !out.effect) return null;
   return out;
 }
 
@@ -141,6 +201,42 @@ export function hasAttackBonus(b) {
 }
 
 /**
+ * États que les bonus actifs posent sur la cible de CETTE attaque.
+ *
+ * Volontairement séparé de `collectAttackBonuses` : les dégâts sont lus à
+ * plusieurs endroits et à des moments différents (le jet du joueur, la
+ * résolution d'un sort, la fiche qui affiche un aperçu), alors qu'un état ne
+ * se pose qu'une fois, sur une touche que le MJ a validée. Les mélanger
+ * aurait fait poser l'état à chaque endroit qui voulait simplement connaître
+ * les dégâts.
+ *
+ * Le filtre de déclenchement est le même que celui des effets d'arme : un
+ * critique déclenche aussi ce qui est réglé sur « touche », mais pas ce qui
+ * est réservé à la touche normale.
+ *
+ * @returns {Array<{effect: object, label: string, stateId: string}>}
+ */
+export function collectAttackBonusEffects(actor, { kind = "arme", weapon = null, isCrit = false } = {}) {
+  const allowed = isCrit ? ["hit", "crit"] : ["hit", "hitonly"];
+  const out = [];
+  for (const st of (Array.isArray(actor?.system?.etatsActifs) ? actor.system.etatsActifs : [])) {
+    const bonus = normalizeAttackBonus(st?.attackBonus);
+    if (!bonus?.effect) continue;
+    if (!matches(bonus, { kind, weapon })) continue;
+    if (!allowed.includes(bonus.effect.when)) continue;
+    out.push({
+      effect: bonus.effect,
+      label: String(st?.label ?? "Bonus"),
+      // Identifie l'état SOURCE (le buff du porteur), pas l'état posé : c'est
+      // lui qui doit rendre le poison rafraîchissable plutôt qu'empilable
+      // quand la même lame frappe deux fois la même cible.
+      stateId: String(st?.id ?? bonus.effect.label)
+    });
+  }
+  return out;
+}
+
+/**
  * Texte d'une entrée de bonus, unique formateur.
  *
  * Toutes les surfaces passent par lui — fiche de sort, résumé d'état sur la
@@ -164,7 +260,20 @@ export function attackBonusText(bonus) {
       ? `aux armes de ${b.categories.map(c => WEAPON_CATEGORIES[c].toLowerCase()).join(" / ")}`
       : (b.scope === "toutes" ? "aux armes et aux sorts" : "aux attaques d'arme");
 
-  return `⚔️ ${parts.join(" ")}${typeTxt} ${cible}`;
+  const dmgTxt = parts.length ? `${parts.join(" ")}${typeTxt} ` : "";
+
+  // L'état accordé fait partie de ce qu'un joueur doit lire sur son buff :
+  // sans lui, « ⚔️ aux attaques d'arme » ne dit rien d'un bonus qui n'ajoute
+  // aucun dégât et ne fait qu'empoisonner.
+  const fx = b.effect;
+  const fxTxt = fx
+    ? ` · pose « ${fx.label} » ${fx.duration} tour(s)`
+      + (fx.dot.mode === "damage" ? ` (${fx.dot.base}${fx.dot.stat ? `+${fx.dot.stat}÷${fx.dot.per}` : ""}/tour)`
+       : fx.dot.mode === "heal"   ? ` (${fx.dot.base}${fx.dot.stat ? `+${fx.dot.stat}÷${fx.dot.per}` : ""} soin/tour)` : "")
+      + (fx.when === "crit" ? " — crit seulement" : fx.when === "hitonly" ? " — touche normale" : "")
+    : "";
+
+  return `⚔️ ${dmgTxt}${cible}${fxTxt}`;
 }
 
 /**

@@ -895,8 +895,38 @@ export function computeSpellValue(item, opts = {}) {
     const atk = normalizeAttackBonus({
       scope: fx.atkScope, categories: fx.atkCategories,
       flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-      livraison: fx.atkLivraison, tag: fx.atkTag
+      livraison: fx.atkLivraison, tag: fx.atkTag,
+      effect: {
+        label: fx.atkFxLabel, when: fx.atkFxWhen,
+        duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
+        tag: fx.atkFxTag,
+        dot: {
+          mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
+          stat: fx.atkFxDotStat, per: fx.atkFxDotPer
+        }
+      }
     });
+
+    // État posé sur la cible par les attaques du porteur (« tes lames
+    // empoisonnent »). Pesé comme un DOT MAINTENU, pas cumulé : frapper de
+    // nouveau rafraîchit la durée au lieu d'empiler un second poison (l'id
+    // de l'état est déterministe, voir upsertHitState dans
+    // attack-resolve.js), donc la cible encaisse `tick` par tour tant que le
+    // buff dure, et non `tick × durée de l'état` à chaque coup. Le compter de
+    // la seconde façon triplait n'importe quel poison de 3 tours.
+    const atkFx = atk?.effect ?? null;
+    if (atkFx && atkFx.dot.mode !== "none") {
+      const tick = n(atkFx.dot.base, 0)
+                 + (atkFx.dot.stat ? Math.floor(SCALING_REF_STAT / Math.max(1, n(atkFx.dot.per, 10))) : 0);
+      if (tick) {
+        // × la chance de toucher : l'état n'est posé que sur une touche.
+        const soin = atkFx.dot.mode === "heal";
+        add(`${fxLabel} · état posé`,
+            `${round1(tick)}${soin ? " soin" : " dég"}/tour · ${dur} tour(s)`,
+            (onAlly === soin ? 1 : -1) * tick * dur * affected * DAMAGE_POINT * fxChance * chance);
+      }
+    }
+
     if (atk) {
       const parAttaque = diceAverage(atk.dice) + n(atk.flat, 0)
                        + (n(atk.pct, 0) / 100) * n(PARTY.damagePerHit, 7);
