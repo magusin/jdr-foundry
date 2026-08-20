@@ -1,0 +1,92 @@
+{{!-- Fiche TALENT — voir module/sheets/item-talent-sheet-v2.js et
+      module/rules/loadout.js. Volontairement minimale : un talent ne fait
+      que des mods de stats, donc tout autre champ serait un piège à
+      remplir. --}}
+<form class="rpg-sheet rpg-talent-sheet">
+  <header class="sheet-header" style="display:flex;align-items:center;gap:10px">
+    <img class="rpg-img-edit" src="{{item.img}}" data-field="img" title="Changer l'image"
+      style="width:48px;height:48px;cursor:{{#if canEdit}}pointer{{else}}default{{/if}};border-radius:8px;border:1px solid var(--color-border-light-2)"/>
+    <div class="header-fields" style="flex:1">
+      {{#if canEdit}}
+      <input name="name" type="text" value="{{item.name}}" placeholder="Nom du talent" />
+      {{else}}
+      <h2 style="margin:0">{{item.name}}</h2>
+      {{/if}}
+      <div style="font-size:11px;opacity:.7">🎭 Talent — un seul porté à la fois, gratuit, actif en permanence</div>
+    </div>
+    {{#if isGM}}
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <button type="button" data-action="sendToActors" style="cursor:pointer;padding:4px 10px;white-space:nowrap" title="Envoyer une copie à un ou plusieurs PJ — c'est ainsi qu'on débloque un talent">📤 Envoyer</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;cursor:pointer"
+        title="Synchronisé PAR DÉFAUT avec tout autre exemplaire du même nom déjà donné à un PJ : toute modification des bonus/malus se répercute. Décoche si CET exemplaire doit cesser de suivre les autres.">
+        <input type="checkbox" data-action="toggleLinkSync" {{#unless (eq item.flags.rpg.linkSync false)}}checked{{/unless}} />
+        🔗 Synchro
+      </label>
+    </div>
+    {{/if}}
+  </header>
+
+  <section class="sheet-body" style="padding:10px;display:flex;flex-direction:column;gap:12px">
+
+    {{#if summary}}
+    <div class="card">
+      <h2>Effet</h2>
+      <div style="font-size:13px;line-height:1.7">{{summary}}</div>
+    </div>
+    {{/if}}
+
+    <div class="card">
+      <h2>Bonus &amp; malus</h2>
+      <div class="talent-mod-list" style="display:flex;flex-direction:column;gap:6px">
+        {{#each mods as |mod mi|}}
+        <div class="talent-mod-row" data-mod-index="{{mi}}"
+          style="display:grid;grid-template-columns:1fr auto auto 70px auto;gap:6px;align-items:center">
+          <select data-mod-field="stat" {{#unless @root.canEdit}}disabled{{/unless}}>
+            {{#each @root.statGroups as |grp|}}
+            <optgroup label="{{grp.label}}">
+              {{#each grp.options as |opt|}}
+              <option value="{{opt.value}}" {{#if (eq mod.stat opt.value)}}selected{{/if}}>{{opt.label}}</option>
+              {{/each}}
+            </optgroup>
+            {{/each}}
+          </select>
+          <select data-mod-field="sens" {{#unless @root.canEdit}}disabled{{/unless}}>
+            <option value="bonus" {{#unless mod.isMalus}}selected{{/unless}}>⬆️ Bonus</option>
+            <option value="malus" {{#if mod.isMalus}}selected{{/if}}>⬇️ Malus</option>
+          </select>
+          <select data-mod-field="mode" {{#unless @root.canEdit}}disabled{{/unless}}>
+            <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe</option>
+            <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
+          </select>
+          <input type="number" data-mod-field="value" value="{{mod.absValue}}" min="0" placeholder="0"
+            title="Quantité, toujours positive — le sens est choisi à gauche."
+            {{#unless @root.canEdit}}disabled{{/unless}}/>
+          {{#if @root.canEdit}}
+          <button type="button" data-action="removeMod" data-mod-index="{{mi}}"
+            class="fx-del-btn" title="Retirer cette ligne">✕</button>
+          {{else}}<span></span>{{/if}}
+        </div>
+        {{/each}}
+      </div>
+      {{#if canEdit}}
+      <button type="button" data-action="addMod" class="fx-add-btn" style="margin-top:8px">+ Ajouter une stat</button>
+      <small class="fx-hint" style="display:block;margin-top:6px">
+        Un talent se joue en <b>petit bonus contre petit malus</b> : ±1 à ±3 sur une principale,
+        <b>±1 ou ±2 au maximum</b> sur un toucher (1 point = 5 points de pourcentage de touche)
+        et sur l'armure fixe (1 point vaut ~36 points de score d'armure).
+        Attention au sens du toucher : <b>+1 rend le coup PLUS facile</b>, il est soustrait du seuil.
+      </small>
+      {{/if}}
+    </div>
+
+    <div class="card">
+      <h2>Description</h2>
+      {{#if canEdit}}
+      <textarea name="system.description" rows="5" placeholder="Ce que ce talent dit du personnage.">{{system.description}}</textarea>
+      {{else}}
+      <div style="white-space:pre-wrap">{{system.description}}</div>
+      {{/if}}
+    </div>
+
+  </section>
+</form>

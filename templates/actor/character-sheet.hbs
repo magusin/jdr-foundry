@@ -420,6 +420,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
       {{#if hasBlessures}}🩸{{/if}} Blessures
     </a>
     {{#if flags.isGM}}
+    <a class="item" data-tab="loadout">🎭 Talents</a>
     <a class="item" data-tab="pnj">🎭 PNJ / RP</a>
     {{/if}}
     {{/unless}}
@@ -1394,6 +1395,93 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
     garde pour lui (caractère, dialogues, secrets).
     ========================== --}}
     {{#if flags.isGM}}
+    {{!-- ONGLET TALENTS & PASSIF — voir module/rules/loadout.js.
+          Deux emplacements indépendants, un occupant chacun au maximum.
+          Les boutons portent data-action="pickTalent"/"pickPassif" et sont
+          listés dans OWNER_CTRL (character-sheet-v2.js) : ils restent
+          actifs pour le propriétaire alors que la fiche est en lecture
+          seule pour lui, parce que c'est LUI qui choisit ce qu'il porte. --}}
+    <div class="tab" data-group="primary" data-tab="loadout">
+
+      <section class="card">
+        <h2>🎭 Talent</h2>
+        <div style="font-size:11px;opacity:.7;margin-bottom:8px">
+          Un seul porté à la fois, ou aucun. Gratuit, actif en permanence —
+          en combat comme hors combat.
+          {{#if loadout.inCombat}}<b>En changer maintenant coûte une action normale.</b>{{/if}}
+        </div>
+
+        <div class="rpg-loadout-list" style="display:flex;flex-direction:column;gap:6px">
+          <button type="button" data-action="pickTalent"
+            class="rpg-loadout-row{{#unless loadout.talentWorn}} is-worn{{/unless}}">
+            <span class="rpg-loadout-name">— Aucun talent —</span>
+            {{#unless loadout.talentWorn}}<span class="rpg-loadout-badge">porté</span>{{/unless}}
+          </button>
+          {{#each loadout.talents as |t|}}
+          <button type="button" data-action="pickTalent" data-item-id="{{t.id}}"
+            class="rpg-loadout-row{{#if t.worn}} is-worn{{/if}}">
+            <img src="{{t.img}}" alt="" class="rpg-loadout-img"/>
+            <span class="rpg-loadout-mid">
+              <span class="rpg-loadout-name">{{t.name}}</span>
+              {{#if t.summary}}<span class="rpg-loadout-sum">{{t.summary}}</span>{{/if}}
+            </span>
+            {{#if t.worn}}<span class="rpg-loadout-badge">porté</span>{{/if}}
+          </button>
+          {{else}}
+          <div class="rpg-empty" style="font-size:12px;opacity:.6">
+            Aucun talent appris. Le MJ t'en donne un comme n'importe quel objet.
+          </div>
+          {{/each}}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>🔮 Passif</h2>
+        <div style="font-size:11px;opacity:.7;margin-bottom:8px">
+          Un seul porté à la fois, ou aucun. Actif en permanence ; son coût en
+          mana est prélevé <b>une fois</b>, à ton premier tour de combat —
+          jamais hors combat.
+          {{#if loadout.inCombat}}
+            {{#if loadout.passifWillCharge}}
+            <b>Tu as déjà payé ce combat : en changer coûte une action rapide
+            et le mana du nouveau.</b>
+            {{else}}
+            <b>Tu n'as pas encore payé ce combat : en changer maintenant coûte
+            une action rapide, et c'est le nouveau passif qui sera prélevé à
+            ton premier tour.</b>
+            {{/if}}
+          {{/if}}
+        </div>
+
+        <div class="rpg-loadout-list" style="display:flex;flex-direction:column;gap:6px">
+          <button type="button" data-action="pickPassif"
+            class="rpg-loadout-row{{#unless loadout.passifWorn}} is-worn{{/unless}}">
+            <span class="rpg-loadout-name">— Aucun passif —</span>
+            {{#unless loadout.passifWorn}}<span class="rpg-loadout-badge">porté</span>{{/unless}}
+          </button>
+          {{#each loadout.passifs as |p|}}
+          <button type="button" data-action="pickPassif" data-item-id="{{p.id}}"
+            class="rpg-loadout-row{{#if p.worn}} is-worn{{/if}}">
+            <img src="{{p.img}}" alt="" class="rpg-loadout-img"/>
+            <span class="rpg-loadout-mid">
+              <span class="rpg-loadout-name">{{p.name}}</span>
+              {{#if p.summary}}<span class="rpg-loadout-sum">{{{p.summary}}}</span>{{/if}}
+            </span>
+            <span class="rpg-loadout-cost" title="Coût en mana, prélevé une fois par combat">
+              {{#if p.cost}}🔷 {{p.cost}}{{else}}gratuit{{/if}}
+            </span>
+            {{#if p.worn}}<span class="rpg-loadout-badge">porté</span>{{/if}}
+          </button>
+          {{else}}
+          <div class="rpg-empty" style="font-size:12px;opacity:.6">
+            Aucun sort passif connu. Un passif est un sort dont la Vitesse vaut « Passif ».
+          </div>
+          {{/each}}
+        </div>
+      </section>
+
+    </div>
+
     <div class="tab" data-group="primary" data-tab="pnj">
 
       <section class="card">

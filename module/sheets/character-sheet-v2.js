@@ -1,6 +1,10 @@
 // systems/rpg/module/sheets/character-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
-import { getBudget, movementRemaining, movementSpent } from "../rules/action-budget.js";
+import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
+import {
+  talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat
+} from "../rules/loadout.js";
+import { talentSummary } from "./item-talent-sheet-v2.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { isNpcActor } from "../rules/actor-roles.js";
@@ -556,6 +560,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     };
 
     ctx.equipSlots = this._buildEquipSlotsUI(itemsObj);
+    ctx.loadout = this._buildLoadoutUI();
 
     // Le joueur peut toujours s'équiper hors combat ; en combat le changement
     // consomme l'action « Échange d'arme » (voir _canEquipNow). On le lui dit
@@ -1127,6 +1132,28 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       } finally { btn.disabled = false; }
     }, { capture: true });
 
+    // ── Emplacements Talent / Passif (joueurs ET MJ) ─────────────────────
+    // Branché avant le retour joueur, comme les slots d'équipement : c'est
+    // le joueur qui choisit ce qu'il porte, pas le MJ.
+    bindOnce("loadout").addEventListener("click", async (evLo) => {
+      const btn = evLo.target?.closest?.("[data-action='pickTalent'], [data-action='pickPassif']");
+      if (!btn || btn.disabled) return;
+      if (!game.user.isGM && !this.document.isOwner) return;
+      evLo.preventDefault();
+      evLo.stopPropagation();
+      const kind = btn.dataset.action === "pickTalent" ? "talent" : "passif";
+      btn.disabled = true;
+      try {
+        await this._pickLoadout(kind, btn.dataset.itemId || null);
+      } catch (e) {
+        console.error("[RPG] changement d'emplacement Talent/Passif :", e);
+        ui.notifications?.error?.("Impossible de changer cet emplacement — voir la console (F12).");
+      } finally {
+        btn.disabled = false;
+        await this.render({ force: true });
+      }
+    }, { capture: true });
+
     // ── Ouvrir la fiche d'un objet possédé (joueurs ET MJ) ───────────────
     // Doit être branché AVANT le retour joueur : sinon les joueurs ne
     // pouvaient pas consulter leurs propres armes/armures/objets.
@@ -1151,7 +1178,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       // Commandes qui appartiennent au joueur, pas des champs de la fiche :
       // elles restent actives s'il possède le personnage.
       const OWNER_CTRL = "[data-action='equipSlotSelect'], [data-action='toggleEquip'],"
-                       + "[data-action='declareSpell'], [data-action='castSpell']";
+                       + "[data-action='declareSpell'], [data-action='castSpell'],"
+                       // Emplacements Talent / Passif : ils appartiennent au
+                       // joueur, pas au MJ — c'est tout l'objet de l'onglet.
+                       + "[data-action='pickTalent'], [data-action='pickPassif']";
       // Pur confort d'affichage : actif pour tout le monde.
       const VIEW_CTRL  = ".spell-filter, .spell-filter-q, .spell-filter-reset";
 
@@ -1448,6 +1478,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       const equipe = !!it.system.equipe;
 
       if (t === "consumable") out.consommables.push(it);
+      // Un talent a son propre onglet (rules/loadout.js) : le laisser tomber
+      // dans le sac le ferait apparaître deux fois, avec un poids et une
+      // quantité qui ne veulent rien dire pour lui.
+      else if (t === "talent") continue;
       else if (t === "spell") out.sorts.push(it);
       else if (t === "skill") out.competences.push(it);
       else if (t === "quest") continue; // gérée par le bloc Quêtes dédié (ctx.quests), pas ici
@@ -1536,6 +1570,121 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const res = await declareSpell(this.document, item);
     if (!res?.ok) ui.notifications?.warn?.(res?.reason ?? "Impossible de lancer le sort.");
     await this.render({ force: true });
+  }
+
+  /**
+   * Contexte des deux emplacements — Talent et Passif (rules/loadout.js).
+   *
+   * Les deux listes contiennent TOUJOURS une entrée « Aucun » : ne rien
+   * porter est un choix légitime des deux côtés (aucun malus subi pour un
+   * talent, aucun mana dépensé pour un passif), pas un état à corriger.
+   */
+  _buildLoadoutUI() {
+    const actor = this.document;
+    const combat = game.combat?.active ? game.combat : null;
+
+    const talentRow = (it, worn) => ({
+      id: it.id, name: it.name, img: it.img,
+      summary: talentSummary(it),
+      description: String(it.system?.description ?? ""),
+      worn
+    });
+
+    const passifRow = (it, worn) => ({
+      id: it.id, name: it.name, img: it.img,
+      cost: passifManaCost(it),
+      summary: buildSpellEffectsPreview(it),
+      description: String(it.system?.description ?? ""),
+      worn
+    });
+
+    const wornT = equippedTalent(actor);
+    const wornP = equippedPassif(actor);
+
+    return {
+      inCombat: !!combat,
+      // Après son premier tour, l'acteur a déjà payé : changer de passif
+      // recoûte donc son mana. Avant, le prélèvement de début de tour n'a pas
+      // encore eu lieu et prendra le NOUVEAU passif — le changement est donc
+      // gratuit sur le moment. Le dire évite de faire croire à un oubli.
+      passifWillCharge: !!combat && hasPaidThisCombat(actor, combat),
+      talents: talentsOf(actor).map(it => talentRow(it, wornT?.id === it.id)),
+      passifs: passifsOf(actor).map(it => passifRow(it, wornP?.id === it.id)),
+      talentWorn: wornT ? talentRow(wornT, true) : null,
+      passifWorn: wornP ? passifRow(wornP, true) : null
+    };
+  }
+
+  /**
+   * Change un emplacement. `itemId` à null vide l'emplacement.
+   *
+   * En combat, le changement consomme une place d'action — normale pour un
+   * talent, rapide pour un passif. La réservation est enveloppée comme
+   * ailleurs : un client JOUEUR ne peut pas écrire les flags du document
+   * Combat (Foundry le lui refuse), donc l'échec est journalisé et le
+   * changement a quand même lieu, exactement comme le fait macro/menu.js
+   * pour les attaques et les sorts. La place n'est réellement décomptée que
+   * lorsque le client du MJ la confirme — c'est le trou connu de l'économie
+   * d'action, pas une particularité des emplacements.
+   */
+  async _pickLoadout(kind, itemId) {
+    const actor = this.document;
+    if (!game.user.isGM && !actor.isOwner) return;
+
+    const lo = await import("../rules/loadout.js");
+    const combat = game.combat?.active ? game.combat : null;
+    const isTalent = kind === "talent";
+
+    const current = isTalent ? lo.equippedTalent(actor) : lo.equippedPassif(actor);
+    if ((current?.id ?? null) === (itemId ?? null)) return;   // rien à faire
+
+    // Mana d'abord, tant que l'ancien passif est encore en place : si la
+    // bourse est vide, on n'a rien écrit et l'état reste cohérent.
+    let charge = null;
+    if (!isTalent && combat && lo.hasPaidThisCombat(actor, combat) && itemId) {
+      const next = actor.items.get(itemId);
+      charge = await lo.chargePassif(actor, next);
+    }
+
+    const chosen = isTalent
+      ? await lo.setEquippedTalent(actor, itemId)
+      : await lo.setEquippedPassif(actor, itemId);
+
+    if (combat) await this._consumeLoadoutSlot(isTalent ? "sortNormal" : "sortRapide", chosen, kind);
+
+    const what = chosen?.name ?? "Aucun";
+    const cost = charge?.paid ? ` <span style="opacity:.7">(−${charge.paid} mana)</span>` : "";
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `${isTalent ? "🎭" : "🔮"} <b>${actor.name}</b> — `
+             + `${isTalent ? "Talent" : "Passif"} : <b>${what}</b>${cost}`
+    });
+  }
+
+  /** Réserve puis confirme la place d'action d'un changement d'emplacement. */
+  async _consumeLoadoutSlot(slot, item, kind) {
+    try {
+      const combat = game.combat;
+      const cbt = combat?.combatants?.find(c => c.actorId === this.document.id);
+      if (!combat || !cbt) return;
+
+      const budget = await getBudget(combat, cbt.id);
+      if (!canUseSlot(budget, slot)) {
+        ui.notifications?.warn?.(
+          `Plus de place d'action ${slot === "sortRapide" ? "rapide" : "normale"} ce tour — `
+        + `le changement est fait, préviens le MJ.`);
+        return;
+      }
+      // Ni réservation ni attente : le changement est déjà écrit quand on
+      // arrive ici, il n'y a rien à valider. confirmSlot rend un NOUVEAU
+      // budget (il ne modifie pas le sien), d'où le passage direct à
+      // saveBudget.
+      await saveBudget(combat, cbt.id, confirmSlot(budget, slot));
+    } catch (e) {
+      // Refus attendu côté joueur : Foundry n'autorise pas un non-MJ à
+      // écrire les flags d'un Combat. On journalise et on continue.
+      console.warn(`[RPG] place d'action du changement de ${kind} non réservée :`, e);
+    }
   }
 
   async _canEquipNow(item) {

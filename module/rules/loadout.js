@@ -1,0 +1,300 @@
+// module/rules/loadout.js
+//
+// Les deux EMPLACEMENTS d'un personnage : un Talent, un Passif.
+//
+// Ce sont deux systèmes distincts qui partagent exactement une règle —
+// « un seul à la fois, ou aucun » — et rien d'autre :
+//
+//   TALENT  Item de type `talent`. Gratuit. Ne fait QUE des mods de stats
+//           (les 18 de KEY_TO_BUCKET, initiative comprise, en flat ou en %).
+//           Actif en permanence, en combat comme hors combat. En changer
+//           pendant un combat coûte une action normale.
+//
+//   PASSIF  Item de type `spell` dont la Vitesse vaut « Passif ». Actif en
+//           permanence lui aussi, mais son `coutMana` est prélevé UNE FOIS,
+//           au premier tour de son porteur dans un combat — et de nouveau
+//           s'il en change en cours de route (action rapide). Hors combat il
+//           tourne gratuitement : le mana est une ressource de combat.
+//
+// L'emplacement VIDE est un état légitime des deux côtés : ne rien porter
+// est un choix (aucun malus subi pour un Talent, aucun mana dépensé pour un
+// Passif), pas un oubli à corriger.
+//
+// ─────────────────────────────────────────────────────────────────────────
+// Pourquoi `system.equipe` et pas un nouveau champ
+//
+// `system.equipe` est déjà dans la liste blanche des écritures joueur
+// (`isBookkeeping`/`allowed` dans init.js), donc un joueur peut équiper son
+// propre Talent sans qu'on ouvre quoi que ce soit de plus — et rien ne lit
+// ce champ sur un `spell` ou un `talent` ailleurs dans le code
+// (`sumBonuses`, `estEquip` et `allEquipItems` filtrent tous sur
+// weapon/armor/relic). Le champ était donc libre des deux côtés.
+//
+// L'exclusivité est appliquée par une VRAIE écriture (on déséquipe les
+// autres), jamais par une règle d'affichage : deux clients qui équipent en
+// même temps doivent converger vers un seul porté, et une liste qui se
+// contente de masquer laisserait deux `equipe: true` en base — donc deux
+// jeux de bonus cumulés dans prepareDerivedData, silencieusement.
+
+const FLAG_SCOPE = "rpg";
+
+function n(v, d = 0) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : d;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reconnaissance                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Un Talent : item du type dédié. */
+export function isTalent(item) {
+  return item?.type === "talent";
+}
+
+/**
+ * Un Passif : sort dont la Vitesse vaut « passif ».
+ *
+ * `declareSpell` refuse déjà ces items (« toujours actif, pas de
+ * déclaration ») — c'est ce qui fait d'eux un emplacement plutôt qu'une
+ * action.
+ */
+export function isPassif(item) {
+  return item?.type === "spell" && String(item?.system?.speed ?? "") === "passif";
+}
+
+/** Les Talents que l'acteur possède. */
+export function talentsOf(actor) {
+  return (actor?.items ?? []).filter(isTalent);
+}
+
+/** Les Passifs que l'acteur possède. */
+export function passifsOf(actor) {
+  return (actor?.items ?? []).filter(isPassif);
+}
+
+/** Le Talent porté, ou null si l'emplacement est vide. */
+export function equippedTalent(actor) {
+  return talentsOf(actor).find(it => !!it.system?.equipe) ?? null;
+}
+
+/** Le Passif porté, ou null si l'emplacement est vide. */
+export function equippedPassif(actor) {
+  return passifsOf(actor).find(it => !!it.system?.equipe) ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mods d'un talent                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Mods normalisés d'un Talent, au format `{stat: {flat, pct}}`.
+ *
+ * C'est EXACTEMENT la forme que `sumActiveEffectMods` attend d'un état, ce
+ * qui est tout l'intérêt du choix de structure : un Talent se branche sur la
+ * mécanique de mods déjà en place au lieu d'en réclamer une deuxième, et il
+ * hérite donc des 18 stats de KEY_TO_BUCKET (l'initiative en fait partie,
+ * contrairement à la grille `equipBonus` d'une armure) et du mode
+ * pourcentage.
+ */
+export function talentMods(item) {
+  const out = {};
+  for (const m of (Array.isArray(item?.system?.mods) ? item.system.mods : [])) {
+    const stat = String(m?.stat ?? "").trim();
+    if (!stat) continue;
+    const mode = m?.mode === "pct" ? "pct" : "flat";
+    const v = n(m?.value, 0);
+    if (!v) continue;
+    out[stat] = out[stat] ?? { flat: 0, pct: 0 };
+    out[stat][mode] += v;
+  }
+  return out;
+}
+
+/**
+ * États permanents produits par le Talent PORTÉ, pour sumActiveEffectMods.
+ *
+ * Rien n'est écrit en base : ces mods sont recalculés à chaque
+ * prepareDerivedData, donc ils apparaissent et disparaissent avec
+ * l'équipement, sans état à synchroniser ni à nettoyer. Même approche que
+ * `passiveSpellStates` pour les sorts passifs, juste à côté.
+ */
+export function talentStates(actor) {
+  const it = equippedTalent(actor);
+  if (!it) return [];
+  const mods = talentMods(it);
+  return Object.keys(mods).length ? [{ mods }] : [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Équiper / déséquiper                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Équipe un Talent (ou vide l'emplacement avec `itemId = null`).
+ *
+ * Écrit tous les changements en UN SEUL updateEmbeddedDocuments : deux
+ * updates séparés feraient passer l'acteur par un état intermédiaire à zéro
+ * ou à deux talents portés, et `prepareDerivedData` recalcule entre les
+ * deux — donc un clignotement des stats, visible sur la fiche.
+ */
+export async function setEquippedTalent(actor, itemId = null) {
+  if (!actor) return null;
+  const updates = [];
+  let chosen = null;
+
+  for (const it of talentsOf(actor)) {
+    const want = !!itemId && it.id === itemId;
+    if (want) chosen = it;
+    if (!!it.system?.equipe !== want) updates.push({ _id: it.id, "system.equipe": want });
+  }
+
+  if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+  return chosen;
+}
+
+/**
+ * Équipe un Passif (ou vide l'emplacement avec `itemId = null`).
+ *
+ * N'effectue AUCUN prélèvement de mana : le coût dépend du contexte (début
+ * de combat, changement en cours de combat, hors combat où c'est gratuit) et
+ * appartient donc à l'appelant, pas à l'écriture elle-même. Voir
+ * `chargePassif` et `chargePassifOnFirstTurn`.
+ */
+export async function setEquippedPassif(actor, itemId = null) {
+  if (!actor) return null;
+  const updates = [];
+  let chosen = null;
+
+  for (const it of passifsOf(actor)) {
+    const want = !!itemId && it.id === itemId;
+    if (want) chosen = it;
+    // `system.aura.active` a longtemps servi de bascule à ces sorts sans
+    // qu'aucun calcul ne le lise (le bouton du menu de combat l'écrivait,
+    // sumBonuses et passiveSpellStates l'ignoraient : « désactiver » un
+    // passif ne retirait donc rien). Il est aligné sur `equipe` pour que les
+    // données déjà en base cessent de dire deux choses différentes.
+    if (!!it.system?.equipe !== want || it.system?.aura?.active !== want) {
+      updates.push({ _id: it.id, "system.equipe": want, "system.aura.active": want });
+    }
+  }
+
+  if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+  return chosen;
+}
+
+/* ------------------------------------------------------------------ */
+/* Coût en mana d'un passif                                            */
+/* ------------------------------------------------------------------ */
+
+/** Coût d'entrée d'un passif, en mana. 0 = gratuit. */
+export function passifManaCost(item) {
+  return Math.max(0, n(item?.system?.coutMana, 0));
+}
+
+/**
+ * Prélève le coût d'un passif sur le mana de l'acteur.
+ *
+ * Le mana ne descend jamais sous 0 et le passif n'est JAMAIS désactivé faute
+ * de paiement : le désactiver dynamiquement obligerait `talentStates` /
+ * `passiveSpellStates` à consulter la bourse à chaque recalcul de stats —
+ * fragile, et pour un cas qui n'arrive presque jamais (5 mana de départ pour
+ * un coût de 1 à 3). Un porteur à sec paie ce qu'il peut, et le message le
+ * dit.
+ *
+ * @returns {{paid: number, asked: number, short: boolean}}
+ */
+export async function chargePassif(actor, item, { announce = true } = {}) {
+  const asked = passifManaCost(item);
+  const res = { paid: 0, asked, short: false };
+  if (!actor || !item || asked <= 0) return res;
+
+  const cur = n(actor.system?.ressources?.mana?.valeur, 0);
+  const paid = Math.max(0, Math.min(asked, cur));
+  res.paid = paid;
+  res.short = paid < asked;
+
+  if (paid > 0) await actor.update({ "system.ressources.mana.valeur": cur - paid });
+
+  if (announce) {
+    const manque = res.short
+      ? ` <span style="opacity:.7">(coût ${asked}, réserve insuffisante)</span>`
+      : "";
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content: `🔮 <b>${actor.name}</b> maintient <b>${item.name}</b> — `
+             + `<b>−${paid}</b> mana${manque}`
+    });
+  }
+  return res;
+}
+
+/* ------------------------------------------------------------------ */
+/* Prélèvement au premier tour du combat                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Marque, sur le document Combat, les acteurs ayant déjà payé leur passif.
+ *
+ * Le flag vit sur le Combat et disparaît donc avec lui : un nouveau combat
+ * refait payer, ce qui est la règle voulue. Le stocker sur l'acteur aurait
+ * demandé un nettoyage à la fin de chaque rencontre — une remise à zéro
+ * oubliée quelque part et le passif devenait gratuit à vie.
+ */
+function paidSet(combat) {
+  const raw = combat?.getFlag?.(FLAG_SCOPE, "passifPaid");
+  return Array.isArray(raw) ? raw.map(String) : [];
+}
+
+/**
+ * Cet acteur a-t-il déjà payé un passif dans ce combat ?
+ *
+ * Sert au changement en cours de combat, et c'est ce qui évite de faire
+ * payer deux fois : tant que l'acteur n'a pas joué son premier tour, aucun
+ * prélèvement n'a eu lieu et le changement est donc gratuit sur le moment —
+ * `chargePassifOnFirstTurn` prélèvera le coût du NOUVEAU passif le moment
+ * venu. Après son premier tour, en revanche, l'ancien a été payé et le
+ * nouveau doit l'être aussi.
+ *
+ * Lecture seule : un client joueur peut lire un flag de Combat, il ne peut
+ * pas en écrire un. C'est précisément pour ça que le décompte vit ici et non
+ * dans une écriture faite au moment du changement.
+ */
+export function hasPaidThisCombat(actor, combat) {
+  if (!actor || !combat) return false;
+  const key = String(actor.uuid ?? actor.id ?? "");
+  return !!key && paidSet(combat).includes(key);
+}
+
+/**
+ * Prélève le coût du passif porté au PREMIER tour de cet acteur dans ce
+ * combat. Sans passif porté, il n'y a rien à payer — l'emplacement vide est
+ * un choix, pas une anomalie.
+ *
+ * À appeler APRÈS la régénération de début de tour : le porteur doit
+ * encaisser sa régen avant de payer, sinon il paie sur une réserve qui n'a
+ * pas encore été rendue et le premier tour est deux fois plus cher que les
+ * autres.
+ *
+ * GM uniquement — écrire un flag de Combat depuis un client joueur est
+ * refusé par Foundry (voir la note sur budgetWrite dans macro/menu.js).
+ */
+export async function chargePassifOnFirstTurn(actor, combat) {
+  if (!game.user.isGM) return null;
+  if (!actor || !combat) return null;
+
+  const key = String(actor.uuid ?? actor.id ?? "");
+  if (!key) return null;
+
+  const paid = paidSet(combat);
+  if (paid.includes(key)) return null;          // déjà payé ce combat
+
+  // Le marquage précède le prélèvement : l'acteur est réputé « passé par
+  // ici » même s'il ne porte rien, sinon on rejouerait ce test à chacun de
+  // ses tours pour rien.
+  await combat.setFlag(FLAG_SCOPE, "passifPaid", [...paid, key]);
+
+  const item = equippedPassif(actor);
+  if (!item) return null;
+  return chargePassif(actor, item);
+}

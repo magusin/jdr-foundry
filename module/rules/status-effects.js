@@ -2,6 +2,7 @@
 
 import { mitigateDamage } from "./combat.js";
 import { hpSecret } from "./chat-visibility.js";
+import { talentStates, isPassif, equippedPassif } from "./loadout.js";
 
 /**
  * Structure stockée dans actor.system.etatsActifs:
@@ -511,9 +512,18 @@ const KEY_TO_BUCKET = {
  */
 function passiveSpellStates(actor) {
   const out = [];
+  // Un seul passif porté à la fois (loadout.js). Avant l'existence de
+  // l'emplacement, TOUS les sorts passifs du grimoire comptaient en même
+  // temps et le bouton « désactiver » du menu de combat n'y changeait rien —
+  // il écrivait `system.aura.active` que personne ne lisait.
+  const worn = equippedPassif(actor);
   for (const it of (actor.items ?? [])) {
-    if (it?.type !== "spell") continue;
-    if (String(it.system?.speed) !== "passif") continue;
+    if (!isPassif(it)) continue;
+    // Repli pour les données antérieures à l'emplacement : si aucun passif
+    // n'est marqué porté, l'ancien comportement s'applique, sinon un
+    // personnage perdrait ses bonus au chargement du monde sans comprendre
+    // pourquoi. Le premier équipement le fait basculer sur la nouvelle règle.
+    if (worn && it.id !== worn.id) continue;
 
     for (const fx of (Array.isArray(it.system?.effectsUI) ? it.system.effectsUI : [])) {
       const mods = {};
@@ -533,7 +543,12 @@ function passiveSpellStates(actor) {
 export function sumActiveEffectMods(actor) {
   const states = [
     ...(Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : []),
-    ...passiveSpellStates(actor)
+    ...passiveSpellStates(actor),
+    // Le Talent porté (loadout.js) passe par le même chemin que les sorts
+    // passifs, et pour la même raison : ses mods sont recalculés ici à
+    // chaque prepareDerivedData, donc ils suivent l'équipement sans qu'aucun
+    // état n'ait à être posé puis retiré.
+    ...talentStates(actor)
   ];
 
   const out = {

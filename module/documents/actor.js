@@ -4,6 +4,7 @@ import {
   DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
 } from "../rules/damage-types.js";
 import { BASE_VITESSE } from "../rules/base-speed.js";
+import { isPassif, equippedPassif } from "../rules/loadout.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -101,6 +102,7 @@ function sumBonuses(actor) {
   };
 
   const isMonster = actor.type === "monster";
+  const wornPassif = equippedPassif(actor);
 
   for (const item of actor.items) {
     const t = item.type;
@@ -109,9 +111,15 @@ function sumBonuses(actor) {
     // ✅ Monstres: pas d'équipement weapon/armor/relic (on ignore)
     const isEquip = !isMonster && (t === "weapon" || t === "armor" || t === "relic") && !!sys.equipe;
 
-    // ✅ PJ + Monstres: sorts passifs (buff/aura) actifs => pris en compte
-    // Sort passif : speed="passif" OU aura.active (rétrocompat)
-    const isPassiveSpell = (t === "spell") && (sys?.speed === "passif" || !!sys?.aura?.active);
+    // ✅ PJ + Monstres: le sort passif PORTÉ (un seul emplacement, loadout.js)
+    // Repli pour les données antérieures à l'emplacement : tant qu'aucun
+    // passif n'est marqué porté, tous comptent comme avant — sinon un
+    // personnage perdrait ses bonus au chargement du monde. Le premier
+    // équipement fait basculer sur la nouvelle règle.
+    // `aura.active` reste accepté pour les sorts non passifs qui s'en
+    // servaient comme bascule (rétrocompat).
+    const isPassiveSpell = (t === "spell")
+      && (isPassif(item) ? (!wornPassif || item.id === wornPassif.id) : !!sys?.aura?.active);
 
     if (!isEquip && !isPassiveSpell) continue;
 

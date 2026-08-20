@@ -198,7 +198,8 @@
       "consumable",
       "spell",
       "recipe",
-      "quest"
+      "quest",
+      "talent"
     ],
     "templates": {
       "baseItem": {
@@ -396,6 +397,14 @@
       "effectsUI": [],
       "description": "",
       "tag": "neutre"
+    },
+    "talent": {
+      "templates": [
+        "baseItem",
+        "details"
+      ],
+      "equipe": false,
+      "mods": []
     },
     "recipe": {
       "templates": [

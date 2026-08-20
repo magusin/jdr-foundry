@@ -20,6 +20,7 @@
   "TYPES.Item.spell": "Sort",
   "TYPES.Item.recipe": "Recette",
   "TYPES.Item.quest": "Quête",
+  "TYPES.Item.talent": "Talent",
 
   "TYPES.RegionBehavior.terrainDifficile": "Terrain difficile",
   "TYPES.RegionBehavior.vegetationDense": "Végétation dense",

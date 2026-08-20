@@ -130,6 +130,16 @@ const SYNC_FIELDS = {
   loot: [
     "system.poids", "system.prix", "system.vendeurAssocie",
     "system.lore", "system.description", "system.effet"
+  ],
+  // Talent : seuls ses bonus/malus et son texte sont de la définition.
+  // `system.equipe` est EXCLU comme partout ailleurs, et ici l'exclusion est
+  // particulièrement critique : ce champ est l'emplacement porté (voir
+  // rules/loadout.js), donc le synchroniser équiperait ou déséquiperait le
+  // talent chez TOUS les personnages qui en ont une copie dès qu'un seul
+  // d'entre eux change le sien.
+  talent: [
+    "system.poids", "system.prix", "system.vendeurAssocie",
+    "system.lore", "system.description", "system.mods"
   ]
 };
 
