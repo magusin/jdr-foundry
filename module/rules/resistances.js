@@ -46,7 +46,10 @@ export function gearStateResistRows(list) {
 function getGearResistances(actor) {
   const list = [];
   for (const it of actor.items) {
-    if (it.type !== "weapon" && it.type !== "armor" && it.type !== "relic") continue;
+    // Le TALENT porté accorde des résistances aux états comme une pièce
+    // d'équipement (rules/loadout.js). Son marqueur est le même champ
+    // `system.equipe`, donc le test d'équipement ci-dessous vaut pour lui.
+    if (!["weapon", "armor", "relic", "talent"].includes(it.type)) continue;
     if (!it.system?.equipe) continue;
     const res = Array.isArray(it.system?.resistances) ? it.system.resistances : [];
     list.push(...res);

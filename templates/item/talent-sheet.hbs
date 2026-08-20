@@ -79,6 +79,79 @@
       {{/if}}
     </div>
 
+    {{!-- Deux familles de résistances, à ne pas confondre : celle-ci réduit
+          les DÉGÂTS reçus d'un type, la suivante agit sur la durée et le
+          tick des ÉTATS. Voir damage-types.js vs resistances.js. --}}
+    <div class="card">
+      <h2>Résistances aux dégâts (par type)</h2>
+      {{#if canEdit}}
+        <div class="rpg-resist-elem-grid">
+          {{#each resistElemRows as |r|}}
+          <div class="rpg-resist-elem-cell">
+            <label title="Réduction des dégâts de type {{r.label}} tant que le talent est porté. Négatif = vulnérabilité.">{{r.label}}</label>
+            <div class="rpg-resist-elem-input">
+              <input type="number" name="system.resistancesElem.{{r.key}}" value="{{r.value}}" min="-100" max="100" step="5"/>
+              <span>%</span>
+            </div>
+          </div>
+          {{/each}}
+        </div>
+        <div style="font-size:11px;opacity:.7;margin-top:4px">
+          <b>100 %</b> = immunité, valeur <b>négative</b> = vulnérabilité (dégâts augmentés).
+          C'est là qu'un talent « Peau d'écailles » (+feu) ou « Sang vif » (−glace) se règle.
+        </div>
+      {{else}}
+        {{#if resistElemActive.length}}
+        <div class="rpg-resist-elem-read">
+          {{#each resistElemActive as |r|}}
+          <span class="rpg-resist-elem-chip {{#if r.isWeak}}is-weak{{else}}is-resist{{/if}}">{{r.text}}</span>
+          {{/each}}
+        </div>
+        {{else}}
+        <div style="font-size:11px;opacity:.7">Aucune résistance aux dégâts.</div>
+        {{/if}}
+      {{/if}}
+    </div>
+
+    {{#if canEdit}}
+    <div class="card">
+      <h2>Résistances aux états</h2>
+      <div class="rpg-resistances">
+        {{#each system.resistances as |r idx|}}
+        <div class="resistance-row" data-idx="{{idx}}" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;flex-wrap:wrap">
+          <select name="system.resistances.{{idx}}.tag" style="flex:1.5">
+            {{#each @root.EFFECT_TAGS as |label tag|}}
+              <option value="{{tag}}" {{#if (eq r.tag tag)}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+          <select name="system.resistances.{{idx}}.effectKey" style="flex:1.5;font-size:11px"
+            title="Vide = tous les effets du type choisi ci-contre. Sinon, un effet précis du catalogue.">
+            <option value="">— Tous les effets de ce type —</option>
+            {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+            <optgroup label="{{gLabel}}">
+              {{#each group as |e|}}
+              <option value="{{e.value}}" {{#if (eq r.effectKey e.value)}}selected{{/if}}>{{e.label}}</option>
+              {{/each}}
+            </optgroup>
+            {{/each}}
+          </select>
+          <label style="font-size:11px;white-space:nowrap"
+            title="Tours retirés à l'effet reçu. POSITIF = il dure moins longtemps (résistance) ; NÉGATIF = il dure plus longtemps (vulnérabilité).">Durée −<input type="number" name="system.resistances.{{idx}}.durationReduction" value="{{r.durationReduction}}" step="1" style="width:50px"/></label>
+          <label style="font-size:11px;white-space:nowrap"
+            title="Pourcentage retiré aux dégâts par tour de l'effet reçu. POSITIF = il fait moins mal ; NÉGATIF = il fait plus mal.">DOT −<input type="number" name="system.resistances.{{idx}}.dotReductionPct" value="{{r.dotReductionPct}}" min="-100" max="100" step="5" style="width:50px"/>%</label>
+          <label style="font-size:11px;white-space:nowrap"><input type="checkbox" name="system.resistances.{{idx}}.immune" {{#if r.immune}}checked{{/if}}/> Immunité</label>
+          <button type="button" data-action="removeResistance" data-idx="{{idx}}" title="Retirer">✕</button>
+        </div>
+        {{/each}}
+      </div>
+      <button type="button" data-action="addResistance" style="margin-top:4px">+ Ajouter une résistance</button>
+      <div style="font-size:11px;opacity:.7;margin-top:4px">
+        Agit sur la <b>durée</b> et les <b>dégâts par tour</b> des états reçus — pas sur les dégâts directs.
+        Une valeur <b>négative</b> est une vulnérabilité : l'état dure plus longtemps ou fait plus mal.
+      </div>
+    </div>
+    {{/if}}
+
     <div class="card">
       <h2>Description</h2>
       {{#if canEdit}}

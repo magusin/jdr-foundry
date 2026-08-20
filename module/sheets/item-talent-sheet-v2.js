@@ -20,6 +20,8 @@ import {
   applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions
 } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import { normalizeResistMap, resistRows, nonZeroResistRows } from "../rules/damage-types.js";
+import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -108,7 +110,9 @@ export class RPGTalentSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     },
     actions: {
       addMod:    async function (e) { await this._actionAddMod(e); },
-      removeMod: async function (e) { await this._actionRemoveMod(e); }
+      removeMod: async function (e) { await this._actionRemoveMod(e); },
+      addResistance:    async function (e) { await this._actionAddResistance(e); },
+      removeResistance: async function (e) { await this._actionRemoveResistance(e); }
     }
   }, { inplace: false });
 
@@ -135,6 +139,19 @@ export class RPGTalentSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       label: g.label,
       options: Object.entries(g.stats).map(([value, label]) => ({ value, label }))
     }));
+    // Résistances — mêmes deux familles qu'un équipement, et pour la même
+    // raison : un Talent est porté en permanence, donc il doit pouvoir
+    // accorder les deux. `resistancesElem` réduit les DÉGÂTS d'un type,
+    // `resistances[]` agit sur la durée et le tick des ÉTATS. Les confondre
+    // est l'erreur classique du système (voir damage-types.js vs
+    // resistances.js).
+    ctx.system.resistancesElem = normalizeResistMap(ctx.system.resistancesElem);
+    ctx.resistElemRows   = resistRows(ctx.system.resistancesElem);
+    ctx.resistElemActive = nonZeroResistRows(ctx.system.resistancesElem);
+    ctx.system.resistances = Array.isArray(ctx.system.resistances) ? ctx.system.resistances : [];
+    ctx.EFFECT_TAGS = { "": "(N'importe quel type — filtre seulement par nom d'effet)", ...EFFECT_TAGS };
+    ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "label" });
+
     ctx.summary = talentSummary(item);
     ctx.canEdit = this.isEditable;
     ctx.isGM = game.user.isGM;
@@ -167,8 +184,33 @@ export class RPGTalentSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
    * et `Array.isArray` échoue silencieusement partout en aval.
    */
   async _onFormSubmitV2(event, form, formData, options) {
-    const data = foundry.utils.expandObject(formData.object ?? {});
-    const patch = foundry.utils.flattenObject(data);
+    const expanded = foundry.utils.expandObject(formData.object ?? {});
+
+    // Résistances aux états : Foundry rend un objet à clés numériques quand
+    // les index ont un trou, pas un tableau — même normalisation que la fiche
+    // d'armure, sans laquelle Array.isArray échoue silencieusement partout en
+    // aval.
+    const resRaw = expanded?.system?.resistances;
+    if (resRaw && !Array.isArray(resRaw)) expanded.system.resistances = Object.values(resRaw);
+    if (Array.isArray(expanded?.system?.resistances)) {
+      for (const r of expanded.system.resistances) {
+        if (!r) continue;
+        r.tag = String(r.tag ?? "").trim();
+        r.durationReduction = n(r.durationReduction, 0);
+        // Négatif = vulnérabilité, bornée comme côté moteur
+        // (computeResistanceFor clampe déjà la somme à [-100, 100]).
+        r.dotReductionPct = Math.min(100, Math.max(-100, n(r.dotReductionPct, 0)));
+        r.immune = !!r.immune;
+      }
+    }
+
+    if (expanded?.system?.resistancesElem) {
+      expanded.system.resistancesElem = normalizeResistMap(expanded.system.resistancesElem);
+    }
+
+    const patch = foundry.utils.flattenObject(expanded);
+    // Les lignes de mods n'ont pas de `name=` : elles sont relues du DOM en
+    // bloc et réécrites entières (voir _collectMods).
     delete patch["system.mods"];
     patch["system.mods"] = this._collectMods();
     await this.document.update(patch);
@@ -186,6 +228,23 @@ export class RPGTalentSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const mods = this._collectMods();
     if (Number.isInteger(idx) && idx >= 0 && idx < mods.length) mods.splice(idx, 1);
     await this.document.update({ "system.mods": mods });
+    this.render();
+  }
+
+  async _actionAddResistance() {
+    const list = Array.isArray(this.document.system?.resistances)
+      ? foundry.utils.deepClone(this.document.system.resistances) : [];
+    list.push({ tag: "", effectKey: "", durationReduction: 0, dotReductionPct: 0, immune: false });
+    await this.document.update({ "system.resistances": list });
+    this.render();
+  }
+
+  async _actionRemoveResistance(event) {
+    const idx = Number(event?.target?.closest("[data-idx]")?.dataset?.idx);
+    const list = Array.isArray(this.document.system?.resistances)
+      ? foundry.utils.deepClone(this.document.system.resistances) : [];
+    if (Number.isInteger(idx) && idx >= 0 && idx < list.length) list.splice(idx, 1);
+    await this.document.update({ "system.resistances": list });
     this.render();
   }
 

@@ -242,6 +242,7 @@
           "manaMax": 0,
           "fatigueMax": 0,
           "vitesse": 0,
+          "initiativeMod": 0,
           "podsMax": 0,
           "armureFixe": 0,
           "resistanceFixe": 0,
@@ -404,7 +405,20 @@
         "details"
       ],
       "equipe": false,
-      "mods": []
+      "mods": [],
+      "resistancesElem": {
+        "physique": 0,
+        "magique": 0,
+        "feu": 0,
+        "eau": 0,
+        "eclair": 0,
+        "glace": 0,
+        "air": 0,
+        "terre": 0,
+        "lumiere": 0,
+        "obscurite": 0
+      },
+      "resistances": []
     },
     "recipe": {
       "templates": [

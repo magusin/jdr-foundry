@@ -139,7 +139,8 @@ const SYNC_FIELDS = {
   // d'entre eux change le sien.
   talent: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.lore", "system.description", "system.mods"
+    "system.lore", "system.description", "system.mods",
+    "system.resistancesElem", "system.resistances"
   ]
 };
 

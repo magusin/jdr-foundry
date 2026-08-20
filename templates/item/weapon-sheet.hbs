@@ -321,6 +321,8 @@
           <div class="mm-line"><span class="mm-label" title="Points de vie regagnés en plus à chaque tour. Valeur ferme, en entier : +1 = un PV de plus par tour.">Régén PV</span><input class="mm-input" type="number" name="system.bonus.regenPv" value="{{system.bonus.regenPv}}" step="1"/></div>
           <div class="mm-line"><span class="mm-label" title="Mana regagné en plus à chaque tour. Valeur ferme, en entier.">Régén Mana</span><input class="mm-input" type="number" name="system.bonus.regenMana" value="{{system.bonus.regenMana}}" step="1"/></div>
           <div class="mm-line"><span class="mm-label">Vitesse</span><input class="mm-input" type="number" name="system.bonus.vitesse" value="{{system.bonus.vitesse}}"/></div>
+          <div class="mm-line"><span class="mm-label" title="Modifie le score d'initiative du porteur. Positif = agit plus tôt dans le tour.">Initiative</span><input class="mm-input" type="number" name="system.bonus.initiativeMod" value="{{system.bonus.initiativeMod}}"/></div>
+          <div class="mm-line"><span class="mm-label" title="Capacité de transport du porteur, en pods.">Pods max</span><input class="mm-input" type="number" name="system.bonus.podsMax" value="{{system.bonus.podsMax}}"/></div>
 
           <div class="mm-line"><span class="mm-label">Armure fixe</span><input class="mm-input" type="number" name="system.bonus.armureFixe" value="{{system.bonus.armureFixe}}"/></div>
           <div class="mm-line"><span class="mm-label">Résistance fixe</span><input class="mm-input" type="number" name="system.bonus.resistanceFixe" value="{{system.bonus.resistanceFixe}}"/></div>
@@ -329,6 +331,7 @@
 
           <div class="mm-line"><span class="mm-label">Toucher physique</span><input class="mm-input" type="number" name="system.bonus.toucherPhysique" value="{{system.bonus.toucherPhysique}}"/></div>
           <div class="mm-line"><span class="mm-label">Toucher magique</span><input class="mm-input" type="number" name="system.bonus.toucherMagique" value="{{system.bonus.toucherMagique}}"/></div>
+          <div class="mm-line"><span class="mm-label" title="Modifie le TN des jets de retrait d'état pour le porteur (négatif = plus facile à se défaire des états).">Mod. Retrait État <span style="opacity:.5;font-size:10px">(+/- TN)</span></span><input class="mm-input" type="number" name="system.bonus.retraitMod" value="{{system.bonus.retraitMod}}" placeholder="0"/></div>
         </div>
       {{else}}
         {{#if displayWeaponBonuses.length}}
