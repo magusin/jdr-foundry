@@ -36,7 +36,7 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
         <div>
-          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il l'a dans son grimoire (dégâts par tour et aura non gérés en passif).">Vitesse</label>
+          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il est le passif PORTÉ (onglet Talents — un seul à la fois, en avoir plusieurs dans son grimoire n'en active aucun de plus). Son coût en mana est prélevé une fois par combat, au premier tour. Dégâts par tour et aura non gérés en passif.">Vitesse</label>
           {{#if canEdit}}
           <select name="system.speed" style="width:100%">
             <option value="passif" {{#if (eq system.speed "passif")}}selected{{/if}}>Passif</option>

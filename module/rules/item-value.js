@@ -1010,7 +1010,22 @@ export function computeSpellValue(item, opts = {}) {
   // ── Coûts ─────────────────────────────────────────────────────────────
   const manaCost = Math.max(0, n(sys.coutMana, 0));
   const fatigueCost = Math.max(0, n(sys.fatigueCost, 1));
-  if (!isPassif) {
+  if (isPassif) {
+    // Un passif ne coûte AUCUNE fatigue — il n'est jamais déclaré, donc aucune
+    // action n'est consommée. Son mana, lui, est bien prélevé : une fois par
+    // combat, au premier tour de son porteur, après la régénération
+    // (chargePassifOnFirstTurn, loadout.js). Le compter zéro fois, comme
+    // avant, pesait un passif à 3 mana exactement comme un passif gratuit.
+    //
+    // Il entre donc UNE seule fois dans le total, lequel est ensuite étalé sur
+    // REF_TURNS (voir « Disponibilité » plus bas) : le coût se répartit sur le
+    // combat exactement comme le bénéfice qu'il paie, ce qui est le bon
+    // rapport puisque les deux valent « pour tout le combat ».
+    if (manaCost) {
+      add("Coût en mana (une fois par combat)", `−${round1(manaCost)}`,
+          -manaCost * STAT_WEIGHTS.manaMax);
+    }
+  } else {
     if (manaCost) add("Coût en mana", `−${round1(manaCost)}`, -manaCost * STAT_WEIGHTS.manaMax);
     if (fatigueCost) add("Coût en fatigue", `−${round1(fatigueCost)}`, -fatigueCost * STAT_WEIGHTS.fatigueMax);
   }
