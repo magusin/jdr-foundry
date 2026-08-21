@@ -471,7 +471,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       s._ui.cdRestant = cdRestant;
       s._ui.cdMax = Number(doc.system?.cooldown?.max ?? doc.system?.recharge?.max ?? 0) || 0;
 
-      s._ui.isAura = !!(doc.system?.aura?.active || doc.system?.aura?.enabled);
+      // Une aura vient d'un EFFET (fx.isAura), jamais du bloc hérité
+      // system.aura — que setEquippedPassif utilise comme marqueur
+      // d'équipement, si bien que tout passif porté se disait « aura ».
+      s._ui.isAura = s._ui.auraEnabled;
     }
 
     ctx.actor = actor;
@@ -1598,7 +1601,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       return {
         id: it.id, name: it.name, img: it.img,
         cost: passifManaCost(it),
-        summary: buildSpellEffectsPreview(it),
+        // Ce que le passif donne, ligne par ligne. L'appel se faisait avec
+        // l'item nu alors que la signature attend { actor, item }, et son
+        // retour est un TABLEAU : le résumé rendu valait « [object Object] »
+        // au mieux, rien la plupart du temps — l'onglet ne disait donc jamais
+        // ce qu'un passif apporte, alors que c'est la seule information qui
+        // permet d'en choisir un.
+        effects: buildSpellEffectsPreview({ actor, item: it }),
         description: String(it.system?.description ?? ""),
         cooldownLeft: left,
         locked: !!combat && left > 0 && !worn,

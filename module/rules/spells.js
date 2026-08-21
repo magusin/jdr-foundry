@@ -9,6 +9,8 @@ import {
   collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
+import { findStateSlot } from "./status-effects.js";
+import { dropPassifOnStateLabel } from "./loadout.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -784,10 +786,16 @@ export function buildSpellUI({ actor, item }) {
   // de la liste de sorts se lisait pourtant uniquement sur lui : elle
   // manquait donc sur tous les sorts d'aura créés depuis la refonte.
   const fxAura = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).find(fx => fx?.isAura) ?? null;
-  const auraEnabled = !!fxAura || !!(sys.aura?.enabled || sys.aura?.active);
-  const auraMin = fxAura ? n(fxAura.auraMin, 0) : n(sys.aura?.range?.min, 0);
-  const auraMax = fxAura ? n(fxAura.auraMax, 0) : n(sys.aura?.range?.max, 0);
-  const auraTarget = fxTargetLabel(fxAura ? str(fxAura.auraTarget, "allies") : str(sys.aura?.target, "allies"));
+  // …et UNIQUEMENT de là. Lire aussi `sys.aura.active`/`enabled` en repli
+  // annonçait une aura sur tout PASSIF PORTÉ : setEquippedPassif (loadout.js)
+  // écrit `system.aura.active` en même temps que `system.equipe`, pour aligner
+  // un champ hérité qui servait autrefois d'interrupteur. La ligne
+  // « 🌀 Aura 0–3 (alliés) » affichée sous un passif sans la moindre case Aura
+  // cochée venait de là — les bornes étant celles du gabarit, pas du sort.
+  const auraEnabled = !!fxAura;
+  const auraMin = n(fxAura?.auraMin, 0);
+  const auraMax = n(fxAura?.auraMax, 0);
+  const auraTarget = fxTargetLabel(str(fxAura?.auraTarget, "allies"));
 
   const _manaCostBase  = n(sys.coutMana, 0);
   const _tag           = sys.tag ?? "neutre";
@@ -1044,15 +1052,27 @@ async function upsertState(actor, state) {
 
   const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
   const id = String(adjusted.id || foundry.utils.randomID());
-  const idx = list.findIndex(e => String(e.id) === id);
   const normalized = normalizeState(adjusted, id);
-  if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
+  // Même id, sinon même LIBELLÉ : un état homonyme déjà présent est remplacé
+  // plutôt que doublé, meilleur ou non (voir findStateSlot). L'ancienne
+  // entrée est écrasée en entier — un merge aurait laissé traîner les champs
+  // de l'effet précédent (résistance accordée, bonus d'attaque…) qui n'ont
+  // aucune raison de survivre à son remplacement.
+  const idx = findStateSlot(list, id, normalized.label);
+  const replaced = idx >= 0 ? String(list[idx]?.label ?? "") : null;
+  if (idx >= 0) list[idx] = normalized;
   else list.push(normalized);
 
   await actor.update({ "system.etatsActifs": list });
+
+  // Un passif accordant le même libellé n'est pas dans cette liste : il faut
+  // le déposer explicitement, sinon ses mods continueraient de s'ajouter
+  // par-dessus, invisibles.
+  const droppedPassif = await dropPassifOnStateLabel(actor, normalized.label);
+
   if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
 
-  return { resisted: false, resistanceInfo: adjusted.resistanceInfo };
+  return { resisted: false, resistanceInfo: adjusted.resistanceInfo, replaced, droppedPassif };
 }
 
 /* ------------------------------------------------------------ */
@@ -1730,7 +1750,13 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
         if (ampInfo?.dotBonusPct)   ampBits.push(`puissance ${ampInfo.dotBonusPct > 0 ? "+" : ""}${ampInfo.dotBonusPct}%`);
         if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
         const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
-        fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
+        // Ce qui a été remplacé se dit : sans ça, un état homonyme écrasé
+        // (ou pire, un passif déposé) disparaît sans trace et se lit comme
+        // un bug côté joueur.
+        const replTxt = resistResult?.droppedPassif
+          ? ` <span style="opacity:.8">· 🔮 remplace le passif « ${resistResult.droppedPassif} » (emplacement libéré)</span>`
+          : (resistResult?.replaced ? ` <span style="opacity:.8">· ♻️ remplace « ${resistResult.replaced} »</span>` : "");
+        fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}${replTxt}`);
       }
     }
 

@@ -540,6 +540,29 @@ function passiveSpellStates(actor) {
   return out;
 }
 
+/**
+ * Emplacement qu'un état ENTRANT doit occuper dans `system.etatsActifs`.
+ *
+ * L'id d'abord — deux poses de la même source se rafraîchissent —, puis le
+ * LIBELLÉ, à la casse près. Deux « Légèreté » venus de deux sorts différents
+ * portaient jusqu'ici deux id distincts : la cible se retrouvait avec deux
+ * lignes homonymes, deux décomptes indépendants et leurs bonus additionnés,
+ * sans que rien à l'écran ne le laisse deviner. Le dernier posé gagne,
+ * meilleur ou non — c'est la règle de table, et c'est au joueur de regarder
+ * avant de lancer.
+ *
+ * @returns {number} index à écraser, ou -1 pour ajouter à la suite.
+ */
+export function findStateSlot(list, id, label) {
+  const arr = Array.isArray(list) ? list : [];
+  const byId = arr.findIndex(st => String(st?.id ?? "") === String(id ?? ""));
+  if (byId >= 0) return byId;
+
+  const key = String(label ?? "").trim().toLowerCase();
+  if (!key) return -1;
+  return arr.findIndex(st => String(st?.label ?? "").trim().toLowerCase() === key);
+}
+
 export function sumActiveEffectMods(actor) {
   const states = [
     ...(Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : []),

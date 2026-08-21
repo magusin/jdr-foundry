@@ -199,6 +199,39 @@ export async function setEquippedPassif(actor, itemId = null, { force = false } 
   return chosen;
 }
 
+/**
+ * Dépose le Passif porté si l'un de ses effets porte le libellé d'un état
+ * qu'on vient de poser sur cet acteur.
+ *
+ * Un passif n'est PAS un état : `passiveSpellStates` (status-effects.js) en
+ * relit les mods à chaque recalcul, sans jamais rien écrire dans
+ * `etatsActifs`. Un « Légèreté » posé par le sort d'un autre ne peut donc
+ * pas l'écraser comme il écrase un état homonyme — les deux se
+ * cumuleraient, l'un visible et l'autre non. La règle de table est que le
+ * dernier posé gagne : le passif est donc réellement retiré, et
+ * l'emplacement repasse à « Aucun passif » sur la fiche, là où le porteur
+ * peut le voir et le reprendre.
+ *
+ * `force: true` : le retrait ne doit jamais être refusé pour cause de
+ * recharge — c'est une dépose, pas une prise.
+ *
+ * @returns {Promise<string|null>} nom du passif déposé, ou null.
+ */
+export async function dropPassifOnStateLabel(actor, label) {
+  const key = String(label ?? "").trim().toLowerCase();
+  if (!actor || !key) return null;
+
+  const worn = equippedPassif(actor);
+  if (!worn) return null;
+
+  const fxList = Array.isArray(worn.system?.effectsUI) ? worn.system.effectsUI : [];
+  const hit = fxList.some(fx => String(fx?.label ?? "").trim().toLowerCase() === key);
+  if (!hit) return null;
+
+  await setEquippedPassif(actor, null, { force: true });
+  return worn.name;
+}
+
 /* ------------------------------------------------------------------ */
 /* Recharge d'un passif                                                */
 /* ------------------------------------------------------------------ */
