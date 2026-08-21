@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/turn-effects.js
 
 import { hpSecret } from "./chat-visibility.js";
+import { passifStates } from "./loadout.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -120,7 +121,16 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   await decCooldowns(actor);
 
   // 2) États + collecte DOT
-  const { changed, next, removedAuraSource, totalDot, totalFatigueDot } = tickStates(actor);
+  let { changed, next, removedAuraSource, totalDot, totalFatigueDot } = tickStates(actor);
+
+  // Le passif porté n'écrit aucun état (loadout.js) : son « par tour » doit
+  // donc être ajouté ici, sinon un passif qui régénère ou qui brûle son
+  // porteur se saisissait sur la fiche et ne se produisait jamais. Rien à
+  // décompter ni à réécrire — il vaut tant que le passif est porté.
+  for (const st of passifStates(actor)) {
+    totalDot += n(st?.dot?.perTick, 0);
+    totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+  }
 
   // 3) Applique DOT avant la mise à jour des états
   const updates = {};

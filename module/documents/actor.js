@@ -4,7 +4,7 @@ import {
   DAMAGE_TYPE_KEYS, emptyResistMap, normalizeResistMap, sumResistMaps, isDamageType
 } from "../rules/damage-types.js";
 import { BASE_VITESSE } from "../rules/base-speed.js";
-import { isPassif, equippedPassif } from "../rules/loadout.js";
+import { isPassif, equippedPassif, effectiveStates, passifFallbackAllowed } from "../rules/loadout.js";
 
 function clamp(v, min, max) {
   v = Number(v) || 0;
@@ -125,14 +125,16 @@ function sumBonuses(actor) {
     const isWornTalent = t === "talent" && !!sys.equipe;
 
     // ✅ PJ + Monstres: le sort passif PORTÉ (un seul emplacement, loadout.js)
-    // Repli pour les données antérieures à l'emplacement : tant qu'aucun
-    // passif n'est marqué porté, tous comptent comme avant — sinon un
-    // personnage perdrait ses bonus au chargement du monde. Le premier
-    // équipement fait basculer sur la nouvelle règle.
+    // Le repli « aucun porté ⇒ tous comptent » ne vaut plus que pour un
+    // acteur sans emplacement à l'écran — un monstre. Voir
+    // passifFallbackAllowed : sur un personnage, il faisait de
+    // « — Aucun passif — » l'exact contraire de ce qu'il annonce.
     // `aura.active` reste accepté pour les sorts non passifs qui s'en
     // servaient comme bascule (rétrocompat).
     const isPassiveSpell = (t === "spell")
-      && (isPassif(item) ? (!wornPassif || item.id === wornPassif.id) : !!sys?.aura?.active);
+      && (isPassif(item)
+            ? (item.id === wornPassif?.id || (!wornPassif && passifFallbackAllowed(actor)))
+            : !!sys?.aura?.active);
 
     if (!isEquip && !isPassiveSpell && !isWornTalent) continue;
 
@@ -206,7 +208,9 @@ function sumBonuses(actor) {
  */
 function sumStateResistances(actor) {
   const out = emptyResistMap();
-  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  // Le passif porté compte comme un état actif : ses résistances ne sont
+  // écrites nulle part, elles sont recalculées (effectiveStates, loadout.js).
+  const states = effectiveStates(actor);
   for (const st of states) {
     const r = st?.resistanceDamage;
     if (!r || typeof r !== "object") continue;

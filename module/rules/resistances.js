@@ -11,6 +11,7 @@ import { getWeatherModifierFor } from "./weather-library.js";
 import { resistTextParts } from "./damage-types.js";
 import { normalizeEffectTag } from "./effect-library.js";
 import { writeStateOn } from "./status-effects.js";
+import { effectiveStates } from "./loadout.js";
 
 /**
  * Lignes lisibles des résistances aux ÉTATS portées par un objet
@@ -81,7 +82,8 @@ export function actorStateResistRows(actor) {
  */
 function getStateResistances(actor) {
   const list = [];
-  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  // Passif porté compris — voir effectiveStates (loadout.js).
+  const states = effectiveStates(actor);
   for (const st of states) {
     if (st?.resistance && typeof st.resistance === "object") list.push(st.resistance);
   }

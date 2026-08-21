@@ -2100,7 +2100,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     // Id, sinon LIBELLÉ : un effet du même nom déjà présent est remplacé,
     // jamais empilé. Même règle et même fonction que les sorts, les armes et
     // les auras — voir findStateSlot (status-effects.js).
-    const idx = findStateSlot(list, id, state.label);
+    const idx = findStateSlot(list, id, state.label, state);
 
     const finalId = idx >= 0 ? list[idx].id : id;
     const normalized = this._normalizeState({ ...state, id: finalId });

@@ -2,7 +2,7 @@
 
 import { mitigateDamage } from "./combat.js";
 import { hpSecret } from "./chat-visibility.js";
-import { talentStates, isPassif, equippedPassif, dropPassifOnStateLabel } from "./loadout.js";
+import { talentStates, passifStates, dropPassifOnStateLabel } from "./loadout.js";
 
 /**
  * Structure stockée dans actor.system.etatsActifs:
@@ -508,49 +508,14 @@ const KEY_TO_BUCKET = {
 };
 
 /**
- * Effets d'un sort PASSIF, présentés comme des états permanents.
+ * Effets du sort PASSIF porté, vus comme des états.
  *
- * Un sort dont la Vitesse vaut « Passif » ne se déclare jamais (declareSpell
- * le refuse) : il est censé agir en permanence sur son porteur. Or seul
- * `system.bonus` (grille de la fiche d'ARME/ARMURE, absente de la fiche de
- * sort) était lu pour lui — les bonus/malus saisis dans ses effets
- * secondaires, eux, ne partaient nulle part. « Passif » était donc une option
- * proposée par la fiche qui ne produisait strictement rien.
- *
- * On ne fabrique aucun document : ces mods sont recalculés à chaque
- * prepareDerivedData, donc ils apparaissent et disparaissent avec le sort,
- * sans état à synchroniser. Un DOT/HOT par tour ou une aura portés par un
- * sort passif restent, eux, non gérés (ils supposent un vrai état posé).
+ * Le contenu vit dans loadout.js, qui possède l'emplacement : ici on ne fait
+ * que le consommer pour les mods. Les autres champs (dégâts par tour, aura,
+ * résistances accordées, bonus de dégâts aux attaques) sont lus par leurs
+ * propres modules via `effectiveStates()`.
  */
-function passiveSpellStates(actor) {
-  const out = [];
-  // Un seul passif porté à la fois (loadout.js). Avant l'existence de
-  // l'emplacement, TOUS les sorts passifs du grimoire comptaient en même
-  // temps et le bouton « désactiver » du menu de combat n'y changeait rien —
-  // il écrivait `system.aura.active` que personne ne lisait.
-  const worn = equippedPassif(actor);
-  for (const it of (actor.items ?? [])) {
-    if (!isPassif(it)) continue;
-    // Repli pour les données antérieures à l'emplacement : si aucun passif
-    // n'est marqué porté, l'ancien comportement s'applique, sinon un
-    // personnage perdrait ses bonus au chargement du monde sans comprendre
-    // pourquoi. Le premier équipement le fait basculer sur la nouvelle règle.
-    if (worn && it.id !== worn.id) continue;
-
-    for (const fx of (Array.isArray(it.system?.effectsUI) ? it.system.effectsUI : [])) {
-      const mods = {};
-      for (const m of (Array.isArray(fx?.mods) ? fx.mods : [])) {
-        const stat = String(m?.stat ?? "").trim();
-        if (!stat) continue;
-        const mode = m?.mode === "pct" ? "pct" : "flat";
-        mods[stat] = mods[stat] ?? { flat: 0, pct: 0 };
-        mods[stat][mode] += Number(m?.value) || 0;
-      }
-      if (Object.keys(mods).length) out.push({ mods });
-    }
-  }
-  return out;
-}
+const passiveSpellStates = (actor) => passifStates(actor);
 
 /**
  * Emplacement qu'un état ENTRANT doit occuper dans `system.etatsActifs`.
@@ -565,14 +530,29 @@ function passiveSpellStates(actor) {
  *
  * @returns {number} index à écraser, ou -1 pour ajouter à la suite.
  */
-export function findStateSlot(list, id, label) {
+export function findStateSlot(list, id, label, incoming = null) {
   const arr = Array.isArray(list) ? list : [];
   const byId = arr.findIndex(st => String(st?.id ?? "") === String(id ?? ""));
   if (byId >= 0) return byId;
 
   const key = String(label ?? "").trim().toLowerCase();
   if (!key) return -1;
-  return arr.findIndex(st => String(st?.label ?? "").trim().toLowerCase() === key);
+
+  // Une BLESSURE et un état ne s'apparient jamais, même sous le même nom.
+  // « Saignement » existe des deux côtés : dans WOUND_LIBRARY (permanent,
+  // seul un soin du MJ l'enlève) et dans EFFECT_LIBRARY (physique,
+  // temporaire). Sans cette séparation, un coup de dague posant un
+  // saignement de 3 tours écrasait la blessure permanente, qui disparaissait
+  // à l'expiration — une guérison gratuite — et l'inverse effaçait le
+  // saignement en cours.
+  const wound = isWoundState(incoming ?? { label });
+  return arr.findIndex(st =>
+    String(st?.label ?? "").trim().toLowerCase() === key && isWoundState(st) === wound);
+}
+
+/** Une blessure localisée (wound-library.js), par opposition à un état. */
+function isWoundState(st) {
+  return String(st?.type ?? "") === "wound";
 }
 
 /**
@@ -598,7 +578,7 @@ export async function writeStateOn(actor, state, { recompute = true } = {}) {
     ? deepClone(actor.system.etatsActifs) : [];
 
   const entry = { ...state, id: String(state.id || uid()) };
-  const idx = findStateSlot(list, entry.id, entry.label);
+  const idx = findStateSlot(list, entry.id, entry.label, entry);
   const replaced = idx >= 0 ? String(list[idx]?.label ?? "") : null;
   // L'entrée entrante gagne ENTIÈREMENT, son id compris : c'est sous cet id
   // que l'appelant la retrouvera (l'annulation d'une action retire les états

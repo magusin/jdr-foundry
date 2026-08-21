@@ -10,6 +10,7 @@ import {
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
 import { writeStateOn } from "./status-effects.js";
+import { tickPerTick } from "./effect-tick.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -370,40 +371,6 @@ function summarizeModsWithKind(mods = {}) {
   else kind = "mixed"; // si tu veux éviter mixed, on le traitera comme buff (ou debuff). Ici on le garde interne.
 
   return { kind, summary };
-}
-
-/**
- * Valeur par tour d'un effet secondaire, SIGNÉE pour le moteur de tour :
- * positive = dégâts, négative = soin.
- *
- * Source : fx.tick { mode:"none"|"damage"|"heal", flat, stat, per, perStep }
- * où `flat` est toujours positif — c'est `mode` qui donne le sens.
- * Replis successifs sur les anciens formats : dot{}/hot{} séparés, puis
- * l'ancien champ unique signé damage.flat.
- */
-function tickPerTick(fx, effP) {
-  const scaled = (blk) => {
-    if (!blk) return 0;
-    const stat = String(blk.stat ?? "").trim();
-    const per = Math.max(1, n(blk.per, 10) || 10);
-    const perStep = n(blk.perStep, 0);
-    const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) * perStep : 0;
-    return n(blk.flat, 0) + bonus;
-  };
-
-  const t = fx?.tick;
-  if (t && typeof t === "object" && t.mode) {
-    if (t.mode === "none") return 0;
-    const total = Math.abs(scaled(t));
-    return t.mode === "heal" ? -total : total;
-  }
-
-  // Anciens formats
-  const dotHas = fx?.dot && (n(fx.dot.flat, 0) !== 0 || n(fx.dot.perStep, 0) !== 0);
-  const hotHas = fx?.hot && (n(fx.hot.flat, 0) !== 0 || n(fx.hot.perStep, 0) !== 0);
-  if (dotHas || hotHas) return scaled(fx.dot) - scaled(fx.hot);
-
-  return n(fx?.damage?.flat, 0);
 }
 
 function effectsForResult(item, result) {
@@ -1724,7 +1691,11 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
           continue;
         }
-        addedStatesTracker.push({ actorId: applyTo.id, stateId });
+        // L'UUID en plus de l'id : sur un monstre non lié, l'acteur
+        // synthétique du token porte le MÊME id que son prototype, donc
+        // l'annulation retirait l'état de la fiche d'origine et laissait le
+        // token avec le sien (même piège que la chaîne d'attaque).
+        addedStatesTracker.push({ actorUuid: applyTo.uuid ?? null, actorId: applyTo.id, stateId });
         const modSummary = summarizeMods(mods);
         const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? n(outgoing.duration, duration)} tours`;
         // Trace l'amplification pour que le MJ voie d'où vient le renfort

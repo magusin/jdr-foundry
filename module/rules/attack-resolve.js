@@ -88,7 +88,7 @@ function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, e
   // (findStateSlot) : un état homonyme est remplacé, jamais doublé.
   // L'entrée est écrasée en entier plutôt que fusionnée, pour ne pas
   // hériter des champs de l'effet précédent.
-  const idx = findStateSlot(states, id, label);
+  const idx = findStateSlot(states, id, label, state);
   if (idx >= 0) states[idx] = state;
   else states.push(state);
   return perTick;

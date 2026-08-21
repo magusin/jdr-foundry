@@ -17,6 +17,8 @@
 //   - tag seul        → tous les effets de cet élément
 //   - effectKey seul  → uniquement cet effet, quel que soit l'élément
 
+import { effectiveStates } from "./loadout.js";
+
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 /** Amplifications fournies par l'équipement équipé du lanceur (arme/armure/relique). */
@@ -34,7 +36,9 @@ function getGearAmplifications(actor) {
 /** Amplifications fournies par les états actifs du lanceur. */
 function getStateAmplifications(actor) {
   const list = [];
-  const states = Array.isArray(actor?.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  // Passif porté compris (effectiveStates, loadout.js) : ses effets ne sont
+  // écrits nulle part, ils sont recalculés à chaque lecture.
+  const states = effectiveStates(actor);
   for (const st of states) {
     if (st?.amplification && typeof st.amplification === "object") list.push(st.amplification);
   }

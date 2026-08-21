@@ -1,7 +1,7 @@
 // systems/rpg/module/rules/auras.js
 
 import { RPG_AURA_RENDER } from "./aura-render.js";
-import { dropPassifOnStateLabel } from "./loadout.js";
+import { dropPassifOnStateLabel, effectiveStates } from "./loadout.js";
 
 const REFRESH_DEBOUNCE_MS = 50;
 let _t = null;
@@ -221,15 +221,22 @@ function getAuraSources(tokens) {
     const a = t.actor;
     if (!a) continue;
 
-    const states = Array.isArray(a.system?.etatsActifs) ? a.system.etatsActifs : [];
+    // Les états posés PLUS ceux du passif porté : un passif d'aura n'écrit
+    // rien dans etatsActifs (loadout.js), il n'émettait donc strictement
+    // rien. On l'éteint en déposant le passif, là où un état d'aura ordinaire
+    // se supprime depuis la fiche.
+    const states = effectiveStates(a);
     for (const st of states) {
       if (!st?.isAura) continue;
 
       const max = Number(st?.aura?.max ?? 0) || 0;
       if (max <= 0) continue;
 
+      // Un état permanent n'a pas de compteur : le passif porté et une
+      // blessure s'écrivent tous deux `remaining: 0`, ce que le test « il
+      // ne reste plus rien » prenait pour une aura expirée.
       const rem = Number(st?.remaining ?? st?.duration ?? 1) || 0;
-      if (rem <= 0) continue;
+      if (!st?.permanent && rem <= 0) continue;
 
       out.push({ sourceToken: t, sourceActor: a, auraState: st });
     }
@@ -380,14 +387,21 @@ export const RPG_AURAS = {
         // portant la même aura et se tenant côte à côte se détruisaient
         // mutuellement leur source — et, tant qu'elle tenait, cumulaient
         // leurs mods avec ceux de la copie reçue.
-        const ownAuras = new Set(cur.filter(s => s?.isAura)
+        // Les auras que CET acteur émet — passif porté compris, sinon un
+        // porteur d'aura passive n'était protégé ni du remplacement ni de la
+        // copie reçue d'un homonyme.
+        const ownAuras = new Set(effectiveStates(a).filter(s => s?.isAura)
           .map(s => String(s?.label ?? "").trim().toLowerCase()));
         const kept = add.filter(s => !ownAuras.has(String(s.label ?? "").trim().toLowerCase()));
 
         const incoming = new Set(kept.map(s => String(s.label ?? "").trim().toLowerCase()));
+        // Une blessure porte le même nom qu'un état sans être le même animal
+        // (« Saignement » existe des deux côtés) : elle n'est jamais
+        // remplacée par une copie d'aura — voir findStateSlot.
         const keep = cur.filter(s =>
           s?.type !== "auraApplied" &&
-          (s?.isAura || !incoming.has(String(s?.label ?? "").trim().toLowerCase())));
+          (s?.isAura || s?.type === "wound" ||
+           !incoming.has(String(s?.label ?? "").trim().toLowerCase())));
 
         await setActorStates(a, [...keep, ...kept]);
 

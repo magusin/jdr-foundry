@@ -824,7 +824,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const id = state.id || foundry.utils.randomID();
     // Id, sinon LIBELLÉ — même règle que la fiche de personnage et que tout
     // le reste du système (findStateSlot, status-effects.js).
-    const idx = findStateSlot(list, id, state.label);
+    const idx = findStateSlot(list, id, state.label, state);
 
     const finalId = idx >= 0 ? list[idx].id : id;
     const normalized = this._normalizeState({ ...state, id: finalId });

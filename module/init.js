@@ -2040,6 +2040,11 @@ Hooks.once("init", async () => {
 
       const flat = foundry.utils.flattenObject(changed ?? {});
       const relevant = Object.keys(flat).some(k =>
+        // Équiper ou déposer un PASSIF allume ou éteint son aura : ses effets
+        // ne sont écrits nulle part, ils sont relus depuis l'emplacement
+        // (loadout.js). Sans cette clé, l'aura d'un passif ne changeait qu'au
+        // premier déplacement d'un token.
+        k === "system.equipe" ||
         k.startsWith("system.aura") ||
         k.startsWith("system.range") ||
         k.startsWith("system.effectsUI") ||

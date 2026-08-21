@@ -1,6 +1,8 @@
 // module/rules/action-budget.js
 // Budget d'actions par tour + log undo
 
+import { resolveDeclaredActor } from "./attack-declare.js";
+
 const SCOPE       = "rpg";
 const FLAG_BUDGET = "actionBudget";
 const FLAG_LOG    = "actionLog";
@@ -389,13 +391,16 @@ export async function undoAction(combat, actionId) {
   if (Array.isArray(snap.addedStates) && snap.addedStates.length) {
     // Regroupe par acteur pour ne mettre à jour chaque acteur qu'une fois
     const byActor = new Map();
-    for (const { actorId, stateId } of snap.addedStates) {
-      if (!byActor.has(actorId)) byActor.set(actorId, []);
-      byActor.get(actorId).push(stateId);
+    for (const { actorUuid, actorId, stateId } of snap.addedStates) {
+      // Clé = UUID quand on l'a : deux tokens non liés du même monstre
+      // partagent leur id, et les regrouper dessus retirait l'état du mauvais.
+      const key = actorUuid || actorId;
+      if (!byActor.has(key)) byActor.set(key, []);
+      byActor.get(key).push(stateId);
     }
-    for (const [actorId, stateIds] of byActor.entries()) {
-      const affected = game.actors.get(actorId);
-      if (!affected) { errors.push(`Acteur introuvable pour retirer un effet (${actorId})`); continue; }
+    for (const [key, stateIds] of byActor.entries()) {
+      const affected = await resolveDeclaredActor(String(key).includes(".") ? key : null, key);
+      if (!affected) { errors.push(`Acteur introuvable pour retirer un effet (${key})`); continue; }
       const next = (affected.system?.etatsActifs ?? [])
         .filter(s => !stateIds.includes(s.id));
       await affected.update({ "system.etatsActifs": next });

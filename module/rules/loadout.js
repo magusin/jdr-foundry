@@ -36,6 +36,9 @@
 // contente de masquer laisserait deux `equipe: true` en base — donc deux
 // jeux de bonus cumulés dans prepareDerivedData, silencieusement.
 
+import { normalizeAttackBonus } from "./attack-bonus.js";
+import { tickPerTick } from "./effect-tick.js";
+
 const FLAG_SCOPE = "rpg";
 
 function n(v, d = 0) {
@@ -236,6 +239,152 @@ export async function dropPassifOnStateLabel(actor, label) {
 
   await setEquippedPassif(actor, null, { force: true });
   return worn.name;
+}
+
+/* ------------------------------------------------------------------ */
+/* Les effets du passif porté, vus comme des états                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * États VIRTUELS produits par le passif porté — un par effet secondaire.
+ *
+ * Rien n'est écrit sur l'acteur : la liste est reconstruite à chaque lecture,
+ * donc elle apparaît et disparaît avec l'emplacement, sans état à
+ * synchroniser ni à nettoyer. C'est le seul point où l'on décide de ce qu'un
+ * passif porté fait réellement.
+ *
+ * Historiquement, seuls les `mods` en sortaient — et comme les cinq autres
+ * champs d'un effet ne sont lus que sur `system.etatsActifs`, tout le reste
+ * de l'éditeur d'effets était MUET sur un passif : les dégâts/soin par tour,
+ * l'aura, les deux résistances accordées et le bonus de dégâts aux attaques
+ * y étaient saisissables et n'allaient nulle part. La forme rendue ici est
+ * celle d'un vrai état (spells.js), à ceci près qu'elle n'existe qu'en
+ * mémoire ; les lecteurs passent tous par `effectiveStates()`.
+ *
+ * L'id est déterministe (`passif_<item>_<effet>`) : il sert de clé aux copies
+ * d'aura et aux états posés par un bonus d'attaque, qui doivent se
+ * rafraîchir plutôt que s'empiler.
+ */
+/**
+ * Le repli « aucun passif marqué porté ⇒ tous comptent » s'applique-t-il ?
+ *
+ * Il existait pour ne pas priver de leurs bonus les données antérieures à
+ * l'emplacement. Le problème est qu'il ne s'éteint jamais : choisir
+ * « — Aucun passif — » revenait à les rallumer TOUS, et déposer son unique
+ * passif à le garder actif indéfiniment. L'onglet Talents affiche pourtant
+ * « — Aucun passif — porté », donc l'écran disait exactement le contraire de
+ * ce que la fiche calculait.
+ *
+ * Le repli ne vaut donc plus que là où aucune interface ne permet de choisir :
+ * un MONSTRE n'a pas d'onglet Talents, ses capacités passives seraient
+ * devenues impossibles à activer. Un personnage, lui, a l'emplacement sous
+ * les yeux — au prix d'un clic pour rééquiper ce qu'il portait.
+ */
+export function passifFallbackAllowed(actor) {
+  return actor?.type !== "character";
+}
+
+export function passifStates(actor) {
+  const out = [];
+  if (!actor) return out;
+
+  // Un seul passif porté à la fois, ou aucun — voir passifFallbackAllowed
+  // pour le seul cas où « aucun » veut encore dire « tous ».
+  const worn = equippedPassif(actor);
+  const fallback = !worn && passifFallbackAllowed(actor);
+  const effP = actor.system?.derived?.effective?.principales
+            ?? actor.system?.principales ?? {};
+
+  for (const it of (actor.items ?? [])) {
+    if (!isPassif(it)) continue;
+    if (!worn && !fallback) continue;
+    if (worn && it.id !== worn.id) continue;
+
+    const fxList = Array.isArray(it.system?.effectsUI) ? it.system.effectsUI : [];
+    fxList.forEach((fx, i) => {
+      const mods = {};
+      for (const m of (Array.isArray(fx?.mods) ? fx.mods : [])) {
+        const stat = String(m?.stat ?? "").trim();
+        if (!stat) continue;
+        const mode = m?.mode === "pct" ? "pct" : "flat";
+        mods[stat] = mods[stat] ?? { flat: 0, pct: 0 };
+        mods[stat][mode] += Number(m?.value) || 0;
+      }
+      if (fx?.movementTypeGrant) mods.movementTypeGrant = fx.movementTypeGrant;
+
+      const perTick = tickPerTick(fx, effP);
+      const isAura = !!fx?.isAura;
+
+      const st = {
+        id: `passif_${it.id}_${fx?.id ?? i}`,
+        label: String(fx?.label ?? it.name ?? "Passif"),
+        type: "passifEffect",
+        sourceLabel: it.name ?? "",
+        tag: String(fx?.tag ?? "").trim() || null,
+        effectKey: String(fx?.effectKey ?? "").trim() || null,
+        isAura,
+        permanent: true,
+        duration: 0,
+        remaining: 0,
+        dot: {
+          flat: perTick, perTick,
+          formula: String(fx?.damage?.dice ?? "").trim(),
+          fatiguePerTick: Number(fx?.fatigueDot) || 0
+        },
+        mods,
+        resistance: {
+          tag: String(fx?.resistTag ?? "").trim() || null,
+          durationReduction: Number(fx?.resistDurationReduction) || 0,
+          dotReductionPct: Number(fx?.resistDotPct) || 0,
+          immune: !!fx?.resistImmune
+        },
+        resistanceDamage: {
+          tag: String(fx?.resistDamageTag ?? "").trim() || null,
+          pct: Number(fx?.resistDamagePct) || 0
+        },
+        attackBonus: normalizeAttackBonus({
+          scope: fx?.atkScope, categories: fx?.atkCategories,
+          flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
+          livraison: fx?.atkLivraison, tag: fx?.atkTag,
+          effect: {
+            label: fx?.atkFxLabel, when: fx?.atkFxWhen,
+            duration: fx?.atkFxDuration, removeBaseTN: fx?.atkFxRemoveTN,
+            tag: fx?.atkFxTag,
+            dot: {
+              mode: fx?.atkFxDotMode, base: fx?.atkFxDotBase,
+              stat: fx?.atkFxDotStat, per: fx?.atkFxDotPer
+            }
+          }
+        })
+      };
+
+      if (isAura) {
+        st.aura = {
+          min: Number(fx?.auraMin) || 0,
+          max: Number(fx?.auraMax) || 0,
+          key: st.label,
+          target: String(fx?.auraTarget ?? "allies")
+        };
+      }
+
+      out.push(st);
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Tous les états qui agissent sur cet acteur : ceux réellement posés, plus
+ * ceux du passif porté.
+ *
+ * À utiliser partout où l'on LIT les états pour en déduire un effet. Les
+ * écritures, elles, ne visent que `system.etatsActifs` : un état virtuel n'a
+ * pas d'existence à modifier — on dépose le passif à la place.
+ */
+export function effectiveStates(actor) {
+  const real = Array.isArray(actor?.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  return [...real, ...passifStates(actor)];
 }
 
 /* ------------------------------------------------------------------ */

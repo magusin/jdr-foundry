@@ -33,7 +33,9 @@
         background:rgba(200,163,73,.10);border:1px solid rgba(200,163,73,.35)">
         <b>Passif</b> — jamais déclaré, donc aucun jet : ni touché, ni critique, ni cible à viser.
         Tout ce qu'il fait tient dans <b>Effets secondaires</b>, appliqués en permanence à son porteur
-        tant qu'il est le passif <b>porté</b> (onglet Talents, un seul à la fois).
+        tant qu'il est le passif <b>porté</b> (onglet Talents, un seul à la fois) : bonus/malus, dégâts ou
+        soin par tour, aura, résistances accordées, bonus de dégâts aux attaques. Rien n'est écrit sur la
+        fiche — tout est relu depuis l'emplacement, donc tout s'éteint dès que le passif est déposé.
         Portée, cibles, difficulté, déplacement, dégâts et récupération sont donc masqués : ils ne sont lus
         par personne. Repasse la Vitesse sur Normal et tout revient, intact.
         <br/>Pour un bonus qui dure tout le combat : coche <b>N'expire pas</b> sur l'effet,
@@ -49,7 +51,7 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
         <div>
-          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il est le passif PORTÉ (onglet Talents — un seul à la fois, en avoir plusieurs dans son grimoire n'en active aucun de plus). Son coût en mana est prélevé une fois par combat, au premier tour. Dégâts par tour et aura non gérés en passif.">Vitesse</label>
+          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il est le passif PORTÉ (onglet Talents — un seul à la fois, en avoir plusieurs dans son grimoire n'en active aucun de plus). Son coût en mana est prélevé une fois par combat, au premier tour. Ses effets valent pleinement : bonus/malus, dégâts ou soin par tour, aura, résistances accordées et bonus de dégâts aux attaques.">Vitesse</label>
           {{#if canEdit}}
           <select name="system.speed" style="width:100%">
             <option value="passif" {{#if (eq system.speed "passif")}}selected{{/if}}>Passif</option>

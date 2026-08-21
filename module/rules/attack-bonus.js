@@ -28,6 +28,7 @@
 // bonus — même règle que pour les résistances élémentaires.
 
 import { DAMAGE_TYPES, damageTypeLabel } from "./damage-types.js";
+import { effectiveStates } from "./loadout.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -173,7 +174,10 @@ function matches(bonus, { kind, weapon }) {
  */
 export function collectAttackBonuses(actor, { kind = "arme", weapon = null } = {}) {
   const out = { entries: [], flatSame: 0, pct: 0, own: [], sameDice: [] };
-  for (const st of (Array.isArray(actor?.system?.etatsActifs) ? actor.system.etatsActifs : [])) {
+  // effectiveStates : les états posés PLUS ceux du passif porté, qui ne sont
+  // écrits nulle part (loadout.js). Sans eux, un passif « tes coups
+  // enflamment » se saisissait sur la fiche et n'ajoutait rien du tout.
+  for (const st of effectiveStates(actor)) {
     const bonus = normalizeAttackBonus(st?.attackBonus);
     if (!bonus || !matches(bonus, { kind, weapon })) continue;
     const label = String(st?.label ?? "Bonus");
@@ -219,7 +223,7 @@ export function hasAttackBonus(b) {
 export function collectAttackBonusEffects(actor, { kind = "arme", weapon = null, isCrit = false } = {}) {
   const allowed = isCrit ? ["hit", "crit"] : ["hit", "hitonly"];
   const out = [];
-  for (const st of (Array.isArray(actor?.system?.etatsActifs) ? actor.system.etatsActifs : [])) {
+  for (const st of effectiveStates(actor)) {
     const bonus = normalizeAttackBonus(st?.attackBonus);
     if (!bonus?.effect) continue;
     if (!matches(bonus, { kind, weapon })) continue;
