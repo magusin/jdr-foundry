@@ -8,6 +8,7 @@ import {
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
 import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN } from "../rules/attack-bonus.js";
+import { effectCatalogByTag, getEffectDef, EFFECT_TAGS, normalizeEffectTag } from "../rules/effect-library.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -581,24 +582,16 @@ static PARTS = foundry.utils.mergeObject(
     ctx.showEffects  = ctx.canEdit || (Array.isArray(ctx.system.effectsUI) && ctx.system.effectsUI.length > 0);
     ctx.showDescription = ctx.canEdit || !!String(ctx.system.description ?? "").trim();
 
-    // Catalogue d'effets groupé par type pour les optgroups du dropdown
-    const lib = game.rpg?.effectLibrary;
-    if (lib) {
-      const TAG_LABEL = { feu:"🔥 Feu", air:"🌬️ Air", eau:"💧 Eau", glace:"❄️ Glace",
-                          eclair:"⚡ Éclair", terre:"🌿 Terre", magique:"✨ Magique",
-                          physique:"⚔️ Physique", lumiere:"✨ Lumière", obscurite:"🌑 Obscurité" };
-      const byTag = {};
-      for (const e of lib.listEffects()) {
-        const g = e.tag ?? "autre";
-        if (!byTag[g]) byTag[g] = [];
-        byTag[g].push({ key: e.key, label: e.label });
-      }
-      ctx.EFFECT_CATALOG = Object.fromEntries(
-        Object.entries(byTag).map(([tag, list]) => [TAG_LABEL[tag] ?? tag, list])
-      );
-    } else {
-      ctx.EFFECT_CATALOG = {};
-    }
+    // Catalogue des états — construit par le module lui-même (groupes triés,
+    // libellé de famille depuis EFFECT_TAGS). Une copie locale de la table des
+    // familles vivait ici et ignorait « neutre », dont le groupe s'affichait
+    // sous sa clé technique dès que le tag a été renommé.
+    ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "key" });
+    // Familles d'ÉTATS (neutre inclus) — l'élément d'un état posé sert aux
+    // résistances aux états, dont le vocabulaire est celui d'EFFECT_TAGS et
+    // non celui des types de dégâts (qui connaît « magique » et ignore
+    // « neutre »).
+    ctx.effectTagChoices = Object.entries(EFFECT_TAGS).map(([key, label]) => ({ key, label }));
     ctx.isReadOnly = !ctx.canEdit;
 
     // ── Vue joueur : résumé compact ────────────────────────────────────────
@@ -793,11 +786,15 @@ static PARTS = foundry.utils.mergeObject(
       // lames empoisonnent »). Sans nom, tout ce bloc est inerte : c'est
       // normalizeBonusEffect (attack-bonus.js) qui rend null, et le bonus
       // reste purement chiffré comme avant l'existence du champ.
+      fx.atkFxKey = String(fx.atkFxKey ?? "").trim();
       fx.atkFxLabel = String(fx.atkFxLabel ?? "").trim();
       fx.atkFxWhen = BONUS_FX_WHEN[String(fx.atkFxWhen ?? "")] ? String(fx.atkFxWhen) : "hit";
       fx.atkFxDuration = Math.max(1, n(fx.atkFxDuration, 1));
       fx.atkFxRemoveTN = Math.max(0, n(fx.atkFxRemoveTN, 0));
-      fx.atkFxTag = String(fx.atkFxTag ?? "");
+      // Vocabulaire des familles d'états : un « magique » saisi avant le
+      // renommage se relit en « neutre », sinon le <select> retomberait sur
+      // « — Aucun — » et la valeur serait perdue au premier enregistrement.
+      fx.atkFxTag = normalizeEffectTag(fx.atkFxTag ?? "");
       fx.atkFxDotMode = ["damage", "heal", "none"].includes(String(fx.atkFxDotMode))
         ? String(fx.atkFxDotMode) : "none";
       fx.atkFxDotBase = Math.max(0, n(fx.atkFxDotBase, 0));
@@ -949,6 +946,7 @@ static PARTS = foundry.utils.mergeObject(
         atkDice:       str("atkDice", prev.atkDice ?? ""),
         atkLivraison:  str("atkLivraison", prev.atkLivraison ?? ""),
         atkTag:        str("atkTag", prev.atkTag ?? ""),
+        atkFxKey:      str("atkFxKey", prev.atkFxKey ?? ""),
         atkFxLabel:    str("atkFxLabel", prev.atkFxLabel ?? ""),
         atkFxWhen:     str("atkFxWhen", prev.atkFxWhen ?? "hit"),
         atkFxDuration: num("atkFxDuration", n(prev.atkFxDuration, 1)),
@@ -1399,6 +1397,28 @@ static PARTS = foundry.utils.mergeObject(
 
         // …puis on enregistre depuis le DOM, sans re-render (la fenêtre ne
         // remonte pas et l'accordéon reste ouvert).
+        await this._saveEffects(root);
+      }
+
+      // Même chose pour l'état posé par un bonus d'attaque (partie 8). Le nom
+      // est ÉCRASÉ ici, contrairement à la partie 1 : le champ est celui de
+      // l'état posé et le catalogue est le choix explicite du MJ. Repasser sur
+      // « — Nom libre — » ne l'efface pas, pour ne pas perdre un nom saisi à la
+      // main d'un simple clic.
+      if (ev.target?.matches?.("select.fx-atkfx-catalogue-select")) {
+        const sel = ev.target;
+        const def = sel.value ? getEffectDef(sel.value) : null;
+        const card = sel.closest("details");
+        if (def && card) {
+          const labelInput = card.querySelector('[data-fx-field="atkFxLabel"]');
+          const tagSel = card.querySelector('[data-fx-field="atkFxTag"]');
+          if (labelInput) labelInput.value = def.label;
+          // Le <select> de l'élément ne connaît que les familles d'états : on
+          // n'y écrit que si l'option existe réellement, sinon la valeur
+          // choisie serait remplacée par une chaîne vide silencieusement.
+          const tag = normalizeEffectTag(def.tag);
+          if (tagSel && tag && tagSel.querySelector(`option[value="${tag}"]`)) tagSel.value = tag;
+        }
         await this._saveEffects(root);
       }
     });
