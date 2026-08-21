@@ -729,6 +729,15 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                 <span class="muted" style="margin-left:6px;">[AURA]</span>
                 {{/if}}
 
+                {{!-- État REÇU d'une aura : il ne se décompte pas et ne se
+                      retire pas, il tient tant que la cible reste à portée.
+                      Afficher « 999999 tours » comme pour un état ordinaire
+                      ne voulait rien dire. --}}
+                {{#if e.auraApplied}}
+                <span class="muted" style="margin-left:6px;"
+                  title="Reçu de l'aura de {{e.auraApplied.sourceName}}. Ne peut pas être retiré par un jet : seul l'émetteur est débuffable, et l'aura s'éteint alors pour tout le monde.">[AURA de {{e.auraApplied.sourceName}}]</span>
+                {{/if}}
+
                 {{#if e.isBeneficial}}
                 <span class="muted" style="margin-left:6px;">[BUFF]</span>
                 {{/if}}
@@ -737,7 +746,11 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                 <span class="muted" style="margin-left:6px;">[AFFLICTION]</span>
                 {{/if}}
 
+                {{#if e.auraApplied}}
+                <span class="muted">(tant que tu restes à portée)</span>
+                {{else}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+                {{/if}}
 
                 {{#if e.cleanseDC}}
                 <span class="muted">Retrait: {{e.cleanseDC}}+</span>

@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/auras.js
 
 import { RPG_AURA_RENDER } from "./aura-render.js";
+import { dropPassifOnStateLabel } from "./loadout.js";
 
 const REFRESH_DEBOUNCE_MS = 50;
 let _t = null;
@@ -248,11 +249,29 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
 
   return {
     id: `aura:${sourceActor.id}:${auraState.id}:${targetActor.id}:${targetToken.id}`,
-    label: `${auraState.label} (Aura)`,
+    // Le libellé est celui de l'effet source, à l'identique. Le suffixe
+    // « (Aura) » qu'il portait en faisait un état d'un AUTRE nom pour tout ce
+    // qui compare des libellés : il ne remplaçait pas l'état homonyme déjà
+    // porté (les deux s'empilaient), et status-icons.js, qui apparie sur
+    // (libellé, élément), ne lui trouvait aucune icône de token. La
+    // provenance est dite par `type` et par `auraApplied.sourceName`, que la
+    // fiche affiche en pastille — pas en trafiquant le nom.
+    label: String(auraState.label ?? "Aura"),
     type: "auraApplied",
     isAura: false,
+    // Il ne se décompte pas (turn-effects.js saute les auraApplied) : il dure
+    // tant que la cible reste à portée, ni plus ni moins. Pas de
+    // `permanent: true` pour autant — ce drapeau range un état parmi les
+    // séquelles de blessure sur la fiche (autoStatesForBlessures) ; c'est le
+    // gabarit qui lit `auraApplied` et écrit « tant que tu restes à portée »
+    // au lieu des 999999 tours.
     duration: 999999,
     remaining: 999999,
+    // Aucun seuil de retrait, et c'est la règle : un effet reçu d'une aura ne
+    // se retire pas. Seul l'émetteur est débuffable — retirer SON état d'aura
+    // (qui, lui, porte son removeBaseTN) éteint l'aura pour tout le monde.
+    // removableStates() (remove-state.js) filtre sur removeDifficulty /
+    // removeBaseTN / cleanseDC : les trois sont absents ou nuls ici.
     cleanseDC: 0,
     // On reporte le type/élément et la clé de l'effet source : sans eux, les
     // résistances et les icônes d'état ne reconnaissaient pas l'effet d'aura.
@@ -264,6 +283,7 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
       sourceActorId: sourceActor.id,
       sourceTokenId: sourceToken.id,
       sourceStateId: auraState.id,
+      sourceName: sourceActor.name ?? "",
       targetTokenId: targetToken.id,
       auraKey,
       min,
@@ -286,6 +306,16 @@ export const RPG_AURAS = {
   async refreshAuras() {
     cleanupOverrides();
     if (!canvas?.ready) return;
+
+    // Poser un état sur autrui est une écriture d'acteur : un client JOUEUR
+    // se la fait refuser par Foundry, et n'aurait fait qu'empiler des erreurs
+    // silencieuses. Il garde en revanche le rendu des anneaux, qui est
+    // purement local — sans ce partage, un joueur ne verrait plus aucune
+    // aura sur le canevas.
+    if (!game.user?.isGM) {
+      try { RPG_AURA_RENDER.refresh(); } catch (e) { console.warn("[RPG] aura-render:", e); }
+      return;
+    }
 
     // lock anti boucle
     if (_running) { _queued = true; return; }
@@ -337,10 +367,32 @@ export const RPG_AURAS = {
         if (!a) continue;
 
         const cur = Array.isArray(a.system?.etatsActifs) ? foundry.utils.deepClone(a.system.etatsActifs) : [];
-        const keep = cur.filter(s => s?.type !== "auraApplied");
         const add = desiredApplied.get(t.id) ?? [];
 
+        // Un état homonyme déjà porté cède la place à celui de l'aura, comme
+        // partout ailleurs (findStateSlot) : le dernier posé gagne. La
+        // conséquence est voulue et doit être connue de la table — en
+        // sortant de l'aura, la cible n'a plus RIEN, puisque son état
+        // personnel a été remplacé, pas mis de côté.
+        const incoming = new Set(add.map(s => String(s.label ?? "").trim().toLowerCase()));
+        const keep = cur.filter(s =>
+          s?.type !== "auraApplied" &&
+          !incoming.has(String(s?.label ?? "").trim().toLowerCase()));
+
         await setActorStates(a, [...keep, ...add]);
+
+        // Même règle pour un passif accordant l'un de ces libellés : il ne
+        // vit pas dans etatsActifs, donc rien ne l'aurait remplacé et ses
+        // mods se seraient ajoutés à ceux de l'aura, invisibles.
+        for (const st of add) {
+          const dropped = await dropPassifOnStateLabel(a, st.label);
+          if (dropped) {
+            ChatMessage.create({
+              content: `🔮 <b>${st.label}</b> (aura de ${st.auraApplied?.sourceName ?? "?"}) `
+                     + `remplace le passif « ${dropped} » de <b>${a.name}</b> — emplacement libéré.`
+            }).catch(() => {});
+          }
+        }
       }
 
       // Rendu visuel (anneaux colorés par élément) toujours en phase avec

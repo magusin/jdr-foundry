@@ -280,8 +280,17 @@ export async function resolveRemoveFromMessage(message, result) {
   const success = result === "success";
 
   if (success && actor) {
+    const removed = (actor.system?.etatsActifs ?? []).find(s => s.id === d.stateId) ?? null;
     const list = (actor.system?.etatsActifs ?? []).filter(s => s.id !== d.stateId);
     await actor.update({ "system.etatsActifs": list });
+
+    // L'état retiré était une AURA : elle s'éteint pour tous ceux qui en
+    // bénéficiaient. C'est la seule façon de retirer un effet d'aura — les
+    // cibles, elles, ne peuvent pas s'en défaire (l'état qu'elles reçoivent
+    // ne porte aucun seuil). Sans ce rafraîchissement, les auraApplied
+    // survivaient à leur source jusqu'au prochain déplacement ou début de
+    // tour, et le débuff réussi paraissait sans effet.
+    if (removed?.isAura) await globalThis.RPG_AURAS?.refreshAuras?.();
   }
 
   await message.delete();

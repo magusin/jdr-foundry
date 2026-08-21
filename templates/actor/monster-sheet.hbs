@@ -115,7 +115,12 @@
               {{#if e.isAura}}<span class="muted" style="margin-left:6px">[AURA]</span>{{/if}}
               {{#if e.isBeneficial}}<span class="muted" style="margin-left:6px">[BUFF]</span>{{/if}}
               {{#if e.isHarmful}}<span class="muted" style="margin-left:6px">[AFFLICTION]</span>{{/if}}
+              {{#if e.auraApplied}}
+              <span class="muted" style="margin-left:6px" title="Reçu de l'aura de {{e.auraApplied.sourceName}} — impossible à retirer par un jet.">[AURA de {{e.auraApplied.sourceName}}]</span>
+              <span class="muted">(tant qu'il reste à portée)</span>
+              {{else}}
               <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+              {{/if}}
               {{#if e.summary}}
               <div class="muted" style="margin-top:4px">{{e.summary}}</div>
               {{/if}}
@@ -533,7 +538,12 @@
                 {{#if e.isAura}}<span class="muted" style="margin-left:6px;">🌀</span>{{/if}}
                 {{#if e.isBeneficial}}<span class="muted" style="margin-left:6px;">✨</span>{{/if}}
                 {{#if e.isHarmful}}<span class="muted" style="margin-left:6px;">☠️</span>{{/if}}
+                {{#if e.auraApplied}}
+                <span class="muted" style="margin-left:6px;" title="Reçu de l'aura de {{e.auraApplied.sourceName}} — impossible à retirer par un jet.">[AURA de {{e.auraApplied.sourceName}}]</span>
+                <span class="muted">(tant qu'il reste à portée)</span>
+                {{else}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+                {{/if}}
                 {{#if e.cleanseDC}}<span class="muted">Retrait: {{e.cleanseDC}}+</span>{{/if}}
                 {{#if e.summary}}<div class="muted" style="margin-top:4px;">{{e.summary}}</div>{{/if}}
               </div>
