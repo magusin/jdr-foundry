@@ -759,11 +759,31 @@
                   état de forme identique. --}}
             <div class="fx-sub" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--ink-3,rgba(255,255,255,.15))">
               <label style="font-weight:700;font-size:12px">🧪 État posé sur la cible touchée (optionnel)</label>
-              <div class="fx-grid-4" style="margin-top:6px">
+              {{!-- Même catalogue que la partie 1 : choisir une entrée remplit le
+                    nom ET l'élément de l'état, si bien que l'icône de token du
+                    catalogue (status-icons.js, appariée sur libellé + élément)
+                    apparaît toute seule sur la cible. --}}
+              <div class="fx-grid-2" style="margin-top:6px">
+                <div>
+                  <label title="Choisir un état du catalogue remplit le nom et l'élément ci-dessous.">État du catalogue</label>
+                  <select class="fx-atkfx-catalogue-select" data-fx-idx="{{i}}" data-fx-field="atkFxKey">
+                    <option value="">— Nom libre —</option>
+                    {{#each @root.EFFECT_CATALOG as |group gLabel|}}
+                    <optgroup label="{{gLabel}}">
+                      {{#each group as |e|}}
+                      <option value="{{e.key}}" data-tag="{{e.tag}}" data-label="{{e.label}}"
+                        {{#if (eq fx.atkFxKey e.key)}}selected{{/if}}>{{e.label}}</option>
+                      {{/each}}
+                    </optgroup>
+                    {{/each}}
+                  </select>
+                </div>
                 <div>
                   <label title="Nom de l'état tel qu'il apparaîtra sur la fiche de la cible. VIDE = ce bonus n'ajoute que des dégâts, il ne pose aucun état.">Nom de l'état</label>
                   <input type="text" data-fx-field="atkFxLabel" value="{{fx.atkFxLabel}}" placeholder="ex. Venin"/>
                 </div>
+              </div>
+              <div class="fx-grid-4" style="margin-top:6px">
                 <div>
                   <label title="Quand l'état est posé. Un critique déclenche aussi « Touche + crit », mais pas « Touche normale ».">Déclencheur</label>
                   <select data-fx-field="atkFxWhen">
@@ -815,7 +835,7 @@
                   <label title="Élément de l'état posé. Sert aux résistances aux ÉTATS de la cible (durée réduite, tick réduit, immunité) — pas aux résistances aux dégâts.">Élément de l'état</label>
                   <select data-fx-field="atkFxTag">
                     <option value="" {{#unless fx.atkFxTag}}selected{{/unless}}>— Aucun —</option>
-                    {{#each @root.damageTypeChoices as |c|}}
+                    {{#each @root.effectTagChoices as |c|}}
                       <option value="{{c.key}}" {{#if (eq fx.atkFxTag c.key)}}selected{{/if}}>{{c.label}}</option>
                     {{/each}}
                   </select>
