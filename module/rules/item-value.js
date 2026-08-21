@@ -717,7 +717,11 @@ export function computeSpellValue(item, opts = {}) {
 
   const speed = String(sys.speed ?? "normal");
   const isPassif = speed === "passif";
-  const targets = Math.max(1, n(sys.targetCount?.max, 1));
+  // Un passif ne vise personne : il s'applique à son porteur, un point.
+  // Un `targetCount.max` resté à 3 d'une version antérieure du sort aurait
+  // sinon triplé le poids de chacun de ses effets, sans que rien ne le montre
+  // — la fiche ne propose même plus le champ en passif.
+  const targets = isPassif ? 1 : Math.max(1, n(sys.targetCount?.max, 1));
   const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
 
   // ── Dégâts ────────────────────────────────────────────────────────────
@@ -753,7 +757,12 @@ export function computeSpellValue(item, opts = {}) {
         toucherMagique: n(opts.toucherMagique, n(actor?.system?.derived?.toucherMagique, 0))
       });
   const chance = hit.chance;
-  const critShare = Math.min(chance, CRIT_SHARE);
+  // Un passif ne lance AUCUN dé : il est actif en permanence, sans jet, donc
+  // sans réussite ni critique. Lui laisser la part de critique le faisait
+  // peser comme si 5 % de ses ticks sortaient en 20 naturel, et la fiche
+  // annonçait « dont critique » sur un sort que declareSpell refuse de
+  // déclarer. La chance vaut déjà 1 plus haut ; la part de crit doit valoir 0.
+  const critShare = isPassif ? 0 : Math.min(chance, CRIT_SHARE);
 
   const landedNormal = landedAgainstParty(rawNormal, PARTY);
   const landedCrit = landedAgainstParty(rawCrit, PARTY);
@@ -771,7 +780,8 @@ export function computeSpellValue(item, opts = {}) {
     add(`Dégâts moyens (par cible${targets > 1 ? `, ×${targets}` : ""})`,
         `${round1(rawNormal)} brut → ${round1(landedNormal)} encaissé`,
         damagePerUse * DAMAGE_POINT);
-    if (rawCrit !== rawNormal) {
+    // Idem : pas de ligne « dont critique » sur un passif, qui n'en a pas.
+    if (!isPassif && rawCrit !== rawNormal) {
       rows.push({ label: "Dont critique (5 % des jets)", value: `${round1(rawCrit)} brut`, points: null });
     }
   }
@@ -998,13 +1008,29 @@ export function computeSpellValue(item, opts = {}) {
   if (moveSelf > 0) add("Charge (déplacement offert)", `${round1(moveSelf)} m`, moveSelf * 1.5);
 
   // ── Portée ────────────────────────────────────────────────────────────
-  const portee = Math.max(0, n(sys.range?.max, 0) - 1.5);
+  // Idem pour la portée : un passif ne porte nulle part, il est sur soi.
+  const portee = isPassif ? 0 : Math.max(0, n(sys.range?.max, 0) - 1.5);
   if (portee > 0) add("Portée", `${round1(n(sys.range?.max, 0))} m`, portee * 0.3);
 
   // ── Coûts ─────────────────────────────────────────────────────────────
   const manaCost = Math.max(0, n(sys.coutMana, 0));
   const fatigueCost = Math.max(0, n(sys.fatigueCost, 1));
-  if (!isPassif) {
+  if (isPassif) {
+    // Un passif ne coûte AUCUNE fatigue — il n'est jamais déclaré, donc aucune
+    // action n'est consommée. Son mana, lui, est bien prélevé : une fois par
+    // combat, au premier tour de son porteur, après la régénération
+    // (chargePassifOnFirstTurn, loadout.js). Le compter zéro fois, comme
+    // avant, pesait un passif à 3 mana exactement comme un passif gratuit.
+    //
+    // Il entre donc UNE seule fois dans le total, lequel est ensuite étalé sur
+    // REF_TURNS (voir « Disponibilité » plus bas) : le coût se répartit sur le
+    // combat exactement comme le bénéfice qu'il paie, ce qui est le bon
+    // rapport puisque les deux valent « pour tout le combat ».
+    if (manaCost) {
+      add("Coût en mana (une fois par combat)", `−${round1(manaCost)}`,
+          -manaCost * STAT_WEIGHTS.manaMax);
+    }
+  } else {
     if (manaCost) add("Coût en mana", `−${round1(manaCost)}`, -manaCost * STAT_WEIGHTS.manaMax);
     if (fatigueCost) add("Coût en fatigue", `−${round1(fatigueCost)}`, -fatigueCost * STAT_WEIGHTS.fatigueMax);
   }
