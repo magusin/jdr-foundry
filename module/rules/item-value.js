@@ -717,7 +717,11 @@ export function computeSpellValue(item, opts = {}) {
 
   const speed = String(sys.speed ?? "normal");
   const isPassif = speed === "passif";
-  const targets = Math.max(1, n(sys.targetCount?.max, 1));
+  // Un passif ne vise personne : il s'applique à son porteur, un point.
+  // Un `targetCount.max` resté à 3 d'une version antérieure du sort aurait
+  // sinon triplé le poids de chacun de ses effets, sans que rien ne le montre
+  // — la fiche ne propose même plus le champ en passif.
+  const targets = isPassif ? 1 : Math.max(1, n(sys.targetCount?.max, 1));
   const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
 
   // ── Dégâts ────────────────────────────────────────────────────────────
@@ -1004,7 +1008,8 @@ export function computeSpellValue(item, opts = {}) {
   if (moveSelf > 0) add("Charge (déplacement offert)", `${round1(moveSelf)} m`, moveSelf * 1.5);
 
   // ── Portée ────────────────────────────────────────────────────────────
-  const portee = Math.max(0, n(sys.range?.max, 0) - 1.5);
+  // Idem pour la portée : un passif ne porte nulle part, il est sur soi.
+  const portee = isPassif ? 0 : Math.max(0, n(sys.range?.max, 0) - 1.5);
   if (portee > 0) add("Portée", `${round1(n(sys.range?.max, 0))} m`, portee * 0.3);
 
   // ── Coûts ─────────────────────────────────────────────────────────────

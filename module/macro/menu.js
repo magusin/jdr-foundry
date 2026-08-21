@@ -1257,6 +1257,17 @@
       const waToggled = btn.dataset.toggled === "true";
       const newState  = !waToggled;
 
+      // Un passif encore en recharge ne se reprend pas (rules/loadout.js).
+      // Le vérifier AVANT le journal d'action : journaliser puis se voir
+      // refuser l'échange laisserait au MJ la trace d'un changement qui n'a
+      // pas eu lieu, avec un bouton « Annuler » qui n'annule rien.
+      const cdLeft = game.rpg?.loadout?.passifCooldownLeft?.(item) ?? 0;
+      if (newState && cdLeft > 0 && getCombat()?.active) {
+        notify("warn", `${item.name} est encore en recharge — ${cdLeft} tour(s) à attendre.`);
+        btn.disabled = false;
+        return;
+      }
+
       try {
         // Logue le changement pour que le MJ puisse annuler
         const actionId = foundry.utils.randomID();
@@ -1285,7 +1296,12 @@
         // sumBonuses ni passiveSpellStates ne lisaient ce champ, donc
         // « désactiver » un passif ne retirait rien du tout). Activer l'un
         // déséquipe donc désormais les autres, en une seule écriture.
-        await game.rpg?.loadout?.setEquippedPassif?.(actor, newState ? item.id : null);
+        // setEquippedPassif refuse un passif encore en recharge (il est
+        // engagé, on ne le reprend pas tout de suite) et rend null : sans ce
+        // test, le chat annonçait « Activé » sur un changement qui n'a pas eu
+        // lieu, et la place d'action était décomptée pour rien.
+        const swapped = await game.rpg?.loadout?.setEquippedPassif?.(actor, newState ? item.id : null);
+        if (newState && !swapped) return;
 
         // Message dans le chat (logué pour MJ)
         await ChatMessage.create({

@@ -399,6 +399,32 @@ function normalizeAndMergeEffects(document, expanded) {
   return expanded;
 }
 
+/**
+ * Ce qu'un PASSIF ne peut pas avoir, remis à sa valeur neutre quand un sort
+ * passe en Vitesse « Passif ».
+ *
+ * Un passif n'est jamais déclaré (declareSpell le refuse), donc il ne vise
+ * personne, ne mesure aucune distance, n'oppose aucun seuil et ne déplace pas
+ * son lanceur. Les champs correspondants sont masqués sur la fiche — mais les
+ * masquer ne suffit pas : ils resteraient en base, et la pesée les lit encore
+ * (une portée résiduelle valait des points, un `targetCount.max` à 3 triplait
+ * le poids de chaque effet). On les neutralise donc à l'écriture, une fois,
+ * plutôt que de demander à chaque lecteur de se souvenir du cas.
+ *
+ * `targetCount.max` vaut 1 et non 0 : c'est le porteur lui-même.
+ * La fatigue est à 0 parce qu'aucune action n'est consommée — le mana, lui,
+ * est bien prélevé (une fois par combat) et n'est donc pas touché.
+ */
+const PASSIF_NEUTRAL_FIELDS = {
+  "system.range.min": 0,
+  "system.range.max": 0,
+  "system.difficulte": 0,
+  "system.moveSelf": 0,
+  "system.fatigueCost": 0,
+  "system.targetCount.min": 0,
+  "system.targetCount.max": 1
+};
+
 export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
   static documentName = "Item";
 
@@ -533,9 +559,24 @@ static PARTS = foundry.utils.mergeObject(
     ctx.canEdit = game.user.isGM || this.isEditable;
     ctx.isGM = game.user.isGM;
 
+    // ── Un passif n'est jamais déclaré ────────────────────────────────────
+    //
+    // declareSpell le refuse (« toujours actif, pas de déclaration ») : il n'y
+    // a donc ni jet de touché, ni cible visée, ni portée, ni déplacement du
+    // lanceur, ni critique. Ses dés de dégâts et ses lignes de récupération ne
+    // sont lus par personne. Les afficher quand même, c'était inviter le MJ à
+    // remplir une quarantaine de champs dont un seul groupe compte — les
+    // effets secondaires, qui sont TOUT ce qu'un passif fait.
+    //
+    // Les cartes sont masquées, pas vidées : _onFormSubmitV2 ne reconstruit
+    // damages[]/restores[] que si leurs lignes existent dans le DOM, donc
+    // repasser un sort en Passif puis en Normal lui rend ses dégâts intacts.
+    ctx.isPassif = String(ctx.system.speed ?? "") === "passif";
+
     // Grilles de saisie : MJ seul. Le joueur lit la même information dans le
     // résumé du haut (playerInfo), sans pouvoir toucher aux valeurs.
-    ctx.showRestores = ctx.canEdit;
+    ctx.showRestores = ctx.canEdit && !ctx.isPassif;
+    ctx.showDamages  = !ctx.isPassif;
     // Carte « Effets secondaires » : inutile de l'afficher vide au joueur.
     ctx.showEffects  = ctx.canEdit || (Array.isArray(ctx.system.effectsUI) && ctx.system.effectsUI.length > 0);
     ctx.showDescription = ctx.canEdit || !!String(ctx.system.description ?? "").trim();
@@ -995,6 +1036,22 @@ static PARTS = foundry.utils.mergeObject(
         else if (el.type === "number") value = el.value === "" ? null : Number(el.value);
         else value = el.value;
 
+        // 3 bis) La Vitesse change la FORME de la fiche : passer en Passif
+        // retire portée, cibles, difficulté, dégâts et récupération, qu'un
+        // passif ne fait pas. Elle est donc le seul champ simple à re-rendre,
+        // et le seul à normaliser ce qu'il rend inutile — sinon un sort
+        // converti gardait une portée de 9 m et 3 cibles max, invisibles sur
+        // la fiche mais bien lues par la pesée et par tout futur lecteur.
+        // Les dés de dégâts et les récupérations, eux, sont CONSERVÉS : ils
+        // ne sont lus par personne en passif, et les effacer ferait perdre le
+        // travail du MJ au moindre aller-retour Normal → Passif → Normal.
+        if (name === "system.speed") {
+          const data = { [name]: value };
+          if (String(value) === "passif") Object.assign(data, PASSIF_NEUTRAL_FIELDS);
+          await this._updateAndKeepView(data);
+          return;
+        }
+
         await this.document.update({ [name]: value }, { render: false });
 
         // Même limite que les autres champs enregistrés sans re-render : le
@@ -1219,6 +1276,19 @@ static PARTS = foundry.utils.mergeObject(
     }
 
     const prepared = normalizeAndMergeEffects(this.document, expanded);
+
+    // Même neutralisation que dans _bindLiveSave, pour le chemin « Entrée » :
+    // la Vitesse peut avoir changé dans cette soumission, ou avoir déjà été
+    // passive avant elle. On lit la valeur soumise si elle existe, celle du
+    // document sinon.
+    const submittedSpeed = String(prepared?.system?.speed ?? this.document.system?.speed ?? "");
+    if (submittedSpeed === "passif") {
+      prepared.system = foundry.utils.mergeObject(
+        prepared.system ?? {},
+        foundry.utils.expandObject(PASSIF_NEUTRAL_FIELDS).system,
+        { inplace: false }
+      );
+    }
 
     if (collectedFx) {
       prepared.system = prepared.system ?? {};

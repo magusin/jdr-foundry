@@ -1440,7 +1440,9 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
         <div style="font-size:11px;opacity:.7;margin-bottom:8px">
           Un seul porté à la fois, ou aucun. Actif en permanence ; son coût en
           mana est prélevé <b>une fois</b>, à ton premier tour de combat —
-          jamais hors combat.
+          jamais hors combat. Si le sort a une <b>recharge</b>, elle part au
+          même instant : le reposer pour en essayer un autre t'oblige à
+          attendre la fin du décompte avant de pouvoir y revenir.
           {{#if loadout.inCombat}}
             {{#if loadout.passifWillCharge}}
             <b>Tu as déjà payé ce combat : en changer coûte une action rapide
@@ -1461,12 +1463,16 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
           </button>
           {{#each loadout.passifs as |p|}}
           <button type="button" data-action="pickPassif" data-item-id="{{p.id}}"
-            class="rpg-loadout-row{{#if p.worn}} is-worn{{/if}}">
+            class="rpg-loadout-row{{#if p.worn}} is-worn{{/if}}{{#if p.locked}} is-locked{{/if}}"
+            {{#if p.locked}}disabled title="Encore en recharge : {{p.cooldownLeft}} tour(s)."{{/if}}>
             <img src="{{p.img}}" alt="" class="rpg-loadout-img"/>
             <span class="rpg-loadout-mid">
               <span class="rpg-loadout-name">{{p.name}}</span>
               {{#if p.summary}}<span class="rpg-loadout-sum">{{{p.summary}}}</span>{{/if}}
             </span>
+            {{#if p.cooldownLeft}}
+            <span class="rpg-loadout-cd" title="Recharge : le passif est engagé, il ne peut pas être repris avant la fin du décompte.">↻ {{p.cooldownLeft}}</span>
+            {{/if}}
             <span class="rpg-loadout-cost" title="Coût en mana, prélevé une fois par combat">
               {{#if p.cost}}🔷 {{p.cost}}{{else}}gratuit{{/if}}
             </span>

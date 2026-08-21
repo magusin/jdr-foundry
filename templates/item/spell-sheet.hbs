@@ -28,11 +28,24 @@
     {{#if canEdit}}
     <section class="card">
       <h2>Général</h2>
+      {{#if isPassif}}
+      <div style="font-size:11px;opacity:.75;margin:-2px 0 8px;padding:6px 8px;border-radius:6px;
+        background:rgba(200,163,73,.10);border:1px solid rgba(200,163,73,.35)">
+        <b>Passif</b> — jamais déclaré, donc aucun jet : ni touché, ni critique, ni cible à viser.
+        Tout ce qu'il fait tient dans <b>Effets secondaires</b>, appliqués en permanence à son porteur
+        tant qu'il est le passif <b>porté</b> (onglet Talents, un seul à la fois).
+        Portée, cibles, difficulté, déplacement, dégâts et récupération sont donc masqués : ils ne sont lus
+        par personne. Repasse la Vitesse sur Normal et tout revient, intact.
+        <br/>Pour un bonus qui dure tout le combat : coche <b>N'expire pas</b> sur l'effet,
+        et laisse son <b>TN de retrait à 0</b> pour qu'aucun jet ne puisse le dissiper.
+      </div>
+      {{else}}
       <div style="font-size:11px;opacity:.7;margin:-2px 0 8px">
         Un même sort peut cumuler librement : <b>Dégâts</b> (physiques et/ou magiques, plusieurs lignes),
         <b>Récupération</b> (PV / mana / fatigue, pour soi ou pour les cibles) et des
         <b>Effets secondaires</b> (bonus, malus, dégâts ou soin par tour, aura). Laisse vide ce qui ne sert pas.
       </div>
+      {{/if}}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
         <div>
@@ -46,6 +59,7 @@
           {{else}}<div><b>{{system.speed}}</b></div>{{/if}}
         </div>
 
+        {{#unless isPassif}}
         <div>
           {{!-- Ce champ ne concerne PAS la mitigation des dégâts (chaque ligne
                de dégâts a sa propre livraison) : il décide des stats comparées
@@ -72,6 +86,7 @@
           <div style="font-size:13px">{{tagLabel}}</div>
           {{/if}}
         </div>
+        {{/unless}}
 
         <div>
           <label>Coût Mana</label>
@@ -86,6 +101,7 @@
           {{/if}}
         </div>
 
+        {{#unless isPassif}}
         <div>
           <label title="Fatigue consommée à chaque lancement de ce sort">Coût fatigue</label>
           {{#if canEdit}}<input type="number" name="system.fatigueCost" value="{{system.fatigueCost}}" min="0" style="width:100%"/>
@@ -127,9 +143,10 @@
           {{#if canEdit}}<input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.targetCount.max}}</b></div>{{/if}}
         </div>
+        {{/unless}}
 
         <div>
-          <label>Recharge max</label>
+          <label{{#if isPassif}} title="Tours d'attente avant de pouvoir REPRENDRE ce passif. Le décompte part au moment où il est lancé — ton premier tour de combat, en même temps que son coût en mana. Le reposer pour en essayer un autre t'oblige donc à attendre la fin du décompte avant d'y revenir. 0 = changeable librement."{{/if}}>Recharge max</label>
           {{#if canEdit}}<input type="number" name="system.cooldown.max" value="{{system.cooldown.max}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.cooldown.max}}</b></div>{{/if}}
         </div>
@@ -140,11 +157,13 @@
         </div>
 
       </div>
+      {{#unless isPassif}}
       <div style="font-size:11px;opacity:.7;margin-top:6px">
         👥 <b>Viser plusieurs cibles</b> — outil <b>Ciblage ✛</b> de la barre d'outils Token :
         clic sur la 1<sup>re</sup> cible, puis <b>Maj+clic</b> sur les suivantes (re-clic = retirer).
         Le sort n'est déclaré que si le nombre de cibles visées tient entre le min et le max ci-dessus.
       </div>
+      {{/unless}}
     </section>
     {{else}}
     {{!-- Vue joueur : uniquement ce qui est renseigné, jamais de case vide --}}
@@ -216,7 +235,11 @@
 
     {{!-- ═══ DÉGÂTS (multiples lignes) — MJ uniquement ═══
          Le joueur retrouve la formule dans le résumé du haut : lui montrer
-         la grille de saisie revenait à le laisser modifier le sort.      --}}
+         la grille de saisie revenait à le laisser modifier le sort.
+         Masquée pour un PASSIF : il n'est jamais déclaré, donc jamais résolu,
+         donc ses dés ne sont lus par personne (les lignes restent en base et
+         reviennent telles quelles si le sort repasse en Normal).          --}}
+    {{#if showDamages}}
     {{#if canEdit}}
     <section class="card">
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -268,6 +291,7 @@
         (Physique → armure de la cible, Magique → résistance). Un sort peut donc cumuler une ligne physique et une ligne magique.
         Toutes les lignes s'appliquent à <b>chaque</b> cible visée.</small>
     </section>
+    {{/if}}
     {{/if}}
 
     {{!-- ═══ RÉCUPÉRATION (soin PV / mana / fatigue) ═══

@@ -2,7 +2,8 @@
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
-  talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat
+  talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat,
+  passifCooldownLeft
 } from "../rules/loadout.js";
 import { talentSummary } from "./item-talent-sheet-v2.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
@@ -1590,13 +1591,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       worn
     });
 
-    const passifRow = (it, worn) => ({
-      id: it.id, name: it.name, img: it.img,
-      cost: passifManaCost(it),
-      summary: buildSpellEffectsPreview(it),
-      description: String(it.system?.description ?? ""),
-      worn
-    });
+    // `cooldown` n'est bloquant qu'en combat, comme le refus dans
+    // setEquippedPassif : hors combat rien ne décompte, donc rien ne bloque.
+    const passifRow = (it, worn) => {
+      const left = passifCooldownLeft(it);
+      return {
+        id: it.id, name: it.name, img: it.img,
+        cost: passifManaCost(it),
+        summary: buildSpellEffectsPreview(it),
+        description: String(it.system?.description ?? ""),
+        cooldownLeft: left,
+        locked: !!combat && left > 0 && !worn,
+        worn
+      };
+    };
 
     const wornT = equippedTalent(actor);
     const wornP = equippedPassif(actor);
@@ -1640,6 +1648,16 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
     // Mana d'abord, tant que l'ancien passif est encore en place : si la
     // bourse est vide, on n'a rien écrit et l'état reste cohérent.
+    // Le refus pour cause de recharge doit précéder le prélèvement : payer
+    // puis se voir refuser l'échange aurait vidé la bourse pour rien.
+    if (!isTalent && itemId && combat && lo.passifCooldownLeft(actor.items.get(itemId)) > 0) {
+      const it = actor.items.get(itemId);
+      ui.notifications?.warn?.(
+        `${it?.name ?? "Ce passif"} est encore en recharge — `
+      + `${lo.passifCooldownLeft(it)} tour(s) à attendre.`);
+      return;
+    }
+
     let charge = null;
     if (!isTalent && combat && lo.hasPaidThisCombat(actor, combat) && itemId) {
       const next = actor.items.get(itemId);
@@ -1649,6 +1667,14 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const chosen = isTalent
       ? await lo.setEquippedTalent(actor, itemId)
       : await lo.setEquippedPassif(actor, itemId);
+
+    // Pris en cours de combat APRÈS le premier tour : il est lancé sur-le-
+    // champ, donc sa recharge part maintenant. Avant le premier tour, il n'y
+    // a rien à armer — chargePassifOnFirstTurn s'en chargera le moment venu,
+    // sur le passif effectivement porté à cet instant.
+    if (!isTalent && chosen && combat && lo.hasPaidThisCombat(actor, combat)) {
+      await lo.startPassifCooldown(actor, chosen);
+    }
 
     if (combat) await this._consumeLoadoutSlot(isTalent ? "sortNormal" : "sortRapide", chosen, kind);
 

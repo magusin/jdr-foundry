@@ -161,8 +161,24 @@ export async function setEquippedTalent(actor, itemId = null) {
  * appartient donc à l'appelant, pas à l'écriture elle-même. Voir
  * `chargePassif` et `chargePassifOnFirstTurn`.
  */
-export async function setEquippedPassif(actor, itemId = null) {
+export async function setEquippedPassif(actor, itemId = null, { force = false } = {}) {
   if (!actor) return null;
+
+  // Un passif encore en recharge ne se reprend pas — c'est tout l'objet de
+  // la recharge (voir startPassifCooldown). Le refus ne vaut QU'EN COMBAT,
+  // par cohérence avec le mana : hors combat un passif tourne gratuitement,
+  // et bloquer un remaniement d'avant-fight sur un décompte qui ne descend
+  // qu'aux tours de son porteur l'aurait gelé indéfiniment.
+  if (itemId && !force && game.combat?.active) {
+    const wanted = actor.items?.get?.(itemId);
+    const left = passifCooldownLeft(wanted);
+    if (left > 0) {
+      ui.notifications?.warn?.(
+        `${wanted?.name ?? "Ce passif"} est encore en recharge — ${left} tour(s) à attendre.`);
+      return null;
+    }
+  }
+
   const updates = [];
   let chosen = null;
 
@@ -181,6 +197,57 @@ export async function setEquippedPassif(actor, itemId = null) {
 
   if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
   return chosen;
+}
+
+/* ------------------------------------------------------------------ */
+/* Recharge d'un passif                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recharge restante d'un passif, en tours. 0 = disponible.
+ *
+ * C'est le MÊME champ que celui de n'importe quel sort ou arme
+ * (`system.cooldown.restant`), ce qui rend le décompte gratuit :
+ * `decCooldowns` (turn-effects.js) parcourt déjà tout item qui le porte, au
+ * début du tour de son porteur — y compris un passif déposé, ce qui est
+ * exactement ce qu'il faut ici, puisque c'est pendant qu'on ne le porte plus
+ * que l'attente doit s'écouler.
+ */
+export function passifCooldownLeft(item) {
+  return Math.max(0, n(item?.system?.cooldown?.restant, 0));
+}
+
+/** Un passif encore en recharge ne peut pas être (re)pris. */
+export function isPassifOnCooldown(item) {
+  return isPassif(item) && passifCooldownLeft(item) > 0;
+}
+
+/**
+ * Arme la recharge d'un passif, au moment où il est réellement LANCÉ —
+ * c'est-à-dire au premier tour de combat de son porteur, en même temps que
+ * le prélèvement de mana, ou immédiatement s'il est pris en cours de combat
+ * alors que ce prélèvement a déjà eu lieu.
+ *
+ * Pourquoi à ce moment-là et pas au dépôt : un passif n'est pas une action
+ * qu'on déclenche, il est « entretenu ». Le compteur part donc quand
+ * l'entretien commence. La conséquence voulue est la seule qui compte à la
+ * table : reposer un passif pour en essayer un autre coûte l'attente
+ * complète avant de pouvoir revenir au premier, ce qui décourage de le
+ * changer à chaque tour selon l'adversaire en face.
+ *
+ * `system.cooldown.restant` est dans la liste blanche d'écriture joueur
+ * (init.js), donc le porteur peut l'armer depuis son propre client.
+ *
+ * @returns {boolean} vrai si une écriture a eu lieu.
+ */
+export async function startPassifCooldown(actor, item) {
+  const max = Math.max(0, n(item?.system?.cooldown?.max, 0));
+  if (!actor || !item || max <= 0) return false;
+  if (passifCooldownLeft(item) === max) return false;      // déjà armée
+  await actor.updateEmbeddedDocuments("Item", [
+    { _id: item.id, "system.cooldown.restant": max }
+  ]);
+  return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -296,5 +363,11 @@ export async function chargePassifOnFirstTurn(actor, combat) {
 
   const item = equippedPassif(actor);
   if (!item) return null;
+
+  // Le passif est lancé maintenant : sa recharge part en même temps que son
+  // coût. Les deux disent la même chose — « il vient d'être engagé » — et
+  // les séparer aurait laissé un passif payé mais reprenable au tour suivant.
+  await startPassifCooldown(actor, item);
+
   return chargePassif(actor, item);
 }
