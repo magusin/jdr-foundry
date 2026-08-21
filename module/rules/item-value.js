@@ -753,7 +753,12 @@ export function computeSpellValue(item, opts = {}) {
         toucherMagique: n(opts.toucherMagique, n(actor?.system?.derived?.toucherMagique, 0))
       });
   const chance = hit.chance;
-  const critShare = Math.min(chance, CRIT_SHARE);
+  // Un passif ne lance AUCUN dé : il est actif en permanence, sans jet, donc
+  // sans réussite ni critique. Lui laisser la part de critique le faisait
+  // peser comme si 5 % de ses ticks sortaient en 20 naturel, et la fiche
+  // annonçait « dont critique » sur un sort que declareSpell refuse de
+  // déclarer. La chance vaut déjà 1 plus haut ; la part de crit doit valoir 0.
+  const critShare = isPassif ? 0 : Math.min(chance, CRIT_SHARE);
 
   const landedNormal = landedAgainstParty(rawNormal, PARTY);
   const landedCrit = landedAgainstParty(rawCrit, PARTY);
@@ -771,7 +776,8 @@ export function computeSpellValue(item, opts = {}) {
     add(`Dégâts moyens (par cible${targets > 1 ? `, ×${targets}` : ""})`,
         `${round1(rawNormal)} brut → ${round1(landedNormal)} encaissé`,
         damagePerUse * DAMAGE_POINT);
-    if (rawCrit !== rawNormal) {
+    // Idem : pas de ligne « dont critique » sur un passif, qui n'en a pas.
+    if (!isPassif && rawCrit !== rawNormal) {
       rows.push({ label: "Dont critique (5 % des jets)", value: `${round1(rawCrit)} brut`, points: null });
     }
   }
