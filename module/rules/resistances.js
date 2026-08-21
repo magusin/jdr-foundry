@@ -10,6 +10,8 @@ const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d
 import { getWeatherModifierFor } from "./weather-library.js";
 import { resistTextParts } from "./damage-types.js";
 import { normalizeEffectTag } from "./effect-library.js";
+import { writeStateOn } from "./status-effects.js";
+import { effectiveStates } from "./loadout.js";
 
 /**
  * Lignes lisibles des résistances aux ÉTATS portées par un objet
@@ -80,7 +82,8 @@ export function actorStateResistRows(actor) {
  */
 function getStateResistances(actor) {
   const list = [];
-  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  // Passif porté compris — voir effectiveStates (loadout.js).
+  const states = effectiveStates(actor);
   for (const st of states) {
     if (st?.resistance && typeof st.resistance === "object") list.push(st.resistance);
   }
@@ -235,18 +238,14 @@ export async function addStateWithResistance(actor, state) {
     return { applied: false, resisted: true, resistanceInfo: adjusted.resistanceInfo };
   }
 
-  const list = Array.isArray(actor.system?.etatsActifs)
-    ? foundry.utils.deepClone(actor.system.etatsActifs)
-    : [];
+  // Insertion : id, sinon LIBELLÉ, et dépose d'un passif homonyme. La règle
+  // est commune à tout le système (writeStateOn, status-effects.js) — sans
+  // elle, appliquer « Brûlure » depuis le catalogue MJ à une cible déjà
+  // brûlée écrivait une seconde ligne du même nom.
+  const { replaced, droppedPassif } = await writeStateOn(actor, adjusted);
 
-  const id = String(adjusted.id || foundry.utils.randomID());
-  const idx = list.findIndex(e => String(e.id) === id);
-  if (idx >= 0) list[idx] = { ...list[idx], ...adjusted };
-  else list.push(adjusted);
-
-  await actor.update({ "system.etatsActifs": list });
-
-  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
-
-  return { applied: true, resisted: false, state: adjusted, resistanceInfo: adjusted.resistanceInfo };
+  return {
+    applied: true, resisted: false, state: adjusted,
+    resistanceInfo: adjusted.resistanceInfo, replaced, droppedPassif
+  };
 }

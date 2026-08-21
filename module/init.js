@@ -35,7 +35,6 @@ import { randomizeMonster, buildRandomUpdatesForActor } from "./monster-gen.js";
 import { RPGActor } from "./documents/actor.js";
 import { RPGItem } from "./documents/item.js";
 
-import * as Status from "./rules/status-effects.js";
 import { RPG_AURAS } from "./rules/auras.js";
 import { GM_AURA } from "./rules/gm-aura.js";
 import { RPG_AURA_RENDER } from "./rules/aura-render.js";
@@ -607,7 +606,6 @@ Hooks.once("init", async () => {
 
   game.rpg = game.rpg ?? {};
   game.rpg.randomizeMonster = randomizeMonster;
-  game.rpg.status = Status;
   game.rpg.auras = RPG_AURAS;
   game.rpg.gmAura = GM_AURA;
   game.rpg.auraRender = RPG_AURA_RENDER;
@@ -1077,6 +1075,19 @@ Hooks.once("init", async () => {
 
     // ✅ game.rpg.status : force recompute d'un acteur
     game.rpg.status = { recompute: async (actor) => { if (actor) { actor.reset(); actor.sheet?.render(false); } } };
+
+    // ✅ game.rpg.states : la règle d'insertion d'un état, pour les macros —
+    // elles ne peuvent pas importer, et écrire un état à la main leur faisait
+    // rater le remplacement par libellé et la dépose du passif homonyme.
+    {
+      const _st = await import("./rules/status-effects.js");
+      const _lo = await import("./rules/loadout.js");
+      game.rpg.states = {
+        writeState: _st.writeStateOn,
+        findStateSlot: _st.findStateSlot,
+        dropPassifOnStateLabel: _lo.dropPassifOnStateLabel
+      };
+    }
 
     // ✅ game.rpg.budget : API budget d'actions
     game.rpg.budget = {
@@ -2027,6 +2038,11 @@ Hooks.once("init", async () => {
 
       const flat = foundry.utils.flattenObject(changed ?? {});
       const relevant = Object.keys(flat).some(k =>
+        // Équiper ou déposer un PASSIF allume ou éteint son aura : ses effets
+        // ne sont écrits nulle part, ils sont relus depuis l'emplacement
+        // (loadout.js). Sans cette clé, l'aura d'un passif ne changeait qu'au
+        // premier déplacement d'un token.
+        k === "system.equipe" ||
         k.startsWith("system.aura") ||
         k.startsWith("system.range") ||
         k.startsWith("system.effectsUI") ||
@@ -2038,6 +2054,14 @@ Hooks.once("init", async () => {
 
       if (!relevant) return;
       requestAuraRefresh(150);
+
+      // Les effets d'un PASSIF porté valent comme des états (loadout.js) :
+      // équiper ou déposer change donc les icônes du token, alors qu'aucune
+      // écriture n'a touché system.etatsActifs — le miroir branché sur
+      // updateActor ne pouvait pas le voir.
+      if (game.user.isGM && flat["system.equipe"] !== undefined) {
+        syncActorStatusIcons(actor).catch(e => console.warn("[RPG] icônes de statut :", e));
+      }
     });
 
     // ---------- Item renommé/réimagé : rafraîchit les fenêtres qui
@@ -2197,8 +2221,10 @@ Hooks.once("init", async () => {
       // sélection d'emplacement échouait en silence côté joueur.
       "system.emplacement",
       "system.actif",
+      // Marqueur d'équipement d'un passif, écrit en même temps que
+      // system.equipe (loadout.js). `system.aura.enabled` a disparu avec le
+      // reste du bloc hérité.
       "system.aura.active",
-      "system.aura.enabled",
       // Recharge : c'est le SYSTÈME qui l'écrit quand le joueur lance son
       // sort. Sans ces clés, l'update etait rejetee en silence et le sort
       // restait indefiniment disponible (aucune recharge appliquee).

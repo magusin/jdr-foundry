@@ -13,6 +13,8 @@
 import { hpSecret } from "./chat-visibility.js";
 import { confirmAttackDeclaration, rollAttackDie, resolveDeclaredActor } from "./attack-declare.js";
 import { collectAttackBonusEffects } from "./attack-bonus.js";
+import { findStateSlot } from "./status-effects.js";
+import { dropPassifOnStateLabel } from "./loadout.js";
 
 const MISS_MESSAGES_MELEE = [
   "{target} esquive l'attaque au dernier moment !",
@@ -51,7 +53,8 @@ function pickRandom(list) {
  *
  * L'`id` est déterministe, d'où le remplacement plutôt que l'empilement :
  * frapper deux fois la même cible rafraîchit la durée du poison, il n'en
- * pose pas deux qui se décomptent chacun de leur côté.
+ * pose pas deux qui se décomptent chacun de leur côté. Un état de même
+ * LIBELLÉ venu d'ailleurs est remplacé de la même façon (findStateSlot).
  */
 function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, effP }) {
   const stat = String(dot?.stat ?? "").trim();
@@ -81,8 +84,12 @@ function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, e
     mods: {}
   };
 
-  const idx = states.findIndex(st => String(st?.id) === id);
-  if (idx >= 0) states[idx] = { ...states[idx], ...state };
+  // Même id, sinon même LIBELLÉ — la règle est celle des sorts
+  // (findStateSlot) : un état homonyme est remplacé, jamais doublé.
+  // L'entrée est écrasée en entier plutôt que fusionnée, pour ne pas
+  // hériter des champs de l'effet précédent.
+  const idx = findStateSlot(states, id, label, state);
+  if (idx >= 0) states[idx] = state;
   else states.push(state);
   return perTick;
 }
@@ -126,6 +133,7 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
   // "hitOnly" = touche normale seulement, "crit" = critique seulement
   const allowed = new Set(isCrit ? ["hit", "crit"] : ["hit", "hitonly"]);
   const rows = [];
+  const postedLabels = [];
 
   const effP = attacker?.system?.derived?.effective?.principales
             ?? attacker?.system?.principales ?? {};
@@ -149,6 +157,7 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
       dot: fx?.dot, effP
     });
 
+    postedLabels.push(label);
     rows.push(hitStateLine("✨", label, target.name, perTick, duration,
       isCrit && String(fx?.when).toLowerCase() === "crit" ? " <i>(crit)</i>" : ""));
   }
@@ -156,9 +165,9 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
   // ── 2) États accordés par un bonus d'attaque ──────────────────────────
   for (const g of granted) {
     const fx = g.effect;
-    // L'id porte l'état SOURCE : deux buffs différents qui posent chacun un
-    // poison en posent bien deux, alors que la même lame qui frappe deux fois
-    // rafraîchit le sien.
+    // L'id porte l'état SOURCE, mais le libellé prime au moment de
+    // l'insertion : deux buffs qui posent chacun un « Venin » n'en laissent
+    // qu'un sur la cible, le dernier posé.
     const perTick = upsertHitState(states, {
       id: `atkfx_${g.stateId}_${target.id}`,
       label: fx.label,
@@ -168,12 +177,22 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
       dot: fx.dot, effP
     });
 
+    postedLabels.push(fx.label);
     rows.push(hitStateLine("🧪", fx.label, target.name, perTick, fx.duration,
       ` <span style="opacity:.7">(${g.label})</span>`));
   }
 
   if (rows.length) {
     await target.update({ "system.etatsActifs": states });
+
+    // Un passif de la cible qui accorde l'un de ces libellés est déposé :
+    // il ne vit pas dans etatsActifs, donc rien ne l'aurait écrasé et ses
+    // mods seraient restés en plus, invisibles (voir loadout.js).
+    for (const label of postedLabels) {
+      const dropped = await dropPassifOnStateLabel(target, label);
+      if (dropped) rows.push(`🔮 <b>${label}</b> remplace le passif « ${dropped} » de ${target.name} — emplacement libéré`);
+    }
+
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(target);
   }
   return rows;

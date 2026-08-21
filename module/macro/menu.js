@@ -111,7 +111,11 @@
     min: n(it?.system?.range?.min,  0),
     max: n(it?.system?.range?.max ?? it?.system?.portee, 0),
   });
-  const isAura       = (it) => !!(it?.system?.aura?.active || it?.system?.aura?.enabled);
+  // Une aura vient d'un effet du sort. Le bloc hérité system.aura sert de
+  // marqueur d'équipement à un passif (loadout.js) : le lire ici faisait
+  // passer tout passif porté pour une aura, donc pour un sort exigeant une
+  // cible (requiresTarget ci-dessous).
+  const isAura       = (it) => (Array.isArray(it?.system?.effectsUI) ? it.system.effectsUI : []).some(fx => fx?.isAura);
   const requiresTarget = (it) => !!(it?.system?.damage?.enabled || isAura(it));
 
   // ── listes ─────────────────────────────────────────────────────────────────

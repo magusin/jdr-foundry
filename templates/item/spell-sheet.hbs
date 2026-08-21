@@ -33,7 +33,9 @@
         background:rgba(200,163,73,.10);border:1px solid rgba(200,163,73,.35)">
         <b>Passif</b> — jamais déclaré, donc aucun jet : ni touché, ni critique, ni cible à viser.
         Tout ce qu'il fait tient dans <b>Effets secondaires</b>, appliqués en permanence à son porteur
-        tant qu'il est le passif <b>porté</b> (onglet Talents, un seul à la fois).
+        tant qu'il est le passif <b>porté</b> (onglet Talents, un seul à la fois) : bonus/malus, dégâts ou
+        soin par tour, aura, résistances accordées, bonus de dégâts aux attaques. Rien n'est écrit sur la
+        fiche — tout est relu depuis l'emplacement, donc tout s'éteint dès que le passif est déposé.
         Portée, cibles, difficulté, déplacement, dégâts et récupération sont donc masqués : ils ne sont lus
         par personne. Repasse la Vitesse sur Normal et tout revient, intact.
         <br/>Pour un bonus qui dure tout le combat : coche <b>N'expire pas</b> sur l'effet,
@@ -49,7 +51,7 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
 
         <div>
-          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il est le passif PORTÉ (onglet Talents — un seul à la fois, en avoir plusieurs dans son grimoire n'en active aucun de plus). Son coût en mana est prélevé une fois par combat, au premier tour. Dégâts par tour et aura non gérés en passif.">Vitesse</label>
+          <label title="Normal / Rapide = le sort se déclare et consomme une action (le Rapide en consomme moins). Passif = jamais déclaré : les bonus/malus de ses effets secondaires s'appliquent en permanence à son porteur, tant qu'il est le passif PORTÉ (onglet Talents — un seul à la fois, en avoir plusieurs dans son grimoire n'en active aucun de plus). Son coût en mana est prélevé une fois par combat, au premier tour. Ses effets valent pleinement : bonus/malus, dégâts ou soin par tour, aura, résistances accordées et bonus de dégâts aux attaques.">Vitesse</label>
           {{#if canEdit}}
           <select name="system.speed" style="width:100%">
             <option value="passif" {{#if (eq system.speed "passif")}}selected{{/if}}>Passif</option>
@@ -534,7 +536,8 @@
             <div class="fx-mods-list" data-fx-idx="{{i}}">
               {{#if fx.mods.length}}
               <div class="fx-mod-row fx-mod-head">
-                <span>Stat</span><span>Sens</span><span>Type</span><span>Valeur</span><span></span>
+                <span>Stat</span><span>Sens</span><span>Type</span><span>Fixe</span>
+                <span>Stat de calcul</span><span>Par tranche</span><span>Gain</span><span></span>
               </div>
               {{/if}}
               {{#each fx.mods as |mod mi|}}
@@ -577,14 +580,37 @@
                   <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
                 </select>
                 <input type="number" data-mod-field="value" value="{{mod.absValue}}" min="0" placeholder="0"
-                  title="Quantité, toujours positive — le sens est choisi à gauche."/>
+                  title="Part fixe, toujours positive — le sens est choisi à gauche."/>
+                {{!-- Mise à l'échelle : même forme que les dégâts (partie 3),
+                      fixe + (stat ÷ tranche) × gain, figée sur le lanceur au
+                      moment où l'effet est posé. --}}
+                <select data-mod-field="scaleStat"
+                  title="Caractéristique du LANCEUR qui renforce ce bonus, figée au moment où l'effet est posé. Laisse « — Aucune — » pour un bonus fixe.">
+                  <option value="" {{#unless mod.scaleStat}}selected{{/unless}}>— Aucune —</option>
+                  <option value="force"        {{#if (eq mod.scaleStat "force")}}selected{{/if}}>Force</option>
+                  <option value="dexterite"    {{#if (eq mod.scaleStat "dexterite")}}selected{{/if}}>Dextérité</option>
+                  <option value="intelligence" {{#if (eq mod.scaleStat "intelligence")}}selected{{/if}}>Intelligence</option>
+                  <option value="acuite"       {{#if (eq mod.scaleStat "acuite")}}selected{{/if}}>Acuité</option>
+                  <option value="endurance"    {{#if (eq mod.scaleStat "endurance")}}selected{{/if}}>Endurance</option>
+                </select>
+                <input type="number" data-mod-field="scalePer" value="{{mod.scalePer}}" min="1" step="1"
+                  title="Diviseur : la stat est divisée par ce nombre, arrondi à l'inférieur."/>
+                <input type="number" data-mod-field="scaleStep" value="{{mod.scaleStep}}" min="0" step="1"
+                  title="Gain par tranche. 0 = aucune mise à l'échelle."/>
                 <button type="button" data-action="removeMod" data-fx-idx="{{i}}" data-mod-index="{{mi}}"
                   class="fx-del-btn" title="Retirer cette stat">✕</button>
               </div>
               {{/each}}
             </div>
             <button type="button" data-action="addMod" data-fx-idx="{{i}}" class="fx-add-btn">+ Ajouter une stat</button>
-            <small class="fx-hint">Facultatif — laisse vide si l'effet ne change aucune stat. Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>. La <b>Fatigue max</b> se gère ici aussi.</small>
+            <small class="fx-hint">
+              Facultatif — laisse vide si l'effet ne change aucune stat. Ex. Enlisement : <b>Vitesse · Malus · % · 25</b>.
+              La <b>Fatigue max</b> se gère ici aussi.
+              <br>Les trois dernières colonnes font grandir le bonus avec le lanceur, comme les dégâts :
+              <b>Fixe + (stat ÷ tranche) × gain</b>. Ex. <b>Force · Bonus · Fixe · 2</b> puis
+              <b>Intelligence · 10 · 1</b> = +2, et +1 de plus par tranche de 10 en Intelligence du lanceur.
+              La valeur est figée au moment où l'effet est posé ; sur un <b>passif</b>, elle suit les stats de son porteur.
+            </small>
           </fieldset>
 
           {{!-- 5 · Déplacement & Aura --}}
@@ -626,7 +652,16 @@
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff. Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte : l'aura part de lui et touche, à chaque tour et selon la distance, les alliés / les ennemis / tout le monde. ⚠️ Pour une aura autour du <b>lanceur</b>, mets « S'applique à : Le lanceur » en partie 2, sinon elle rayonnera autour de la cible.</small>
+            <small class="fx-hint">
+              Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff.
+              Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte.
+              <br>L'aura part <b>du porteur de l'état</b>, jamais du sort : « S'applique à : Le lanceur » en partie 2 la fait rayonner autour de toi,
+              « la/les cible(s) » la pose sur un allié (avec une portée du sort supérieure à 0) qui devient alors l'émetteur à ta place.
+              <br>Ceux qui sont à portée reçoivent une <b>copie</b> de l'effet : elle porte le même nom, remplace un état homonyme qu'ils
+              avaient déjà — et le passif qui l'accordait — et disparaît dès qu'ils sortent de la zone, <b>sans rendre l'ancien</b>.
+              Cette copie ne peut pas être retirée par un jet : pour éteindre une aura, il faut supprimer l'état de <b>son porteur</b>,
+              et elle s'éteint alors pour tout le monde d'un coup.
+            </small>
           </fieldset>
 
           {{!-- 6 · Résistance à un TYPE DE DÉGÂTS --}}

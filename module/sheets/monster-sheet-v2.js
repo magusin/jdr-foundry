@@ -12,6 +12,8 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, normalizeResistMap, resistRows, nonZeroResistRows
 } from "../rules/damage-types.js";
 import { actorStateResistRows } from "../rules/resistances.js";
+import { findStateSlot } from "../rules/status-effects.js";
+import { dropPassifOnStateLabel, passifStates } from "../rules/loadout.js";
 import { computeMonsterValue, computeMonsterBandValues } from "../rules/item-value.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
@@ -293,8 +295,15 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     // dernier lieu) : un état décrit ici ne disait donc pas la même chose
     // que le même état décrit ailleurs.
     const states = Array.isArray(sys?.etatsActifs) ? foundry.utils.deepClone(sys.etatsActifs) : [];
+    // Les effets du passif porté comptent comme des états (loadout.js) : un
+    // monstre n'a pas d'onglet Talents, donc c'est ici, et nulle part
+    // ailleurs, que le MJ peut voir ce que ses capacités passives lui donnent.
+    const passifDisplay = foundry.utils.deepClone(passifStates(this.document))
+      .map(st => ({ ...st, isVirtual: true }));
     decorateStates(states);
-    ctx.system.etatsActifs = states;
+    decorateStates(passifDisplay);
+    for (const st of states) if (st?.type === "auraApplied") st.isVirtual = true;
+    ctx.system.etatsActifs = [...passifDisplay, ...states];
     return ctx;
   }
 
@@ -820,29 +829,44 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     const path = this._statePath();
     const list = this._stateList();
     const id = state.id || foundry.utils.randomID();
-    let idx = list.findIndex(e => e.id === id);
-
-    // Pas de correspondance par id (nouvel ajout, cf. stateAdd) : un effet
-    // IDENTIQUE déjà présent sur la cible (même nom) doit être REMPLACÉ —
-    // durée/valeurs rafraîchies — plutôt qu'empilé en double.
-    if (idx < 0) {
-      const label = String(state.label ?? "").trim().toLowerCase();
-      if (label) idx = list.findIndex(e => String(e.label ?? "").trim().toLowerCase() === label);
-    }
+    // Id, sinon LIBELLÉ — même règle que la fiche de personnage et que tout
+    // le reste du système (findStateSlot, status-effects.js).
+    const idx = findStateSlot(list, id, state.label, state);
 
     const finalId = idx >= 0 ? list[idx].id : id;
     const normalized = this._normalizeState({ ...state, id: finalId });
     if (idx >= 0) list[idx] = normalized;
     else list.push(normalized);
     await this.document.update({ [path]: list });
+
+    const dropped = await dropPassifOnStateLabel(this.document, normalized.label);
+    if (dropped) {
+      ui.notifications?.info?.(`Passif « ${dropped} » déposé : ${normalized.label} le remplace.`);
+    }
+
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.document);
+
+    // Une aura posée à la main doit rayonner tout de suite : sans ce
+    // rafraîchissement, elle attendait un déplacement ou un début de tour.
+    if (normalized.isAura && globalThis.RPG_AURAS?.refreshAuras) {
+      await globalThis.RPG_AURAS.refreshAuras();
+    }
   }
 
   async _stateRemove(id) {
     const path = this._statePath();
+    const removed = this._stateFindById(id);
     const list = this._stateList().filter(e => e.id !== id);
     await this.document.update({ [path]: list });
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.document);
+
+    // Retirer À LA MAIN l'état d'aura de son porteur est la façon dont le MJ
+    // éteint une aura : les copies posées sur les autres doivent partir avec.
+    // La fiche de personnage le fait déjà ; celle-ci ne le faisait pas, et
+    // l'aura survivait à sa propre source jusqu'au prochain déplacement.
+    if (removed?.isAura && globalThis.RPG_AURAS?.refreshAuras) {
+      await globalThis.RPG_AURAS.refreshAuras();
+    }
   }
 
   _stateDefaults() {

@@ -9,6 +9,8 @@ import {
   collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
+import { writeStateOn } from "./status-effects.js";
+import { tickPerTick, scaledModValue } from "./effect-tick.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -371,40 +373,6 @@ function summarizeModsWithKind(mods = {}) {
   return { kind, summary };
 }
 
-/**
- * Valeur par tour d'un effet secondaire, SIGNÉE pour le moteur de tour :
- * positive = dégâts, négative = soin.
- *
- * Source : fx.tick { mode:"none"|"damage"|"heal", flat, stat, per, perStep }
- * où `flat` est toujours positif — c'est `mode` qui donne le sens.
- * Replis successifs sur les anciens formats : dot{}/hot{} séparés, puis
- * l'ancien champ unique signé damage.flat.
- */
-function tickPerTick(fx, effP) {
-  const scaled = (blk) => {
-    if (!blk) return 0;
-    const stat = String(blk.stat ?? "").trim();
-    const per = Math.max(1, n(blk.per, 10) || 10);
-    const perStep = n(blk.perStep, 0);
-    const bonus = stat ? Math.floor(n(effP?.[stat], 0) / per) * perStep : 0;
-    return n(blk.flat, 0) + bonus;
-  };
-
-  const t = fx?.tick;
-  if (t && typeof t === "object" && t.mode) {
-    if (t.mode === "none") return 0;
-    const total = Math.abs(scaled(t));
-    return t.mode === "heal" ? -total : total;
-  }
-
-  // Anciens formats
-  const dotHas = fx?.dot && (n(fx.dot.flat, 0) !== 0 || n(fx.dot.perStep, 0) !== 0);
-  const hotHas = fx?.hot && (n(fx.hot.flat, 0) !== 0 || n(fx.hot.perStep, 0) !== 0);
-  if (dotHas || hotHas) return scaled(fx.dot) - scaled(fx.hot);
-
-  return n(fx?.damage?.flat, 0);
-}
-
 function effectsForResult(item, result) {
   const arr = Array.isArray(item?.system?.effectsUI) ? item.system.effectsUI : [];
   const res = String(result);
@@ -498,29 +466,16 @@ async function ensureSpellDefaults(item) {
     if (sys.cooldown.restant === undefined) patch["system.cooldown.restant"] = 0;
   }
 
-  // aura
+  // aura : il ne reste de ce bloc hérité que `active`, aligné sur
+  // `system.equipe` par setEquippedPassif comme marqueur d'équipement d'un
+  // passif (loadout.js). Une vraie aura vient d'un EFFET (fx.isAura) ; les
+  // champs de définition qui traînaient ici (enabled, target, key, range,
+  // dotFlat, cleanseDC) n'étaient plus lus par personne et sont supprimés à
+  // la première sauvegarde de la fiche.
   if (!sys.aura || typeof sys.aura !== "object") {
-    patch["system.aura"] = {
-      active: false,
-      enabled: false,
-      target: "allies",
-      key: "",
-      range: { min: 0, max: 3 },
-      dotFlat: 0,
-      cleanseDC: 0
-    };
+    patch["system.aura"] = { active: false };
   } else {
     if (sys.aura.active === undefined) patch["system.aura.active"] = false;
-    if (sys.aura.enabled === undefined) patch["system.aura.enabled"] = false;
-    if (sys.aura.target === undefined) patch["system.aura.target"] = "allies";
-    if (sys.aura.key === undefined) patch["system.aura.key"] = "";
-    if (!sys.aura.range || typeof sys.aura.range !== "object") patch["system.aura.range"] = { min: 0, max: 3 };
-    else {
-      if (sys.aura.range.min === undefined) patch["system.aura.range.min"] = 0;
-      if (sys.aura.range.max === undefined) patch["system.aura.range.max"] = 3;
-    }
-    if (sys.aura.dotFlat === undefined) patch["system.aura.dotFlat"] = 0;
-    if (sys.aura.cleanseDC === undefined) patch["system.aura.cleanseDC"] = 0;
   }
 
   // --- DAMAGE (success)
@@ -642,16 +597,20 @@ function getFxByWhen(item, when) {
   return arr.filter(fx => String(fx?.when ?? "").toLowerCase() === String(when).toLowerCase());
 }
 
-function buildModsFromFxMods(fxMods) {
+/**
+ * Mods d'un effet, figés aux caractéristiques du LANCEUR au moment où ils
+ * sont posés — comme les dégâts. `effP` absent = aucune mise à l'échelle,
+ * ce qui est le bon repli pour un aperçu hors contexte.
+ */
+function buildModsFromFxMods(fxMods, effP = null) {
   const mods = {};
   const mds = Array.isArray(fxMods) ? fxMods : [];
   for (const m of mds) {
     const stat = String(m?.stat ?? "").trim();
     if (!stat) continue;
     const mode = (m?.mode === "pct") ? "pct" : "flat";
-    const v = n(m?.value, 0);
     if (!mods[stat]) mods[stat] = { flat: 0, pct: 0 };
-    mods[stat][mode] += v;
+    mods[stat][mode] += scaledModValue(m, effP);
   }
   return mods;
 }
@@ -784,10 +743,16 @@ export function buildSpellUI({ actor, item }) {
   // de la liste de sorts se lisait pourtant uniquement sur lui : elle
   // manquait donc sur tous les sorts d'aura créés depuis la refonte.
   const fxAura = (Array.isArray(sys.effectsUI) ? sys.effectsUI : []).find(fx => fx?.isAura) ?? null;
-  const auraEnabled = !!fxAura || !!(sys.aura?.enabled || sys.aura?.active);
-  const auraMin = fxAura ? n(fxAura.auraMin, 0) : n(sys.aura?.range?.min, 0);
-  const auraMax = fxAura ? n(fxAura.auraMax, 0) : n(sys.aura?.range?.max, 0);
-  const auraTarget = fxTargetLabel(fxAura ? str(fxAura.auraTarget, "allies") : str(sys.aura?.target, "allies"));
+  // …et UNIQUEMENT de là. Lire aussi `sys.aura.active`/`enabled` en repli
+  // annonçait une aura sur tout PASSIF PORTÉ : setEquippedPassif (loadout.js)
+  // écrit `system.aura.active` en même temps que `system.equipe`, pour aligner
+  // un champ hérité qui servait autrefois d'interrupteur. La ligne
+  // « 🌀 Aura 0–3 (alliés) » affichée sous un passif sans la moindre case Aura
+  // cochée venait de là — les bornes étant celles du gabarit, pas du sort.
+  const auraEnabled = !!fxAura;
+  const auraMin = n(fxAura?.auraMin, 0);
+  const auraMax = n(fxAura?.auraMax, 0);
+  const auraTarget = fxTargetLabel(str(fxAura?.auraTarget, "allies"));
 
   const _manaCostBase  = n(sys.coutMana, 0);
   const _tag           = sys.tag ?? "neutre";
@@ -799,7 +764,7 @@ export function buildSpellUI({ actor, item }) {
 
   // IMPORTANT: modsSummary = HIT ONLY (jamais hit+crit)
   const fxHit = getFxByWhen(item, "hit")[0] ?? null;
-  const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods) : {};
+  const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods, getEffP(actor)) : {};
   const modsSummary = summarizeMods(hitMods);
 
   // Natures du sort, pour le filtrage des listes (« kinds » séparés par |)
@@ -965,7 +930,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
     if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
     else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
 
-    const modSummary = summarizeMods(buildModsFromFxMods(fx.mods));
+    const modSummary = summarizeMods(buildModsFromFxMods(fx.mods, getEffP(actor)));
     if (modSummary) parts.push(modSummary);
 
     if (fx.isAura) {
@@ -1042,17 +1007,13 @@ async function upsertState(actor, state) {
     return { resisted: true, resistanceInfo: adjusted.resistanceInfo };
   }
 
-  const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
-  const id = String(adjusted.id || foundry.utils.randomID());
-  const idx = list.findIndex(e => String(e.id) === id);
-  const normalized = normalizeState(adjusted, id);
-  if (idx >= 0) list[idx] = { ...list[idx], ...normalized };
-  else list.push(normalized);
+  // Insertion : id, sinon LIBELLÉ, écrasement de l'entrée entière, puis
+  // dépose d'un passif accordant le même nom. Les trois gestes vont toujours
+  // ensemble et vivent en un seul endroit — writeStateOn (status-effects.js).
+  const normalized = normalizeState(adjusted, String(adjusted.id || foundry.utils.randomID()));
+  const { replaced, droppedPassif } = await writeStateOn(actor, normalized);
 
-  await actor.update({ "system.etatsActifs": list });
-  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
-
-  return { resisted: false, resistanceInfo: adjusted.resistanceInfo };
+  return { resisted: false, resistanceInfo: adjusted.resistanceInfo, replaced, droppedPassif };
 }
 
 /* ------------------------------------------------------------ */
@@ -1169,7 +1130,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
     const lines = [];
     for (const fx of list) {
-      const mods = buildModsFromFxMods(fx.mods);
+      const mods = buildModsFromFxMods(fx.mods, getEffP(actor));
       const modInfo = summarizeModsWithKind(mods);
 
       const parts = [];
@@ -1609,7 +1570,9 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     if (allPairs.length > 0 && targetActors.length === 0) return;
 
     for (const fx of fxList) {
-      const mods = buildModsFromFxMods(fx.mods);
+      // Figés sur les stats du LANCEUR, pas de la cible : c'est sa puissance
+      // qui décide de ce que son sort accorde (même règle que ses dégâts).
+      const mods = buildModsFromFxMods(fx.mods, getEffP(actor));
       // Qui reçoit l'effet : la ou les cibles visées, le lanceur, ou les deux.
       // Une valeur inconnue (ancien format) retombe sur les cibles plutôt que
       // sur une liste vide — un effet qui ne s'applique à personne, sans un mot
@@ -1721,7 +1684,11 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           fxResultRows.push(`🛡️ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name} résiste (${reason})`);
           continue;
         }
-        addedStatesTracker.push({ actorId: applyTo.id, stateId });
+        // L'UUID en plus de l'id : sur un monstre non lié, l'acteur
+        // synthétique du token porte le MÊME id que son prototype, donc
+        // l'annulation retirait l'état de la fiche d'origine et laissait le
+        // token avec le sien (même piège que la chaîne d'attaque).
+        addedStatesTracker.push({ actorUuid: applyTo.uuid ?? null, actorId: applyTo.id, stateId });
         const modSummary = summarizeMods(mods);
         const durTxt = permanent ? "permanent" : `${info?.finalDuration ?? n(outgoing.duration, duration)} tours`;
         // Trace l'amplification pour que le MJ voie d'où vient le renfort
@@ -1730,7 +1697,13 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
         if (ampInfo?.dotBonusPct)   ampBits.push(`puissance ${ampInfo.dotBonusPct > 0 ? "+" : ""}${ampInfo.dotBonusPct}%`);
         if (ampInfo?.modBonusPct)   ampBits.push(`bonus/malus ${ampInfo.modBonusPct > 0 ? "+" : ""}${ampInfo.modBonusPct}%`);
         const ampTxt = ampBits.length ? ` <span style="opacity:.8">· ⚗️ amplifié (${ampBits.join(", ")})</span>` : "";
-        fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}`);
+        // Ce qui a été remplacé se dit : sans ça, un état homonyme écrasé
+        // (ou pire, un passif déposé) disparaît sans trace et se lit comme
+        // un bug côté joueur.
+        const replTxt = resistResult?.droppedPassif
+          ? ` <span style="opacity:.8">· 🔮 remplace le passif « ${resistResult.droppedPassif} » (emplacement libéré)</span>`
+          : (resistResult?.replaced ? ` <span style="opacity:.8">· ♻️ remplace « ${resistResult.replaced} »</span>` : "");
+        fxResultRows.push(`✨ <b>${str(fx.label, "Effet")}</b> → ${applyTo.name}${modSummary ? ` (${modSummary})` : ""} — ${durTxt}${ampTxt}${replTxt}`);
       }
     }
 

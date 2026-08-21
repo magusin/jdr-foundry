@@ -877,7 +877,15 @@ export function computeSpellValue(item, opts = {}) {
       if (!stat || weight === undefined) continue;
       const signed = n(m?.value, 0);
       const isBonus = (m?.sens === "malus") ? false : (m?.sens === "bonus" ? true : signed >= 0);
-      const qty = Math.abs(signed);
+      // Part fixe + part qui grandit avec une stat du lanceur, chiffrée sur
+      // la même référence que le scaling des dégâts (SCALING_REF_STAT) : sans
+      // elle, « +1 par 10 d'Intelligence » pesait zéro.
+      const scaleStat = String(m?.scaleStat ?? "").trim();
+      const scaleStep = n(m?.scaleStep, 0);
+      const scalePer = Math.max(1, n(m?.scalePer, 10) || 10);
+      const scaled = (scaleStat && scaleStep)
+        ? Math.floor(SCALING_REF_STAT / scalePer) * Math.abs(scaleStep) : 0;
+      const qty = Math.abs(signed) + scaled;
       if (!qty) continue;
       // Un "%" n'a de sens que rapporté à une valeur : PCT_REF donne l'ordre
       // de grandeur habituel de la stat visée.

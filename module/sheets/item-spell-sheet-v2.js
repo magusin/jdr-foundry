@@ -9,6 +9,7 @@ import {
 import { computeSpellValue } from "../rules/item-value.js";
 import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN } from "../rules/attack-bonus.js";
 import { effectCatalogByTag, getEffectDef, EFFECT_TAGS, normalizeEffectTag } from "../rules/effect-library.js";
+import { modIsScaled } from "../rules/effect-tick.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -110,6 +111,7 @@ function decorateMod(m) {
     absValue: abs,
     statLabel: label,
     text: `${isMalus ? "⬇️" : "⬆️"} ${label} ${isMalus ? "−" : "+"}${abs}${m.mode === "pct" ? "%" : ""}`
+      + (modIsScaled(m) ? ` (+${Math.abs(n(m.scaleStep, 0))} par ${n(m.scalePer, 10)} de ${STAT_LABELS[m.scaleStat] ?? m.scaleStat})` : "")
   };
 }
 
@@ -197,7 +199,7 @@ function normMods(raw) {
   // `sens` est stocké EXPLICITEMENT : le déduire du signe cassait le choix
   // « Malus » tant que la quantité valait 0 (−0 n'est pas < 0, le select
   // repassait donc sur « Bonus » au rendu suivant).
-  const push = (stat, mode, value, sens) => {
+  const push = (stat, mode, value, sens, scale = null) => {
     const v = n(value, 0);
     const s = (sens === "malus" || sens === "bonus") ? sens : (v < 0 ? "malus" : "bonus");
     const qty = Math.abs(v);
@@ -205,14 +207,20 @@ function normMods(raw) {
       stat,
       mode: mode === "pct" ? "pct" : "flat",
       sens: s,
-      value: s === "malus" ? -qty : qty
+      value: s === "malus" ? -qty : qty,
+      // Mise à l'échelle sur une stat du lanceur — même forme que l'effet par
+      // tour (scaledModValue, effect-tick.js). Absente = bonus fixe.
+      scaleStat: String(scale?.stat ?? "").trim(),
+      scalePer: Math.max(1, n(scale?.per, 10) || 10),
+      scaleStep: Math.abs(n(scale?.step, 0))
     });
   };
   if (Array.isArray(raw)) {
     for (const m of raw) {
       const stat = String(m?.stat ?? "").trim();
       if (!stat) continue;
-      push(stat, m?.mode, m?.value, m?.sens);
+      push(stat, m?.mode, m?.value, m?.sens,
+           { stat: m?.scaleStat, per: m?.scalePer, step: m?.scaleStep });
     }
     return out;
   }
@@ -678,11 +686,11 @@ static PARTS = foundry.utils.mergeObject(
     ctx.system.moveSelf = Math.max(0, n(ctx.system.moveSelf, 0));
     ctx.system.cooldown = ctx.system.cooldown ?? { max: 0, restant: 0 };
 
+    // Du bloc hérité `system.aura` il ne reste que `active`, marqueur
+    // d'équipement d'un passif. Le reste (portée, cible, clé, dotFlat,
+    // cleanseDC) ne décrivait plus rien : une aura vient d'un effet.
     ctx.system.aura = ctx.system.aura ?? {};
     ctx.system.aura.active = b(ctx.system.aura.active);
-    ctx.system.aura.range = ctx.system.aura.range ?? { min: 0, max: 0 };
-    ctx.system.aura.target = ctx.system.aura.target ?? "both";
-    ctx.system.aura.key = String(ctx.system.aura.key ?? "");
 
     ctx.system.description = String(ctx.system.description ?? "");
 
@@ -837,12 +845,6 @@ static PARTS = foundry.utils.mergeObject(
     ctx.ui.hasDamage = hasRealDamage(ctx.system.damage);
     ctx.ui.hasDamageCrit = !!ctx.system.damageCrit.enabled && hasRealDamage(ctx.system.damageCrit);
 
-    ctx.ui.hasAuraFields = !!ctx.system.aura.active && (
-      n(ctx.system.aura.range?.min, 0) !== 0 ||
-      n(ctx.system.aura.range?.max, 0) !== 0 ||
-      String(ctx.system.aura.key ?? "").trim() !== ""
-    );
-
     ctx.ui.damageStatBonus = ctx.system?.damage?.preview?.scalingBonus ?? 0;
     ctx.ui.damageCritStatBonus = ctx.system?.damageCrit?.preview?.scalingBonus ?? 0;
 
@@ -900,7 +902,13 @@ static PARTS = foundry.utils.mergeObject(
         const mode = row.querySelector('[data-mod-field="mode"]')?.value === "pct" ? "pct" : "flat";
         const sens = row.querySelector('[data-mod-field="sens"]')?.value === "malus" ? "malus" : "bonus";
         const qty = Math.abs(Number(row.querySelector('[data-mod-field="value"]')?.value) || 0);
-        mods.push({ stat: String(stat), mode, sens, value: sens === "malus" ? -qty : qty });
+        const scaleStat = String(row.querySelector('[data-mod-field="scaleStat"]')?.value ?? "").trim();
+        const scalePer = Math.max(1, Number(row.querySelector('[data-mod-field="scalePer"]')?.value) || 10);
+        const scaleStep = Math.abs(Number(row.querySelector('[data-mod-field="scaleStep"]')?.value) || 0);
+        mods.push({
+          stat: String(stat), mode, sens, value: sens === "malus" ? -qty : qty,
+          scaleStat, scalePer, scaleStep
+        });
       });
 
       out.push({
@@ -1292,6 +1300,17 @@ static PARTS = foundry.utils.mergeObject(
       prepared.system = prepared.system ?? {};
       prepared.system.effectsUI = collectedFx;
     }
+
+    // Nettoyage à la première sauvegarde : les champs de définition du bloc
+    // hérité `system.aura` ne décrivent plus rien (une aura vient d'un effet).
+    // Les laisser en base, c'est laisser un MJ les retrouver un jour dans un
+    // export et croire qu'ils font quelque chose. Même procédé que
+    // « -=regenPvPct » sur les fiches d'équipement.
+    prepared.system = prepared.system ?? {};
+    prepared.system.aura = Object.assign({}, prepared.system.aura, {
+      "-=enabled": null, "-=target": null, "-=key": null,
+      "-=range": null, "-=dotFlat": null, "-=cleanseDC": null
+    });
 
     // Soumission explicite uniquement (touche Entrée) : submitOnChange est
     // désactivé, la saisie courante passe par _bindLiveSave sans re-render.

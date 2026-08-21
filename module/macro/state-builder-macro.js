@@ -156,10 +156,11 @@
 
             if (isAura) {
               // Source d'aura : ajoutée directement sur la cible (pas de résistance,
-              // elle ÉMET l'effet, elle ne le subit pas), puis on rafraîchit
-              const list = foundry.utils.deepClone(actor.system?.etatsActifs ?? []);
-              list.push(state);
-              await actor.update({ "system.etatsActifs": list });
+              // elle ÉMET l'effet, elle ne le subit pas), puis on rafraîchit.
+              // L'écriture passe par la règle commune (game.rpg.states) : un
+              // état du même nom déjà porté est remplacé, et un passif qui
+              // l'accordait est déposé — un push direct les empilait.
+              await game.rpg.states.writeState(actor, state);
               results.push({ name: actor.name, applied: true, aura: true });
             } else {
               const res = await resAPI.addStateWithResistance(actor, state);

@@ -12,6 +12,7 @@
 // Tout est défensif (try/catch) : en cas d'API différente, on n'altère rien.
 
 import { EFFECT_LIBRARY } from "./effect-library.js";
+import { effectiveStates } from "./loadout.js";
 
 // Icône Foundry native par tag élémentaire (fichiers du set core /icons/svg/).
 const ICON_BY_TAG = {
@@ -71,7 +72,12 @@ export function installCustomStatusEffects() {
 
 /** Ensemble des ids de statut correspondant aux etatsActifs de l'acteur. */
 function wantedStatusIds(actor) {
-  const states = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
+  // Les états du PASSIF porté comptent comme les autres : ils ne sont écrits
+  // nulle part (loadout.js) mais ils agissent, donc ils doivent se voir sur
+  // le token — sans quoi le seul effet permanent du jeu était aussi le seul
+  // invisible. Les copies d'aura arrivent par la même liste, avec le libellé
+  // de leur source, donc leur icône est celle de l'effet d'origine.
+  const states = effectiveStates(actor);
   const ids = new Set();
   for (const s of states) {
     const key = LABEL_TAG_TO_KEY[labelTagKey(s?.label, s?.tag)]

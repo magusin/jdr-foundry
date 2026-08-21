@@ -729,6 +729,20 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                 <span class="muted" style="margin-left:6px;">[AURA]</span>
                 {{/if}}
 
+                {{!-- État REÇU d'une aura : il ne se décompte pas et ne se
+                      retire pas, il tient tant que la cible reste à portée.
+                      Afficher « 999999 tours » comme pour un état ordinaire
+                      ne voulait rien dire. --}}
+                {{#if (eq e.type "passifEffect")}}
+                <span class="muted" style="margin-left:6px;"
+                  title="Vient du passif porté « {{e.sourceLabel}} » (onglet Talents). Il s'éteint en déposant le passif, pas en retirant l'état — il n'y en a pas à retirer.">[PASSIF · {{e.sourceLabel}}]</span>
+                {{/if}}
+
+                {{#if e.auraApplied}}
+                <span class="muted" style="margin-left:6px;"
+                  title="Reçu de l'aura de {{e.auraApplied.sourceName}}. Ne se retire pas ici : il revient tant que la cible reste à portée. Pour l'éteindre, supprimer l'état d'aura sur {{e.auraApplied.sourceName}} — il s'éteint alors pour tous.">[AURA de {{e.auraApplied.sourceName}}]</span>
+                {{/if}}
+
                 {{#if e.isBeneficial}}
                 <span class="muted" style="margin-left:6px;">[BUFF]</span>
                 {{/if}}
@@ -737,7 +751,13 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                 <span class="muted" style="margin-left:6px;">[AFFLICTION]</span>
                 {{/if}}
 
+                {{#if e.auraApplied}}
+                <span class="muted">(tant que tu restes à portée)</span>
+                {{else if (eq e.type "passifEffect")}}
+                <span class="muted">(tant que tu le portes)</span>
+                {{else}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
+                {{/if}}
 
                 {{#if e.cleanseDC}}
                 <span class="muted">Retrait: {{e.cleanseDC}}+</span>
@@ -762,10 +782,13 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
               </div>
 
               <div class="state-actions">
-                {{#if ../flags.isGM}}
+                {{!-- Un état VIRTUEL (automatique, passif, copie d'aura) n'existe
+                      pas en base : le crayon en fabriquerait une copie et la
+                      corbeille serait défaite au prochain rafraîchissement. --}}
+                {{#if ../flags.isGM}}{{#unless e.isVirtual}}
                 <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
                 <button type="button" data-action="stateDelete" data-id="{{e.id}}">🗑</button>
-                {{/if}}
+                {{/unless}}{{/if}}
                 <button type="button" data-action="stateShow" data-id="{{e.id}}">?</button>
               </div>
             </li>
@@ -1106,7 +1129,10 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
       <a class="item-edit"><b>{{it.name}}</b></a>
 
       <div class="spell-meta" style="opacity:.85; font-size:12px; margin-top:4px; display:flex; flex-wrap:wrap; gap:10px;">
-        <span>⚡ {{#if (eq it._ui.speed "rapide")}}Rapide{{else}}Normal{{/if}}</span>
+        {{!-- Trois vitesses existent (normal / rapide / passif) : sans le
+              troisième cas, un passif s'annonçait « Normal », c'est-à-dire
+              exactement ce qu'il n'est pas. --}}
+        <span>⚡ {{#if (eq it._ui.speed "rapide")}}Rapide{{else if (eq it._ui.speed "passif")}}Passif{{else}}Normal{{/if}}</span>
         <span>💧 Mana: {{it._ui.coutMana}}</span>
         <span>📏 Sort: {{it._ui.rangeMin}}–{{it._ui.rangeMax}}</span>
 
@@ -1140,7 +1166,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
 
       {{#if it._previewEffects.length}}
       <div style="margin-top:8px; padding:8px; border:1px solid rgba(255,255,255,.12); border-radius:10px;">
-        <div style="font-size:12px; opacity:.85; margin-bottom:6px;"><b>Effets (aperçu)</b></div>
+        <div style="font-size:12px; opacity:.85; margin-bottom:6px;"><b>Effets</b></div>
         <ul style="margin:0; padding-left:16px; font-size:12px; opacity:.85;">
           {{#each it._previewEffects as |fx|}}
           <li>
@@ -1468,7 +1494,13 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             <img src="{{p.img}}" alt="" class="rpg-loadout-img"/>
             <span class="rpg-loadout-mid">
               <span class="rpg-loadout-name">{{p.name}}</span>
-              {{#if p.summary}}<span class="rpg-loadout-sum">{{{p.summary}}}</span>{{/if}}
+              {{#if p.effects.length}}
+              <span class="rpg-loadout-sum">
+                {{#each p.effects as |fx|}}
+                <span style="display:block">{{fx.label}}{{#if fx.summary}} — {{fx.summary}}{{/if}}</span>
+                {{/each}}
+              </span>
+              {{/if}}
             </span>
             {{#if p.cooldownLeft}}
             <span class="rpg-loadout-cd" title="Recharge : le passif est engagé, il ne peut pas être repris avant la fin du décompte.">↻ {{p.cooldownLeft}}</span>

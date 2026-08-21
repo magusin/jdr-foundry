@@ -3,8 +3,9 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
   talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat,
-  passifCooldownLeft
+  passifCooldownLeft, dropPassifOnStateLabel, passifStates
 } from "../rules/loadout.js";
+import { findStateSlot } from "../rules/status-effects.js";
 import { talentSummary } from "./item-talent-sheet-v2.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
@@ -412,7 +413,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     }
 
     const states = Array.isArray(actor.system?.etatsActifs)
-      ? foundry.utils.deepClone(actor.system.etatsActifs)
+      ? foundry.utils.deepClone([...actor.system.etatsActifs, ...passifStates(actor)])
       : [];
     decorateStates(states);
 
@@ -471,7 +472,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       s._ui.cdRestant = cdRestant;
       s._ui.cdMax = Number(doc.system?.cooldown?.max ?? doc.system?.recharge?.max ?? 0) || 0;
 
-      s._ui.isAura = !!(doc.system?.aura?.active || doc.system?.aura?.enabled);
+      // Une aura vient d'un EFFET (fx.isAura), jamais du bloc hérité
+      // system.aura — que setEquippedPassif utilise comme marqueur
+      // d'équipement, si bien que tout passif porté se disait « aura ».
+      s._ui.isAura = s._ui.auraEnabled;
     }
 
     ctx.actor = actor;
@@ -622,9 +626,24 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     }
 
-    decorateStates(states);
+    // Les effets du PASSIF porté sont des états comme les autres : ils
+    // agissent en permanence, ils portent une icône sur le token — ils n'ont
+    // simplement pas d'existence en base (loadout.js). Les cacher de cette
+    // liste, c'était laisser le joueur chercher d'où vient un bonus qu'il
+    // subit ou dont il profite.
+    const passifDisplay = foundry.utils.deepClone(passifStates(actor))
+      .map(st => ({ ...st, isVirtual: true }));
 
-    ctx.system.etatsActifs = [...autoStates, ...states];
+    decorateStates(states);
+    decorateStates(passifDisplay);
+
+    // Une copie d'aura et un état automatique ne s'éditent ni ne se
+    // suppriment : le rafraîchissement les réécrit, et un « _auto_ » n'existe
+    // pas en base — le crayon en fabriquait une copie fantôme.
+    for (const st of states) if (st?.type === "auraApplied") st.isVirtual = true;
+    for (const st of autoStates) st.isVirtual = true;
+
+    ctx.system.etatsActifs = [...autoStates, ...passifDisplay, ...states];
     // skills
     ctx.system.skills = ctx.system.skills ?? {};
     ctx.skills = Object.entries(ctx.system.skills).map(([key, s]) => {
@@ -1598,7 +1617,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       return {
         id: it.id, name: it.name, img: it.img,
         cost: passifManaCost(it),
-        summary: buildSpellEffectsPreview(it),
+        // Ce que le passif donne, ligne par ligne. L'appel se faisait avec
+        // l'item nu alors que la signature attend { actor, item }, et son
+        // retour est un TABLEAU : le résumé rendu valait « [object Object] »
+        // au mieux, rien la plupart du temps — l'onglet ne disait donc jamais
+        // ce qu'un passif apporte, alors que c'est la seule information qui
+        // permet d'en choisir un.
+        effects: buildSpellEffectsPreview({ actor, item: it }),
         description: String(it.system?.description ?? ""),
         cooldownLeft: left,
         locked: !!combat && left > 0 && !worn,
@@ -2087,15 +2112,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const list = this._stateList();
 
     const id = state.id || foundry.utils.randomID();
-    let idx = list.findIndex(e => e.id === id);
-
-    // Pas de correspondance par id (nouvel ajout, cf. _stateAdd) : un effet
-    // IDENTIQUE déjà présent sur la cible (même nom) doit être REMPLACÉ —
-    // durée/valeurs rafraîchies — plutôt qu'empilé en double.
-    if (idx < 0) {
-      const label = String(state.label ?? "").trim().toLowerCase();
-      if (label) idx = list.findIndex(e => String(e.label ?? "").trim().toLowerCase() === label);
-    }
+    // Id, sinon LIBELLÉ : un effet du même nom déjà présent est remplacé,
+    // jamais empilé. Même règle et même fonction que les sorts, les armes et
+    // les auras — voir findStateSlot (status-effects.js).
+    const idx = findStateSlot(list, id, state.label, state);
 
     const finalId = idx >= 0 ? list[idx].id : id;
     const normalized = this._normalizeState({ ...state, id: finalId });
@@ -2104,6 +2124,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     else list.push(normalized);
 
     await this.document.update({ [path]: list });
+
+    // Un passif du porteur qui accorde ce même libellé est déposé : il ne vit
+    // pas dans etatsActifs, donc rien ne l'aurait remplacé (loadout.js).
+    const dropped = await dropPassifOnStateLabel(this.document, normalized.label);
+    if (dropped) {
+      ui.notifications?.info?.(`Passif « ${dropped} » déposé : ${normalized.label} le remplace.`);
+    }
 
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.document);
 

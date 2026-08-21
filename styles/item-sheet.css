@@ -452,6 +452,14 @@
   align-items: center;
   margin-bottom: 4px;
 }
+/* La fiche de SORT porte trois colonnes de plus (stat de calcul, tranche,
+   gain) : un bonus y grandit avec le lanceur, ce qu'une zone ne peut pas
+   faire — elle n'en a pas. */
+.rpg-spell-sheet .fx-mod-row {
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.6fr)
+    minmax(0, 1.2fr) minmax(0, 0.6fr) minmax(0, 0.6fr) 24px;
+}
 .rpg-spell-sheet .fx-mod-head , .rpg-zone-sheet .fx-mod-head {
   font-size: 10px;
   font-weight: 700;

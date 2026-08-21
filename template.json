@@ -365,13 +365,7 @@
         "restant": 0
       },
       "aura": {
-        "active": false,
-        "target": "allies",
-        "key": "",
-        "range": {
-          "min": 0,
-          "max": 3
-        }
+        "active": false
       },
       "damage": {
         "enabled": false,
