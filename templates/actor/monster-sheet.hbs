@@ -118,6 +118,9 @@
               {{#if e.auraApplied}}
               <span class="muted" style="margin-left:6px" title="Reçu de l'aura de {{e.auraApplied.sourceName}} — se retire en supprimant l'état d'aura sur son porteur, jamais ici.">[AURA de {{e.auraApplied.sourceName}}]</span>
               <span class="muted">(tant qu'il reste à portée)</span>
+              {{else if (eq e.type "passifEffect")}}
+              <span class="muted" style="margin-left:6px" title="Vient de la capacité passive « {{e.sourceLabel}} ».">[PASSIF · {{e.sourceLabel}}]</span>
+              <span class="muted">(tant qu'il la porte)</span>
               {{else}}
               <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
               {{/if}}
@@ -541,6 +544,9 @@
                 {{#if e.auraApplied}}
                 <span class="muted" style="margin-left:6px;" title="Reçu de l'aura de {{e.auraApplied.sourceName}} — se retire en supprimant l'état d'aura sur son porteur, jamais ici.">[AURA de {{e.auraApplied.sourceName}}]</span>
                 <span class="muted">(tant qu'il reste à portée)</span>
+                {{else if (eq e.type "passifEffect")}}
+                <span class="muted" style="margin-left:6px;" title="Vient de la capacité passive « {{e.sourceLabel}} ».">[PASSIF · {{e.sourceLabel}}]</span>
+                <span class="muted">(tant qu'il la porte)</span>
                 {{else}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
                 {{/if}}
@@ -548,10 +554,10 @@
                 {{#if e.summary}}<div class="muted" style="margin-top:4px;">{{e.summary}}</div>{{/if}}
               </div>
               <div class="state-actions">
-                {{#if ../flags.isGM}}
+                {{#if ../flags.isGM}}{{#unless e.isVirtual}}
                 <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
                 <button type="button" data-action="stateDelete" data-id="{{e.id}}">🗑</button>
-                {{/if}}
+                {{/unless}}{{/if}}
                 <button type="button" data-action="stateShow" data-id="{{e.id}}">?</button>
               </div>
             </li>

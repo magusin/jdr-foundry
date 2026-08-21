@@ -115,8 +115,8 @@ const SYNC_FIELDS = {
     "system.difficulte", "system.moveSelf", "system.livraison", "system.damage", "system.damageCrit",
     "system.damages", "system.restores", "system.effectsUI", "system.tag",
     "system.cooldown.max",
-    "system.aura.target", "system.aura.key", "system.aura.range",
-    "system.aura.dotFlat", "system.aura.cleanseDC"
+    // (le reste de system.aura — target, key, range, dotFlat, cleanseDC —
+    //  a été supprimé : une aura vient d'un effet, pas de ce bloc)
   ],
   recipe: [
     "system.poids", "system.prix", "system.vendeurAssocie",

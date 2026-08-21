@@ -13,7 +13,7 @@ import {
 } from "../rules/damage-types.js";
 import { actorStateResistRows } from "../rules/resistances.js";
 import { findStateSlot } from "../rules/status-effects.js";
-import { dropPassifOnStateLabel } from "../rules/loadout.js";
+import { dropPassifOnStateLabel, passifStates } from "../rules/loadout.js";
 import { computeMonsterValue, computeMonsterBandValues } from "../rules/item-value.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
@@ -295,8 +295,15 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
     // dernier lieu) : un état décrit ici ne disait donc pas la même chose
     // que le même état décrit ailleurs.
     const states = Array.isArray(sys?.etatsActifs) ? foundry.utils.deepClone(sys.etatsActifs) : [];
+    // Les effets du passif porté comptent comme des états (loadout.js) : un
+    // monstre n'a pas d'onglet Talents, donc c'est ici, et nulle part
+    // ailleurs, que le MJ peut voir ce que ses capacités passives lui donnent.
+    const passifDisplay = foundry.utils.deepClone(passifStates(this.document))
+      .map(st => ({ ...st, isVirtual: true }));
     decorateStates(states);
-    ctx.system.etatsActifs = states;
+    decorateStates(passifDisplay);
+    for (const st of states) if (st?.type === "auraApplied") st.isVirtual = true;
+    ctx.system.etatsActifs = [...passifDisplay, ...states];
     return ctx;
   }
 

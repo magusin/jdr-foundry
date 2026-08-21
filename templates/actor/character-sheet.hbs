@@ -733,6 +733,11 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                       retire pas, il tient tant que la cible reste à portée.
                       Afficher « 999999 tours » comme pour un état ordinaire
                       ne voulait rien dire. --}}
+                {{#if (eq e.type "passifEffect")}}
+                <span class="muted" style="margin-left:6px;"
+                  title="Vient du passif porté « {{e.sourceLabel}} » (onglet Talents). Il s'éteint en déposant le passif, pas en retirant l'état — il n'y en a pas à retirer.">[PASSIF · {{e.sourceLabel}}]</span>
+                {{/if}}
+
                 {{#if e.auraApplied}}
                 <span class="muted" style="margin-left:6px;"
                   title="Reçu de l'aura de {{e.auraApplied.sourceName}}. Ne se retire pas ici : il revient tant que la cible reste à portée. Pour l'éteindre, supprimer l'état d'aura sur {{e.auraApplied.sourceName}} — il s'éteint alors pour tous.">[AURA de {{e.auraApplied.sourceName}}]</span>
@@ -748,6 +753,8 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
 
                 {{#if e.auraApplied}}
                 <span class="muted">(tant que tu restes à portée)</span>
+                {{else if (eq e.type "passifEffect")}}
+                <span class="muted">(tant que tu le portes)</span>
                 {{else}}
                 <span class="muted">({{e.remaining}} tour{{#unless (eq e.remaining 1)}}s{{/unless}})</span>
                 {{/if}}
@@ -775,10 +782,13 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
               </div>
 
               <div class="state-actions">
-                {{#if ../flags.isGM}}
+                {{!-- Un état VIRTUEL (automatique, passif, copie d'aura) n'existe
+                      pas en base : le crayon en fabriquerait une copie et la
+                      corbeille serait défaite au prochain rafraîchissement. --}}
+                {{#if ../flags.isGM}}{{#unless e.isVirtual}}
                 <button type="button" data-action="stateEdit" data-id="{{e.id}}">✎</button>
                 <button type="button" data-action="stateDelete" data-id="{{e.id}}">🗑</button>
-                {{/if}}
+                {{/unless}}{{/if}}
                 <button type="button" data-action="stateShow" data-id="{{e.id}}">?</button>
               </div>
             </li>

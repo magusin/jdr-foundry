@@ -3,7 +3,7 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
   talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat,
-  passifCooldownLeft, dropPassifOnStateLabel
+  passifCooldownLeft, dropPassifOnStateLabel, passifStates
 } from "../rules/loadout.js";
 import { findStateSlot } from "../rules/status-effects.js";
 import { talentSummary } from "./item-talent-sheet-v2.js";
@@ -413,7 +413,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     }
 
     const states = Array.isArray(actor.system?.etatsActifs)
-      ? foundry.utils.deepClone(actor.system.etatsActifs)
+      ? foundry.utils.deepClone([...actor.system.etatsActifs, ...passifStates(actor)])
       : [];
     decorateStates(states);
 
@@ -626,9 +626,24 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       });
     }
 
-    decorateStates(states);
+    // Les effets du PASSIF porté sont des états comme les autres : ils
+    // agissent en permanence, ils portent une icône sur le token — ils n'ont
+    // simplement pas d'existence en base (loadout.js). Les cacher de cette
+    // liste, c'était laisser le joueur chercher d'où vient un bonus qu'il
+    // subit ou dont il profite.
+    const passifDisplay = foundry.utils.deepClone(passifStates(actor))
+      .map(st => ({ ...st, isVirtual: true }));
 
-    ctx.system.etatsActifs = [...autoStates, ...states];
+    decorateStates(states);
+    decorateStates(passifDisplay);
+
+    // Une copie d'aura et un état automatique ne s'éditent ni ne se
+    // suppriment : le rafraîchissement les réécrit, et un « _auto_ » n'existe
+    // pas en base — le crayon en fabriquait une copie fantôme.
+    for (const st of states) if (st?.type === "auraApplied") st.isVirtual = true;
+    for (const st of autoStates) st.isVirtual = true;
+
+    ctx.system.etatsActifs = [...autoStates, ...passifDisplay, ...states];
     // skills
     ctx.system.skills = ctx.system.skills ?? {};
     ctx.skills = Object.entries(ctx.system.skills).map(([key, s]) => {

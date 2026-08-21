@@ -37,7 +37,7 @@
 // jeux de bonus cumulés dans prepareDerivedData, silencieusement.
 
 import { normalizeAttackBonus } from "./attack-bonus.js";
-import { tickPerTick } from "./effect-tick.js";
+import { tickPerTick, scaledModValue } from "./effect-tick.js";
 
 const FLAG_SCOPE = "rpg";
 
@@ -308,7 +308,10 @@ export function passifStates(actor) {
         if (!stat) continue;
         const mode = m?.mode === "pct" ? "pct" : "flat";
         mods[stat] = mods[stat] ?? { flat: 0, pct: 0 };
-        mods[stat][mode] += Number(m?.value) || 0;
+        // Mis à l'échelle des stats du PORTEUR, comme le sort le fait de
+        // celles du lanceur — et recalculé à chaque lecture, donc un passif
+        // qui donne « +1 par 10 de Force » suit la Force du moment.
+        mods[stat][mode] += scaledModValue(m, effP);
       }
       if (fx?.movementTypeGrant) mods.movementTypeGrant = fx.movementTypeGrant;
 

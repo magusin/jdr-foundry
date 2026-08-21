@@ -1,24 +1,25 @@
 // systems/rpg/module/rules/status-effects.js
 
-import { mitigateDamage } from "./combat.js";
-import { hpSecret } from "./chat-visibility.js";
 import { talentStates, passifStates, dropPassifOnStateLabel } from "./loadout.js";
 
 /**
- * Structure stockée dans actor.system.etatsActifs:
- * {
- *   id: string,
- *   key: string,              // ex: "poison"
- *   label: string,            // ex: "Poison affaiblissant"
- *   remaining: number,        // tours restants
- *   cleanseDC: number,        // jet min d20 pour retirer (info)
- *   source: { actorId, itemId, stat, snap },
- *   dot: { base, per, perStep, livraison }, // optionnel
- *   modsFlat: { principales?, defenses?, move? }, // nombres
- *   modsPct:  { principales?, defenses?, move? }  // nombres (ex -10 => -10%)
- * }
+ * Ce que ce module fait encore, et lui seul :
+ *
+ *  - `writeStateOn` / `findStateSlot` : la règle d'écriture d'un état dans
+ *    `actor.system.etatsActifs` (emplacement par id puis par libellé,
+ *    écrasement entier, dépose du passif homonyme). Tout le système passe
+ *    par là.
+ *  - `sumActiveEffectMods` : la somme des bonus/malus de stats de tous les
+ *    états qui agissent — ceux posés, le Talent et le Passif portés.
+ *
+ * Il portait aussi une SECONDE représentation des effets, héritée
+ * (`applyEffect`, `normalizeEffectInstance`, `upsertEffect`,
+ * `tickActorEffectsAtTurnStart`, leurs seaux `modsFlat`/`modsPct` figés à
+ * six stats) : plus rien ne l'appelait depuis que les zones et le catalogue
+ * MJ sont passés à `writeStateOn`, et elle ne connaissait pas la moitié des
+ * champs d'un état — elle est supprimée plutôt que laissée comme un second
+ * chemin qui ignore silencieusement ce qu'on lui donne.
  */
-
 function uid() {
   return foundry.utils.randomID();
 }
@@ -27,279 +28,8 @@ function n(x) {
   return Number(x) || 0;
 }
 
-function clamp(nv, a, b) {
-  return Math.max(a, Math.min(b, nv));
-}
-
 function deepClone(o) {
   return foundry.utils.deepClone(o ?? {});
-}
-
-function ensureBuckets() {
-  return {
-    principales: { force: 0, intelligence: 0, dexterite: 0, acuite: 0, endurance: 0 },
-    defenses: { armureFixe: 0, resistanceFixe: 0, scoreArmure: 0, scoreResistance: 0 },
-    ressources: { pvMax: 0, manaMax: 0 },
-    regen: { pv: 0, mana: 0 },
-    move: { vitesse: 0 },
-    initiative: { mod: 0 }
-  };
-}
-
-
-function addBuckets(dst, src) {
-  if (!src) return;
-  for (const group of ["principales", "defenses", "ressources", "regen", "move", "initiative"]) {
-    const g = src[group] ?? {};
-    const d = dst[group] ?? {};
-    for (const k of Object.keys(d)) d[k] = n(d[k]) + n(g[k]);
-    dst[group] = d;
-  }
-}
-
-function scaleValue(def, snap) {
-  // def: { base, per, perStep }
-  const base = n(def?.base);
-  const per = Math.max(1, n(def?.per) || 10);
-  const perStep = n(def?.perStep);
-  const steps = Math.floor(Math.max(0, n(snap)) / per);
-  return base + steps * perStep;
-}
-
-/**
- * Convertit un "mods" qui peut contenir des nombres OU des objets scalés
- * en valeurs numériques finales (avec snap).
- *
- * Exemple accepté:
- * modsFlat.principales.force = -10
- * OU
- * modsFlat.principales.force = { base:-5, per:10, perStep:-1 }
- */
-function computeModsNumeric(mods, snap) {
-  const out = ensureBuckets();
-  if (!mods) return out;
-
-  for (const group of ["principales", "defenses", "ressources", "regen", "move", "initiative"]) {
-    const g = mods[group] ?? {};
-    for (const key of Object.keys(out[group])) {
-      const v = g[key];
-      if (v == null) continue;
-
-      if (typeof v === "number" || typeof v === "string") {
-        out[group][key] += n(v);
-      } else if (typeof v === "object") {
-        out[group][key] += scaleValue(v, snap);
-      }
-    }
-  }
-
-  return out;
-}
-
-export function getItemEffects(item) {
-  const arr = item?.system?.effects;
-  return Array.isArray(arr) ? arr : [];
-}
-
-function slugKey(s) {
-  return String(s ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "etat";
-}
-
-function legacyToNew(legacy, actorForSnap) {
-  const effP = actorForSnap?.system?.derived?.effective?.principales
-    ?? actorForSnap?.system?.principales
-    ?? {};
-
-  const name = String(legacy?.name ?? "").trim();
-  const duration = Math.max(1, n(legacy?.duration ?? 1));
-  const remaining = clamp(n(legacy?.remaining ?? duration), 0, 999);
-  const dc = clamp(n(legacy?.dc ?? 0), 0, 20);
-
-  const dotFlat = n(legacy?.dotFlat ?? 0);
-  const dotStat = String(legacy?.dotStat ?? "").trim();
-  const dotDiv = Math.max(1, n(legacy?.dotDiv ?? 10) || 10);
-
-  // Convertit l'ancien DOT: dotFlat + floor(stat/dotDiv)
-  // => scaleValue(base=dotFlat, per=dotDiv, perStep=1, snap=statVal)
-  const stat = dotStat || "intelligence";
-  const snap = n(effP?.[stat] ?? 0);
-
-  const dot = (dotFlat !== 0 || dotStat)
-    ? { base: dotFlat, per: dotDiv, perStep: 1, livraison: "physique" }
-    : null;
-
-  // Convertit debuff -> modsFlat/modsPct (signés)
-  // IMPORTANT: on considère que tes valeurs sont déjà SIGNÉES (ex: -10 = malus)
-  const d = legacy?.debuff ?? {};
-  const modsFlat = ensureBuckets();
-  const modsPct = ensureBuckets();
-
-  modsFlat.principales.force += n(d.forceFlat ?? 0);
-  modsPct.principales.force += n(d.forcePct ?? 0);
-
-  modsFlat.principales.dexterite += n(d.dexFlat ?? 0);
-  modsPct.principales.dexterite += n(d.dexPct ?? 0);
-
-  // ancien code: intFlat/intPct
-  modsFlat.principales.intelligence += n(d.intFlat ?? 0);
-  modsPct.principales.intelligence += n(d.intPct ?? 0);
-
-  // si tu ajoutes acuite/endurance dans la sheet plus tard
-  modsFlat.principales.acuite += n(d.acuiteFlat ?? 0);
-  modsPct.principales.acuite += n(d.acuitePct ?? 0);
-  modsFlat.principales.endurance += n(d.enduranceFlat ?? 0);
-  modsPct.principales.endurance += n(d.endurancePct ?? 0);
-
-  return {
-    id: legacy?.id ?? uid(),
-    key: slugKey(name),
-    label: name || "État",
-    remaining,
-    cleanseDC: dc,
-    source: { actorId: actorForSnap?.id ?? null, itemId: null, stat, snap },
-    dot,
-    modsFlat,
-    modsPct
-  };
-}
-
-export function normalizeEffectInstance(e, actorForSnap) {
-  if (!e) return null;
-
-  // déjà au nouveau format
-  if (e.key && e.label && e.modsFlat && e.modsPct) {
-    const out = deepClone(e);
-    out.id = out.id ?? uid();
-    out.remaining = clamp(n(out.remaining ?? 0), 0, 999);
-    out.cleanseDC = clamp(n(out.cleanseDC ?? 0), 0, 20);
-    out.source = out.source ?? { actorId: null, itemId: null, stat: "intelligence", snap: 0 };
-    out.modsFlat = out.modsFlat ?? ensureBuckets();
-    out.modsPct = out.modsPct ?? ensureBuckets();
-    return out;
-  }
-
-  // ancien format (name/duration/dc/dotFlat/debuff)
-  if (e.name || e.duration || e.debuff || e.dotFlat != null) {
-    return legacyToNew(e, actorForSnap);
-  }
-
-  return null;
-}
-
-
-/**
- * Applique un effet défini par l'item sur la cible (MJ only recommandé).
- * - stacking "replace" : remplace un effet existant avec la même key
- * - stacking "stack" : ajoute un nouvel état
- */
-export async function applyEffect({ sourceActor, targetActor, item, effectDef }) {
-  if (!targetActor || !item || !effectDef) return;
-
-  const key = String(effectDef.key ?? "").trim();
-  if (!key) return ui.notifications.warn("Effet invalide: il manque 'key'.");
-
-  const label = String(effectDef.label ?? key);
-  const duration = Math.max(1, n(effectDef.duration ?? 1));
-  const stacking = String(effectDef.stacking ?? "replace"); // replace | stack
-  const cleanseDC = clamp(n(effectDef.cleanseDC ?? 0), 0, 20);
-  const dotPerTick = n(effectDef?.dot?.perTick ?? 0);
-  const dotDef = dotPerTick > 0 ? { perTick: dotPerTick } : null;
-
-  // Snapshot stat de l'attaquant (si scaling)
-  const stat = String(effectDef.sourceStat ?? effectDef.dot?.stat ?? "intelligence");
-  const effP = sourceActor?.system?.derived?.effective?.principales ?? sourceActor?.system?.principales ?? {};
-  const snap = n(effP?.[stat] ?? 0);
-
-  // Debuffs flat/% (convertis en nombres)
-  const modsFlat = computeModsNumeric(effectDef.modsFlat, snap);
-  const modsPct = computeModsNumeric(effectDef.modsPct, snap);
-
-  const instance = {
-    id: uid(),
-    key,
-    label,
-    remaining: duration,
-    cleanseDC,
-    source: {
-      actorId: sourceActor?.id ?? null,
-      itemId: item?.id ?? null,
-      stat,
-      snap
-    },
-    dot: dotDef,
-    modsFlat,
-    modsPct
-  };
-
-  // La clé du catalogue ne suffit pas à décider du remplacement : deux
-  // sources différentes (un sort, un piège, le dialogue du MJ) posent la
-  // même « Brûlure » sous des clés et des ids différents, et elles
-  // s'empilaient. writeStateOn applique la règle commune — id, sinon
-  // LIBELLÉ — et dépose au passage un passif du même nom.
-  const current = Array.isArray(targetActor.system?.etatsActifs) ? targetActor.system.etatsActifs : [];
-  if (stacking === "replace") {
-    const sameKey = current.filter(e => e?.key === key && e?.id !== instance.id);
-    if (sameKey.length) {
-      const ids = new Set(sameKey.map(e => e.id));
-      await targetActor.update({
-        "system.etatsActifs": current.filter(e => !ids.has(e.id))
-      });
-    }
-  }
-
-  const { droppedPassif } = await writeStateOn(targetActor, instance);
-  if (droppedPassif) {
-    ChatMessage.create({
-      content: `🔮 <b>${label}</b> remplace le passif « ${droppedPassif} » de <b>${targetActor.name}</b> — emplacement libéré.`
-    }).catch(() => {});
-  }
-
-  ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ actor: sourceActor }),
-    content:
-      `<b>${sourceActor?.name ?? "Quelqu'un"}</b> applique <b>${label}</b> à <b>${targetActor.name}</b> ` +
-      `(${duration} tour(s)${cleanseDC ? `, retrait: ${cleanseDC}+` : ""}).`
-  });
-}
-
-/**
- * Retire un état (MJ).
- */
-export async function removeEffect(targetActor, effectId) {
-  const cur = Array.isArray(targetActor.system?.etatsActifs) ? targetActor.system.etatsActifs : [];
-  const next = cur.filter(e => e?.id !== effectId);
-  await targetActor.update({ "system.etatsActifs": next });
-}
-
-/**
- * Affiche au chat le jet requis (sans lancer à la place du joueur).
- */
-export async function postCleanseInfo(targetActor, effectId) {
-  const cur = Array.isArray(targetActor.system?.etatsActifs) ? targetActor.system.etatsActifs : [];
-  const e = cur.find(x => x?.id === effectId);
-  if (!e) return;
-
-  const dc = n(e.cleanseDC);
-  const txt = dc > 0
-    ? `Jet requis pour retirer <b>${e.label}</b> : <b>${dc}+</b> au d20.`
-    : `Cet effet (<b>${e.label}</b>) n'a pas de difficulté de retrait définie.`;
-
-  await ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ actor: targetActor }),
-    content: txt
-  });
-}
-
-/**
- * Calcule le DOT brut (avant mitigation).
- */
-export function computeDotRaw(effectInstance) {
-  return Math.max(0, n(effectInstance?.dot?.perTick ?? 0));
 }
 
 function normalizeStateV2(st) {
@@ -395,63 +125,6 @@ function normalizeStateV2(st) {
   return null;
 }
 
-
-/**
- * Tick au début du tour d'un actor:
- * - applique DOT (si présent)
- * - décrémente remaining
- * - supprime les effets à 0
- *
- * IMPORTANT: pas de jets ici, juste les ticks.
- */
-export async function tickActorEffectsAtTurnStart(actor) {
-  const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
-  if (!list.length) return;
-
-  let pv = Number(actor.system?.ressources?.pv?.valeur ?? 0) || 0;
-  const pvMax = Number(actor.system?.ressources?.pv?.max ?? 0) || 0;
-
-  const survivors = [];
-  let totalDot = 0;
-
-  for (const e of list) {
-    const remaining = Math.max(0, Number(e?.remaining ?? 0) || 0);
-    if (remaining <= 0) continue;
-
-    // DOT
-    const rawDot = Math.max(0, Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0);
-    if (rawDot > 0) totalDot += rawDot;
-
-    // ✅ auraApplied: ne décrémente jamais (géré par refreshAuras)
-    if (String(e?.type) === "auraApplied") {
-      survivors.push(e);
-      continue;
-    }
-
-    // ✅ le reste décrémente normalement (y compris aura source)
-    const nextRemaining = Math.max(0, remaining - 1);
-    if (nextRemaining > 0) survivors.push({ ...e, remaining: nextRemaining });
-  }
-
-  const updates = { "system.etatsActifs": survivors };
-
-  if (totalDot > 0) {
-    pv = Math.max(0, pv - totalDot);
-    updates["system.ressources.pv.valeur"] = pv;
-  }
-
-  await actor.update(updates);
-
-  if (totalDot > 0) {
-    await ChatMessage.create({
-      speaker: ChatMessage.getSpeaker({ actor }),
-      content: `<b>${actor.name}</b> subit <b>${totalDot}</b> dégâts (effets).`
-             + hpSecret(actor, ` PV: ${pv}/${pvMax}`)
-    });
-  }
-}
-
-
 /**
  * Sommes des debuffs à appliquer en "temps réel" dans prepareDerivedData()
  * Retour: { flat, pct }
@@ -506,16 +179,6 @@ const KEY_TO_BUCKET = {
   // charge — capacité de transport (le sheet l'offrait déjà sans qu'il soit câblé)
   podsMax: ["charge", "podsMax"]
 };
-
-/**
- * Effets du sort PASSIF porté, vus comme des états.
- *
- * Le contenu vit dans loadout.js, qui possède l'emplacement : ici on ne fait
- * que le consommer pour les mods. Les autres champs (dégâts par tour, aura,
- * résistances accordées, bonus de dégâts aux attaques) sont lus par leurs
- * propres modules via `effectiveStates()`.
- */
-const passiveSpellStates = (actor) => passifStates(actor);
 
 /**
  * Emplacement qu'un état ENTRANT doit occuper dans `system.etatsActifs`.
@@ -599,7 +262,7 @@ export async function writeStateOn(actor, state, { recompute = true } = {}) {
 export function sumActiveEffectMods(actor) {
   const states = [
     ...(Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : []),
-    ...passiveSpellStates(actor),
+    ...passifStates(actor),
     // Le Talent porté (loadout.js) passe par le même chemin que les sorts
     // passifs, et pour la même raison : ses mods sont recalculés ici à
     // chaque prepareDerivedData, donc ils suivent l'équipement sans qu'aucun
@@ -651,19 +314,5 @@ export function sumActiveEffectMods(actor) {
   }
 
   return out;
-}
-
-export async function upsertEffect(targetActor, effectLike) {
-  const e = normalizeEffectInstance(effectLike, targetActor);
-  if (!e) return;
-
-  const cur = Array.isArray(targetActor.system?.etatsActifs) ? targetActor.system.etatsActifs : [];
-  const next = cur.map(x => normalizeEffectInstance(x, targetActor)).filter(Boolean);
-
-  const idx = next.findIndex(x => x.id === e.id);
-  if (idx >= 0) next[idx] = e;
-  else next.push(e);
-
-  await targetActor.update({ "system.etatsActifs": next });
 }
 

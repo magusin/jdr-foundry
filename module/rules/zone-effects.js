@@ -66,7 +66,7 @@ function _pointInRegion(region, x, y, elevation = 0) {
  * effects.js) lit pour calculer les stats dérivées. C'est le format MODERNE
  * (KEY_TO_BUCKET y couvre toucherPhysique/toucherMagique/fatigueMax/podsMax
  * en plus des stats de base) — pas l'ancien modsFlat.groupe.stat restreint
- * qu'utilisait applyEffect() d'status-effects.js, qui ignorait silencieusement
+ * qu'utilisait l'ancien applyEffect() (supprimé), qui ignorait silencieusement
  * ces 4 stats-là faute de bucket prévu pour elles.
  */
 function modsToBuckets(entries) {
@@ -89,7 +89,7 @@ function modsToBuckets(entries) {
  * consommateur : "sorts, catalogue MJ, futurs pièges"). Remplace par clé
  * (stacking "replace") plutôt que d'empiler : redéclencher la même zone
  * persistante sur la même cible rafraîchit sa durée au lieu d'accumuler des
- * doublons — même règle que applyEffect() qu'on remplace ici.
+ * doublons — même règle que partout ailleurs (writeStateOn).
  */
 async function applyZoneStateEffect(actor, state) {
   const adjusted = applyResistances(actor, state);

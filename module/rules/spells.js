@@ -10,7 +10,7 @@ import {
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
 import { writeStateOn } from "./status-effects.js";
-import { tickPerTick } from "./effect-tick.js";
+import { tickPerTick, scaledModValue } from "./effect-tick.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -466,29 +466,16 @@ async function ensureSpellDefaults(item) {
     if (sys.cooldown.restant === undefined) patch["system.cooldown.restant"] = 0;
   }
 
-  // aura
+  // aura : il ne reste de ce bloc hérité que `active`, aligné sur
+  // `system.equipe` par setEquippedPassif comme marqueur d'équipement d'un
+  // passif (loadout.js). Une vraie aura vient d'un EFFET (fx.isAura) ; les
+  // champs de définition qui traînaient ici (enabled, target, key, range,
+  // dotFlat, cleanseDC) n'étaient plus lus par personne et sont supprimés à
+  // la première sauvegarde de la fiche.
   if (!sys.aura || typeof sys.aura !== "object") {
-    patch["system.aura"] = {
-      active: false,
-      enabled: false,
-      target: "allies",
-      key: "",
-      range: { min: 0, max: 3 },
-      dotFlat: 0,
-      cleanseDC: 0
-    };
+    patch["system.aura"] = { active: false };
   } else {
     if (sys.aura.active === undefined) patch["system.aura.active"] = false;
-    if (sys.aura.enabled === undefined) patch["system.aura.enabled"] = false;
-    if (sys.aura.target === undefined) patch["system.aura.target"] = "allies";
-    if (sys.aura.key === undefined) patch["system.aura.key"] = "";
-    if (!sys.aura.range || typeof sys.aura.range !== "object") patch["system.aura.range"] = { min: 0, max: 3 };
-    else {
-      if (sys.aura.range.min === undefined) patch["system.aura.range.min"] = 0;
-      if (sys.aura.range.max === undefined) patch["system.aura.range.max"] = 3;
-    }
-    if (sys.aura.dotFlat === undefined) patch["system.aura.dotFlat"] = 0;
-    if (sys.aura.cleanseDC === undefined) patch["system.aura.cleanseDC"] = 0;
   }
 
   // --- DAMAGE (success)
@@ -610,16 +597,20 @@ function getFxByWhen(item, when) {
   return arr.filter(fx => String(fx?.when ?? "").toLowerCase() === String(when).toLowerCase());
 }
 
-function buildModsFromFxMods(fxMods) {
+/**
+ * Mods d'un effet, figés aux caractéristiques du LANCEUR au moment où ils
+ * sont posés — comme les dégâts. `effP` absent = aucune mise à l'échelle,
+ * ce qui est le bon repli pour un aperçu hors contexte.
+ */
+function buildModsFromFxMods(fxMods, effP = null) {
   const mods = {};
   const mds = Array.isArray(fxMods) ? fxMods : [];
   for (const m of mds) {
     const stat = String(m?.stat ?? "").trim();
     if (!stat) continue;
     const mode = (m?.mode === "pct") ? "pct" : "flat";
-    const v = n(m?.value, 0);
     if (!mods[stat]) mods[stat] = { flat: 0, pct: 0 };
-    mods[stat][mode] += v;
+    mods[stat][mode] += scaledModValue(m, effP);
   }
   return mods;
 }
@@ -773,7 +764,7 @@ export function buildSpellUI({ actor, item }) {
 
   // IMPORTANT: modsSummary = HIT ONLY (jamais hit+crit)
   const fxHit = getFxByWhen(item, "hit")[0] ?? null;
-  const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods) : {};
+  const hitMods = fxHit ? buildModsFromFxMods(fxHit.mods, getEffP(actor)) : {};
   const modsSummary = summarizeMods(hitMods);
 
   // Natures du sort, pour le filtrage des listes (« kinds » séparés par |)
@@ -939,7 +930,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
     if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
     else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
 
-    const modSummary = summarizeMods(buildModsFromFxMods(fx.mods));
+    const modSummary = summarizeMods(buildModsFromFxMods(fx.mods, getEffP(actor)));
     if (modSummary) parts.push(modSummary);
 
     if (fx.isAura) {
@@ -1139,7 +1130,7 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
 
     const lines = [];
     for (const fx of list) {
-      const mods = buildModsFromFxMods(fx.mods);
+      const mods = buildModsFromFxMods(fx.mods, getEffP(actor));
       const modInfo = summarizeModsWithKind(mods);
 
       const parts = [];
@@ -1579,7 +1570,9 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     if (allPairs.length > 0 && targetActors.length === 0) return;
 
     for (const fx of fxList) {
-      const mods = buildModsFromFxMods(fx.mods);
+      // Figés sur les stats du LANCEUR, pas de la cible : c'est sa puissance
+      // qui décide de ce que son sort accorde (même règle que ses dégâts).
+      const mods = buildModsFromFxMods(fx.mods, getEffP(actor));
       // Qui reçoit l'effet : la ou les cibles visées, le lanceur, ou les deux.
       // Une valeur inconnue (ancien format) retombe sur les cibles plutôt que
       // sur une liste vide — un effet qui ne s'applique à personne, sans un mot

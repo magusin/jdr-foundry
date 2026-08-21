@@ -45,3 +45,36 @@ export function tickPerTick(fx, effP) {
   return n(fx?.damage?.flat, 0);
 }
 
+
+/**
+ * Valeur SIGNÉE d'un bonus/malus de stat, mise à l'échelle des
+ * caractéristiques de celui qui lance l'effet.
+ *
+ * Même forme que le « par tour » ci-dessus — `fixe + (stat ÷ par) × gain` —
+ * et pour la même raison : un rare sort doit pouvoir donner un bonus qui
+ * dépend de la puissance de son lanceur, exactement comme ses dégâts. Sans
+ * cela, la partie 4 de l'éditeur d'effets était le seul endroit de la fiche
+ * où un nombre restait figé quoi qu'il arrive.
+ *
+ * La quantité saisie est toujours POSITIVE, c'est `sens` qui donne le signe
+ * (voir normMods, item-spell-sheet-v2.js) ; on retombe sur le signe de la
+ * valeur pour les données antérieures à ce champ.
+ */
+export function scaledModValue(m, effP) {
+  const signed = n(m?.value, 0);
+  const neg = m?.sens === "malus" || (m?.sens !== "bonus" && signed < 0);
+
+  const base = Math.abs(signed);
+  const stat = String(m?.scaleStat ?? "").trim();
+  const per = Math.max(1, n(m?.scalePer, 10) || 10);
+  const step = n(m?.scaleStep, 0);
+  const bonus = (stat && step) ? Math.floor(n(effP?.[stat], 0) / per) * step : 0;
+
+  const qty = base + bonus;
+  return neg ? -qty : qty;
+}
+
+/** Le mod grandit-il avec une caractéristique ? */
+export function modIsScaled(m) {
+  return !!String(m?.scaleStat ?? "").trim() && n(m?.scaleStep, 0) !== 0;
+}
