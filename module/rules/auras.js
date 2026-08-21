@@ -374,17 +374,27 @@ export const RPG_AURAS = {
         // conséquence est voulue et doit être connue de la table — en
         // sortant de l'aura, la cible n'a plus RIEN, puisque son état
         // personnel a été remplacé, pas mis de côté.
-        const incoming = new Set(add.map(s => String(s.label ?? "").trim().toLowerCase()));
+        // Un état d'aura PORTÉ n'est pas un effet reçu, c'est une émission :
+        // il n'est jamais remplacé par la copie d'un homonyme, et la copie
+        // n'est pas posée non plus. Sans ces deux exceptions, deux paladins
+        // portant la même aura et se tenant côte à côte se détruisaient
+        // mutuellement leur source — et, tant qu'elle tenait, cumulaient
+        // leurs mods avec ceux de la copie reçue.
+        const ownAuras = new Set(cur.filter(s => s?.isAura)
+          .map(s => String(s?.label ?? "").trim().toLowerCase()));
+        const kept = add.filter(s => !ownAuras.has(String(s.label ?? "").trim().toLowerCase()));
+
+        const incoming = new Set(kept.map(s => String(s.label ?? "").trim().toLowerCase()));
         const keep = cur.filter(s =>
           s?.type !== "auraApplied" &&
-          !incoming.has(String(s?.label ?? "").trim().toLowerCase()));
+          (s?.isAura || !incoming.has(String(s?.label ?? "").trim().toLowerCase())));
 
-        await setActorStates(a, [...keep, ...add]);
+        await setActorStates(a, [...keep, ...kept]);
 
         // Même règle pour un passif accordant l'un de ces libellés : il ne
         // vit pas dans etatsActifs, donc rien ne l'aurait remplacé et ses
         // mods se seraient ajoutés à ceux de l'aura, invisibles.
-        for (const st of add) {
+        for (const st of kept) {
           const dropped = await dropPassifOnStateLabel(a, st.label);
           if (dropped) {
             ChatMessage.create({

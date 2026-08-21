@@ -9,8 +9,7 @@ import {
   collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
-import { findStateSlot } from "./status-effects.js";
-import { dropPassifOnStateLabel } from "./loadout.js";
+import { writeStateOn } from "./status-effects.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -1050,27 +1049,11 @@ async function upsertState(actor, state) {
     return { resisted: true, resistanceInfo: adjusted.resistanceInfo };
   }
 
-  const list = Array.isArray(actor.system?.etatsActifs) ? foundry.utils.deepClone(actor.system.etatsActifs) : [];
-  const id = String(adjusted.id || foundry.utils.randomID());
-  const normalized = normalizeState(adjusted, id);
-  // Même id, sinon même LIBELLÉ : un état homonyme déjà présent est remplacé
-  // plutôt que doublé, meilleur ou non (voir findStateSlot). L'ancienne
-  // entrée est écrasée en entier — un merge aurait laissé traîner les champs
-  // de l'effet précédent (résistance accordée, bonus d'attaque…) qui n'ont
-  // aucune raison de survivre à son remplacement.
-  const idx = findStateSlot(list, id, normalized.label);
-  const replaced = idx >= 0 ? String(list[idx]?.label ?? "") : null;
-  if (idx >= 0) list[idx] = normalized;
-  else list.push(normalized);
-
-  await actor.update({ "system.etatsActifs": list });
-
-  // Un passif accordant le même libellé n'est pas dans cette liste : il faut
-  // le déposer explicitement, sinon ses mods continueraient de s'ajouter
-  // par-dessus, invisibles.
-  const droppedPassif = await dropPassifOnStateLabel(actor, normalized.label);
-
-  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+  // Insertion : id, sinon LIBELLÉ, écrasement de l'entrée entière, puis
+  // dépose d'un passif accordant le même nom. Les trois gestes vont toujours
+  // ensemble et vivent en un seul endroit — writeStateOn (status-effects.js).
+  const normalized = normalizeState(adjusted, String(adjusted.id || foundry.utils.randomID()));
+  const { replaced, droppedPassif } = await writeStateOn(actor, normalized);
 
   return { resisted: false, resistanceInfo: adjusted.resistanceInfo, replaced, droppedPassif };
 }

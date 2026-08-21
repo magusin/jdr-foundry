@@ -134,9 +134,9 @@
         const state = woundAPI.buildWoundState(woundKey, { sourceLabel: "MJ" });
         if (!state) return;
 
-        const list = foundry.utils.deepClone(actor.system?.etatsActifs ?? []);
-        list.push(state);
-        await actor.update({ "system.etatsActifs": list });
+        // Même règle d'insertion que partout ailleurs : une blessure du même
+        // nom déjà présente est rafraîchie, pas doublée (game.rpg.states).
+        await game.rpg.states.writeState(actor, state);
 
         await ChatMessage.create({ content: `🩸 <b>${actor.name}</b> subit : <b>${state.label}</b> (permanent, jusqu'à soin).` });
         game.rpg?.journal?.appendToCampaignJournal(`<b>${actor.name}</b> subit une blessure : ${state.label}.`).catch(() => {});

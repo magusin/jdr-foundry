@@ -225,8 +225,14 @@ export async function dropPassifOnStateLabel(actor, label) {
   if (!worn) return null;
 
   const fxList = Array.isArray(worn.system?.effectsUI) ? worn.system.effectsUI : [];
-  const hit = fxList.some(fx => String(fx?.label ?? "").trim().toLowerCase() === key);
-  if (!hit) return null;
+  const matching = fxList.filter(fx => String(fx?.label ?? "").trim().toLowerCase() === key);
+  if (!matching.length) return null;
+
+  // Un passif qui ÉMET une aura de ce nom n'est pas déposé : son porteur en
+  // est la source, pas le bénéficiaire, et l'éteindre priverait aussi tous
+  // ses alliés à portée. Deux porteurs de la même aura côte à côte se
+  // seraient mutuellement désarmés.
+  if (matching.every(fx => !!fx?.isAura)) return null;
 
   await setEquippedPassif(actor, null, { force: true });
   return worn.name;

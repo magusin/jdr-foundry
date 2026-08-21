@@ -10,6 +10,8 @@
 // déclaration) pour refléter l'état de l'acteur au moment où ça compte —
 // un buff/debuff de retrait posé entre-temps doit s'appliquer.
 
+import { resolveDeclaredActor } from "./attack-declare.js";
+
 const FLAG_SCOPE = "rpg";
 
 function n(v, d = 0) {
@@ -177,6 +179,12 @@ export async function declareRemoveState(actor) {
   if (!state) return { handled: true, ok: false, reason: "État introuvable." };
 
   const d = {
+    // L'UUID d'abord, l'id en repli : un monstre posé sur une scène est un
+    // token NON LIÉ dont l'acteur synthétique porte le MÊME id que son
+    // prototype, si bien que game.actors.get(id) retirait l'état de la fiche
+    // d'origine et laissait le token avec le sien. Même règle que toute la
+    // chaîne d'attaque (resolveDeclaredActor, attack-declare.js).
+    actorUuid: actor.uuid ?? null,
     actorId: actor.id, actorName: actor.name,
     stateId: state.id, stateLabel: state.label,
     bonus: rollBonusFor(actor)
@@ -215,7 +223,7 @@ export async function confirmRemoveDeclaration(message, approve) {
     return;
   }
 
-  const actor = game.actors.get(d.actorId);
+  const actor = await resolveDeclaredActor(d.actorUuid, d.actorId);
   const state = (actor?.system?.etatsActifs ?? []).find(s => s.id === d.stateId);
   if (!actor || !state) {
     await message.update({ content: gmContent(d, "rejected"), "flags.rpg.removeStateFlow.phase": "rejected" });
@@ -240,7 +248,7 @@ export async function rollRemoveDie(message) {
   const d = flags.removeStateFlow ?? {};
   if (d.phase !== "awaitingRoll") return;
 
-  const actor = game.actors.get(d.actorId);
+  const actor = await resolveDeclaredActor(d.actorUuid, d.actorId);
   const tn = n(d.tnFinal, 11);
   const bonus = n(d.bonus, 0);
   const roll = await (new Roll(`1d20 + ${bonus}`)).evaluate();
@@ -275,7 +283,7 @@ export async function resolveRemoveFromMessage(message, result) {
 
   const flags = message?.flags?.rpg ?? {};
   const d = flags.removeStateFlow ?? {};
-  const actor = game.actors.get(d.actorId);
+  const actor = await resolveDeclaredActor(d.actorUuid, d.actorId);
   const publicMsg = d.linkedPublicId ? game.messages.get(d.linkedPublicId) : null;
   const success = result === "success";
 

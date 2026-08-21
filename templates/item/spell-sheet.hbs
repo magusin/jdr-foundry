@@ -626,7 +626,16 @@
                 </select>
               </div>
             </div>
-            <small class="fx-hint">Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff. Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte : l'aura part de lui et touche, à chaque tour et selon la distance, les alliés / les ennemis / tout le monde. ⚠️ Pour une aura autour du <b>lanceur</b>, mets « S'applique à : Le lanceur » en partie 2, sinon elle rayonnera autour de la cible.</small>
+            <small class="fx-hint">
+              Le <b>mode de déplacement</b> s'accorde à qui reçoit l'effet (partie 2) — indépendant de l'Aura, parfait pour un simple buff.
+              Coche <b>Aura</b> en plus si l'effet doit AUSSI rayonner autour de celui qui le porte.
+              <br>L'aura part <b>du porteur de l'état</b>, jamais du sort : « S'applique à : Le lanceur » en partie 2 la fait rayonner autour de toi,
+              « la/les cible(s) » la pose sur un allié (avec une portée du sort supérieure à 0) qui devient alors l'émetteur à ta place.
+              <br>Ceux qui sont à portée reçoivent une <b>copie</b> de l'effet : elle porte le même nom, remplace un état homonyme qu'ils
+              avaient déjà — et le passif qui l'accordait — et disparaît dès qu'ils sortent de la zone, <b>sans rendre l'ancien</b>.
+              Cette copie ne peut pas être retirée par un jet : pour éteindre une aura, il faut supprimer l'état de <b>son porteur</b>,
+              et elle s'éteint alors pour tout le monde d'un coup.
+            </small>
           </fieldset>
 
           {{!-- 6 · Résistance à un TYPE DE DÉGÂTS --}}

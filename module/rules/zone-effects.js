@@ -20,6 +20,7 @@ import { computeFinalDamage, applyFinalDamage } from "./combat.js";
 import { hpSecret } from "./chat-visibility.js";
 import { isImmuneToTerrain } from "./movement-types.js";
 import { applyResistances } from "./resistances.js";
+import { writeStateOn } from "./status-effects.js";
 import { listEffects, EFFECT_TAGS } from "./effect-library.js";
 import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS } from "./damage-types.js";
 import { applyUiTheme, restoreScrollPositions } from "../sheets/sheet-helpers.js";
@@ -96,14 +97,21 @@ async function applyZoneStateEffect(actor, state) {
     return { applied: false, resisted: true, resistanceInfo: adjusted.resistanceInfo };
   }
 
+  // Remplacement par clé ET par libellé : une zone qui pose « Brûlure » sur
+  // une cible déjà brûlée par un sort écrivait une seconde ligne homonyme,
+  // avec son propre décompte. writeStateOn (status-effects.js) porte la
+  // règle commune et dépose un passif du même nom.
   const current = Array.isArray(actor.system?.etatsActifs) ? actor.system.etatsActifs : [];
-  const next = current.filter(e => e?.key !== adjusted.key);
-  next.push({ ...adjusted, id: adjusted.id || foundry.utils.randomID() });
+  const sameKey = adjusted.key
+    ? current.filter(e => e?.key === adjusted.key && e?.id !== adjusted.id) : [];
+  if (sameKey.length) {
+    const ids = new Set(sameKey.map(e => e.id));
+    await actor.update({ "system.etatsActifs": current.filter(e => !ids.has(e.id)) });
+  }
 
-  await actor.update({ "system.etatsActifs": next });
-  if (game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+  const { droppedPassif } = await writeStateOn(actor, adjusted);
 
-  return { applied: true, resisted: false, state: adjusted };
+  return { applied: true, resisted: false, state: adjusted, droppedPassif };
 }
 
 /** Régions actives à (x,y[,élévation]) portant un comportement zoneEffet. */

@@ -3,8 +3,9 @@ import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/s
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
   talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat,
-  passifCooldownLeft
+  passifCooldownLeft, dropPassifOnStateLabel
 } from "../rules/loadout.js";
+import { findStateSlot } from "../rules/status-effects.js";
 import { talentSummary } from "./item-talent-sheet-v2.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
@@ -2096,15 +2097,10 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     const list = this._stateList();
 
     const id = state.id || foundry.utils.randomID();
-    let idx = list.findIndex(e => e.id === id);
-
-    // Pas de correspondance par id (nouvel ajout, cf. _stateAdd) : un effet
-    // IDENTIQUE déjà présent sur la cible (même nom) doit être REMPLACÉ —
-    // durée/valeurs rafraîchies — plutôt qu'empilé en double.
-    if (idx < 0) {
-      const label = String(state.label ?? "").trim().toLowerCase();
-      if (label) idx = list.findIndex(e => String(e.label ?? "").trim().toLowerCase() === label);
-    }
+    // Id, sinon LIBELLÉ : un effet du même nom déjà présent est remplacé,
+    // jamais empilé. Même règle et même fonction que les sorts, les armes et
+    // les auras — voir findStateSlot (status-effects.js).
+    const idx = findStateSlot(list, id, state.label);
 
     const finalId = idx >= 0 ? list[idx].id : id;
     const normalized = this._normalizeState({ ...state, id: finalId });
@@ -2113,6 +2109,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     else list.push(normalized);
 
     await this.document.update({ [path]: list });
+
+    // Un passif du porteur qui accorde ce même libellé est déposé : il ne vit
+    // pas dans etatsActifs, donc rien ne l'aurait remplacé (loadout.js).
+    const dropped = await dropPassifOnStateLabel(this.document, normalized.label);
+    if (dropped) {
+      ui.notifications?.info?.(`Passif « ${dropped} » déposé : ${normalized.label} le remplace.`);
+    }
 
     if (game.rpg?.status?.recompute) await game.rpg.status.recompute(this.document);
 

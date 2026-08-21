@@ -2,7 +2,7 @@
 
 import { mitigateDamage } from "./combat.js";
 import { hpSecret } from "./chat-visibility.js";
-import { talentStates, isPassif, equippedPassif } from "./loadout.js";
+import { talentStates, isPassif, equippedPassif, dropPassifOnStateLabel } from "./loadout.js";
 
 /**
  * Structure stockée dans actor.system.etatsActifs:
@@ -236,16 +236,28 @@ export async function applyEffect({ sourceActor, targetActor, item, effectDef })
     modsPct
   };
 
+  // La clé du catalogue ne suffit pas à décider du remplacement : deux
+  // sources différentes (un sort, un piège, le dialogue du MJ) posent la
+  // même « Brûlure » sous des clés et des ids différents, et elles
+  // s'empilaient. writeStateOn applique la règle commune — id, sinon
+  // LIBELLÉ — et dépose au passage un passif du même nom.
   const current = Array.isArray(targetActor.system?.etatsActifs) ? targetActor.system.etatsActifs : [];
-  let next = [...current];
-
   if (stacking === "replace") {
-    next = next.filter(e => e?.key !== key);
+    const sameKey = current.filter(e => e?.key === key && e?.id !== instance.id);
+    if (sameKey.length) {
+      const ids = new Set(sameKey.map(e => e.id));
+      await targetActor.update({
+        "system.etatsActifs": current.filter(e => !ids.has(e.id))
+      });
+    }
   }
 
-  next.push(instance);
-
-  await targetActor.update({ "system.etatsActifs": next });
+  const { droppedPassif } = await writeStateOn(targetActor, instance);
+  if (droppedPassif) {
+    ChatMessage.create({
+      content: `🔮 <b>${label}</b> remplace le passif « ${droppedPassif} » de <b>${targetActor.name}</b> — emplacement libéré.`
+    }).catch(() => {});
+  }
 
   ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor: sourceActor }),
@@ -561,6 +573,47 @@ export function findStateSlot(list, id, label) {
   const key = String(label ?? "").trim().toLowerCase();
   if (!key) return -1;
   return arr.findIndex(st => String(st?.label ?? "").trim().toLowerCase() === key);
+}
+
+/**
+ * Écrit un état sur un acteur en appliquant la règle d'insertion du système.
+ *
+ * Un seul endroit pour les trois gestes qui vont toujours ensemble : trouver
+ * l'emplacement (id, sinon libellé — findStateSlot), écraser l'entrée EN
+ * ENTIER, puis déposer un passif qui accorderait le même libellé (il ne vit
+ * pas dans `etatsActifs`, donc rien ne l'aurait remplacé et ses mods se
+ * seraient ajoutés à ceux du nouvel état, invisibles).
+ *
+ * Les chemins qui écrivent plusieurs états d'un coup (attack-resolve.js) ou
+ * qui reconstruisent la liste entière (auras.js) gardent leur propre boucle
+ * et appellent les deux briques directement — c'est la même règle, appliquée
+ * au bon grain.
+ *
+ * @returns {Promise<{replaced: string|null, droppedPassif: string|null}>}
+ */
+export async function writeStateOn(actor, state, { recompute = true } = {}) {
+  if (!actor || !state) return { replaced: null, droppedPassif: null };
+
+  const list = Array.isArray(actor.system?.etatsActifs)
+    ? deepClone(actor.system.etatsActifs) : [];
+
+  const entry = { ...state, id: String(state.id || uid()) };
+  const idx = findStateSlot(list, entry.id, entry.label);
+  const replaced = idx >= 0 ? String(list[idx]?.label ?? "") : null;
+  // L'entrée entrante gagne ENTIÈREMENT, son id compris : c'est sous cet id
+  // que l'appelant la retrouvera (l'annulation d'une action retire les états
+  // qu'elle a posés par {actorId, stateId} — action-budget.js), et garder
+  // l'ancien id l'aurait rendue introuvable.
+  if (idx >= 0) list[idx] = entry;
+  else list.push(entry);
+
+  await actor.update({ "system.etatsActifs": list });
+
+  const droppedPassif = await dropPassifOnStateLabel(actor, entry.label);
+
+  if (recompute && game.rpg?.status?.recompute) await game.rpg.status.recompute(actor);
+
+  return { replaced, droppedPassif };
 }
 
 export function sumActiveEffectMods(actor) {

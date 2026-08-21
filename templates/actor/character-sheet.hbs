@@ -735,7 +735,7 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
                       ne voulait rien dire. --}}
                 {{#if e.auraApplied}}
                 <span class="muted" style="margin-left:6px;"
-                  title="Reçu de l'aura de {{e.auraApplied.sourceName}}. Ne peut pas être retiré par un jet : seul l'émetteur est débuffable, et l'aura s'éteint alors pour tout le monde.">[AURA de {{e.auraApplied.sourceName}}]</span>
+                  title="Reçu de l'aura de {{e.auraApplied.sourceName}}. Ne se retire pas ici : il revient tant que la cible reste à portée. Pour l'éteindre, supprimer l'état d'aura sur {{e.auraApplied.sourceName}} — il s'éteint alors pour tous.">[AURA de {{e.auraApplied.sourceName}}]</span>
                 {{/if}}
 
                 {{#if e.isBeneficial}}

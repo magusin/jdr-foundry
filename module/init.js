@@ -1078,6 +1078,19 @@ Hooks.once("init", async () => {
     // ✅ game.rpg.status : force recompute d'un acteur
     game.rpg.status = { recompute: async (actor) => { if (actor) { actor.reset(); actor.sheet?.render(false); } } };
 
+    // ✅ game.rpg.states : la règle d'insertion d'un état, pour les macros —
+    // elles ne peuvent pas importer, et écrire un état à la main leur faisait
+    // rater le remplacement par libellé et la dépose du passif homonyme.
+    {
+      const _st = await import("./rules/status-effects.js");
+      const _lo = await import("./rules/loadout.js");
+      game.rpg.states = {
+        writeState: _st.writeStateOn,
+        findStateSlot: _st.findStateSlot,
+        dropPassifOnStateLabel: _lo.dropPassifOnStateLabel
+      };
+    }
+
     // ✅ game.rpg.budget : API budget d'actions
     game.rpg.budget = {
       getBudget, saveBudget, resetBudget, canUseSlot,
