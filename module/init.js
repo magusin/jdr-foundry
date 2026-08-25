@@ -490,6 +490,13 @@ Hooks.once("init", async () => {
     default: 3, requiresReload: false
   });
 
+  game.settings.register("rpg", "peseeNiveauGroupe", {
+    name: "Pesée — niveau du groupe",
+    hint: "Niveau des personnages joueurs pris comme référence par la pesée des objets et des sorts. Il fixe la mitigation du groupe (donc ce qu'une arme lui inflige vraiment) et la caractéristique de référence du scaling de dégâts (4 au niveau 1, +2 par niveau). Purement indicatif : n'affecte aucune règle. Monte-le quand ta table monte, sinon un objet de milieu de campagne reste jugé contre des débutants.",
+    scope: "world", config: true, type: Number,
+    default: 1, requiresReload: false
+  });
+
   game.settings.register("rpg", "peseeDegatsAttaque", {
     name: "Pesée — dégâts par attaque (niveau 1)",
     hint: "Dégâts bruts moyens d'UNE attaque d'un personnage débutant, seconde arme comprise. 7 par défaut = deux armes 1d6 (3,5 + 3,5). Monte-le si tes joueurs démarrent avec des armes plus lourdes.",
