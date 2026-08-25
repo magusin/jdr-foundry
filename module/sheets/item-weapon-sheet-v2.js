@@ -44,11 +44,24 @@ function estimateDiceMinMax(diceStr) {
   return { min: nb * 1 + mod, max: nb * faces + mod, ok: true };
 }
 
+/**
+ * Base du scaling de dégâts : `per 10`, gain `+1`, comme template.json.
+ *
+ * Le repli valait 0 ici alors que `RPGItem#rollDamage` lit `?? 1` : une arme
+ * dont l'objet `scaling` ne portait pas la clé affichait « +0 par tranche »
+ * sur sa fiche et infligeait quand même le bonus de stat au jet. Les deux
+ * bouts lisent maintenant la même base. Une valeur 0 réellement enregistrée
+ * (le MJ a écrit 0) est respectée : seul l'ABSENCE de champ retombe sur 1.
+ *
+ * Le dé de critique garde 0 par défaut, lui — il s'AJOUTE au coup au lieu de
+ * le remplacer, et le doubler d'un bonus de stat n'a jamais été l'intention
+ * (template.json dit 0 de son côté aussi).
+ */
 function normScaling(s, fallback = {}) {
   return {
     stat: String(s?.stat ?? fallback.stat ?? "force"),
     per: n(s?.per ?? fallback.per, 10) || 10,
-    perStep: n(s?.perStep ?? fallback.perStep, 0)
+    perStep: n(s?.perStep ?? fallback.perStep, 1)
   };
 }
 
@@ -238,7 +251,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.system.damage = normDamageBlock(ctx.system.damage, {
       dice: legacyDice,
       flat: legacyFlat,
-      scaling: { stat: "force", per: 10, perStep: 0 }
+      scaling: { stat: "force", per: 10, perStep: 1 }
     });
 
     // ---- Critique

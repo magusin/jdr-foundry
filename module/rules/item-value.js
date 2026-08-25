@@ -151,8 +151,30 @@ export const STAT_WEIGHTS = {
   // rien neuf fois, puis un point de dégât entier au passage de la dizaine.
   // Un +2 de Force ne fait donc littéralement rien tant qu'il ne fait pas
   // franchir un seuil — la pesée le lisse, la table le subit en une fois.
-  force: 0.85,
-  intelligence: 0.85,
+  // Le poids d'un point de Force/Intelligence dépend ENTIÈREMENT du `per` des
+  // armes et des sorts de la table, puisque c'est lui qui convertit la stat en
+  // dégâts (`damage.scaling`, item.js / spells.js) — la pesée d'une armure ne
+  // peut pas savoir quelle arme sera portée avec, elle prend donc le `per` de
+  // BASE. Recalculé depuis les formules de ce fichier, un point de stat vaut :
+  //
+  //     per 10 (base)  0,45   per 8  0,55   per 6  0,72   per 5  0,85
+  //
+  // 0,55 correspond à un arsenal majoritairement en `per` 8-10, avec quelques
+  // armes à deux mains descendues à 5. Si tu généralises les `per` bas, monte
+  // ce poids d'autant, sinon la pesée sous-évaluera toutes les pièces qui
+  // donnent de la Force.
+  //
+  // Il valait 0,85 — la valeur d'un `per` de 5 — alors que le `per` de base
+  // est 10 : toute pièce donnant de la Force ou de l'Intelligence était donc
+  // comptée pour près du double de ce qu'elle rend réellement.
+  force: 0.55,
+  intelligence: 0.55,
+  // Dextérité / Acuité : un TN chacune, et une moitié de point d'initiative.
+  // ⚠️ Cette moitié de point ne pèse presque RIEN : l'initiative se joue sur
+  // `1d100 + @init` (init.js), où +1 fait passer la chance d'agir en premier
+  // de 50 % à 50,5 %. Le poids de 1,4 tient donc sur le seuil de touché seul —
+  // il ne faudra le remonter que si l'initiative repasse un jour sur un dé
+  // plus petit.
   dexterite: 1.4,
   acuite: 1.4,
   endurance: 0.6,
@@ -170,7 +192,18 @@ export const STAT_WEIGHTS = {
   // qu'un combat court le paie moins. Le mana suit le rapport que lui donne
   // déjà manaMax face à pvMax.
   regenPv: 8,
-  regenMana: 6
+  regenMana: 6,
+
+  // ── Initiative : le seul champ de `equipBonus.bonus` que cette table
+  // n'avait jamais listé. `computeItemValue` itère sur STAT_WEIGHTS, donc une
+  // clé absente d'ici est purement INVISIBLE : une relique « +10 initiative »
+  // affichait 0 point et restait classée « Village ».
+  //
+  // Le poids est petit, et c'est le dé qui le veut : `CONFIG.Combat.initiative`
+  // vaut « 1d100 + @init ». Contre un adversaire de même bonus, +1 donne
+  // 50,5 % de passer avant lui, +5 donne 54,4 %, +10 donne 59,1 %. Un point
+  // d'initiative vaut donc environ le quinzième d'un point de toucher.
+  initiativeMod: 0.3
 };
 
 /**
@@ -193,8 +226,40 @@ const STATE_RESIST_WEIGHTS = { immune: 8, durationReduction: 1, dotReductionPct:
 /** Un point de dégât moyen, sur une attaque type d'environ 7. */
 const DAMAGE_POINT = 8;
 
-/** Stat de référence pour évaluer un scaling d'arme hors de tout porteur. */
-const SCALING_REF_STAT = 4;
+/**
+ * Stat de référence pour évaluer un scaling hors de tout porteur.
+ *
+ * Elle DOIT suivre le niveau, exactement comme `partyRefFor` : une
+ * caractéristique principale gagne +1 par niveau automatiquement
+ * (`prepareDerivedData`), et l'équipement en ajoute à peu près autant, d'où
+ * la pente de +2 par niveau — la même que celle retenue pour la Dextérité et
+ * l'Acuité du groupe de référence.
+ *
+ *   niveau 1 → 4      niveau 5 → 12      niveau 10 → 22
+ *
+ * La constante valait 4 pour tout le monde, et c'était le trou le plus cher
+ * de ce fichier dès qu'on règle les `per` arme par arme : un marteau en
+ * `per 3` était pesé « +1 de scaling » (⌊4/3⌋) alors qu'un porteur de
+ * niveau 5 en tire +4 (⌊13/3⌋). Soit 12 points de pesée manquants sur une
+ * échelle où « Rare » commence à 55.
+ *
+ * Le niveau 1 rend toujours 4 : rien ne change pour une table qui débute.
+ */
+export function scalingRefStat(level = 1) {
+  return 4 + 2 * (Math.max(1, n(level, 1)) - 1);
+}
+
+/**
+ * Niveau du groupe de référence, réglable en monde (comme sa taille et ses
+ * dégâts par attaque). `computeItemValue` pesait TOUT contre un groupe de
+ * niveau 1, pour toujours : une arme était jugée sur la mitigation d'un
+ * débutant (5 %) alors que le groupe qui la ramasse en est à 17 % ou 32 %.
+ */
+export function peseeLevel() {
+  try {
+    return Math.max(1, n(game.settings.get("rpg", "peseeNiveauGroupe"), 1));
+  } catch (e) { return 1; }   // hors Foundry, ou réglage pas encore enregistré
+}
 
 /**
  * Paliers, par catégorie. Une arme part de plus haut : ses dés comptent.
@@ -230,6 +295,37 @@ const TIERS = {
  * seuls pour lesquels une valeur « raisonnable » par pièce peut produire un
  * total déraisonnable sans que rien ne le signale.
  */
+/**
+ * Nombre d'emplacements d'équipement d'un personnage : tête, torse, taille,
+ * bras, mains, jambes, pieds, main droite, main gauche, relique
+ * (SLOT_DEFS dans character-sheet-v2.js).
+ *
+ * La projection était écrite « ×9 » en dur, d'avant l'existence du type
+ * `relic` : elle sous-estimait donc d'un dixième le cumul d'un set complet.
+ */
+export const EQUIP_SLOTS = 10;
+
+/**
+ * Une arme à DEUX MAINS occupe les deux emplacements de main : son porteur
+ * renonce à un bouclier ou à une seconde arme. Elle doit donc être comparée à
+ * une PAIRE, pas à une arme seule, et ses paliers sont relevés d'autant.
+ *
+ * 1,5 vient de la pesée des mains gauches réelles rapportée au palier de leur
+ * arme : un bouclier de bois pèse 11,5 pour un palier Village à 20 (×0,57), un
+ * écu d'acier 14,8 pour un palier Commun à 35 (×0,42), un pavois runique 40,8
+ * pour un palier Rare à 55 (×0,74), une dague en seconde main ~12 (×0,6). La
+ * seconde main vaut donc, en gros, la moitié de la première.
+ *
+ * C'est un chiffre de table, à retoucher si tes boucliers pèsent
+ * systématiquement plus ou moins que ça.
+ */
+export const TWO_HAND_TIER_FACTOR = 1.5;
+
+/** Emplacements réellement consommés par un objet. */
+export function slotsUsedBy(item) {
+  return (String(item?.type ?? "") === "weapon" && item?.system?.twoHands) ? 2 : 1;
+}
+
 const LINEAR_FIELDS = new Set([
   "armureFixe", "resistanceFixe", "toucherPhysique", "toucherMagique",
   "vitesse", "fatigueMax", "regenPv", "regenMana"
@@ -251,7 +347,7 @@ const STACK_CAPS = {
 const LABELS = {
   armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
   toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
-  vitesse: "Vitesse", pvMax: "PV max", manaMax: "Mana max",
+  vitesse: "Vitesse", initiativeMod: "Initiative", pvMax: "PV max", manaMax: "Mana max",
   fatigueMax: "Fatigue max", podsMax: "Pods max", retraitMod: "Mod. retrait d'état",
   force: "Force", intelligence: "Intelligence",
   dexterite: "Dextérité", acuite: "Acuité", endurance: "Endurance",
@@ -302,7 +398,8 @@ function pushRow(rows, label, value, points, opts = {}) {
  * et le résultat est donc stable, comparable d'une fiche à l'autre.
  *
  * @param {Item|object} item  Item document ou données brutes.
- * @returns {{total:number, rows:Array, tier:object, warnings:Array, category:string}}
+ * @returns {{total:number, rows:Array, tier:object, warnings:Array, slots:number,
+ *            category:string}}
  */
 export function computeItemValue(item) {
   const type = String(item?.type ?? "");
@@ -317,23 +414,29 @@ export function computeItemValue(item) {
     pushRow(rows, label, value, pts, opts);
   };
 
+  // Emplacements consommés (2 pour une arme à deux mains) et nombre de pièces
+  // qu'un porteur peut réellement cumuler en portant celle-ci : une arme à
+  // deux mains mange l'emplacement de la main gauche, donc une pièce de moins.
+  const slots = slotsUsedBy(item);
+  const stackPieces = EQUIP_SLOTS - (slots - 1);
+
   // ── Bonus de stats ────────────────────────────────────────────────────
   const bonus = sys.bonus ?? {};
   for (const [key, weight] of Object.entries(STAT_WEIGHTS)) {
     const v = n(bonus[key], 0);
     if (!v) continue;
 
-    // Projection ×9 : ce que donnerait un équipement complet portant cette
-    // même valeur. Seuls les champs linéaires en ont besoin — pour les
-    // autres, la courbe absorbe le cumul d'elle-même.
+    // Projection sur un équipement COMPLET portant cette même valeur. Seuls
+    // les champs linéaires en ont besoin — pour les autres, la courbe absorbe
+    // le cumul d'elle-même.
     let warn = false;
     if (LINEAR_FIELDS.has(key)) {
       const cap = STACK_CAPS[key];
-      const stacked = v * 9;
+      const stacked = v * stackPieces;
       if (cap !== undefined && stacked > cap) {
         warn = true;
         warnings.push(
-          `${LABELS[key] ?? key} : ${round1(v)} par pièce → ${round1(stacked)} sur 9 emplacements, ` +
+          `${LABELS[key] ?? key} : ${round1(v)} par pièce → ${round1(stacked)} sur ${stackPieces} emplacements, ` +
           `au-dessus du cumul conseillé de ${cap}.`
         );
       }
@@ -349,12 +452,12 @@ export function computeItemValue(item) {
   for (const [key, weight] of Object.entries(RESIST_WEIGHTS)) {
     const v = n(re[key], 0);
     if (!v) continue;
-    const stacked = v * 9;
+    const stacked = v * stackPieces;
     // 100 = immunité : neuf pièces à 12 % suffisent à rendre un type inoffensif.
     const warn = Math.abs(stacked) >= 100;
     if (warn) {
       warnings.push(
-        `Résistance ${key} : ${round1(v)} % par pièce → ${round1(stacked)} % sur 9 emplacements, ` +
+        `Résistance ${key} : ${round1(v)} % par pièce → ${round1(stacked)} % sur ${stackPieces} emplacements, ` +
         `soit ${stacked >= 100 ? "l'immunité totale" : "la vulnérabilité maximale"}.`
       );
     }
@@ -399,7 +502,9 @@ export function computeItemValue(item) {
     // classement des armes entre elles — seul le barème (TIERS.weapon) a été
     // divisé d'autant. Ce qui appartient vraiment à l'arme, son toucher*, est
     // pesé à part dans la grille de bonus, comme avant.
-    const PARTY = partyRefFor(1);
+    const LEVEL = peseeLevel();
+    const REF_STAT = scalingRefStat(LEVEL);
+    const PARTY = partyRefFor(LEVEL);
     const W = DAMAGE_POINT * PARTY.hitChance;   // un point ENCAISSÉ, pondéré par la touche
     const hitPct = Math.round(PARTY.hitChance * 100);
 
@@ -414,13 +519,13 @@ export function computeItemValue(item) {
     const sc = dmg.scaling ?? {};
     const per = Math.max(1, n(sc.per, 10));
     const perStep = n(sc.perStep, 0);
-    const scaled = Math.floor(SCALING_REF_STAT / per) * perStep;
+    const scaled = Math.floor(REF_STAT / per) * perStep;
     // Chaque ligne suivante est pesée comme un INCRÉMENT du même coup, jamais
     // comme un coup séparé : l'armure fixe et le plancher à 1 de
     // landedAgainstParty s'appliquent une fois par coup reçu, et les repayer
     // ligne par ligne gonflerait un +1 de scaling autant qu'un dé entier.
     const landedScaled = landedAgainstParty(avg + scaled, PARTY) - landedAvg;
-    if (scaled) add(`Scaling (${sc.stat ?? "?"} réf. ${SCALING_REF_STAT})`, landedScaled, W, { text: `+${round1(scaled)}` });
+    if (scaled) add(`Scaling (${sc.stat ?? "?"} réf. ${REF_STAT})`, landedScaled, W, { text: `+${round1(scaled)}` });
 
     // Critique : ne se déclenche que sur un 20 naturel, soit 5 % des jets.
     // Il n'est PAS multiplié par la chance de toucher — un 20 naturel touche
@@ -462,21 +567,46 @@ export function computeItemValue(item) {
       }
     }
 
-    if (sys.twoHands) {
-      warnings.push(
-        "Arme à deux mains : elle occupe deux emplacements pour un seul jeu de bonus. " +
-        "À comparer au total de DEUX armes à une main, pas d'une seule."
-      );
-    }
   }
 
   total = round1(total);
+
+  // ── Emplacements occupés ──────────────────────────────────────────────
+  // Une arme à deux mains prive son porteur de sa main gauche : elle doit
+  // donc peser autant qu'une arme à une main PLUS ce qu'aurait rendu un
+  // bouclier ou une seconde arme. Les paliers sont relevés de
+  // TWO_HAND_TIER_FACTOR au lieu de diviser le total par deux — diviser
+  // rendait toutes les armes à deux mains « Village » d'un coup, puisque le
+  // barème TIERS.weapon est calibré sur des armes entières.
+  //
+  // C'était auparavant une simple phrase d'avertissement : le MJ lisait
+  // « Rare » sur une épée à deux mains qui, à emplacement égal, valait un
+  // Commun, et rien dans le chiffre ne le disait.
   const table = TIERS[isWeapon ? "weapon" : "gear"];
-  const tier = table.find(t => total <= t.max) ?? table[table.length - 1];
+  const tierFactor = slots > 1 ? TWO_HAND_TIER_FACTOR : 1;
+  const tier = table.find(t => total <= t.max * tierFactor) ?? table[table.length - 1];
+
+  if (slots > 1) {
+    const perSlot = round1(total / slots);
+    rows.push({
+      label: "Emplacements occupés",
+      value: `${slots} (deux mains)`,
+      points: 0,
+      key: "slots",
+      warn: false
+    });
+    warnings.push(
+      `Arme à deux mains : elle occupe ${slots} emplacements, soit ${perSlot} point(s) par ` +
+      `emplacement. Son palier est jugé sur des seuils relevés de ×${TWO_HAND_TIER_FACTOR} ` +
+      `(${round1(table[0].max * tierFactor)} / ${round1(table[1].max * tierFactor)} / ` +
+      `${round1(table[2].max * tierFactor)} / ${round1(table[3].max * tierFactor)}), ` +
+      `parce qu'elle remplace une arme ET une main gauche.`
+    );
+  }
 
   rows.sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
 
-  return { total, rows, tier, warnings, category: isWeapon ? "weapon" : "gear" };
+  return { total, rows, tier, warnings, slots, category: isWeapon ? "weapon" : "gear" };
 }
 
 /** Types d'objets que la pesée sait traiter. */
@@ -700,7 +830,11 @@ const SPEED_LABELS = { normal: "Normal", rapide: "Rapide", passif: "Passif" };
 export function computeSpellValue(item, opts = {}) {
   const sys = item?.system ?? {};
   const actor = opts.actor ?? item?.parent ?? null;
-  const level = n(opts.level, n(actor?.system?.niveau, 1));
+  // Sans porteur (fiche de sort ouverte au compendium), le niveau de
+  // référence est celui réglé en monde — le même que pour un objet, sinon un
+  // sort et une arme de la même table se pèsent contre deux groupes
+  // différents.
+  const level = n(opts.level, n(actor?.system?.niveau, peseeLevel()));
   const PARTY = opts.party ?? partyRefFor(level);
   const rows = [];
   const warnings = [];
@@ -711,9 +845,16 @@ export function computeSpellValue(item, opts = {}) {
   const stats = opts.stats
     ?? actor?.system?.derived?.effective?.principales
     ?? actor?.system?.principales
-    ?? { force: SCALING_REF_STAT, intelligence: SCALING_REF_STAT, dexterite: SCALING_REF_STAT,
-         acuite: SCALING_REF_STAT, endurance: SCALING_REF_STAT };
+    ?? (() => {
+      const r = scalingRefStat(level);
+      return { force: r, intelligence: r, dexterite: r, acuite: r, endurance: r };
+    })();
   const hasCaster = !!(opts.stats || actor);
+  // Valeur de repli quand un scaling porte sur une stat absente de `stats`
+  // (et libellé des avertissements) : la même référence, au même niveau, que
+  // celle d'une arme sans porteur.
+  const REF_STAT = scalingRefStat(level);
+  const statOf = (key) => n(stats?.[String(key ?? "")], REF_STAT);
 
   const speed = String(sys.speed ?? "normal");
   const isPassif = speed === "passif";
@@ -878,13 +1019,13 @@ export function computeSpellValue(item, opts = {}) {
       const signed = n(m?.value, 0);
       const isBonus = (m?.sens === "malus") ? false : (m?.sens === "bonus" ? true : signed >= 0);
       // Part fixe + part qui grandit avec une stat du lanceur, chiffrée sur
-      // la même référence que le scaling des dégâts (SCALING_REF_STAT) : sans
+      // la même référence que le scaling des dégâts (scalingRefStat) : sans
       // elle, « +1 par 10 d'Intelligence » pesait zéro.
       const scaleStat = String(m?.scaleStat ?? "").trim();
       const scaleStep = n(m?.scaleStep, 0);
       const scalePer = Math.max(1, n(m?.scalePer, 10) || 10);
       const scaled = (scaleStat && scaleStep)
-        ? Math.floor(SCALING_REF_STAT / scalePer) * Math.abs(scaleStep) : 0;
+        ? Math.floor(statOf(scaleStat) / scalePer) * Math.abs(scaleStep) : 0;
       const qty = Math.abs(signed) + scaled;
       if (!qty) continue;
       // Un "%" n'a de sens que rapporté à une valeur : PCT_REF donne l'ordre
@@ -935,7 +1076,7 @@ export function computeSpellValue(item, opts = {}) {
     const atkFx = atk?.effect ?? null;
     if (atkFx && atkFx.dot.mode !== "none") {
       const tick = n(atkFx.dot.base, 0)
-                 + (atkFx.dot.stat ? Math.floor(SCALING_REF_STAT / Math.max(1, n(atkFx.dot.per, 10))) : 0);
+                 + (atkFx.dot.stat ? Math.floor(statOf(atkFx.dot.stat) / Math.max(1, n(atkFx.dot.per, 10))) : 0);
       if (tick) {
         // × la chance de toucher : l'état n'est posé que sur une touche.
         const soin = atkFx.dot.mode === "heal";
@@ -1098,7 +1239,7 @@ export function computeSpellValue(item, opts = {}) {
     warnings.push("Sort PASSIF : il ne consomme aucune place du budget d'action. Sa valeur est comptée comme une capacité permanente, étalée sur le combat de référence.");
   }
   if (!hasCaster && lines.some(d => n(d.perStep, 0))) {
-    warnings.push(`Scaling de stat pesé sur une caractéristique de référence (${SCALING_REF_STAT}), faute de porteur : sur un lanceur réel, le sort vaut davantage.`);
+    warnings.push(`Scaling de stat pesé sur une caractéristique de référence (${REF_STAT}, niveau ${level}), faute de porteur : sur un lanceur réel, le sort vaut davantage.`);
   }
 
   const total = round1(perTurn);
