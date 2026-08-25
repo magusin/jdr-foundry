@@ -32,11 +32,13 @@
       title: "📊 Stats (total)",
       color: "#9b59b6",
       rows: [
-        "Total = Base + Niveau + Compétences + Équip/Effets",
+        "Total = Base + Niveau + Équip/Effets",
         "+1 par stat par niveau (automatique)",
+        "Les compétences n'ajoutent AUCUNE caractéristique",
         "PV = base(30) + floor(End/5) + bonus",
         "Mana = base(5) + floor(Int/20) + bonus",
-        "FatigueMax = base(10) + floor(End/10) + bonus"
+        "FatigueMax = base(10) + bonus (aucune stat)",
+        "Dégâts de stat : scaling de l'ARME/du SORT (stat/per)"
       ]
     },
     {
@@ -62,7 +64,9 @@
       title: "⬆️ Niveau perso",
       color: "#1d9e75",
       rows: [
-        "100 XP = niveau suivant (auto)",
+        "Palier = 100 + 40×(niv−1) + 15×(niv−1)²",
+        "Niv 1→2 : 100 | 2→3 : 155 | 3→4 : 240",
+        "Niv 4→5 : 355 | 5→6 : 500 | 9→10 : 1380",
         "XP combat = XP monstres ÷ nb PJ",
         "XP surplus conservé au level up"
       ]
@@ -83,9 +87,9 @@
       title: "😰 Moral / Retrait état",
       color: "#8e44ad",
       rows: [
-        "Moral : 1d20 + floor(End/10) + niv.Volonté ≥ 11",
+        "Moral : 1d20 + niv.Volonté ≥ 11 (pas d'End)",
         "Déclenché si PV ≤ 25% en début de tour",
-        "Retrait état : 1d20 + bonus ≥ TN état"
+        "Retrait état : 1d20 + floor(End/10) + niv.Volonté ≥ TN"
       ]
     }
   ];

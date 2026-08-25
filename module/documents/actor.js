@@ -265,7 +265,6 @@ export class RPGActor extends Actor {
     sys.derived = sys.derived ?? {};
     sys.derived.effective = sys.derived.effective ?? {};
     sys.derived.reductions = sys.derived.reductions ?? {};
-    sys.derived.damageBonus = sys.derived.damageBonus ?? {};
     sys.base = sys.base ?? {};
 
     const isMonster = this.type === "monster";
@@ -293,9 +292,6 @@ export class RPGActor extends Actor {
     const modsAE = (typeof sumActiveEffectMods === "function") ? sumActiveEffectMods(this) : null;
     const flat = modsAE?.flat ?? {};
     const pct = modsAE?.pct ?? {};
-    sys.derived.etats = sys.derived.etats ?? {};
-    sys.derived.etats.mods = modsAE;
-
     const applyPct = (val, p) => Number(val) * (1 + (Number(p) || 0) / 100);
 
     // -----------------------
@@ -314,9 +310,6 @@ export class RPGActor extends Actor {
     for (const s of ["force","intelligence","dexterite","acuite","endurance"]) {
       effP[s] += niveau;
     }
-
-    // Stocke la contribution pour l'affichage sur la fiche
-    sys.derived.fromLevel = niveau;
 
     // ✅ Photo AVANT les effets temporaires : c'est la valeur « permanente »
     // du personnage (base + niveau + équipement). La fiche l'affiche à côté
@@ -381,10 +374,18 @@ export class RPGActor extends Actor {
     );
 
     // -----------------------
-    // 3bis) Bonus dégâts depuis stats (FOR/INT)
+    // 3bis) Bonus de dégâts depuis les stats : IL N'Y EN A PAS ICI
     // -----------------------
-    sys.derived.damageBonus.physique = Math.floor(effP.force / 10);
-    sys.derived.damageBonus.magique = Math.floor(effP.intelligence / 10);
+    // `derived.damageBonus.physique/magique` valait ⌊force/10⌋ et ⌊int/10⌋, et
+    // n'était lu NULLE PART — ni par un jet, ni par un template, ni par une
+    // macro. C'était pire qu'inutile : il donnait à lire une règle de bonus
+    // global qui n'existe pas.
+    //
+    // Une caractéristique se convertit en dégâts par le `scaling` de l'OBJET
+    // qui frappe (`system.damage.scaling = {stat, per, perStep}`, base
+    // per 10 / +1), lu par RPGItem#rollDamage pour une arme et par les lignes
+    // damages[] pour un sort. C'est réglable arme par arme, et c'est le seul
+    // endroit où ça se décide.
 
     // -----------------------
     // 4) Ressources / regen / move
@@ -591,13 +592,11 @@ export class RPGActor extends Actor {
       chargeMax = applyPct(chargeMax, pct?.charge?.podsMax);
       chargeMax = Math.max(0, Math.floor(chargeMax));
     }
-    sys.derived.podsFromForce = isMonster ? 0 : Math.floor((Number(effP.force) || 0) / 3);
     sys.derived.effective.podsMax = chargeMax;
 
     const chargeRatio = chargeMax > 0 ? (chargeCur / chargeMax) : 0;
     const chargeState = chargeTierOf(chargeRatio);
 
-    sys.derived.chargeRatio = chargeRatio;
     sys.derived.chargePct = Math.round(chargeRatio * 100);
     sys.derived.chargeState = chargeState;
     // Conservé : la fiche et d'éventuelles macros lisent ce booléen. Il vaut
