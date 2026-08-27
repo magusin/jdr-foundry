@@ -386,6 +386,9 @@
             {{#if fx.uiMove}}<span class="fx-chip">{{fx.uiMove}}</span>{{/if}}
             {{#if fx.uiRemove}}<span class="fx-chip">{{fx.uiRemove}}</span>{{/if}}
             {{#if fx.uiResist}}<span class="fx-chip">{{fx.uiResist}}</span>{{/if}}
+            {{!-- Bonus de dégâts aux attaques + état qu'il pose : la partie 8
+                 de l'effet n'apparaissait que dépliée, côté MJ. --}}
+            {{#if fx.uiAttackBonus}}<span class="fx-chip fx-chip-atk">{{fx.uiAttackBonus}}</span>{{/if}}
           </span>
           {{#if @root.canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"

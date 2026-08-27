@@ -370,6 +370,10 @@
 .rpg-spell-sheet .fx-chip-aura  , .rpg-zone-sheet .fx-chip-aura  { background: rgba(120,110,200,0.18); border-color: rgba(120,110,200,0.40); }
 .rpg-spell-sheet .fx-chip-bonus , .rpg-zone-sheet .fx-chip-bonus { background: rgba(29,158,117,0.18);  border-color: rgba(29,158,117,0.40); }
 .rpg-spell-sheet .fx-chip-malus , .rpg-zone-sheet .fx-chip-malus { background: rgba(192,57,43,0.18);   border-color: rgba(192,57,43,0.40); }
+/* Bonus de dégâts aux attaques : la seule puce dont le texte est une phrase
+   (« ⚔️ +1d6 de feu aux armes de mêlée · pose « Brûlure » … »), donc la seule
+   qui doit pouvoir revenir à la ligne plutôt que déborder de l'en-tête. */
+.rpg-spell-sheet .fx-chip-atk   , .rpg-zone-sheet .fx-chip-atk   { background: rgba(209,120,68,0.18);  border-color: rgba(209,120,68,0.40); white-space: normal; }
 
 .rpg-spell-sheet .fx-body , .rpg-zone-sheet .fx-body {
   padding: 10px;
