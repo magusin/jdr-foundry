@@ -10,6 +10,8 @@ import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
 import { WEAPON_CATEGORIES, weaponCategory } from "../rules/attack-bonus.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
+import { setupItemRefDrop } from "./drop-helper.js";
+import { ammoRef, ammoStock, checkAmmo, AMMO_MODES } from "../rules/ammo.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -137,7 +139,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         removeResistance: async function (event) { await this._actionRemoveResistance(event); },
         addAmplification: async function (event) { await this._actionAddAmplification(event); },
         removeAmplification: async function (event) { await this._actionRemoveAmplification(event); },
-        resetCooldown: async function (event) { await this._actionResetCooldown(event); }
+        resetCooldown: async function (event) { await this._actionResetCooldown(event); },
+        clearAmmo: async function (event) { await this._actionClearAmmo(event); }
       }
     },
     { inplace: false }
@@ -186,7 +189,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "label" });
 
     // ---- Defaults infos
-    ctx.system.qte = n(ctx.system.qte, 0);
+    // Une arme qui existe existe au moins en un exemplaire : un défaut à 0
+    // rendrait une arme de jet injetable à la première sauvegarde de la fiche.
+    ctx.system.qte = n(ctx.system.qte, 1);
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.emplacement = String(ctx.system.emplacement ?? "mainDroite");
     ctx.system.twoHands = b(ctx.system.twoHands);
@@ -210,6 +215,28 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       restant: Math.max(0, n(ctx.system.cooldown?.restant, 0))
     };
     ctx.cooldownRestant = ctx.system.cooldown.restant;
+
+    // ---- Munitions (ammo.js). La référence est de la définition, la réserve
+    // vit dans le sac du porteur : la fiche d'un exemplaire posé au sol n'a
+    // donc rien à compter, et c'est normal.
+    const ref = ammoRef({ system: ctx.system });
+    ctx.system.ammo = {
+      mode: ref.mode, kind: ref.kind, name: ref.name, uuid: ref.uuid,
+      source: ref.source, img: ref.img, type: ref.type, perShot: ref.perShot
+    };
+    ctx.ammoModeChoices = Object.entries(AMMO_MODES).map(([key, label]) => ({
+      key, label, selected: key === ref.mode
+    }));
+    ctx.ammoModeLabel = AMMO_MODES[ref.mode] ?? AMMO_MODES.none;
+    ctx.ammoUses = ref.mode !== "none";
+    ctx.ammoUsesBag = ref.mode === "item";
+    ctx.ammoIsSelf = ref.mode === "self";
+    ctx.ammoRefSet = ref.hasRef;
+    // En mode « arme de jet », la réserve EST la quantité de l'arme : elle se
+    // lit même sur une fiche sans porteur, contrairement au sac.
+    ctx.ammoOwned = ref.configured && (!!actor || ref.mode === "self");
+    ctx.ammoStock = ctx.ammoOwned ? ammoStock(actor, item) : 0;
+    ctx.ammoEnough = ctx.ammoOwned ? checkAmmo(actor, item).ok : true;
 
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
@@ -369,7 +396,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     if (expanded?.system) {
       // infos
       if (expanded.system.twoHands != null) expanded.system.twoHands = b(expanded.system.twoHands);
-      if (expanded.system.qte != null) expanded.system.qte = n(expanded.system.qte, 0);
+      if (expanded.system.qte != null) expanded.system.qte = Math.max(0, n(expanded.system.qte, 1));
       if (expanded.system.poids != null) expanded.system.poids = n(expanded.system.poids, 0);
       if (expanded.system.difficulte != null) expanded.system.difficulte = n(expanded.system.difficulte, 0);
       if (expanded.system.portee != null) expanded.system.portee = n(expanded.system.portee, 1);
@@ -395,6 +422,20 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       if (expanded.system.cooldown?.max != null) {
         expanded.system.cooldown.max = Math.max(0, n(expanded.system.cooldown.max, 0));
         delete expanded.system.cooldown.restant;
+      }
+
+      // munitions : la case et le coût par tir se saisissent, la référence
+      // (nom/uuid/source/img/type) voyage en champs cachés et n'a qu'à être
+      // recopiée telle quelle — c'est le dépôt qui l'écrit.
+      if (expanded.system.ammo) {
+        const mode = String(expanded.system.ammo.mode ?? "none");
+        expanded.system.ammo.mode = AMMO_MODES[mode] ? mode : "none";
+        // `enabled` est l'ancien booléen : on le garde cohérent avec le mode
+        // pour qu'une copie non encore rouverte (ammoRef lit `enabled` en
+        // repli) ne se mette pas à consommer, ou à ne plus consommer.
+        expanded.system.ammo.enabled = expanded.system.ammo.mode !== "none";
+        expanded.system.ammo.kind = String(expanded.system.ammo.kind ?? "").trim();
+        expanded.system.ammo.perShot = Math.max(1, n(expanded.system.ammo.perShot, 1));
       }
 
       // bonus
@@ -491,6 +532,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);
     bindLinkSyncCheckbox(root, this.document);
+    // Dépôt d'un objet n'importe où sur la fiche = désignation de la
+    // munition. Même mécanisme que les ingrédients d'une recette : une
+    // référence déposée, jamais un nom tapé, pour que le sac soit interrogé
+    // avec la même empreinte que celle affichée.
+    if (game.user.isGM) setupItemRefDrop(this, root, (it) => this._setAmmoFromDrop(it));
     // ── UUID cliquable → ouvre la fiche de l'item associé ─────────────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
@@ -504,6 +550,42 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
+  }
+
+  /**
+   * Objet déposé sur la fiche → munition de cette arme.
+   *
+   * On mémorise l'empreinte AU DÉPÔT (source de compendium, ou UUID du pack
+   * quand l'objet déposé EST l'entrée de compendium) plutôt que de la
+   * résoudre au moment du tir : checkAmmo est appelé depuis des contextes
+   * synchrones (le menu de combat construit ses lignes sans await).
+   */
+  async _setAmmoFromDrop(item) {
+    if (!this.isEditable || !item) return;
+    const src = String(item?._stats?.compendiumSource ?? item?.flags?.core?.sourceId ?? "").trim();
+    await this.document.update({
+      "system.ammo": {
+        mode: "item",
+        kind: ammoRef(this.document).kind,
+        enabled: true,
+        name: String(item.name ?? ""),
+        uuid: String(item.uuid ?? ""),
+        source: src || (item.pack ? String(item.uuid ?? "") : ""),
+        img: String(item.img ?? ""),
+        type: String(item.type ?? ""),
+        perShot: ammoRef(this.document).perShot
+      }
+    }, { render: true });
+    ui.notifications?.info?.(`Munition de ${this.document.name} : ${item.name}.`);
+  }
+
+  async _actionClearAmmo(event) {
+    if (!this.isEditable) return;
+    await this.document.update({
+      // Seul l'objet DÉSIGNÉ est retiré : le mode et la famille restent, sinon
+      // ✕ désarmerait la munition au lieu de rouvrir le choix au joueur.
+      "system.ammo": { name: "", uuid: "", source: "", img: "", type: "" }
+    }, { render: true });
   }
 
   async _actionAddEffect(event) {

@@ -74,6 +74,8 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     ctx.system.qte = n(ctx.system.qte, 1);
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.effet = String(ctx.system.effet ?? "");
+    // Famille de munition : ce que cet objet peut alimenter comme arme (ammo.js).
+    ctx.system.ammoKind = String(ctx.system.ammoKind ?? "");
     ctx.system.description = String(ctx.system.description ?? "");
 
     ctx.system.prix = ctx.system.prix ?? { cuivre: 0, argent: 0, or: 0 };

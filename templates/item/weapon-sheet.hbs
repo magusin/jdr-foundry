@@ -31,6 +31,17 @@
       <div class="col card">
         <h2>Infos</h2>
 
+        {{!-- Quantité : la fiche ne l'exposait pas, alors que le champ existe
+             (baseItem) et qu'une arme de jet en consomme une par lancer. --}}
+        <div class="mm-line">
+          <span class="mm-label" title="Nombre d'exemplaires de cette arme. Une arme de jet en perd un par lancer.">Quantité</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.qte" value="{{system.qte}}" min="0" step="1"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.qte}}</b></div>
+          {{/if}}
+        </div>
+
         <div class="mm-line">
           <span class="mm-label">Poids (unité)</span>
           {{#if canEdit}}
@@ -118,6 +129,99 @@
               {{/if}}
             </div>
           </div>
+        {{/if}}
+
+        {{!-- Munitions. Trois régimes : aucune, un objet du sac (arc), ou
+             l'arme elle-même (arme de jet — le projectile EST l'arme, c'est sa
+             quantité qui baisse). En mode « objet du sac », la FAMILLE laisse
+             le joueur choisir sa flèche au moment du tir ; l'objet déposé sur
+             la fiche ferme ce choix sur une munition unique. --}}
+        <div class="mm-line">
+          <span class="mm-label" title="« Un objet du sac » : l'arme puise dans l'inventaire du porteur (arc, arbalète, fronde). « L'arme elle-même » : le projectile est l'arme, sa quantité baisse d'une unité par jet (couteau de jet, javelot). « Aucune » : comportement par défaut, rien n'est consommé.">🏹 Munition</span>
+          {{#if canEdit}}
+            <select class="mm-input" name="system.ammo.mode">
+              {{#each ammoModeChoices as |c|}}
+                <option value="{{c.key}}" {{#if c.selected}}selected{{/if}}>{{c.label}}</option>
+              {{/each}}
+            </select>
+          {{else}}
+            <div class="mm-value"><b>{{ammoModeLabel}}</b></div>
+          {{/if}}
+        </div>
+
+        {{#if ammoUsesBag}}
+        <div class="mm-line">
+          <span class="mm-label" title="Famille de munition, confrontée au champ « Munition pour » des objets du sac. Renseigne-la pour que le joueur puisse choisir entre sa flèche ordinaire et sa flèche de feu au moment du tir.">Famille acceptée</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="text" name="system.ammo.kind" value="{{system.ammo.kind}}" placeholder="ex : flèche"/>
+          {{else}}
+            <div class="mm-value"><b>{{#if system.ammo.kind}}{{system.ammo.kind}}{{else}}—{{/if}}</b></div>
+          {{/if}}
+        </div>
+
+        <div class="mm-line">
+          <span class="mm-label" title="Objet précis désigné comme munition (glisser-déposer). Facultatif : renseigne plutôt la famille ci-dessus pour laisser le choix au joueur.">Objet désigné</span>
+          <div class="mm-value" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            {{#if ammoRefSet}}
+              {{#if system.ammo.img}}<img src="{{system.ammo.img}}" height="20" width="20" style="object-fit:cover;border-radius:4px"/>{{/if}}
+              <b>{{system.ammo.name}}</b>
+              {{#if system.ammo.uuid}}
+                <button type="button" class="rpg-open-uuid" data-uuid="{{system.ammo.uuid}}"
+                  style="font-size:11px;padding:1px 6px;cursor:pointer">🔎</button>
+              {{/if}}
+              {{#if canEdit}}
+                <button type="button" data-action="clearAmmo"
+                  style="font-size:11px;padding:1px 6px;cursor:pointer" title="Retirer l'objet désigné">✕</button>
+              {{/if}}
+            {{else}}
+              <span style="opacity:.7">{{#if canEdit}}Dépose un objet sur cette fiche{{else}}Aucun{{/if}}</span>
+            {{/if}}
+          </div>
+        </div>
+        {{/if}}
+
+        {{#if ammoUses}}
+        <div class="mm-line">
+          <span class="mm-label" title="Nombre d'unités retirées à chaque tir résolu. Une arbalète lourde peut en coûter 2.">Consommé par tir</span>
+          {{#if canEdit}}
+            <input class="mm-input" type="number" name="system.ammo.perShot" value="{{system.ammo.perShot}}" min="1" step="1"/>
+          {{else}}
+            <div class="mm-value"><b>{{system.ammo.perShot}}</b></div>
+          {{/if}}
+        </div>
+
+        {{#if ammoOwned}}
+        <div class="mm-line">
+          <span class="mm-label">{{#if ammoIsSelf}}Exemplaires restants{{else}}En réserve{{/if}}</span>
+          <div class="mm-value"><b style="{{#unless ammoEnough}}color:#c0392b{{/unless}}">{{ammoStock}}</b></div>
+        </div>
+        {{/if}}
+
+        {{!-- La référence voyage en champs cachés : le formulaire est
+             submitOnChange et réécrit system.ammo en entier — sans eux,
+             changer « consommé par tir » effacerait l'objet désigné. --}}
+        <input type="hidden" name="system.ammo.name"   value="{{system.ammo.name}}"/>
+        <input type="hidden" name="system.ammo.uuid"   value="{{system.ammo.uuid}}"/>
+        <input type="hidden" name="system.ammo.source" value="{{system.ammo.source}}"/>
+        <input type="hidden" name="system.ammo.img"    value="{{system.ammo.img}}"/>
+        <input type="hidden" name="system.ammo.type"   value="{{system.ammo.type}}"/>
+
+        {{#if canEdit}}
+        <p class="hint">
+          {{#if ammoIsSelf}}
+            Chaque jet retire <b>un exemplaire</b> de cette arme (quantité ci-dessus). À 0, l'arme
+            ne peut plus être déclarée, mais <b>rien n'est supprimé</b> : la ligne reste au sac et
+            le récapitulatif de fin de combat permet d'en rendre une partie (haches retrouvées).
+          {{else}}
+            Renseigne la <b>famille</b> (« flèche ») et donne la même valeur au champ « Munition pour »
+            des objets concernés : le joueur choisira lui-même laquelle il tire. Tu peux aussi
+            <b>déposer un objet sur cette fiche</b> pour n'en autoriser qu'un seul.
+          {{/if}}
+          Le tir est refusé quand la réserve est vide, et la dépense a lieu à la <b>résolution</b> —
+          un MJ qui refuse la déclaration ne coûte pas de flèche. Rien n'est jamais détruit : le
+          compte tombe à 0 et la fin de combat propose d'en rendre une partie.
+        </p>
+        {{/if}}
         {{/if}}
 
         <p class="hint">

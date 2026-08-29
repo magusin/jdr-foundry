@@ -241,6 +241,49 @@ export function collectAttackBonusEffects(actor, { kind = "arme", weapon = null,
 }
 
 /**
+ * Libellés des caractéristiques utilisables par le scaling d'un état accordé.
+ *
+ * Même liste que le <select> de la fiche de sort (`atkFxDotStat`) : sans elle
+ * le résumé affichait la CLÉ brute (« 2+intelligence÷10/tour »), la seule
+ * ligne du système à parler technique à un joueur.
+ */
+const BONUS_FX_STAT_LABELS = {
+  force: "Force",
+  dexterite: "Dextérité",
+  intelligence: "Intelligence",
+  acuite: "Acuité",
+  endurance: "Endurance"
+};
+
+/**
+ * Détail de l'état accordé : durée, DOT/HOT (scaling compris), élément
+ * opposé, retirabilité et déclencheur.
+ *
+ * Extrait de attackBonusText() parce que tout ce qui décrit l'état doit se
+ * lire à l'identique partout où le bonus est décrit — fiche de sort, aperçu
+ * de déclaration, résumé d'état sur la fiche du porteur, chat.
+ */
+function bonusEffectDetail(fx) {
+  const statTxt = fx.dot.stat
+    ? ` + ${BONUS_FX_STAT_LABELS[fx.dot.stat] ?? fx.dot.stat}÷${fx.dot.per}`
+    : "";
+  const dotTxt = fx.dot.mode === "damage" ? ` ${fx.dot.base}${statTxt} dégâts/tour`
+    : fx.dot.mode === "heal" ? ` ${fx.dot.base}${statTxt} soin/tour`
+    : "";
+  // L'élément de l'état posé décide de la résistance aux ÉTATS qui lui est
+  // opposée (resistances.js) — exactement la même raison qui fait afficher
+  // l'élément des dégâts ajoutés.
+  const tagTxt = fx.tag ? ` de ${damageTypeLabel(fx.tag)}` : "";
+  // Retrait : 0 = aucun jet ne l'enlève (removableStates, remove-state.js).
+  // C'est le piège documenté de la fiche ; le taire sur le résumé revenait à
+  // ne le dire qu'au MJ qui a écrit le sort.
+  const remTxt = fx.removeBaseTN ? ` · retrait TN ${fx.removeBaseTN}+` : " · irrémédiable";
+  const whenTxt = fx.when === "crit" ? " — crit seulement"
+    : fx.when === "hitonly" ? " — touche normale" : "";
+  return `${tagTxt} ${fx.duration} tour(s)${dotTxt}${remTxt}${whenTxt}`;
+}
+
+/**
  * Texte d'une entrée de bonus, unique formateur.
  *
  * Toutes les surfaces passent par lui — fiche de sort, résumé d'état sur la
@@ -270,12 +313,7 @@ export function attackBonusText(bonus) {
   // sans lui, « ⚔️ aux attaques d'arme » ne dit rien d'un bonus qui n'ajoute
   // aucun dégât et ne fait qu'empoisonner.
   const fx = b.effect;
-  const fxTxt = fx
-    ? ` · pose « ${fx.label} » ${fx.duration} tour(s)`
-      + (fx.dot.mode === "damage" ? ` (${fx.dot.base}${fx.dot.stat ? `+${fx.dot.stat}÷${fx.dot.per}` : ""}/tour)`
-       : fx.dot.mode === "heal"   ? ` (${fx.dot.base}${fx.dot.stat ? `+${fx.dot.stat}÷${fx.dot.per}` : ""} soin/tour)` : "")
-      + (fx.when === "crit" ? " — crit seulement" : fx.when === "hitonly" ? " — touche normale" : "")
-    : "";
+  const fxTxt = fx ? ` · pose « ${fx.label} »${bonusEffectDetail(fx)}` : "";
 
   return `⚔️ ${dmgTxt}${cible}${fxTxt}`;
 }

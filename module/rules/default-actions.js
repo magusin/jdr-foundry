@@ -525,6 +525,22 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
                reason: `${weapon.name} est en recharge — encore ${cdRest} tour(s).` };
     }
 
+    // Munitions : même raison exactement — declareAttack refuse le tir, mais
+    // le refus doit tomber AVANT la réservation du slot d'attaque.
+    const { checkAmmo, pickAmmo } = await import("./ammo.js");
+    const ammo = checkAmmo(actor, weapon);
+    if (!ammo.ok) {
+      return { handled: true, ok: false, reason: `${weapon.name} : ${ammo.reason}` };
+    }
+    // Choix de la munition AVANT la réservation, pour la même raison que le
+    // choix de l'arme : fermer la fenêtre est un renoncement, il ne doit pas
+    // laisser un slot « attaque » réservé pour rien.
+    const ammoPick = await pickAmmo(actor, weapon);
+    if (!ammoPick.ok) {
+      if (ammoPick.cancelled) return { handled: true, ok: false, cancelled: true };
+      return { handled: true, ok: false, reason: `${weapon.name} : ${ammoPick.reason}` };
+    }
+
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
     // dire laquelle a servi.
     const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")
@@ -582,7 +598,7 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
 
     const { declareAttack } = await import("./attack-declare.js");
     await declareAttack(actor, weapon, target.actor,
-      { title, offhand, difficulte, actionId, targetToken: target });
+      { title, offhand, difficulte, actionId, targetToken: target, ammo: ammoPick });
     return { handled: true, ok: true };
   }
 

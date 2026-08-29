@@ -70,6 +70,7 @@ import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
+import * as Ammo from "./rules/ammo.js";
 import * as ActorRoles from "./rules/actor-roles.js";
 import * as Loadout from "./rules/loadout.js";
 import * as ItemValue from "./rules/item-value.js";
@@ -1143,6 +1144,18 @@ Hooks.once("init", async () => {
     // (cf. macro/item-distribute.js).
     game.rpg.inventory = Inventory;
 
+    // ✅ game.rpg.ammo : munitions d'une arme de tir/jet. Exposé pour le menu
+    // de combat (macro/menu.js), qui doit annoncer « plus de flèches » AVANT
+    // le clic — declareAttack refuserait après, mais un bouton actif qui
+    // répond non se lit comme un bug.
+    game.rpg.ammo = {
+      ...Ammo,
+      // Alias court, aligné sur game.rpg.weaponRange.check.
+      check: Ammo.checkAmmo,
+      stock: Ammo.ammoStock,
+      pick: Ammo.pickAmmo
+    };
+
     // ✅ game.rpg.actorRoles : qui est un PJ, qui est un PNJ (les deux sont
     // des acteurs `character`). Même critère que la « carte PNJ » des
     // fiches, réutilisé par les macros de distribution pour séparer les
@@ -1942,6 +1955,29 @@ Hooks.once("init", async () => {
             await resetSpellCooldowns(ids);
           });
         }
+        // Munitions retrouvées après le combat : le MJ écrit le nombre, ligne
+        // par ligne. Rien n'est rendu tout seul.
+        for (const btn of Array.from(root?.querySelectorAll('[data-action="ammoRecover"]') ?? [])) {
+          if (btn.dataset.bound || !game.user.isGM) continue;
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            const input = btn.parentElement?.querySelector(".rpg-ammo-back");
+            const qty = Number(input?.value ?? 0) || 0;
+            btn.disabled = true;
+            const res = await Ammo.recoverAmmo({
+              actorId: btn.dataset.actorId, actorUuid: btn.dataset.actorUuid || null,
+              itemId: btn.dataset.itemId, qty
+            });
+            if (res?.ok) {
+              btn.textContent = `+${res.added} rendus`;
+              ui.notifications?.info?.(`${res.name} : ${res.actorName} en a maintenant ${res.total}.`);
+            } else {
+              btn.disabled = false;
+              ui.notifications?.warn?.(res?.reason ?? "Impossible de rendre ces munitions.");
+            }
+          });
+        }
         const restBtn = root?.querySelector('[data-action="restoreManaFatigue"]');
         if (restBtn && !restBtn.dataset.bound && game.user.isGM) {
           restBtn.dataset.bound = "1";
@@ -2440,6 +2476,15 @@ Hooks.once("init", async () => {
       await resolveEndOfCombat(combat);
     } catch (e) {
       console.error("[RPG] Erreur fin de combat (XP/Loot) :", e);
+    }
+    // Munitions dépensées : message SÉPARÉ, parce que resolveEndOfCombat
+    // renonce dès qu'il manque un PJ ou un monstre (combat PvP, entraînement)
+    // — or les flèches, elles, ont bel et bien été tirées.
+    try {
+      const content = Ammo.buildAmmoRecoveryContent(combat);
+      if (content) await ChatMessage.create({ content, whisper: ChatMessage.getWhisperRecipients("GM") });
+    } catch (e) {
+      console.error("[RPG] Erreur récapitulatif munitions :", e);
     }
   });
 });

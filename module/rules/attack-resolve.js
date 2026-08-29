@@ -13,6 +13,7 @@
 import { hpSecret } from "./chat-visibility.js";
 import { confirmAttackDeclaration, rollAttackDie, resolveDeclaredActor } from "./attack-declare.js";
 import { collectAttackBonusEffects } from "./attack-bonus.js";
+import { consumeAmmo, ammoSpentLine } from "./ammo.js";
 import { findStateSlot } from "./status-effects.js";
 import { dropPassifOnStateLabel } from "./loadout.js";
 
@@ -500,6 +501,9 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
       await confirmBudgetSlot(realActionId);
       await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
       await startWeaponCooldown(weapon);
+      // Munition : même moment et même règle que la recharge — la flèche
+      // part dès que le MJ tranche, indépendamment du jet de dégâts à venir.
+      const ammoInfo = await consumeAmmo(attacker, weapon, { itemId: f.ammoItemId ?? null });
 
       await message.delete();
 
@@ -508,7 +512,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
         `<div style="font-size:11px;opacity:.7;margin-top:2px">En attente du jet de dégâts du joueur.</div>` +
         `<div class="rpg-attack-damage-roll" style="margin-top:8px">` +
         `<button type="button" class="rpg-roll-damage-attack" style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600">🎲 Lancer les dégâts</button>` +
-        `</div>`;
+        `</div>` + ammoSpentLine(ammoInfo);
 
       const rollMsg = await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: attacker }),
@@ -538,12 +542,14 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   await confirmBudgetSlot(realActionId);
   await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
   await startWeaponCooldown(weapon);
+  // Un tir manqué coûte sa flèche comme un tir réussi.
+  const ammoInfo = await consumeAmmo(attacker, weapon, { itemId: f.ammoItemId ?? null });
 
   await message.delete();
 
   const resolMsg = await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor: attacker }),
-    content: content +
+    content: content + ammoSpentLine(ammoInfo) +
       (realActionId ? `<div style="margin-top:6px;text-align:right"><button type="button" data-action-undo data-action-id="${realActionId}" style="font-size:11px;padding:2px 8px;cursor:pointer;opacity:0.7">↩️ Annuler</button></div>` : ""),
     flags: realActionId ? { rpg: { confirmedAction: true, actionId: realActionId } } : {}
   });

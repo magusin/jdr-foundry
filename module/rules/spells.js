@@ -946,7 +946,20 @@ export function buildSpellEffectsPreview({ actor, item }) {
     const atkTxt = attackBonusText({
       scope: fx.atkScope, categories: fx.atkCategories,
       flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-      livraison: fx.atkLivraison, tag: fx.atkTag
+      livraison: fx.atkLivraison, tag: fx.atkTag,
+      // L'état accordé fait partie du bonus : l'omettre ici rendait l'aperçu
+      // muet sur « tes lames empoisonnent » — et totalement vide pour un
+      // bonus qui ne pose QU'UN état (normalizeAttackBonus rend alors null
+      // faute du moindre dégât), alors que c'est le cas d'usage type.
+      effect: {
+        label: fx.atkFxLabel, when: fx.atkFxWhen,
+        duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
+        tag: fx.atkFxTag,
+        dot: {
+          mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
+          stat: fx.atkFxDotStat, per: fx.atkFxDotPer
+        }
+      }
     });
     if (atkTxt) parts.push(atkTxt);
 

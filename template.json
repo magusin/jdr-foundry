@@ -263,7 +263,8 @@
     "loot": {
       "templates": [
         "baseItem"
-      ]
+      ],
+      "ammoKind": ""
     },
     "weapon": {
       "templates": [
@@ -280,6 +281,17 @@
       "cooldown": {
         "max": 0,
         "restant": 0
+      },
+      "ammo": {
+        "mode": "none",
+        "kind": "",
+        "enabled": false,
+        "name": "",
+        "uuid": "",
+        "source": "",
+        "img": "",
+        "type": "loot",
+        "perShot": 1
       },
       "livraison": "physique",
       "tag": "",
@@ -338,7 +350,8 @@
         "details"
       ],
       "poids": 0.2,
-      "effet": ""
+      "effet": "",
+      "ammoKind": ""
     },
     "spell": {
       "templates": [
