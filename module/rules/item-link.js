@@ -109,7 +109,10 @@ const SYNC_FIELDS = {
   ],
   consumable: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.lore", "system.description", "system.effet"
+    "system.lore", "system.description", "system.effet",
+    // Famille de munition : définition de l'objet (une flèche est une flèche
+    // sur toutes les copies), jamais un état de l'exemplaire.
+    "system.ammoKind"
   ],
   spell: [
     "system.poids", "system.prix", "system.vendeurAssocie",
@@ -133,7 +136,8 @@ const SYNC_FIELDS = {
   // au même titre que le poids ou le prix.
   loot: [
     "system.poids", "system.prix", "system.vendeurAssocie",
-    "system.lore", "system.description", "system.effet"
+    "system.lore", "system.description", "system.effet",
+    "system.ammoKind"
   ],
   // Talent : seuls ses bonus/malus et son texte sont de la définition.
   // `system.equipe` est EXCLU comme partout ailleurs, et ici l'exclusion est

@@ -305,7 +305,7 @@
       // pas). Même rôle que la recharge ici : le menu ne fait que dire avant le
       // clic ce que declareAttack refuserait après.
       const ammo = game.rpg?.ammo?.check?.(actor, w)
-        ?? { uses: false, ok: true, have: 0, need: 0, label: "", reason: null };
+        ?? { uses: false, ok: true, have: 0, need: 0, label: "", mode: "none", reason: null };
       const noAmmo = ammo.uses && !ammo.ok;
 
       const reasons = [];
@@ -345,7 +345,7 @@
               <span>${tnTxt}</span>
               <span>📏 Portée <b>${fmtMeters(porteeMax)} m</b>${dist !== null ? ` (cible à ${fmtMeters(dist)} m)` : ""}</span>
               ${cdMax > 0 ? `<span>🔄 Recharge <b>${cdMax} tour(s)</b></span>` : ""}
-              ${ammo.uses ? `<span>🏹 ${htmlEscape(ammo.label)} <b>${ammo.have}</b>${ammo.need > 1 ? ` (−${ammo.need}/tir)` : ""}</span>` : ""}
+              ${ammo.uses ? `<span>🏹 ${ammo.mode === "self" ? "Exemplaires" : htmlEscape(ammo.label)} <b>${ammo.have}</b>${ammo.need > 1 ? ` (−${ammo.need}/tir)` : ""}</span>` : ""}
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>
@@ -900,6 +900,15 @@
           cooldown:   null
         };
 
+        // 1 bis. Munition : le joueur choisit AVANT la réservation — fermer la
+        //        fenêtre est un renoncement, pas une action dépensée.
+        const ammoPick = (await game.rpg?.ammo?.pick?.(actor, weapon)) ?? { ok: true, uses: false };
+        if (!ammoPick.ok) {
+          btn.disabled = false;
+          if (!ammoPick.cancelled) notify("warn", `${weapon.name} : ${ammoPick.reason}`);
+          return;
+        }
+
         // 2. Réserve le slot (pending)
         const actionId = foundry.utils.randomID();
         if (budgetAPI && combat && cbt) {
@@ -922,7 +931,7 @@
         const attackAPI = game.rpg?.attack;
         if (!attackAPI?.declareAttack) throw new Error("API d'attaque introuvable — rechargez le monde.");
         const msg = await attackAPI.declareAttack(actor, weapon, targetToken.actor,
-          { actionId, attackerToken: token, targetToken });
+          { actionId, attackerToken: token, targetToken, ammo: ammoPick });
 
         // Enregistre l'id du message dans le log
         if (budgetAPI && combat && cbt && msg) {

@@ -263,7 +263,8 @@
     "loot": {
       "templates": [
         "baseItem"
-      ]
+      ],
+      "ammoKind": ""
     },
     "weapon": {
       "templates": [
@@ -282,6 +283,8 @@
         "restant": 0
       },
       "ammo": {
+        "mode": "none",
+        "kind": "",
         "enabled": false,
         "name": "",
         "uuid": "",
@@ -347,7 +350,8 @@
         "details"
       ],
       "poids": 0.2,
-      "effet": ""
+      "effet": "",
+      "ammoKind": ""
     },
     "spell": {
       "templates": [

@@ -503,7 +503,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
       await startWeaponCooldown(weapon);
       // Munition : même moment et même règle que la recharge — la flèche
       // part dès que le MJ tranche, indépendamment du jet de dégâts à venir.
-      const ammoInfo = await consumeAmmo(attacker, weapon);
+      const ammoInfo = await consumeAmmo(attacker, weapon, { itemId: f.ammoItemId ?? null });
 
       await message.delete();
 
@@ -543,7 +543,7 @@ export async function resolveAttack(message, result, { actionId = null } = {}) {
   await bumpFatigue(attacker, weapon, f.offhandId ? resolveWeapon(attacker, f.offhandId) : null);
   await startWeaponCooldown(weapon);
   // Un tir manqué coûte sa flèche comme un tir réussi.
-  const ammoInfo = await consumeAmmo(attacker, weapon);
+  const ammoInfo = await consumeAmmo(attacker, weapon, { itemId: f.ammoItemId ?? null });
 
   await message.delete();
 

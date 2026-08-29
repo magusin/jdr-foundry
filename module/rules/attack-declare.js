@@ -14,7 +14,7 @@
 
 import { gmOnly } from "./chat-visibility.js";
 import { checkWeaponRange } from "./weapon-range.js";
-import { checkAmmo } from "./ammo.js";
+import { checkAmmo, pickAmmo } from "./ammo.js";
 import { fmtMeters } from "../utils/grid.js";
 
 const htmlEsc = (s) =>
@@ -64,11 +64,17 @@ function renderAttackBody(d, phase) {
       + `dé seul (<b>${htmlEsc(d.offhandDice ?? "—")}</b>), sans part fixe ni bonus de stat`
     : "";
 
+  // Munition annoncée : le MJ valide un tir en sachant ce qu'il coûte, et le
+  // joueur relit le choix qu'il vient de faire.
+  const ammoLine = d.ammoName
+    ? `<br>🏹 Munition : <b>${htmlEsc(d.ammoName)}</b>`
+    : "";
+
   const header = `
     <div>${d.title}</div>
     <div style="opacity:.85;margin-top:2px">
       Seuil de touché : <b>${d.tnFinal}+</b> <span style="opacity:.75">(base ${d.tnBase}+${diffTxt})</span>
-      ${dmgLine}${offhandLine}`;
+      ${dmgLine}${offhandLine}${ammoLine}`;
 
   if (phase === "pending") {
     return `${header}
@@ -162,10 +168,22 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
   // c'est le seul point commun aux quatre chemins d'attaque. La DÉPENSE, elle,
   // n'a lieu qu'à la résolution — un MJ qui refuse la déclaration ne doit pas
   // avoir coûté une flèche.
+  // Le CHOIX de la munition se fait ici aussi, sur le client du joueur : c'est
+  // lui qui sait s'il tire une flèche ordinaire ou sa flèche de feu, et le MJ
+  // doit lire ce choix dans la déclaration plutôt que le deviner. Aucune
+  // fenêtre quand une seule munition est compatible.
+  let ammoPick = { ok: true, uses: false };
   {
-    const check = checkAmmo(attacker, item);
-    if (!check.ok) {
-      ui.notifications?.warn?.(`${item.name} : ${check.reason}`);
+    // `opts.ammo` : le choix a déjà été fait par l'appelant, AVANT qu'il ne
+    // réserve son slot d'action — annuler la fenêtre ne doit pas coûter
+    // l'action (le menu de combat et l'action de base font exactement ça,
+    // comme pour le choix de l'arme). Sinon on demande ici, ce qui couvre les
+    // chemins sans budget (attaque d'opportunité).
+    ammoPick = opts.ammo ?? await pickAmmo(attacker, item);
+    if (!ammoPick.ok) {
+      // Fermer la fenêtre est un renoncement, pas une erreur : pas d'alerte,
+      // comme pour le choix d'arme (pickAttackWeapon).
+      if (!ammoPick.cancelled) ui.notifications?.warn?.(`${item.name} : ${ammoPick.reason}`);
       return null;
     }
   }
@@ -213,6 +231,11 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     // pour les repli.
     actorUuid: attacker.uuid ?? null,
     weaponId: item.id,
+    // Munition annoncée : c'est elle que la résolution retirera du sac. Écrite
+    // dans la déclaration plutôt que rechoisie à la résolution — sinon le MJ
+    // validerait « une flèche » et le moteur en dépenserait une autre.
+    ammoItemId: ammoPick.itemId ?? null,
+    ammoName: ammoPick.name ?? null,
     offhandId: offhand?.id ?? null,
     targetId: targetActor.id,
     targetUuid: targetActor.uuid ?? null,

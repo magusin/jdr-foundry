@@ -11,7 +11,7 @@ import { computeItemValue } from "../rules/item-value.js";
 import { WEAPON_CATEGORIES, weaponCategory } from "../rules/attack-bonus.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 import { setupItemRefDrop } from "./drop-helper.js";
-import { ammoRef, ammoStock, checkAmmo } from "../rules/ammo.js";
+import { ammoRef, ammoStock, checkAmmo, AMMO_MODES } from "../rules/ammo.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -189,7 +189,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "label" });
 
     // ---- Defaults infos
-    ctx.system.qte = n(ctx.system.qte, 0);
+    // Une arme qui existe existe au moins en un exemplaire : un défaut à 0
+    // rendrait une arme de jet injetable à la première sauvegarde de la fiche.
+    ctx.system.qte = n(ctx.system.qte, 1);
     ctx.system.poids = n(ctx.system.poids, 0);
     ctx.system.emplacement = String(ctx.system.emplacement ?? "mainDroite");
     ctx.system.twoHands = b(ctx.system.twoHands);
@@ -219,11 +221,20 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     // donc rien à compter, et c'est normal.
     const ref = ammoRef({ system: ctx.system });
     ctx.system.ammo = {
-      enabled: ref.enabled, name: ref.name, uuid: ref.uuid, source: ref.source,
-      img: ref.img, type: ref.type, perShot: ref.perShot
+      mode: ref.mode, kind: ref.kind, name: ref.name, uuid: ref.uuid,
+      source: ref.source, img: ref.img, type: ref.type, perShot: ref.perShot
     };
-    ctx.ammoRefSet = !!(ref.name || ref.uuid || ref.source);
-    ctx.ammoOwned = !!actor && ref.configured;
+    ctx.ammoModeChoices = Object.entries(AMMO_MODES).map(([key, label]) => ({
+      key, label, selected: key === ref.mode
+    }));
+    ctx.ammoModeLabel = AMMO_MODES[ref.mode] ?? AMMO_MODES.none;
+    ctx.ammoUses = ref.mode !== "none";
+    ctx.ammoUsesBag = ref.mode === "item";
+    ctx.ammoIsSelf = ref.mode === "self";
+    ctx.ammoRefSet = ref.hasRef;
+    // En mode « arme de jet », la réserve EST la quantité de l'arme : elle se
+    // lit même sur une fiche sans porteur, contrairement au sac.
+    ctx.ammoOwned = ref.configured && (!!actor || ref.mode === "self");
     ctx.ammoStock = ctx.ammoOwned ? ammoStock(actor, item) : 0;
     ctx.ammoEnough = ctx.ammoOwned ? checkAmmo(actor, item).ok : true;
 
@@ -385,7 +396,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     if (expanded?.system) {
       // infos
       if (expanded.system.twoHands != null) expanded.system.twoHands = b(expanded.system.twoHands);
-      if (expanded.system.qte != null) expanded.system.qte = n(expanded.system.qte, 0);
+      if (expanded.system.qte != null) expanded.system.qte = Math.max(0, n(expanded.system.qte, 1));
       if (expanded.system.poids != null) expanded.system.poids = n(expanded.system.poids, 0);
       if (expanded.system.difficulte != null) expanded.system.difficulte = n(expanded.system.difficulte, 0);
       if (expanded.system.portee != null) expanded.system.portee = n(expanded.system.portee, 1);
@@ -417,7 +428,13 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       // (nom/uuid/source/img/type) voyage en champs cachés et n'a qu'à être
       // recopiée telle quelle — c'est le dépôt qui l'écrit.
       if (expanded.system.ammo) {
-        expanded.system.ammo.enabled = b(expanded.system.ammo.enabled);
+        const mode = String(expanded.system.ammo.mode ?? "none");
+        expanded.system.ammo.mode = AMMO_MODES[mode] ? mode : "none";
+        // `enabled` est l'ancien booléen : on le garde cohérent avec le mode
+        // pour qu'une copie non encore rouverte (ammoRef lit `enabled` en
+        // repli) ne se mette pas à consommer, ou à ne plus consommer.
+        expanded.system.ammo.enabled = expanded.system.ammo.mode !== "none";
+        expanded.system.ammo.kind = String(expanded.system.ammo.kind ?? "").trim();
         expanded.system.ammo.perShot = Math.max(1, n(expanded.system.ammo.perShot, 1));
       }
 
@@ -548,6 +565,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     const src = String(item?._stats?.compendiumSource ?? item?.flags?.core?.sourceId ?? "").trim();
     await this.document.update({
       "system.ammo": {
+        mode: "item",
+        kind: ammoRef(this.document).kind,
         enabled: true,
         name: String(item.name ?? ""),
         uuid: String(item.uuid ?? ""),
@@ -563,7 +582,9 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
   async _actionClearAmmo(event) {
     if (!this.isEditable) return;
     await this.document.update({
-      "system.ammo": { enabled: false, name: "", uuid: "", source: "", img: "", type: "", perShot: 1 }
+      // Seul l'objet DÉSIGNÉ est retiré : le mode et la famille restent, sinon
+      // ✕ désarmerait la munition au lieu de rouvrir le choix au joueur.
+      "system.ammo": { name: "", uuid: "", source: "", img: "", type: "" }
     }, { render: true });
   }
 

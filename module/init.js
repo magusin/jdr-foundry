@@ -1152,7 +1152,8 @@ Hooks.once("init", async () => {
       ...Ammo,
       // Alias court, aligné sur game.rpg.weaponRange.check.
       check: Ammo.checkAmmo,
-      stock: Ammo.ammoStock
+      stock: Ammo.ammoStock,
+      pick: Ammo.pickAmmo
     };
 
     // ✅ game.rpg.actorRoles : qui est un PJ, qui est un PNJ (les deux sont

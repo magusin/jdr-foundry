@@ -48,6 +48,18 @@
         </div>
       </div>
 
+      {{!-- Munition : cet objet peut servir de projectile à une arme dont la
+            « famille acceptée » porte la même valeur (ammo.js). Vide = objet
+            ordinaire, ce qui est le cas de tout l'inventaire existant. --}}
+      <div style="margin-top:10px">
+        <label title="Famille de munition (« flèche », « carreau »). Une arme dont la famille acceptée porte la même valeur pourra tirer cet objet — et le joueur choisira parmi tout ce qu'il possède de cette famille.">🏹 Munition pour (famille)</label>
+        {{#if canEdit}}
+          <input type="text" name="system.ammoKind" value="{{system.ammoKind}}" placeholder="ex : flèche — vide si ce n'est pas une munition"/>
+        {{else}}
+          <div><b>{{#if system.ammoKind}}{{system.ammoKind}}{{else}}—{{/if}}</b></div>
+        {{/if}}
+      </div>
+
       {{#if (eq item.type "consumable")}}
       <hr/>
       {{!-- Pas de compteur « utilisations » : un consommable se compte en
