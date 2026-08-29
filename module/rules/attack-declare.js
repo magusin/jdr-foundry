@@ -14,6 +14,7 @@
 
 import { gmOnly } from "./chat-visibility.js";
 import { checkWeaponRange } from "./weapon-range.js";
+import { checkAmmo } from "./ammo.js";
 import { fmtMeters } from "../utils/grid.js";
 
 const htmlEsc = (s) =>
@@ -151,6 +152,20 @@ export async function declareAttack(attacker, item, targetActor, opts = {}) {
     if (rest > 0) {
       ui.notifications?.warn?.(
         `${item.name} est en recharge — encore ${rest} tour(s).`);
+      return null;
+    }
+  }
+
+  // ── Munitions ─────────────────────────────────────────────────────────
+  // Une arme de tir/jet peut désigner un objet du sac comme sa munition
+  // (ammo.js). Le contrôle vit ici pour la même raison que la recharge :
+  // c'est le seul point commun aux quatre chemins d'attaque. La DÉPENSE, elle,
+  // n'a lieu qu'à la résolution — un MJ qui refuse la déclaration ne doit pas
+  // avoir coûté une flèche.
+  {
+    const check = checkAmmo(attacker, item);
+    if (!check.ok) {
+      ui.notifications?.warn?.(`${item.name} : ${check.reason}`);
       return null;
     }
   }

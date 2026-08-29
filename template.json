@@ -281,6 +281,15 @@
         "max": 0,
         "restant": 0
       },
+      "ammo": {
+        "enabled": false,
+        "name": "",
+        "uuid": "",
+        "source": "",
+        "img": "",
+        "type": "loot",
+        "perShot": 1
+      },
       "livraison": "physique",
       "tag": "",
       "portee": 1,

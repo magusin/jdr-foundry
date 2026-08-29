@@ -525,6 +525,14 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
                reason: `${weapon.name} est en recharge — encore ${cdRest} tour(s).` };
     }
 
+    // Munitions : même raison exactement — declareAttack refuse le tir, mais
+    // le refus doit tomber AVANT la réservation du slot d'attaque.
+    const { checkAmmo } = await import("./ammo.js");
+    const ammo = checkAmmo(actor, weapon);
+    if (!ammo.ok) {
+      return { handled: true, ok: false, reason: `${weapon.name} : ${ammo.reason}` };
+    }
+
     // On précise la main : avec deux armes du même nom, le MJ doit pouvoir
     // dire laquelle a servi.
     const esc = (s) => String(s ?? "").replaceAll("&", "&amp;")

@@ -301,15 +301,23 @@
       const cdMax  = n(w.system?.cooldown?.max, 0);
       const reloading = cdRest > 0;
 
+      // Munitions (ammo.js, exposé sur game.rpg.ammo — les macros n'importent
+      // pas). Même rôle que la recharge ici : le menu ne fait que dire avant le
+      // clic ce que declareAttack refuserait après.
+      const ammo = game.rpg?.ammo?.check?.(actor, w)
+        ?? { uses: false, ok: true, have: 0, need: 0, label: "", reason: null };
+      const noAmmo = ammo.uses && !ammo.ok;
+
       const reasons = [];
       if (reloading) reasons.push(`En recharge — encore ${cdRest} tour(s)`);
+      if (noAmmo) reasons.push(ammo.reason ?? "Plus de munitions");
       if (atkBlocked) reasons.push("Slot Attaque épuisé pour ce tour");
       if (!hasTarget) reasons.push("Sélectionne une cible (T)");
       if (outOfRange) reasons.push(rangeCheck.reason ?? "Hors portée");
       if (tooManyTargets) reasons.push(`Une seule cible utilisée (${targets.length} sélectionnées)`);
 
       const myTurn = isMyTurn(actor);
-      const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange && !reloading;
+      const canAttack = myTurn && canAct(actor) && hasTarget && !atkBlocked && !outOfRange && !reloading && !noAmmo;
       if (!myTurn) reasons.unshift("Pas ton tour");
       if (isKO(actor)) reasons.unshift("K.O. (0 PV)");
       else if (needsAgonieCheckFirst(actor)) reasons.unshift("Jet de Volonté requis avant d'agir");
@@ -326,6 +334,7 @@
                 <span class="badge b-ok">${livr}</span>
                 <span class="badge b-info">${twoH}</span>
                 ${reloading ? `<span class="badge b-bad">RECHARGE ${cdRest}</span>` : ""}
+                ${ammo.uses ? `<span class="badge ${noAmmo ? "b-bad" : "b-info"}">🏹 ${ammo.have}</span>` : ""}
                 ${atkBlocked ? `<span class="badge b-bad">SLOT ✗</span>` :
                   outOfRange ? `<span class="badge b-bad">PORTÉE ✗</span>` :
                   hasTarget ? `<span class="badge b-ok">CIBLE ✓</span>` : `<span class="badge b-warn">CIBLE</span>`}
@@ -336,6 +345,7 @@
               <span>${tnTxt}</span>
               <span>📏 Portée <b>${fmtMeters(porteeMax)} m</b>${dist !== null ? ` (cible à ${fmtMeters(dist)} m)` : ""}</span>
               ${cdMax > 0 ? `<span>🔄 Recharge <b>${cdMax} tour(s)</b></span>` : ""}
+              ${ammo.uses ? `<span>🏹 ${htmlEscape(ammo.label)} <b>${ammo.have}</b>${ammo.need > 1 ? ` (−${ammo.need}/tir)` : ""}</span>` : ""}
             </div>
             ${reasons.length ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">${htmlEscape(atkTitle)}</div>` : ""}
           </div>

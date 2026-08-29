@@ -85,6 +85,10 @@ const SYNC_FIELDS = {
     // synchroniser rendrait toutes les arbalètes du monde indisponibles dès
     // qu'un joueur tire. Même découpage que pour un sort, plus bas.
     "system.cooldown.max",
+    // Munition : la référence est de la définition (tous les arcs du monde
+    // tirent la même flèche) ; la réserve, elle, vit dans le sac de chaque
+    // porteur, pas sur l'arme — il n'y a donc rien d'état par copie ici.
+    "system.ammo",
     "system.tag",
     "system.portee", "system.range", "system.allonge", "system.damage", "system.crit", "system.effet"
   ],

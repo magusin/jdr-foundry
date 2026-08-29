@@ -10,6 +10,8 @@ import { gearStateResistRows } from "../rules/resistances.js";
 import { computeItemValue } from "../rules/item-value.js";
 import { WEAPON_CATEGORIES, weaponCategory } from "../rules/attack-bonus.js";
 import { EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
+import { setupItemRefDrop } from "./drop-helper.js";
+import { ammoRef, ammoStock, checkAmmo } from "../rules/ammo.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -137,7 +139,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         removeResistance: async function (event) { await this._actionRemoveResistance(event); },
         addAmplification: async function (event) { await this._actionAddAmplification(event); },
         removeAmplification: async function (event) { await this._actionRemoveAmplification(event); },
-        resetCooldown: async function (event) { await this._actionResetCooldown(event); }
+        resetCooldown: async function (event) { await this._actionResetCooldown(event); },
+        clearAmmo: async function (event) { await this._actionClearAmmo(event); }
       }
     },
     { inplace: false }
@@ -210,6 +213,19 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       restant: Math.max(0, n(ctx.system.cooldown?.restant, 0))
     };
     ctx.cooldownRestant = ctx.system.cooldown.restant;
+
+    // ---- Munitions (ammo.js). La référence est de la définition, la réserve
+    // vit dans le sac du porteur : la fiche d'un exemplaire posé au sol n'a
+    // donc rien à compter, et c'est normal.
+    const ref = ammoRef({ system: ctx.system });
+    ctx.system.ammo = {
+      enabled: ref.enabled, name: ref.name, uuid: ref.uuid, source: ref.source,
+      img: ref.img, type: ref.type, perShot: ref.perShot
+    };
+    ctx.ammoRefSet = !!(ref.name || ref.uuid || ref.source);
+    ctx.ammoOwned = !!actor && ref.configured;
+    ctx.ammoStock = ctx.ammoOwned ? ammoStock(actor, item) : 0;
+    ctx.ammoEnough = ctx.ammoOwned ? checkAmmo(actor, item).ok : true;
 
     // ---- Dégâts
     ctx.system.livraison = String(ctx.system.livraison ?? "physique");
@@ -397,6 +413,14 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         delete expanded.system.cooldown.restant;
       }
 
+      // munitions : la case et le coût par tir se saisissent, la référence
+      // (nom/uuid/source/img/type) voyage en champs cachés et n'a qu'à être
+      // recopiée telle quelle — c'est le dépôt qui l'écrit.
+      if (expanded.system.ammo) {
+        expanded.system.ammo.enabled = b(expanded.system.ammo.enabled);
+        expanded.system.ammo.perShot = Math.max(1, n(expanded.system.ammo.perShot, 1));
+      }
+
       // bonus
       if (expanded.system.bonus) {
         for (const [k, v] of Object.entries(expanded.system.bonus)) expanded.system.bonus[k] = n(v, 0);
@@ -491,6 +515,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
     bindImageEditors(root, this.document);
     bindSendToActorsButton(root, this.document);
     bindLinkSyncCheckbox(root, this.document);
+    // Dépôt d'un objet n'importe où sur la fiche = désignation de la
+    // munition. Même mécanisme que les ingrédients d'une recette : une
+    // référence déposée, jamais un nom tapé, pour que le sac soit interrogé
+    // avec la même empreinte que celle affichée.
+    if (game.user.isGM) setupItemRefDrop(this, root, (it) => this._setAmmoFromDrop(it));
     // ── UUID cliquable → ouvre la fiche de l'item associé ─────────────────
     root.querySelectorAll(".rpg-open-uuid").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
@@ -504,6 +533,38 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         } catch(e) { ui.notifications?.error?.(`UUID invalide : ${uuid}`); }
       });
     });
+  }
+
+  /**
+   * Objet déposé sur la fiche → munition de cette arme.
+   *
+   * On mémorise l'empreinte AU DÉPÔT (source de compendium, ou UUID du pack
+   * quand l'objet déposé EST l'entrée de compendium) plutôt que de la
+   * résoudre au moment du tir : checkAmmo est appelé depuis des contextes
+   * synchrones (le menu de combat construit ses lignes sans await).
+   */
+  async _setAmmoFromDrop(item) {
+    if (!this.isEditable || !item) return;
+    const src = String(item?._stats?.compendiumSource ?? item?.flags?.core?.sourceId ?? "").trim();
+    await this.document.update({
+      "system.ammo": {
+        enabled: true,
+        name: String(item.name ?? ""),
+        uuid: String(item.uuid ?? ""),
+        source: src || (item.pack ? String(item.uuid ?? "") : ""),
+        img: String(item.img ?? ""),
+        type: String(item.type ?? ""),
+        perShot: ammoRef(this.document).perShot
+      }
+    }, { render: true });
+    ui.notifications?.info?.(`Munition de ${this.document.name} : ${item.name}.`);
+  }
+
+  async _actionClearAmmo(event) {
+    if (!this.isEditable) return;
+    await this.document.update({
+      "system.ammo": { enabled: false, name: "", uuid: "", source: "", img: "", type: "", perShot: 1 }
+    }, { render: true });
   }
 
   async _actionAddEffect(event) {

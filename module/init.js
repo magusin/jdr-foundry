@@ -70,6 +70,7 @@ import * as TacticalLibrary from "./rules/tactical-library.js";
 import * as QuestGroup from "./rules/quest-group.js";
 import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
+import * as Ammo from "./rules/ammo.js";
 import * as ActorRoles from "./rules/actor-roles.js";
 import * as Loadout from "./rules/loadout.js";
 import * as ItemValue from "./rules/item-value.js";
@@ -1142,6 +1143,17 @@ Hooks.once("init", async () => {
     // pas des modules ES et ne peuvent pas importer rules/inventory.js
     // (cf. macro/item-distribute.js).
     game.rpg.inventory = Inventory;
+
+    // ✅ game.rpg.ammo : munitions d'une arme de tir/jet. Exposé pour le menu
+    // de combat (macro/menu.js), qui doit annoncer « plus de flèches » AVANT
+    // le clic — declareAttack refuserait après, mais un bouton actif qui
+    // répond non se lit comme un bug.
+    game.rpg.ammo = {
+      ...Ammo,
+      // Alias court, aligné sur game.rpg.weaponRange.check.
+      check: Ammo.checkAmmo,
+      stock: Ammo.ammoStock
+    };
 
     // ✅ game.rpg.actorRoles : qui est un PJ, qui est un PNJ (les deux sont
     // des acteurs `character`). Même critère que la « carte PNJ » des
