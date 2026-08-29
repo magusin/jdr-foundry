@@ -150,8 +150,11 @@ export function ammoStock(actor, weapon) {
  */
 export function checkAmmo(actor, weapon) {
   const ref = ammoRef(weapon);
+  // Le nom d'abord, la famille ensuite — capitalisée, parce qu'elle se saisit
+  // en minuscules (« flèche ») et qu'elle se lit en tête de phrase.
+  const cap = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
   const label = ref.mode === "self" ? String(weapon?.name ?? "Arme")
-    : (ref.name || ref.kind || "Munition");
+    : (ref.name || cap(ref.kind) || "Munition");
   if (!ref.configured) {
     return { uses: false, ok: true, have: 0, need: 0, label, mode: ref.mode, choices: 0, reason: null };
   }
@@ -258,7 +261,7 @@ export async function consumeAmmo(actor, weapon, { itemId = null } = {}) {
 
   let remaining = ref.perShot;
   const updates = [];
-  const deletions = [];
+  const taken = [];
 
   for (const c of ordered) {
     if (remaining <= 0) break;
@@ -266,24 +269,152 @@ export async function consumeAmmo(actor, weapon, { itemId = null } = {}) {
     if (take <= 0) continue;
     remaining -= take;
     const left = c.qty - take;
-    // Une ARME lancée n'est jamais supprimée, même à 0 : le jet de dégâts a
-    // lieu APRÈS la résolution et retrouve l'arme par son id (rollAttackDamage)
-    // — la détruire ici ferait échouer le jet du coup qu'on vient de valider.
-    // Elle reste au sac, quantité 0, et la prochaine déclaration est refusée.
-    if (left <= 0 && c.item !== weapon) deletions.push(c.item.id);
-    else updates.push({ _id: c.item.id, "system.qte": left });
+    // RIEN n'est jamais supprimé, munition comme arme : la pile tombe à 0 et
+    // reste au sac. Trois raisons, dans l'ordre où elles mordent — le jet de
+    // dégâts a lieu APRÈS la résolution et retrouve l'arme par son id
+    // (rollAttackDamage), donc détruire une hache lancée ferait échouer le
+    // coup qu'on vient de valider ; une ligne à 0 est ce qui rend la
+    // récupération d'après-combat possible (on incrémente, il n'y a rien à
+    // recréer) ; et une flèche « spéciale » disparue du sac emporterait avec
+    // elle son nom et sa provenance.
+    updates.push({ _id: c.item.id, "system.qte": left });
+    taken.push({ itemId: c.item.id, name: c.item.name, qty: take, self: c.item === weapon });
   }
 
   const spent = ref.perShot - remaining;
   try {
     if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
-    if (deletions.length) await actor.deleteEmbeddedDocuments("Item", deletions);
   } catch (e) {
     console.warn("[RPG] munitions non décomptées :", e);
     return null;
   }
 
-  return { label, spent, remaining: ammoStock(actor, weapon), short: remaining > 0 };
+  // Compteur du combat en cours : c'est lui qui permet de rendre une partie
+  // des haches de lancer une fois la poussière retombée.
+  const totals = await recordAmmoSpent(actor, taken);
+
+  return {
+    label, spent, remaining: ammoStock(actor, weapon), short: remaining > 0,
+    combatTotal: taken.reduce((sum, t) => sum + (totals?.[t.itemId] ?? 0), 0)
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Compteur de munitions dépensées pendant un combat                   */
+/* ------------------------------------------------------------------ */
+//
+// Rien n'est détruit à l'usage : une pile vidée reste au sac à 0. Ce compteur
+// existe pour l'après : « j'ai lancé six haches, j'en récupère trois ». Il
+// vit sur le document Combat (`flags.rpg.ammoSpent`), donc il meurt avec le
+// combat — le porter sur l'acteur demanderait une remise à zéro à chaque fin
+// de rencontre, et une seule remise à zéro oubliée fausserait tout le reste
+// de la campagne. Une clé plate `<actorId>_<itemId>` (jamais un UUID, qui
+// contient des points que Foundry interpréterait comme un chemin).
+
+const SPENT_FLAG = "ammoSpent";
+
+/** Combat où compter : celui en cours, s'il y en a un. */
+function activeCombat() {
+  const c = game.combat;
+  return c?.active ? c : null;
+}
+
+/**
+ * Ajoute au compteur du combat. GM uniquement — un client joueur ne peut pas
+ * écrire les flags d'un Combat (même règle que le budget d'action) ; la
+ * consommation a lieu à la résolution, qui est déjà GM, donc rien n'est perdu.
+ *
+ * @returns {Promise<Object<string, number>|null>} totaux par itemId
+ */
+export async function recordAmmoSpent(actor, taken) {
+  if (!Array.isArray(taken) || !taken.length) return null;
+  const combat = activeCombat();
+  if (!combat || !game.user.isGM || !actor) return null;
+
+  const cur = foundry.utils.deepClone(combat.getFlag("rpg", SPENT_FLAG) ?? {});
+  const totals = {};
+  for (const t of taken) {
+    const key = `${actor.id}_${t.itemId}`;
+    const prev = cur[key] ?? {
+      actorId: actor.id, actorUuid: actor.uuid ?? null, actorName: actor.name,
+      itemId: t.itemId, name: t.name, self: !!t.self, qty: 0
+    };
+    prev.qty = Math.max(0, Number(prev.qty) || 0) + Math.max(0, Number(t.qty) || 0);
+    prev.name = t.name;
+    cur[key] = prev;
+    totals[t.itemId] = prev.qty;
+  }
+  try {
+    await combat.setFlag("rpg", SPENT_FLAG, cur);
+  } catch (e) {
+    console.warn("[RPG] compteur de munitions non écrit :", e);
+    return null;
+  }
+  return totals;
+}
+
+/** Ce qui a été dépensé pendant ce combat, une ligne par acteur × munition. */
+export function ammoSpentEntries(combat) {
+  const raw = combat?.getFlag?.("rpg", SPENT_FLAG) ?? combat?.flags?.rpg?.[SPENT_FLAG] ?? {};
+  return Object.values(raw)
+    .filter(e => e && Number(e.qty) > 0)
+    .sort((a, b) => String(a.actorName).localeCompare(String(b.actorName))
+                 || String(a.name).localeCompare(String(b.name)));
+}
+
+/**
+ * Récapitulatif de fin de combat, avec un champ « rendre » par ligne.
+ *
+ * Pré-rempli à la MOITIÉ, arrondie à l'inférieur : c'est l'usage courant
+ * (on retrouve une partie de ses haches), pas une règle — le MJ écrit le
+ * nombre qu'il veut, 0 compris. Rien n'est rendu automatiquement.
+ */
+export function buildAmmoRecoveryContent(combat) {
+  const entries = ammoSpentEntries(combat);
+  if (!entries.length) return null;
+
+  const esc = (s) => String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const rows = entries.map(e => {
+    const half = Math.floor(Number(e.qty) / 2);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+      <span style="flex:1;font-size:12px"><b>${esc(e.actorName)}</b> — ${esc(e.name)}
+        <small style="opacity:.7">${e.self ? "lancée(s)" : "tirée(s)"} : ${e.qty}</small></span>
+      <input type="number" class="rpg-ammo-back" value="${half}" min="0" max="${e.qty}" step="1"
+        style="width:56px;padding:2px 4px" title="Combien en retrouve-t-il ?"/>
+      <button type="button" data-action="ammoRecover"
+        data-actor-id="${esc(e.actorId)}" data-actor-uuid="${esc(e.actorUuid ?? "")}"
+        data-item-id="${esc(e.itemId)}"
+        style="padding:3px 10px;cursor:pointer;border-radius:5px;font-size:11px;white-space:nowrap">🔁 Rendre</button>
+    </div>`;
+  }).join("");
+
+  return `<h3>🏹 Munitions du combat</h3>`
+       + `<div style="font-size:11px;opacity:.75;margin-bottom:4px">Rien n'a été détruit : les piles vidées sont restées dans le sac à 0. Indique ce que chacun retrouve sur le terrain.</div>`
+       + `<div style="display:flex;flex-direction:column;gap:2px">${rows}</div>`;
+}
+
+/**
+ * Rend `qty` unités à un acteur. La pile existe toujours (rien n'est jamais
+ * supprimé) : il n'y a qu'à incrémenter, ce qui évite de recréer un objet
+ * dont on aurait perdu la provenance et les champs.
+ */
+export async function recoverAmmo({ actorId, actorUuid, itemId, qty }) {
+  if (!game.user.isGM) return { ok: false, reason: "MJ uniquement." };
+  const want = Math.max(0, Math.floor(Number(qty) || 0));
+  if (!want) return { ok: false, reason: "Rien à rendre." };
+
+  let actor = null;
+  if (actorUuid) { try { actor = await fromUuid(actorUuid); } catch { /* uuid périmé */ } }
+  if (actor?.documentName === "Token") actor = actor.actor;
+  actor = actor ?? game.actors.get(actorId) ?? null;
+  if (!actor) return { ok: false, reason: "Acteur introuvable." };
+
+  const item = actor.items.get(itemId);
+  if (!item) return { ok: false, reason: "Objet introuvable — il a été supprimé du sac." };
+
+  const cur = Math.max(0, n(item.system?.qte, 0));
+  await item.update({ "system.qte": cur + want });
+  return { ok: true, name: item.name, actorName: actor.name, total: cur + want, added: want };
 }
 
 /** Ligne de chat annonçant la dépense, ou "" si l'arme ne consomme rien. */
@@ -296,6 +427,7 @@ export function ammoSpentLine(info) {
       ? `<div style="font-size:11px;color:#c0392b;margin-top:2px">🏹 ${info.label} : réserve vide au moment du tir.</div>`
       : "";
   }
+  const total = info.combatTotal ? ` · ${info.combatTotal} depuis le début du combat` : "";
   return `<div style="font-size:11px;opacity:.75;margin-top:2px">🏹 ${info.label} : −${info.spent}`
-       + ` (${info.remaining} en réserve)${info.short ? " — réserve épuisée" : ""}</div>`;
+       + ` (${info.remaining} en réserve${total})${info.short ? " — réserve épuisée" : ""}</div>`;
 }

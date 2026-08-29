@@ -210,14 +210,16 @@
         <p class="hint">
           {{#if ammoIsSelf}}
             Chaque jet retire <b>un exemplaire</b> de cette arme (quantité ci-dessus). À 0, l'arme
-            ne peut plus être déclarée — elle reste au sac pour être ramassée / rachetée.
+            ne peut plus être déclarée, mais <b>rien n'est supprimé</b> : la ligne reste au sac et
+            le récapitulatif de fin de combat permet d'en rendre une partie (haches retrouvées).
           {{else}}
             Renseigne la <b>famille</b> (« flèche ») et donne la même valeur au champ « Munition pour »
             des objets concernés : le joueur choisira lui-même laquelle il tire. Tu peux aussi
             <b>déposer un objet sur cette fiche</b> pour n'en autoriser qu'un seul.
           {{/if}}
           Le tir est refusé quand la réserve est vide, et la dépense a lieu à la <b>résolution</b> —
-          un MJ qui refuse la déclaration ne coûte pas de flèche.
+          un MJ qui refuse la déclaration ne coûte pas de flèche. Rien n'est jamais détruit : le
+          compte tombe à 0 et la fin de combat propose d'en rendre une partie.
         </p>
         {{/if}}
         {{/if}}
