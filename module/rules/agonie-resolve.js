@@ -27,7 +27,13 @@ export async function declareAgonieCheck(actor) {
   const combat = game.combat;
   if (!combat) return;
 
-  const volonteLevel = n(actor.system?.skills?.survie?.level, 0);
+  // Les compétences d'un acteur sont créées à la main par le MJ (init.js
+  // n'écrit qu'un `skills: {}` vide) : la clé n'est garantie par rien. Un
+  // monde dont la compétence de Volonté s'appelle `volonte` voyait ce terme
+  // valoir 0 en silence, et l'agonie se jouait sur un d20 nu sans que le
+  // message ne le dise. On lit donc `volonte` d'abord, puis `survie`.
+  const skills = actor.system?.skills ?? {};
+  const volonteLevel = n(skills.volonte?.level, n(skills.survie?.level, 0));
 
   const roll = await (new Roll(`1d20 + ${volonteLevel}`)).evaluate();
   await roll.toMessage({

@@ -11,6 +11,7 @@
 // un buff/debuff de retrait posé entre-temps doit s'appliquer.
 
 import { resolveDeclaredActor } from "./attack-declare.js";
+import { effectiveStates } from "./loadout.js";
 
 const FLAG_SCOPE = "rpg";
 
@@ -39,14 +40,25 @@ export function removableStates(actor) {
     !s.permanent && (s.removeDifficulty || s.removeBaseTN || s.cleanseDC));
 }
 
-/** Modificateurs globaux au retrait : équipements équipés + états actifs. */
+/**
+ * Modificateurs globaux au retrait : équipements portés + états actifs.
+ *
+ * Les états sont lus via effectiveStates() et non via `system.etatsActifs` :
+ * un passif porté n'écrit aucun état, ses effets sont des états VIRTUELS.
+ * Lire le champ brut faisait donc silencieusement disparaître le retraitMod
+ * d'un passif — la même panne que les cinq autres lecteurs déjà passés à
+ * effectiveStates (bonus d'attaque, résistances, amplifications, auras).
+ *
+ * Seule la part PLATE est lue : un pourcentage d'un seuil de TN n'a pas de
+ * sens, et l'éditeur d'effets le dit dans le libellé de la stat.
+ */
 export function computeRemoveMods(actor) {
   let equipMod = 0;
   for (const item of actor.items) {
     if (item.system?.equipe) equipMod += n(item.system?.bonus?.retraitMod, 0);
   }
   let effectMod = 0;
-  for (const s of (actor.system?.etatsActifs ?? [])) {
+  for (const s of effectiveStates(actor)) {
     effectMod += n(s.mods?.retraitMod?.flat, 0);
   }
   return { equipMod, effectMod };
@@ -60,11 +72,19 @@ export function computeStateTN(actor, state) {
   return { baseTN, equipMod, effectMod, stMod, finalTN: baseTN + equipMod + effectMod + stMod };
 }
 
-function rollBonusFor(actor) {
-  const endurance = n(actor.system?.derived?.effective?.principales?.endurance, 0);
-  const volonte = n(actor.system?.skills?.survie?.level, 0);
-  return Math.floor(endurance / 10) + volonte;
-}
+// Le jet de retrait est un d20 NU : on lit le score de retrait de l'état, ou
+// plus. Il portait auparavant un bonus ⌊Endurance/10⌋ + niveau de « Volonté »
+// (lu sur skills.survie), ce qui posait deux problèmes. D'abord la clé de
+// compétence n'est garantie nulle part — les compétences d'un acteur sont
+// créées à la main par le MJ (init.js n'écrit qu'un `skills: {}` vide), donc
+// un monde dont la compétence s'appelle `volonte` voyait ce terme valoir 0
+// en silence, et le jet n'était pas celui annoncé. Ensuite le seuil est déjà
+// réglable des deux côtés — par l'état lui-même et par les `retraitMod` de
+// l'équipement et des effets — si bien que le bonus faisait varier la même
+// chose une troisième fois, sans que rien à l'écran ne l'explique.
+//
+// Tout ce qui rend un état plus facile ou plus dur à retirer passe donc
+// maintenant par le TN (computeStateTN), et par lui seul.
 
 function gmUserIds() {
   return game.users.filter(u => u.isGM).map(u => u.id);
@@ -85,7 +105,7 @@ function publicContent(d, phase) {
   } else if (phase === "awaitingRoll") {
     footer = `
       <div style="opacity:.8;margin-bottom:6px">
-        <i>Validé par le MJ — il faut faire <b style="color:#e05a00;font-size:1.1em">${d.tnFinal}+</b> sur 1d20+${d.bonus}.</i>
+        <i>Validé par le MJ — il faut faire <b style="color:#e05a00;font-size:1.1em">${d.tnFinal}+</b> sur 1d20.</i>
       </div>
       <button type="button" class="rpg-removestate-roll-btn"
         style="width:100%;padding:6px 8px;cursor:pointer;border-radius:6px;font-weight:600">
@@ -186,8 +206,7 @@ export async function declareRemoveState(actor) {
     // chaîne d'attaque (resolveDeclaredActor, attack-declare.js).
     actorUuid: actor.uuid ?? null,
     actorId: actor.id, actorName: actor.name,
-    stateId: state.id, stateLabel: state.label,
-    bonus: rollBonusFor(actor)
+    stateId: state.id, stateLabel: state.label
   };
 
   const speaker = ChatMessage.getSpeaker({ actor });
@@ -250,13 +269,12 @@ export async function rollRemoveDie(message) {
 
   const actor = await resolveDeclaredActor(d.actorUuid, d.actorId);
   const tn = n(d.tnFinal, 11);
-  const bonus = n(d.bonus, 0);
-  const roll = await (new Roll(`1d20 + ${bonus}`)).evaluate();
+  const roll = await (new Roll("1d20")).evaluate();
   const hit = roll.total >= tn;
 
   await roll.toMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
-    flavor: `🌀 <b>${actor?.name ?? "?"}</b> résiste à <b>${htmlEsc(d.stateLabel)}</b> (1d20+${bonus} vs TN ${tn}+)`
+    flavor: `🌀 <b>${actor?.name ?? "?"}</b> résiste à <b>${htmlEsc(d.stateLabel)}</b> (1d20 vs TN ${tn}+)`
   });
 
   const newD = { ...d, rollTotal: roll.total };

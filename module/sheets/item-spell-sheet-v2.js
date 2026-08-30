@@ -58,7 +58,8 @@ const STAT_LABELS = {
   initiativeMod: "Initiative", vitesse: "Vitesse",
   pvMax: "PV max", manaMax: "Mana max",
   regenPv: "Régén PV", regenMana: "Régén Mana",
-  fatigueMax: "Fatigue max", podsMax: "Pods max"
+  fatigueMax: "Fatigue max", podsMax: "Pods max",
+  retraitMod: "Seuil de retrait d'état"
 };
 
 const WHEN_LABELS = {

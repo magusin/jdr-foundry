@@ -894,7 +894,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       "pvMax", "manaMax", "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
       "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
-      "fatigueMax", "podsMax"
+      "fatigueMax", "podsMax", "retraitMod"
     ];
   }
 
@@ -921,7 +921,8 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
       toucherPhysique: "Toucher physique",
       toucherMagique: "Toucher magique",
       fatigueMax: "Fatigue max",
-      podsMax: "Pods max"
+      podsMax: "Pods max",
+      retraitMod: "Seuil de retrait d'état"
     };
 
     // Catalogue d'effets nommés (Ardeur, Brûlure…), groupé par élément —

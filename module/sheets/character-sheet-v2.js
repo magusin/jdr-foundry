@@ -41,7 +41,8 @@ export const LABELS = {
   toucherMagique: "Toucher magique",
   initiativeMod: "Initiative",
   fatigueMax: "Fatigue max",
-  podsMax: "Pods max"
+  podsMax: "Pods max",
+  retraitMod: "Seuil de retrait d'état"
 };
 
 /** Clé technique du seul emplacement où une relique peut aller. */
@@ -2206,7 +2207,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       "pvMax", "manaMax", "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
       "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
-      "fatigueMax", "podsMax"
+      "fatigueMax", "podsMax", "retraitMod"
     ];
   }
 
@@ -2233,7 +2234,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       toucherPhysique: "Toucher physique",
       toucherMagique: "Toucher magique",
       fatigueMax: "Fatigue max",
-      podsMax: "Pods max"
+      podsMax: "Pods max",
+      retraitMod: "Seuil de retrait d'état"
     };
 
     // Catalogue d'effets nommés (Ardeur, Brûlure…), groupé par élément —
