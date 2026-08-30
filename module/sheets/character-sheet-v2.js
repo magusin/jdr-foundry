@@ -270,7 +270,7 @@ function xpPalierForLevel(level) {
   return Math.round(100 + 40 * x + 15 * x * x);
 }
 
-import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeXpFromSkill } from "../rules/skills.js";
+import { skillXpToNext, skillsTotalLevels, addXpToSkill, removeXpFromSkill } from "../rules/skills.js";
 
 /* -------------------------------------------- */
 /* Sheet Class (V2)                             */
@@ -664,7 +664,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     });
 
     ctx.calc.skillsTotal = skillsTotalLevels(ctx.system.skills);
-    ctx.calc.skillsCap = skillsLevelCap(actor);
 
     // Quêtes
     const STATUT_LABELS = { active: "En cours", reussie: "Réussie", echouee: "Échouée" };

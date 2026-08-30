@@ -3,6 +3,7 @@
 // puis validation MJ avant consommation/création (le MJ garde le contrôle).
 
 import { compendiumSourceOf } from "./inventory.js";
+import { skillLevel } from "./skills.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 const norm = (s) => String(s ?? "").trim().toLowerCase();
@@ -126,7 +127,7 @@ async function consumeIngredients(actor, recipe) {
  * chance = clamp(50 + niveauForge*5 - difficulte, 5, 95)
  */
 export function computeForgeChance(actor, recipe) {
-  const forgeLevel = n(actor.system?.skills?.forge?.level, 0);
+  const forgeLevel = skillLevel(actor, "forge");
   const difficulte  = n(recipe.system?.difficulte, 0);
   const chance = Math.min(95, Math.max(5, 50 + forgeLevel * 5 - difficulte));
   return chance;

@@ -24,6 +24,7 @@ import { writeStateOn } from "./status-effects.js";
 import { listEffects, EFFECT_TAGS } from "./effect-library.js";
 import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS } from "./damage-types.js";
 import { applyUiTheme, restoreScrollPositions } from "../sheets/sheet-helpers.js";
+import { skillLevel } from "./skills.js";
 
 // Clé NON préfixée : comme pour Actor/Item (Actors.registerSheet("rpg", ...,
 // { types: ["character"] }) — jamais "rpg.character"), un sous-type de
@@ -327,15 +328,14 @@ export async function triggerZoneEffectsForToken({ actor, tokenId, x, y, waypoin
 export async function declareZonePerceptionCheck(actor, region, behavior) {
   const sys = behavior.system ?? {};
   const dc = Math.max(1, n(sys.detectDC, 12));
-  const skill = actor.system?.skills?.perception;
-  const skillLevel = n(skill?.level, 0);
-  const tn = Math.max(1, dc - skillLevel);
+  const skillLvl = skillLevel(actor, "perception");
+  const tn = Math.max(1, dc - skillLvl);
   const speaker = ChatMessage.getSpeaker({ actor });
 
   const content = `
     <div style="font-size:13px">
       🔍 <b>${actor.name}</b> — Perception
-      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLevel ? ` (DD ${dc} − niv.${skillLevel})` : ""}</div>
+      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLvl ? ` (DD ${dc} − niv.${skillLvl})` : ""}</div>
       <button type="button" class="rpg-zonecheck-roll-btn"
         data-actor-id="${actor.id}" data-tn="${tn}"
         data-region-id="${region.id}" data-behavior-id="${behavior.id}" data-scene-id="${region.parent?.id ?? region.scene?.id ?? canvas?.scene?.id ?? ""}"
@@ -349,7 +349,7 @@ export async function declareZonePerceptionCheck(actor, region, behavior) {
     speaker,
     content: `<div style="font-size:11px;color:#c8960a;padding:5px;border:1px solid rgba(200,150,0,0.3);border-radius:6px">
       ⚙️ MJ — ${actor.name} → Perception vs <b>${sys.label || "Zone"}</b><br>
-      DD : ${dc} | Niveau compétence : ${skillLevel} | <b>TN réel : ${tn}+</b>
+      DD : ${dc} | Niveau compétence : ${skillLvl} | <b>TN réel : ${tn}+</b>
     </div>`,
     whisper: game.users.filter(u => u.isGM).map(u => u.id)
   });
@@ -367,15 +367,16 @@ export async function declareZonePerceptionCheck(actor, region, behavior) {
 export async function declareZoneDisarmCheck(actor, region, behavior) {
   const sys = behavior.system ?? {};
   const dc = Math.max(1, n(sys.disarmDC, 14));
-  const skill = actor.system?.skills?.crochetage;
-  const skillLevel = n(skill?.level, 0);
-  const tn = Math.max(1, dc - skillLevel);
+  // Désamorcer relève du Larcin (qui a absorbé Crochetage) — voir
+  // SKILL_ALIASES : un personnage resté sur Crochetage garde son niveau.
+  const skillLvl = skillLevel(actor, "larcin");
+  const tn = Math.max(1, dc - skillLvl);
   const speaker = ChatMessage.getSpeaker({ actor });
 
   const content = `
     <div style="font-size:13px">
       🛠️ <b>${actor.name}</b> — Crochetage (désamorçage)
-      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLevel ? ` (DD ${dc} − niv.${skillLevel})` : ""}</div>
+      <div style="opacity:.85;font-size:12px;margin-top:2px">Objectif : <b>${tn}+</b> sur 1d20${skillLvl ? ` (DD ${dc} − niv.${skillLvl})` : ""}</div>
       <button type="button" class="rpg-zonedisarm-roll-btn"
         data-actor-id="${actor.id}" data-tn="${tn}"
         data-region-id="${region.id}" data-behavior-id="${behavior.id}" data-scene-id="${region.parent?.id ?? region.scene?.id ?? canvas?.scene?.id ?? ""}"
@@ -389,7 +390,7 @@ export async function declareZoneDisarmCheck(actor, region, behavior) {
     speaker,
     content: `<div style="font-size:11px;color:#c8960a;padding:5px;border:1px solid rgba(200,150,0,0.3);border-radius:6px">
       ⚙️ MJ — ${actor.name} → Crochetage (désamorçage) vs <b>${sys.label || "Zone"}</b><br>
-      DD : ${dc} | Niveau compétence : ${skillLevel} | <b>TN réel : ${tn}+</b>
+      DD : ${dc} | Niveau compétence : ${skillLvl} | <b>TN réel : ${tn}+</b>
     </div>`,
     whisper: game.users.filter(u => u.isGM).map(u => u.id)
   });
