@@ -380,6 +380,19 @@ export function diceAverage(formula) {
   return matched ? Math.round(total * 100) / 100 : 0;
 }
 
+/**
+ * Faces du PREMIER dé d'une formule (« 2d6+3 » → 6, « 4 » → 0).
+ *
+ * Existe pour reproduire le critique « max+die » tel que le moteur le calcule :
+ * item.js lit `roll.dice[0].faces`, donc les faces du premier dé et d'aucun
+ * autre. Ce n'est pas le maximum de la formule, et c'est volontairement le
+ * même choix ici — la pesée doit dire ce qui SE PASSE, pas ce qui devrait.
+ */
+export function firstDieFaces(formula) {
+  const m = /(\d*)d(\d+)/i.exec(String(formula ?? "").replace(/\s+/g, ""));
+  return m ? Number(m[2]) : 0;
+}
+
 const round1 = (v) => Math.round(v * 10) / 10;
 
 function pushRow(rows, label, value, points, opts = {}) {
@@ -516,9 +529,23 @@ export function computeItemValue(item) {
     });
 
     // Scaling : évalué sur une caractéristique de référence, faute de porteur.
+    //
+    // ⚠️ `perStep` DOIT être lu exactement comme le moteur le lit, et le moteur
+    // (RPGItem#rollDamage, documents/item.js) écrit `Number(sc.perStep ?? 1) || 1` :
+    // absent ⇒ 1, et un 0 stocké ⇒ 1 lui aussi. La pesée lisait `n(sc.perStep, 0)`,
+    // c'est-à-dire 0 par défaut — donc « Scaling +0 » sur toute arme dont l'objet
+    // `scaling` n'a pas la clé, alors que le coup, lui, encaissait bien le bonus.
+    // C'est le même écart que la fiche d'arme avait déjà (corrigé au même moment) :
+    // l'arme rendait la Force et les deux écrans du MJ juraient le contraire.
+    //
+    // Conséquence à connaître : il n'existe PAS de perStep nul pour les dégâts
+    // principaux. Pour désactiver le scaling d'une arme, on vide son champ `stat`
+    // (item.js lit alors `effP[""]` → 0). Le perStep du CRITIQUE, lui, vaut bien 0
+    // par défaut : son dé s'ajoute au coup au lieu de le remplacer, et lui donner
+    // la stat en plus la paierait deux fois.
     const sc = dmg.scaling ?? {};
     const per = Math.max(1, n(sc.per, 10));
-    const perStep = n(sc.perStep, 0);
+    const perStep = Number(sc.perStep ?? 1) || 1;
     const scaled = Math.floor(REF_STAT / per) * perStep;
     // Chaque ligne suivante est pesée comme un INCRÉMENT du même coup, jamais
     // comme un coup séparé : l'armure fixe et le plancher à 1 de
@@ -533,9 +560,115 @@ export function computeItemValue(item) {
     // au critique d'un sort (cf. rollAttackDamage : le dé de crit est un dé de
     // plus, posé à côté du dé principal). D'où une ligne distincte ici, quand
     // computeSpellValue fond la sienne dans la moyenne pondérée.
-    const critAvg = diceAverage(sys.crit?.damage?.dice) + n(sys.crit?.damage?.flat, 0);
+    //
+    // Trois choses que la pesée ignorait, et qui font toutes le même genre
+    // d'écart — le MJ lit un chiffre plus bas que ce que l'arme délivre :
+    //
+    //   1. `crit.mode` n'était pas lu du tout. En « max+die » (le défaut) le
+    //      moteur REMPLACE le dé principal par sa face maximale AVANT d'ajouter
+    //      le dé bonus : `(faces − dé principal) + dé de crit`. Cette première
+    //      moitié valait zéro ici. En « double », il repaie tout le brut.
+    //   2. Un dé de crit VIDE ne vaut pas zéro : item.js relance alors le dé
+    //      PRINCIPAL (`new Roll(die)`). Une arme sans crit écrit était donc
+    //      pesée sans critique, alors qu'elle en a un.
+    //   3. `crit.damage.scaling` n'entrait pas. Son perStep vaut bien 0 par
+    //      défaut (le dé de crit s'ajoute, cf. plus haut), mais un MJ qui le
+    //      remplit voyait sa saisie ignorée.
+    const critBlk   = sys.crit?.damage ?? {};
+    const critMode  = String(sys.crit?.mode ?? "max+die");
+    const critDice  = String(critBlk.dice ?? "").trim();
+    const critFlat  = n(critBlk.flat, 0);
+    const critSc    = critBlk.scaling ?? {};
+    const critPer   = Math.max(1, n(critSc.per, per));
+    const critStep  = n(critSc.perStep, 0);
+    const critScaled = critStep ? Math.floor(REF_STAT / critPer) * critStep : 0;
+
+    let critAvg = 0;
+    if (critMode === "max+die") {
+      // Le dé bonus : celui du crit, sinon le dé principal relancé.
+      const bonusDie = diceAverage(critDice || dmg.dice);
+      // ⚠️ Fidèle au moteur, y compris à son défaut : item.js prend les faces
+      // du PREMIER dé (`roll.dice[0].faces`) et en retranche le total de TOUTE
+      // la formule. Sur « 1d8 » c'est bien +max ; sur « 2d6 » c'est 6 − 7 = −1,
+      // et le critique retire alors des dégâts. La pesée le montre plutôt que
+      // de peser une intention que le code n'applique pas — d'où l'alerte.
+      const dicePart = diceAverage(dmg.dice);
+      critAvg = (firstDieFaces(dmg.dice) - dicePart) + bonusDie + critFlat + critScaled;
+      if (dicePart && firstDieFaces(dmg.dice) < dicePart) {
+        warnings.push(
+          `Critique en « max+die » sur une formule à plusieurs dés (${dmg.dice}) : le moteur ` +
+          `remplace le total des dés par les faces du PREMIER seul, ce qui RETIRE ` +
+          `${round1(dicePart - firstDieFaces(dmg.dice))} dégât(s) en moyenne. Un seul dé plus gros ` +
+          `(ou le mode « double ») évite ce piège.`
+        );
+      }
+    } else {
+      // « double » ou autre : critBonus = rawBrut + critFlat + critStatBonus.
+      critAvg = (avg + scaled) + critFlat + critScaled;
+    }
+
     const landedCrit = landedAgainstParty(avg + scaled + critAvg, PARTY) - landedAgainstParty(avg + scaled, PARTY);
-    if (critAvg) add("Critique (5 % des jets)", landedCrit, DAMAGE_POINT * 0.05, { text: `${round1(critAvg)}` });
+    if (critAvg) add("Critique (5 % des jets)", landedCrit, DAMAGE_POINT * 0.05, {
+      text: `${round1(critAvg)} · ${critMode}${critDice ? "" : " · dé principal relancé"}`
+    });
+
+    // ── États posés par l'arme (system.effects[]) ─────────────────────
+    //
+    // Ils ne pesaient RIEN, alors qu'une dague dont tout l'intérêt est un
+    // poison de 3 tours à 4/tour délivre plus que son 1d4. Le MJ lisait
+    // « Village » sur une arme dont la valeur entière était invisible.
+    //
+    // Pesé comme le DOT accordé par un sort (cf. computeSpellValue) : ce
+    // qu'UNE application réussie délivre, `tick × durée`, multiplié par la
+    // chance de déclencher. Refrapper RAFRAÎCHIT l'état au lieu d'en empiler
+    // un second — l'id est déterministe (upsertHitState, attack-resolve.js) —
+    // donc compter une application par coup gonflerait n'importe quel poison.
+    for (const fx of (Array.isArray(sys.effects) ? sys.effects : [])) {
+      const label = String(fx?.label ?? "").trim() || "Effet";
+      const mode  = String(fx?.dot?.mode ?? "").toLowerCase();
+      const dur   = Math.max(1, n(fx?.duration, 1));
+
+      // Déclencheur, même règle que applyWeaponEffects : un critique déclenche
+      // aussi « hit », jamais « hitonly ».
+      const when = String(fx?.when ?? "hit").toLowerCase();
+      const critShare = 0.05;
+      const trig = when === "crit" ? critShare
+                 : when === "hitonly" ? Math.max(0, PARTY.hitChance - critShare)
+                 : PARTY.hitChance;
+
+      if (!mode || mode === "none") {
+        // Un état sans DOT ne porte aucun `mods` (upsertHitState écrit
+        // `mods: {}`) : il ne fait littéralement rien d'autre qu'exister sous
+        // son libellé. Ça se dit, plutôt que de se lire comme un oubli.
+        warnings.push(
+          `Effet « ${label} » : aucun dégât par tour et aucun modificateur — il ne pose ` +
+          `qu'un libellé sur la cible. Renseigne son DOT pour qu'il fasse quelque chose.`
+        );
+        continue;
+      }
+
+      const dstat = String(fx?.dot?.stat ?? "").trim();
+      const dper  = Math.max(1, n(fx?.dot?.per, 10));
+      const tick  = Math.abs(n(fx?.dot?.base, 0)) + (dstat ? Math.floor(REF_STAT / dper) : 0);
+      if (!tick) continue;
+
+      // Un soin posé sur la CIBLE d'une attaque est un malus pour le porteur.
+      const soin = mode === "heal";
+      add(`Effet « ${label} »`, (soin ? -1 : 1) * tick * dur, DAMAGE_POINT * trig, {
+        text: `${round1(tick)}${soin ? " soin" : " dég"}/tour × ${dur} tour(s) · ${Math.round(trig * 100)} %`
+      });
+
+      // Un état dont le seuil de retrait est 0 ne peut être retiré par AUCUN
+      // jet (removableStates, remove-state.js) : il court jusqu'à expiration.
+      // C'est un choix légitime, mais il double presque la valeur réelle du
+      // poison face à un groupe qui sait se soigner — autant le dire.
+      if (!n(fx?.cleanseDC, 0) && !n(fx?.removeBaseTN, 0)) {
+        warnings.push(
+          `Effet « ${label} » : seuil de retrait à 0 — aucun jet ne peut l'enlever, ` +
+          `il court ses ${dur} tour(s) en entier.`
+        );
+      }
+    }
 
     // Allonge au-delà du corps à corps standard : décide qui peut frapper
     // sans être à portée de riposte.
@@ -559,7 +692,9 @@ export function computeItemValue(item) {
     const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
     if (cdMax > 0) {
       const damagePoints = rows
-        .filter(r => /Dégâts|Scaling|Critique/.test(r.label))
+        // « Effet » compris : un poison posé à chaque coup est posé deux fois
+        // moins souvent si l'arme tire un tour sur deux, comme les dés.
+        .filter(r => /Dégâts|Scaling|Critique|Effet/.test(r.label))
         .reduce((sum, r) => sum + n(r.points, 0), 0);
       const perdu = damagePoints * (1 - 1 / (1 + cdMax));
       if (perdu > 0) {

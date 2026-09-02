@@ -78,7 +78,10 @@ function normDamageBlock(d, fallback = {}) {
 function buildPreview(dmg, effP) {
   const stat = String(dmg?.scaling?.stat ?? "force");
   const per = n(dmg?.scaling?.per, 10) || 10;
-  const perStep = n(dmg?.scaling?.perStep, 0);
+  // Même lecture que RPGItem#rollDamage (`Number(perStep ?? 1) || 1`) : absent
+  // OU 0 stocké ⇒ 1. L'aperçu lisait 0 par défaut et annonçait donc
+  // « +0 par tranche » sur une arme qui rendait bel et bien la stat.
+  const perStep = Number(dmg?.scaling?.perStep ?? 1) || 1;
 
   const statVal = n(effP?.[stat], 0);
   const steps = per > 0 ? Math.floor(statVal / per) : 0;
@@ -455,7 +458,11 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
         if (expanded.system.damage.flat != null) expanded.system.damage.flat = n(expanded.system.damage.flat, 0);
         if (expanded.system.damage.scaling) {
           expanded.system.damage.scaling.per = n(expanded.system.damage.scaling.per, 10) || 10;
-          expanded.system.damage.scaling.perStep = n(expanded.system.damage.scaling.perStep, 0);
+          // Un champ vidé écrivait 0, que le moteur relit ensuite comme 1
+          // (item.js : `Number(perStep ?? 1) || 1`) : la donnée mentait sur ce
+          // que l'arme fait. On stocke ce qui sera réellement appliqué.
+          // Pour désactiver le scaling, on vide le champ « stat », pas celui-ci.
+          expanded.system.damage.scaling.perStep = Number(expanded.system.damage.scaling.perStep ?? 1) || 1;
         }
       }
 
