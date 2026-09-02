@@ -399,13 +399,22 @@ function effectsForResult(item, result) {
   return arr.filter(fx => allowWhen.has(String(fx?.when ?? "hit").toLowerCase()));
 }
 
+/**
+ * Stats où un chiffre PLUS BAS profite au porteur — cf. INVERTED_STATS dans
+ * item-spell-sheet-v2.js, dupliqué ici parce que rules/ ne doit pas dépendre
+ * de sheets/. Sans ça un « −2 au seuil de retrait », qui est une aide, était
+ * annoncé « Debuffs » dans le résumé du sort.
+ */
+const INVERTED_MOD_STATS = new Set(["retraitMod"]);
+
 function classifyMods(mods = {}) {
   let pos = 0;
   let neg = 0;
 
-  for (const v of Object.values(mods)) {
-    const flat = n(v?.flat, 0);
-    const pct = n(v?.pct, 0);
+  for (const [k, v] of Object.entries(mods)) {
+    const sign = INVERTED_MOD_STATS.has(k) ? -1 : 1;
+    const flat = n(v?.flat, 0) * sign;
+    const pct = n(v?.pct, 0) * sign;
 
     if (flat > 0) pos++;
     if (flat < 0) neg++;

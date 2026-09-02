@@ -41,7 +41,8 @@ export const LABELS = {
   toucherMagique: "Toucher magique",
   initiativeMod: "Initiative",
   fatigueMax: "Fatigue max",
-  podsMax: "Pods max"
+  podsMax: "Pods max",
+  retraitMod: "Seuil de retrait d'état"
 };
 
 /** Clé technique du seul emplacement où une relique peut aller. */
@@ -269,7 +270,7 @@ function xpPalierForLevel(level) {
   return Math.round(100 + 40 * x + 15 * x * x);
 }
 
-import { skillXpToNext, skillsTotalLevels, skillsLevelCap, addXpToSkill, removeXpFromSkill } from "../rules/skills.js";
+import { skillXpToNext, skillsTotalLevels, addXpToSkill, removeXpFromSkill } from "../rules/skills.js";
 
 /* -------------------------------------------- */
 /* Sheet Class (V2)                             */
@@ -663,7 +664,6 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
     });
 
     ctx.calc.skillsTotal = skillsTotalLevels(ctx.system.skills);
-    ctx.calc.skillsCap = skillsLevelCap(actor);
 
     // Quêtes
     const STATUT_LABELS = { active: "En cours", reussie: "Réussie", echouee: "Échouée" };
@@ -2206,7 +2206,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       "pvMax", "manaMax", "regenPv", "regenMana",
       "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
       "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
-      "fatigueMax", "podsMax"
+      "fatigueMax", "podsMax", "retraitMod"
     ];
   }
 
@@ -2233,7 +2233,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       toucherPhysique: "Toucher physique",
       toucherMagique: "Toucher magique",
       fatigueMax: "Fatigue max",
-      podsMax: "Pods max"
+      podsMax: "Pods max",
+      retraitMod: "Seuil de retrait d'état"
     };
 
     // Catalogue d'effets nommés (Ardeur, Brûlure…), groupé par élément —

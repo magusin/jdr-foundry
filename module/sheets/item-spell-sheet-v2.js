@@ -58,8 +58,19 @@ const STAT_LABELS = {
   initiativeMod: "Initiative", vitesse: "Vitesse",
   pvMax: "PV max", manaMax: "Mana max",
   regenPv: "Régén PV", regenMana: "Régén Mana",
-  fatigueMax: "Fatigue max", podsMax: "Pods max"
+  fatigueMax: "Fatigue max", podsMax: "Pods max",
+  retraitMod: "Seuil de retrait d'état"
 };
+
+/**
+ * Stats où un chiffre PLUS BAS est meilleur pour le porteur.
+ *
+ * Le seuil de retrait d'état est le seul cas aujourd'hui : c'est un TN, et
+ * le baisser rend l'état plus facile à secouer. La convention de stockage
+ * (positif = monte la stat) est la même que partout ailleurs — seul
+ * l'affichage du sélecteur ⬆️/⬇️ est retourné, par _syncModSensLabels().
+ */
+const INVERTED_STATS = new Set(["retraitMod"]);
 
 const WHEN_LABELS = {
   hit: "⚡ Touche + crit",
@@ -1095,7 +1106,42 @@ static PARTS = foundry.utils.mergeObject(
 
       const aura = !!c.querySelector('[data-fx-field="isAura"]')?.checked;
       c.querySelectorAll('[data-fx-when="aura"]').forEach(el => { el.hidden = !aura; });
+
+      this._syncModSensLabels(c);
     }
+  }
+
+  /**
+   * Rend le sélecteur ⬆️Bonus/⬇️Malus lisible sur une stat où un chiffre PLUS
+   * BAS est meilleur (voir INVERTED_STATS).
+   *
+   * Le stockage ne change pas : `sens` reste le SIGNE appliqué à la stat
+   * (« bonus » = +, « malus » = −), ce que scaledModValue() lit, ce que
+   * l'équipement écrit dans son propre champ, et ce que la pesée pondère.
+   * Seuls les LIBELLÉS des deux options sont échangés, si bien qu'un joueur
+   * qui veut rendre un état plus facile à retirer choisit « Bonus » et que
+   * la valeur enregistrée est bien négative.
+   *
+   * Fait ici plutôt qu'à la construction du gabarit parce que la fiche
+   * enregistre sans re-rendre (_bindLiveSave) : changer la stat d'une ligne
+   * doit relibeller son sélecteur tout de suite, pas au prochain rendu.
+   */
+  _syncModSensLabels(card) {
+    card.querySelectorAll(".fx-mod-row[data-mod-index]").forEach(row => {
+      const stat = row.querySelector('[data-mod-field="stat"]')?.value ?? "";
+      const sel = row.querySelector('[data-mod-field="sens"]');
+      if (!sel) return;
+      const inverted = INVERTED_STATS.has(stat);
+      const optBonus = sel.querySelector('option[value="bonus"]');
+      const optMalus = sel.querySelector('option[value="malus"]');
+      // « bonus » lève la stat, « malus » la baisse : sur une stat inversée
+      // c'est donc l'option « malus » qui aide son porteur.
+      if (optBonus) optBonus.textContent = inverted ? "⬇️ Malus (plus dur)" : "⬆️ Bonus";
+      if (optMalus) optMalus.textContent = inverted ? "⬆️ Bonus (plus facile)" : "⬇️ Malus";
+      sel.title = inverted
+        ? "Stat inversée : un chiffre plus bas est meilleur pour le porteur."
+        : "";
+    });
   }
 
   /** Écrit tous les effets lus dans le DOM, puis rafraîchit les pastilles. */

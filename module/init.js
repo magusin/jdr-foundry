@@ -373,7 +373,50 @@ Hooks.once("init", async () => {
   registerZoneEffectBehavior();
 
   // Expose l'API terrain pour les macros
-  Hooks.once("ready", () => {
+  /**
+ * Complète les personnages existants avec les compétences de référence.
+ *
+ * Purement additif : missingSkillsFor() n'ajoute que ce qui manque et ne
+ * touche ni aux niveaux, ni à l'XP, ni aux compétences maison du MJ. Gardé
+ * derrière un réglage de version pour ne pas repasser à chaque `ready`, et
+ * réservé au MJ actif — un joueur n'a pas le droit d'écrire sur les autres.
+ */
+const SKILLS_VERSION = 1;
+async function backfillSkills() {
+  if (!game.user.isGM || game.user !== game.users.activeGM) return 0;
+  try {
+    if (Number(game.settings.get("rpg", "skillsVersion") ?? 0) >= SKILLS_VERSION) return 0;
+  } catch (e) {
+    console.warn("[RPG] version des compétences illisible :", e);
+    return 0;
+  }
+
+  let done = 0;
+  for (const actor of game.actors.filter(a => a.type === "character")) {
+    try {
+      const skills = Skills.missingSkillsFor(actor);
+      if (!skills) continue;
+      await actor.update({ "system.skills": skills });
+      done++;
+    } catch (e) {
+      console.warn(`[RPG] compétences sur ${actor.name} :`, e);
+    }
+  }
+
+  try { await game.settings.set("rpg", "skillsVersion", SKILLS_VERSION); }
+  catch (e) { console.warn("[RPG] version des compétences non enregistrée :", e); }
+
+  if (done) {
+    console.log(`[RPG] Compétences complétées sur ${done} personnage(s).`);
+    ui.notifications?.info?.(
+      `Compétences complétées sur ${done} personnage(s). ` +
+      `Les niveaux acquis et les compétences maison n'ont pas été touchés.`
+    );
+  }
+  return done;
+}
+
+Hooks.once("ready", () => {
     const { getTerrainAt, calculateMovementCost, TERRAIN_TYPES } = foundry.utils.mergeObject({},{});
   });
 
@@ -481,6 +524,13 @@ Hooks.once("init", async () => {
   // sans lui, la migration repasserait sur les personnages à chaque `ready`
   // et écraserait une vitesse que le MJ aurait rebaissée entre-temps.
   game.settings.register("rpg", "baseSpeedVersion", {
+    scope: "world", config: false, type: Number, default: 0
+  });
+
+  // Version du rattrapage des compétences déjà appliqué à ce monde. Caché,
+  // même raison que baseSpeedVersion : c'est un marqueur de passage, pas un
+  // choix de table. À incrémenter si SKILL_DEFS gagne une entrée.
+  game.settings.register("rpg", "skillsVersion", {
     scope: "world", config: false, type: Number, default: 0
   });
 
@@ -841,8 +891,22 @@ Hooks.once("init", async () => {
     setIfUndef("regeneration.pv", type === "character" ? 1.0 : 0.0);
     setIfUndef("regeneration.mana", type === "character" ? 1.0 : 0.0);
 
-    // ✅ Skills : laisse ton template.json gérer le set complet si présent
-    setIfUndef("skills", system.skills ?? {});
+    // ✅ Compétences : la liste de référence (rules/skills.js). Avant, un
+    //    personnage naissait avec `skills: {}` et le MJ devait les créer à
+    //    la main — d'où des mondes où la clé lue par le moteur n'existait
+    //    tout simplement pas, en silence.
+    //    Écrit directement plutôt que par setIfUndef : celui-ci ne remplace
+    //    que ce qui vaut `undefined`, alors que le cas courant est un
+    //    `skills: {}` DÉFINI mais vide, qu'il aurait laissé tel quel.
+    if (type === "character") {
+      const cur = system.skills;
+      if (!cur || typeof cur !== "object" || !Object.keys(cur).length) {
+        system.skills = Skills.defaultSkills();
+        any = true;
+      }
+    } else {
+      setIfUndef("skills", system.skills ?? {});
+    }
 
     // états
     setIfUndef("etatsActifs", []);
@@ -932,6 +996,13 @@ Hooks.once("init", async () => {
     //    défaut, une seule fois par monde (réglage baseSpeedVersion).
     try { await migrateBaseSpeed(); }
     catch (e) { console.warn("[RPG] vitesse de base:", e); }
+
+    // ✅ Compétences : complète les personnages créés avant la liste de
+    //    référence. N'AJOUTE que les manquantes — aucun niveau, aucune XP,
+    //    aucune compétence maison n'est touchée. Une seule fois par monde,
+    //    et par le seul MJ actif, comme les autres rattrapages.
+    try { await backfillSkills(); }
+    catch (e) { console.warn("[RPG] compétences:", e); }
 
     // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
     //    (y compris les dialogues de macro) héritent des variables de thème.

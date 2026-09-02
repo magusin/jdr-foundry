@@ -5,6 +5,8 @@
 // suivi via un flag sur le Combat, clé actorId. Cette action prévaut sur
 // toutes les autres tant qu'elle n'a pas été résolue.
 
+import { skillLevel } from "./skills.js";
+
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 export function hasRolledAgonieCheck(combat, actorId) {
@@ -27,7 +29,11 @@ export async function declareAgonieCheck(actor) {
   const combat = game.combat;
   if (!combat) return;
 
-  const volonteLevel = n(actor.system?.skills?.survie?.level, 0);
+  // Lu par RÔLE, jamais par clé brute : la clé exacte dépend du monde
+  // (voir SKILL_ALIASES). Avant ça le code lisait `survie` en dur, et un
+  // monde dont la compétence s'appelle `volonte` voyait ce terme valoir 0
+  // en silence — le message annonçait pourtant un bonus.
+  const volonteLevel = skillLevel(actor, "volonte");
 
   const roll = await (new Roll(`1d20 + ${volonteLevel}`)).evaluate();
   await roll.toMessage({

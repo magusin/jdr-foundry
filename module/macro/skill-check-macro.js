@@ -26,34 +26,26 @@
     return;
   }
 
-  // Récupère la liste complète des compétences depuis le 1er PJ (ou la config système)
-  const allSkills = [
-    { key: "force",       label: "Athlétisme / Force brute" },
-    { key: "discretion",  label: "Discrétion" },
-    { key: "crochetage",  label: "Crochetage" },
-    { key: "perception",  label: "Perception" },
-    { key: "survie",      label: "Survie" },
-    { key: "forge",       label: "Forge / Artisanat" },
-    { key: "arcane",      label: "Arcane / Connaissances magiques" },
-    { key: "medecine",    label: "Médecine" },
-    { key: "eloquence",   label: "Éloquence / Persuasion" },
-    { key: "escalade",    label: "Escalade / Acrobaties" },
-  ];
+  // Les compétences affichées sont celles du personnage SÉLECTIONNÉ, et
+  // elles se rafraîchissent quand le MJ en change (voir le render ci-dessous).
+  // Auparavant la liste était bâtie une fois pour toutes depuis le PREMIER
+  // personnage du monde : choisir quelqu'un d'autre laissait à l'écran les
+  // compétences d'un tiers, et le jet partait sur une clé que le personnage
+  // visé ne possédait pas — niveau 0 en silence.
+  const skillList = (actor) => game.rpg?.skills?.skillListFor?.(actor)
+    ?? Object.entries(actor?.system?.skills ?? {})
+         .map(([key, sk]) => ({ key, label: sk?.label ?? key, level: Number(sk?.level) || 0 }));
 
-  // Récupère dynamiquement les compétences du 1er PJ si disponibles
-  const firstPJ = characters[0];
-  const pjSkills = firstPJ?.system?.skills ?? {};
-  const skillList = Object.keys(pjSkills).length
-    ? Object.entries(pjSkills).map(([key, s]) => ({ key, label: s.label ?? key }))
-    : allSkills;
+  const skillOptionsFor = (actor) => skillList(actor)
+    .map(sk => `<option value="${htmlEscape(sk.key)}">${htmlEscape(sk.label)}`
+             + `${sk.level ? ` — niv. ${sk.level}` : " — niv. 0"}</option>`)
+    .join("");
 
   const actorOptions = characters
     .map(a => `<option value="${a.id}">${htmlEscape(a.name)}</option>`)
     .join("");
 
-  const skillOptions = skillList
-    .map(s => `<option value="${s.key}">${htmlEscape(s.label)}</option>`)
-    .join("");
+  const skillOptions = skillOptionsFor(characters[0]);
 
   new Dialog({
     title: "Jet de Compétence (MJ)",
@@ -106,6 +98,21 @@
       cancel: { label: "Annuler" }
     },
     default: "ok",
+    render: (html) => {
+      const root = html?.[0] ?? html;
+      const actorSel = root.querySelector("#sc-actor");
+      const skillSel = root.querySelector("#sc-skill");
+      if (!actorSel || !skillSel) return;
+      actorSel.addEventListener("change", () => {
+        const a = game.actors.get(actorSel.value);
+        if (!a) return;
+        const prev = skillSel.value;
+        skillSel.innerHTML = skillOptionsFor(a);
+        // Garde la compétence choisie si le nouveau personnage l'a aussi :
+        // le MJ qui compare deux persos sur le même jet ne la reperd pas.
+        if ([...skillSel.options].some(o => o.value === prev)) skillSel.value = prev;
+      });
+    },
     options: { width: 400 }
   }).render(true);
 })();

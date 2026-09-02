@@ -7,7 +7,7 @@
  * - Des équipements équipés (system.bonus.retraitMod)
  * - Des sorts actifs (effets avec mods.retraitMod)
  *
- * Jet : 1d20 + Endurance/10 + niveau Volonté + modificateurs VS TN
+ * Jet : 1d20 nu VS le score de retrait de l'état (modifié par les retraitMod)
  */
 (async () => {
   const token = canvas?.tokens?.controlled?.[0] ?? null;
@@ -66,9 +66,8 @@
     </option>`;
   }).join("");
 
-  const endurance = n(actor.system?.derived?.effective?.principales?.endurance, 0);
-  const volonte   = n(actor.system?.skills?.survie?.level, 0);
-  const bonus = Math.floor(endurance / 10) + volonte;
+  // Jet nu : 1d20, à comparer au score de retrait de l'état (voir
+  // rules/remove-state.js pour le pourquoi de l'abandon du bonus).
   const modStr = equipMod + effectMod !== 0
     ? `<div style="font-size:11px;color:#c8960a;margin-top:4px">
         Modificateurs : ${equipMod + effectMod > 0 ? "+" : ""}${equipMod + effectMod} au TN
@@ -86,7 +85,7 @@
           <select id="rs-state" style="width:100%">${options}</select>
         </div>
         <div style="font-size:11px;opacity:.8;background:rgba(255,255,255,0.05);padding:6px;border-radius:6px">
-          Jet : 1d20 + ${Math.floor(endurance/10)} (End/10) + ${volonte} (Volonté) = 1d20 + ${bonus}
+          Jet : <b>1d20</b> — il faut atteindre le score de retrait de l'état, ou plus.
           ${modStr}
         </div>
       </div>`,
@@ -101,10 +100,10 @@
           const state   = states.find(s => s.id === stateId);
           if (!state) return;
 
-          const roll = await (new Roll(`1d20 + ${bonus}`)).evaluate();
+          const roll = await (new Roll("1d20")).evaluate();
           await roll.toMessage({
             speaker: ChatMessage.getSpeaker({ actor }),
-            flavor: `🌀 <b>${actor.name}</b> résiste à <b>${htmlEscape(state.label)}</b> (1d20+${bonus} vs TN ${tn}+)`
+            flavor: `🌀 <b>${actor.name}</b> résiste à <b>${htmlEscape(state.label)}</b> (1d20 vs TN ${tn}+)`
           });
 
           // Message MJ avec boutons Échec/Réussite
