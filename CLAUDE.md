@@ -175,6 +175,54 @@ The four that were broken: `fatigueMax` (read in step 3 but absent from 1, 2 and
 
 `rules/item-value.js`'s `STAT_WEIGHTS` is a useful fifth check — a field with no weight there produces no line in the pesée, which is how the `regen` breakage was noticed at all.
 
+### Calibrer un monstre : `rules/monster-archetypes.js` et le bouton ⚡ de la fiche
+
+La fiche de monstre avait un bouton « + Initialiser les niveaux » qui écrit des
+plages à **zéro** : il crée la structure de `system.gen.bands`, pas la créature. Le MJ
+devait ensuite remplir une vingtaine de fourchettes par niveau sans que rien ne lui dise
+ce qu'une valeur vaut — d'où le symptôme rapporté, « il manque des stats aux monstres »,
+et un bestiaire qui ne suivait pas le niveau du groupe.
+
+`monster-archetypes.js` calcule ces plages au lieu de les laisser vides, et il le fait
+**à l'envers d'une table écrite à la main** : on part de ce que le groupe fait subir au
+monstre et de ce que le monstre doit faire subir au groupe, puis on résout les stats qui
+produisent ces deux nombres. Deux objectifs par archétype suffisent — `tkill` (tours que
+le groupe met à l'abattre) et `share` (fraction des PV d'un PJ enlevée par tour) — le
+reste (PV, scores, dés de la capacité, XP) en découle.
+
+- **Toutes les formules sont IMPORTÉES, jamais recopiées** : `partyRefFor` (item-value.js,
+  la même référence que la pesée), `mitigateDamage`/`tnFromRatio`/`AUTO_FAIL_MAX`
+  (combat.js), et le barème score → % reproduit en inverse (`scoreForPct`, K = 160). Une
+  divergence ici produirait des monstres calibrés pour un autre jeu que celui-ci.
+- **Les bandes s'écrivent AVANT le bonus d'Endurance** : `prepareDerivedData` ajoute
+  ⌊END/3⌋ aux scores et ⌊END/5⌋ aux PV par-dessus. Les valeurs produites sont donc déjà
+  diminuées de cet apport — le même piège que `endInScores` côté pesée.
+- **Les PV sont rendus monotones à la main** (`opts.noMonotone` + boucle sur les niveaux
+  inférieurs). Le calcul brut ne l'est pas : l'armure fixe d'une brute gagne un point tous
+  les trois niveaux, ce qui réduit les dégâts encaissés par coup et donc les PV nécessaires
+  pour tenir `tkill` tours. Juste mathématiquement, illisible à la table — un monstre de
+  niveau 5 avec moins de PV que celui de niveau 3 se lit comme un bug.
+- **La capacité est le vrai livrable, pas la bande.** Un monstre n'a pas d'armes dans ce
+  système (ses attaques *sont* ses items `spell`, cf. `ACTION_EXCLUDED_TYPES`), donc une
+  bande parfaitement calibrée sans capacité écrite reste un sac de PV qui ne fait rien.
+  `recommendedAbilities()` dimensionne les dés (des d6, le dé du système) sur la menace
+  visée, et le bouton propose de créer les items — les doublons de nom sont ignorés, un
+  monstre déjà écrit à la main ne se fait pas polluer.
+- **Vérification croisée gratuite** : la pesée (`computeMonsterBandValues`) est un modèle
+  *indépendant*, et elle tombe sur le palier attendu pour les sept archétypes du niveau 1
+  au niveau 12 (piétaille → Trivial, soldat → Mineur, brute/mage → Sérieux, élite → Élite,
+  boss → Boss). Si l'un des deux bouge, ce désaccord est le test.
+- Les **résistances élémentaires restent à [0, 0]** : elles relèvent du thème de la créature,
+  pas de son calibrage — et `rollResistances` n'écrit rien sur une plage nulle, ce qui
+  préserve une valeur saisie à la main sur la fiche.
+
+`GUIDE_PROGRESSION.md` (racine) est la version MJ de tout ça : table du groupe de référence
+niveau par niveau (PV, dégâts, mitigation visée, score d'armure à porter), tableaux des sept
+archétypes aux niveaux 1/3/5/8/12, composition de rencontre et rythme d'XP (100 XP par niveau,
+quatre rencontres), et la hiérarchie des champs d'équipement — dont le fait, contre-intuitif
+mais voulu, qu'une pièce apportant le score d'armure du niveau pèse « Village » et fait
+pourtant exactement son travail (poids 0,3 contre 10 pour l'armure fixe).
+
 ### Item "pesée": a GM-only power score, and why it is weighted rather than summed
 
 `rules/item-value.js`'s `computeItemValue(item)` scores a `weapon`/`armor`/`relic` so the GM can tell whether something they just wrote is overpowered. It is **pure theorycraft** — nothing it computes is stored, read by a roll, or shown to a player; `_prepareContext` on both item sheets sets `ctx.itemValue` **only when `game.user.isGM`**, so the number never reaches a player's browser at all (same two-layer rule as the quest reward — a template gate alone would leave it in the rendered data).

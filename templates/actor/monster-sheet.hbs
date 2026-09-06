@@ -691,6 +691,8 @@
           <label>Niveaux possibles</label>
           <input type="text" name="system.gen.levelsCsv" value="{{system.gen.levelsCsv}}" placeholder="Ex: 2,4,6" />
           <button type="button" class="btn small" data-action="genInitBands">+ Initialiser les niveaux</button>
+          <button type="button" class="btn small" data-action="genFillBands"
+            title="Calcule des plages réelles (PV, armure, dégâts, XP) pour chaque niveau à partir d'un archétype, contre le groupe de référence.">⚡ Calibrer (archétype)</button>
         </div>
 
         {{#if genBands.length}}
