@@ -10,7 +10,7 @@ guide dit lesquels et où.
 
 ---
 
-## 0. À faire une fois : les trois réglages du monde
+## 0. À faire une fois : les quatre réglages du monde
 
 Paramètres du jeu → Réglages du système. Tout le reste en dépend.
 
@@ -19,6 +19,15 @@ Paramètres du jeu → Réglages du système. Tout le reste en dépend.
 | `peseeGroupeTaille` | Nombre de PJ à ta table | 3 |
 | `peseeDegatsAttaque` | Dégâts moyens d'une attaque de PJ au niveau 1 | 7 |
 | `peseeNiveauGroupe` | **Niveau réel de ton groupe, aujourd'hui** | 1 |
+| `peseeRegenGroupe` | PV qu'un PJ récupère **par tour de combat**, équipement compris | 1 |
+
+Le quatrième est le plus sous-estimé : un personnage régénère **1 PV par tour**
+d'origine (`regeneration.pv`), et l'équipement fait monter ce chiffre. Une
+créature qui n'inflige pas davantage que cette régen ne blessera **jamais**
+personne, quel que soit le nombre de tours — le calibrage l'ajoute donc à la
+menace visée avant de dimensionner les dés. Si ton groupe régénère 4 PV par
+tour et que tu laisses le réglage à 1, tes monstres perdent trois points de
+dégâts par tour chacun sans que rien ne le dise.
 
 Le troisième est celui qu'on oublie. Mets-le à jour à chaque montée de niveau
 du groupe : la pesée d'un objet, celle d'un sort et le calibrage des monstres
@@ -93,13 +102,19 @@ ils tombent d'accord, ta créature est calibrée.
 
 | Archétype | Rôle à la table | Combien en jeter |
 |---|---|---|
-| 🐀 **Piétaille** | figurant, tombe en un tour | 4 à 6 |
-| 🗡️ **Soldat** | l'unité de base d'une rencontre | 3 à 4 |
-| 🪓 **Brute** | lente et blindée, occupe la ligne de front | 1 à 2 (+ du menu fretin) |
-| 🏹 **Rôdeur** | rapide, dur à toucher, fragile ; tire et décroche | 2 à 3 |
-| ✨ **Mage** | frappe fort à distance, s'effondre au contact | 1 à 2 (protégé par le reste) |
-| 🛡️ **Élite** | mini-boss ; fait déjà un vrai combat seul | 1 |
-| 👑 **Boss** | combat de fin d'arc | 1, jamais accompagné d'un autre |
+| 🐀 **Piétaille** | figurant, tombe vite mais use le groupe | 6 |
+| 🗡️ **Soldat** | l'unité de base d'une rencontre | 3 |
+| 🪓 **Brute** | lente, blindée, frappe très fort | 1 (+ du menu fretin) |
+| 🏹 **Rôdeur** | rapide, dur à toucher, fragile ; tire et décroche | 2 |
+| ✨ **Mage** | frappe très fort à distance, s'effondre au contact | 2 (protégés par le reste) |
+| 🛡️ **Élite** | mini-boss ; 9 tours et une capacité qui fait mal | 1 |
+| 👑 **Boss** | combat de fin d'arc, 16 tours | 1, jamais accompagné d'un autre |
+
+Le nombre d'exemplaires n'est pas décoratif : **le calibrage compte dessus**.
+La régénération du groupe est un flux unique sur le PJ visé, pas un flux par
+assaillant — elle est donc partagée entre les créatures de la rencontre. Jouer
+une piétaille toute seule donne une créature inoffensive ; en jouer douze donne
+un massacre.
 
 ### Ce que le bouton écrit, niveau par niveau
 
@@ -110,63 +125,101 @@ plus intéressant du système pour récompenser un groupe qui prépare le combat
 
 #### Niveau 1
 
-| Archétype | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
-|---|---|---|---|---|---|---|---|---|---|
-| 🐀 Piétaille | 6 | 13/7 | 0/0 | 5 | 3 | 2d6 | 8 m | 11 | Trivial |
-| 🗡️ Soldat | 11 | 27/17 | 1/0 | 5 | 5 | 2d6+2 | 8 m | 25 | Mineur |
-| 🪓 Brute | 13 | 51/20 | 2/0 | 4 | 8 | 3d6+2 | 6 m | 38 | Mineur |
-| 🏹 Rôdeur | 11 | 13/13 | 0/0 | 7 | 4 | 2d6+3 | 11 m | 30 | Mineur |
-| ✨ Mage | 9 | 7/52 | 0/1 | 4 | 3 | 3d6+2 | 7 m | 30 | Mineur |
-| 🛡️ Élite | 24 | 51/43 | 2/1 | 6 | 7 | 2d6 · 3d6+4 (recharge 2) | 9 m | 75 | Sérieux |
-| 👑 Boss | 27 | 72/66 | 3/2 | 7 | 10 | 2d6+3 · 4d6+6 (recharge 2) | 9 m | 188 | Élite |
+| Archétype | À jouer par | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 🐀 Piétaille | 6 | 11 | 13/7 | 0/0 | 5 | 3 | 1d6+1 | 8 m | 11 | Trivial |
+| 🗡️ Soldat | 3 | 18 | 27/17 | 1/0 | 5 | 5 | 2d6+3 | 8 m | 25 | Mineur |
+| 🪓 Brute | 1 | 24 | 51/20 | 2/0 | 4 | 8 | 5d6+5 | 6 m | 38 | Sérieux |
+| 🏹 Rôdeur | 2 | 16 | 13/13 | 0/0 | 7 | 4 | 5d6+3 | 11 m | 30 | Sérieux |
+| ✨ Mage | 2 | 16 | 7/52 | 0/1 | 4 | 3 | 5d6+4 | 7 m | 30 | Sérieux |
+| 🛡️ Élite | 1 | 42 | 51/43 | 2/1 | 6 | 7 | 2d6+1 · 6d6+5 (recharge 2) | 9 m | 75 | Élite |
+| 👑 Boss | 1 | 54 | 72/66 | 3/2 | 7 | 10 | 1d6+2 · 4d6+4 (recharge 2) | 9 m | 188 | Boss |
 
 #### Niveau 3
 
-| Archétype | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
-|---|---|---|---|---|---|---|---|---|---|
-| 🐀 Piétaille | 8 | 13/7 | 0/0 | 8 | 5 | 2d6+2 | 8 m | 11 | Trivial |
-| 🗡️ Soldat | 13 | 25/15 | 1/0 | 9 | 9 | 3d6+1 | 8 m | 25 | Mineur |
-| 🪓 Brute | 20 | 49/18 | 2/0 | 6 | 14 | 4d6+2 | 6 m | 38 | Sérieux |
-| 🏹 Rôdeur | 14 | 12/12 | 0/0 | 13 | 6 | 3d6+3 | 11 m | 30 | Mineur |
-| ✨ Mage | 12 | 7/52 | 0/1 | 7 | 5 | 4d6+2 | 7 m | 30 | Mineur |
-| 🛡️ Élite | 36 | 49/41 | 2/1 | 11 | 13 | 2d6+2 · 4d6+4 (recharge 2) | 9 m | 75 | Sérieux |
-| 👑 Boss | 45 | 69/63 | 3/2 | 12 | 18 | 3d6+2 · 6d6+4 (recharge 2) | 9 m | 188 | Boss |
+| Archétype | À jouer par | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 🐀 Piétaille | 6 | 14 | 13/7 | 0/0 | 8 | 5 | 1d6+3 | 8 m | 11 | Trivial |
+| 🗡️ Soldat | 3 | 21 | 25/15 | 1/0 | 9 | 9 | 3d6+1 | 8 m | 25 | Mineur |
+| 🪓 Brute | 1 | 36 | 49/18 | 2/0 | 6 | 14 | 6d6+8 | 6 m | 38 | Élite |
+| 🏹 Rôdeur | 2 | 20 | 12/12 | 0/0 | 13 | 6 | 6d6+6 | 11 m | 30 | Sérieux |
+| ✨ Mage | 2 | 20 | 7/52 | 0/1 | 7 | 5 | 6d6+6 | 7 m | 30 | Sérieux |
+| 🛡️ Élite | 1 | 63 | 49/41 | 2/1 | 11 | 13 | 2d6+2 · 7d6+8 (recharge 2) | 9 m | 75 | Élite |
+| 👑 Boss | 1 | 90 | 69/63 | 3/2 | 12 | 18 | 1d6+3 · 5d6+5 (recharge 2) | 9 m | 188 | Boss |
 
 #### Niveau 5
 
-| Archétype | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
-|---|---|---|---|---|---|---|---|---|---|
-| 🐀 Piétaille | 10 | 12/6 | 0/0 | 12 | 8 | 3d6+1 | 8 m | 11 | Trivial |
-| 🗡️ Soldat | 14 | 24/14 | 2/0 | 13 | 13 | 3d6+5 | 8 m | 25 | Mineur |
-| 🪓 Brute | 20 | 46/15 | 3/0 | 9 | 21 | 4d6+6 | 6 m | 38 | Sérieux |
-| 🏹 Rôdeur | 17 | 11/11 | 0/0 | 18 | 9 | 4d6+3 | 11 m | 30 | Mineur |
-| ✨ Mage | 15 | 6/51 | 0/2 | 10 | 8 | 4d6+6 | 7 m | 30 | Mineur |
-| 🛡️ Élite | 36 | 47/39 | 3/2 | 16 | 18 | 3d6+2 · 6d6+4 (recharge 2) | 9 m | 75 | Élite |
-| 👑 Boss | 45 | 67/61 | 4/3 | 17 | 26 | 3d6+5 · 7d6+7 (recharge 2) | 9 m | 188 | Boss |
+| Archétype | À jouer par | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 🐀 Piétaille | 6 | 17 | 12/6 | 0/0 | 12 | 8 | 2d6 | 8 m | 11 | Mineur |
+| 🗡️ Soldat | 3 | 24 | 24/14 | 2/0 | 13 | 13 | 3d6+5 | 8 m | 25 | Sérieux |
+| 🪓 Brute | 1 | 36 | 46/15 | 3/0 | 9 | 21 | 8d6+8 | 6 m | 38 | Élite |
+| 🏹 Rôdeur | 2 | 25 | 11/11 | 0/0 | 18 | 9 | 8d6+6 | 11 m | 30 | Sérieux |
+| ✨ Mage | 2 | 25 | 6/51 | 0/2 | 10 | 8 | 8d6+6 | 7 m | 30 | Sérieux |
+| 🛡️ Élite | 1 | 63 | 47/39 | 3/2 | 16 | 18 | 3d6+1 · 9d6+10 (recharge 2) | 9 m | 75 | Élite |
+| 👑 Boss | 1 | 90 | 67/61 | 4/3 | 17 | 26 | 2d6 · 6d6+7 (recharge 2) | 9 m | 188 | Boss |
 
 #### Niveau 8
 
-| Archétype | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
-|---|---|---|---|---|---|---|---|---|---|
-| 🐀 Piétaille | 12 | 11/5 | 0/0 | 17 | 11 | 4d6+2 | 8 m | 11 | Mineur |
-| 🗡️ Soldat | 18 | 22/12 | 3/0 | 19 | 19 | 5d6+4 | 8 m | 25 | Mineur |
-| 🪓 Brute | 26 | 43/12 | 4/0 | 13 | 30 | 6d6+7 | 6 m | 38 | Sérieux |
-| 🏹 Rôdeur | 20 | 10/10 | 0/0 | 27 | 13 | 5d6+7 | 11 m | 30 | Mineur |
-| ✨ Mage | 19 | 5/50 | 0/3 | 15 | 11 | 6d6+7 | 7 m | 30 | Sérieux |
-| 🛡️ Élite | 48 | 44/36 | 4/3 | 23 | 27 | 4d6+3 · 8d6+6 (recharge 2) | 9 m | 75 | Élite |
-| 👑 Boss | 63 | 63/57 | 5/4 | 25 | 38 | 5d6+4 · 10d6+8 (recharge 2) | 9 m | 188 | Boss |
+| Archétype | À jouer par | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 🐀 Piétaille | 6 | 20 | 11/5 | 0/0 | 17 | 11 | 2d6+3 | 8 m | 11 | Mineur |
+| 🗡️ Soldat | 3 | 30 | 22/12 | 3/0 | 19 | 19 | 5d6+3 | 8 m | 25 | Sérieux |
+| 🪓 Brute | 1 | 48 | 43/12 | 4/0 | 13 | 30 | 11d6+11 | 6 m | 38 | Élite |
+| 🏹 Rôdeur | 2 | 29 | 10/10 | 0/0 | 27 | 13 | 11d6+10 | 11 m | 30 | Sérieux |
+| ✨ Mage | 2 | 32 | 5/50 | 0/3 | 15 | 11 | 11d6+10 | 7 m | 30 | Élite |
+| 🛡️ Élite | 1 | 84 | 44/36 | 4/3 | 23 | 27 | 3d6+5 · 13d6+12 (recharge 2) | 9 m | 75 | Boss |
+| 👑 Boss | 1 | 126 | 63/57 | 5/4 | 25 | 38 | 2d6+2 · 8d6+10 (recharge 2) | 9 m | 188 | Boss |
 
 #### Niveau 12
 
-| Archétype | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
-|---|---|---|---|---|---|---|---|---|---|
-| 🐀 Piétaille | 15 | 9/3 | 0/0 | 24 | 16 | 5d6+7 | 8 m | 11 | Mineur |
-| 🗡️ Soldat | 22 | 19/9 | 4/0 | 27 | 27 | 7d6+8 | 8 m | 25 | Mineur |
-| 🪓 Brute | 33 | 39/8 | 5/0 | 19 | 43 | 10d6+9 | 6 m | 38 | Sérieux |
-| 🏹 Rôdeur | 23 | 8/8 | 0/0 | 38 | 19 | 8d6+6 | 11 m | 30 | Sérieux |
-| ✨ Mage | 24 | 3/48 | 0/4 | 22 | 16 | 9d6+8 | 7 m | 30 | Sérieux |
-| 🛡️ Élite | 60 | 41/33 | 5/4 | 32 | 38 | 6d6+4 · 11d6+12 (recharge 2) | 9 m | 75 | Élite |
-| 👑 Boss | 81 | 57/51 | 6/5 | 35 | 54 | 8d6+6 · 15d6+16 (recharge 2) | 9 m | 188 | Boss |
+| Archétype | À jouer par | PV | Score arm./rés. | Armure fixe | Dex | End | Capacité(s) | Vitesse | XP | Palier (pesée) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 🐀 Piétaille | 6 | 26 | 9/3 | 0/0 | 24 | 16 | 3d6+4 | 8 m | 11 | Mineur |
+| 🗡️ Soldat | 3 | 36 | 19/9 | 4/0 | 27 | 27 | 7d6+7 | 8 m | 25 | Sérieux |
+| 🪓 Brute | 1 | 60 | 39/8 | 5/0 | 19 | 43 | 17d6+16 | 6 m | 38 | Élite |
+| 🏹 Rôdeur | 2 | 34 | 8/8 | 0/0 | 38 | 19 | 15d6+14 | 11 m | 30 | Sérieux |
+| ✨ Mage | 2 | 41 | 3/48 | 0/4 | 22 | 16 | 15d6+14 | 7 m | 30 | Élite |
+| 🛡️ Élite | 1 | 105 | 41/33 | 5/4 | 32 | 38 | 5d6+6 · 19d6+19 (recharge 2) | 9 m | 75 | Boss |
+| 👑 Boss | 1 | 162 | 57/51 | 6/5 | 35 | 54 | 3d6+4 · 13d6+12 (recharge 2) | 9 m | 188 | Boss |
+
+---
+
+## 2 bis. Ce que coûte réellement une rencontre
+
+Ces chiffres sortent d'une **simulation** du combat avec les valeurs que le
+bouton ⚡ écrit : les PJ concentrent leur feu, les monstres aussi, la régen
+s'applique à chaque tour. Trois valeurs par case : **niveau 1 / 5 / 10**.
+
+| Rencontre | Tours de combat | PV du groupe dépensés | Plus gros coup encaissé |
+|---|---|---|---|
+| 6 × 🐀 Piétaille | 8 / 8 / 8 | 49 % / 44 % / 46 % | 17 % / 15 % / 15 % |
+| 3 × 🗡️ Soldat | 8 / 8 / 8 | 58 % / 55 % / 57 % | 33 % / 30 % / 30 % |
+| 1 × 🪓 Brute | 5 / 5 / 4 | 43 % / 43 % / 32 % | 73 % / 70 % / 68 % |
+| 2 × 🏹 Rôdeur | 4 / 4 / 4 | 44 % / 45 % / 45 % | 67 % / 65 % / 59 % |
+| 2 × ✨ Mage | 4 / 4 / 4 | 47 % / 45 % / 46 % | 70 % / 65 % / 61 % |
+| 1 × 🛡️ Élite | 9 / 9 / 9 | 60 % / 58 % / 58 % | 83 % / 78 % / 76 % |
+| 1 × 👑 Boss | 18 / 16 / 16 | 96 % / 78 % / 77 % | 60 % / 54 % / 52 % |
+
+Ce qu'il faut y lire :
+
+- **Les combats sont longs, et c'est voulu.** Une bande de piétaille ou une
+  escouade de soldats tient 8 tours ; un boss en tient 16. Le nombre de tours
+  est réglé par l'objectif `tkill` de chaque archétype, pas par ses dégâts.
+- **Les gros monstres tapent fort, et c'est voulu aussi.** Une brute, un
+  rôdeur ou un mage enlèvent **60 à 73 % des PV d'un PJ en un seul coup**, et
+  la capacité à recharge d'une élite peut en enlever 83 %. La menace n'est pas
+  étalée à l'identique tous les tours : la capacité de base porte 60 % de la
+  menace, la spéciale en porte 200 % et tombe un tour sur trois. Un gros coup
+  qu'on voit venir se joue (on se protège, on écourte, on interpose le
+  bouclier) ; la même menace lissée n'est qu'une soustraction.
+- **Un boss est un vrai risque de mort**, et au **niveau 1-2 il est à la limite
+  du massacre** (96 % des PV du groupe dépensés). À ces niveaux-là, préfère une
+  élite ; garde le boss pour le niveau 3 et au-delà.
+- La simulation est un **pire cas** : elle suppose zéro tactique, zéro soin,
+  zéro terrain, et des monstres qui concentrent parfaitement leurs coups sur un
+  seul PJ. À la vraie table, tes joueurs feront mieux — c'est justement là que
+  le combat devient stratégique.
 
 ---
 
