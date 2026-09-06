@@ -1,6 +1,7 @@
 // systems/rpg/monster-gen.js
 
 import { DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "./rules/damage-types.js";
+import { BASE_VITESSE } from "./rules/base-speed.js";
 
 function randInt(min, max) {
   min = Math.floor(Number(min));
@@ -107,7 +108,12 @@ export async function randomizeMonster(actor) {
 
   const pvBase = Math.max(1, rollClamped(band.pv, 30, 30));
   const regenPvBase = rollClamped(band.regenPv, 0, 0);
-  const vitBase = rollClamped(band.vitesse, 3, 3);
+  // Repli sur BASE_VITESSE (rules/base-speed.js), pas sur 3 : une bande sans
+  // plage `vitesse` sortait une créature à 3 m face à un groupe à 8. Elle ne
+  // pouvait ni engager, ni rattraper, ni fuir — décorative. Le 3 datait de
+  // l'époque où la base des PJ valait 3 ; elle est passée à 8 et les bandes
+  // n'ont jamais suivi. Une plage explicite reste évidemment prioritaire.
+  const vitBase = rollClamped(band.vitesse, BASE_VITESSE, BASE_VITESSE);
   const xpReward = Math.max(0, rollClamped(band.xpReward, 0, 0));
 
   // ✅ Bandes secondaires (nouveaux systèmes) — fatigue max et toucher inné
@@ -188,7 +194,7 @@ export function buildRandomUpdatesForActor(actor) {
 
   const pvBase      = Math.max(1, rollClamped(band.pv, 30, 30));
   const regenPvBase = rollClamped(band.regenPv, 0, 0);
-  const vitBase     = rollClamped(band.vitesse, 3, 3);
+  const vitBase     = rollClamped(band.vitesse, BASE_VITESSE, BASE_VITESSE);
   const xpReward    = Math.max(0, rollClamped(band.xpReward, 0, 0));
   const fatigueMaxBase = rollClamped(band.fatigueMax, 10, 10);
   const toucherPhysiqueBase = (() => { const [mn, mx] = getRange(band.toucherPhysique, 0, 0); return randInt(mn, mx); })();
