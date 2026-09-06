@@ -132,8 +132,28 @@ export class RPGItem extends Item {
       const critStatBonus = critPerStep ? Math.floor(Math.max(0, critStatVal) / critPer) * critPerStep : 0;
 
       if (mode === "max+die") {
-        // On remplace le dé par son max + on tire un dé bonus
-        const faces    = roll.dice?.[0]?.faces ?? 6;
+        // On remplace LES DÉS par leur maximum + on tire un dé bonus.
+        //
+        // ⚠️ Ceci lisait `roll.dice[0].faces` — les faces du PREMIER dé — et en
+        // retranchait `roll.total`, le total de TOUTE la formule. Sur « 1d8 »
+        // les deux coïncident et personne n'a rien vu. Sur « 2d6 », la
+        // substitution valait 6 − 7 = −1 en moyenne : le critique RETIRAIT des
+        // dégâts, et d'autant plus que l'arme avait de dés. Toutes les armes à
+        // deux mains du système étaient concernées.
+        //
+        // On calcule donc le maximum de l'expression entière : la somme des
+        // maximums de chaque terme de dé, plus la part constante de la formule
+        // (un « +2 » écrit dans le champ des dés), obtenue en retirant du total
+        // ce que les dés ont réellement fait. La différence avec le tirage est
+        // donc toujours ≥ 0, quel que soit le nombre de dés.
+        const diceTerms = Array.isArray(roll.dice) ? roll.dice : [];
+        const diceMax   = diceTerms.reduce((acc, d) =>
+          acc + (Number(d?.number) || 1) * (Number(d?.faces) || 0), 0);
+        const diceRolled = diceTerms.reduce((acc, d) => acc + (Number(d?.total) || 0), 0);
+        const constPart  = (Number(roll.total) || 0) - diceRolled;
+        // Repli sur l'ancien comportement si la formule ne contient aucun dé
+        // (« 4 » en dur) : il n'y a alors rien à maximiser.
+        const rollMax   = diceMax > 0 ? (diceMax + constPart) : (Number(roll.total) || 0);
         const critRoll = critDie
           ? await (new Roll(critDie)).evaluate()
           : await (new Roll(die)).evaluate();
@@ -142,7 +162,7 @@ export class RPGItem extends Item {
           flavor: `✦ <b>${attackerActor?.name ?? "?"}</b> — dé bonus critique (${this.name})`
         });
 
-        critBonus = (faces - roll.total) + critRoll.total + critFlat + critStatBonus;
+        critBonus = Math.max(0, rollMax - (Number(roll.total) || 0)) + critRoll.total + critFlat + critStatBonus;
       } else {
         // mode "double" ou autre : on double le brut
         critBonus = rawBrut + critFlat + critStatBonus;

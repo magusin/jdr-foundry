@@ -381,16 +381,31 @@ export function diceAverage(formula) {
 }
 
 /**
- * Faces du PREMIER dé d'une formule (« 2d6+3 » → 6, « 4 » → 0).
+ * Maximum d'une formule de dés simple (« 2d6+3 » → 15, « 1d8 » → 8, « 4 » → 4).
  *
- * Existe pour reproduire le critique « max+die » tel que le moteur le calcule :
- * item.js lit `roll.dice[0].faces`, donc les faces du premier dé et d'aucun
- * autre. Ce n'est pas le maximum de la formule, et c'est volontairement le
- * même choix ici — la pesée doit dire ce qui SE PASSE, pas ce qui devrait.
+ * Sert au critique « max+die », que le moteur calcule en remplaçant les dés par
+ * leur maximum avant d'ajouter le dé bonus (RPGItem#rollDamage). Une version
+ * précédente lisait les faces du PREMIER dé seulement, parce que le moteur
+ * faisait la même erreur ; les deux ont été corrigés ensemble, et ils doivent
+ * le rester — un critique pesé sur une autre règle que celle qui s'applique
+ * est pire qu'un critique non pesé.
  */
-export function firstDieFaces(formula) {
-  const m = /(\d*)d(\d+)/i.exec(String(formula ?? "").replace(/\s+/g, ""));
-  return m ? Number(m[2]) : 0;
+export function diceMax(formula) {
+  const s = String(formula ?? "").replace(/\s+/g, "").toLowerCase();
+  if (!s) return 0;
+  const re = /([+-]?)(\d*)d(\d+)|([+-]?\d+)(?![d\d])/g;
+  let m, total = 0, matched = false;
+  while ((m = re.exec(s)) !== null) {
+    matched = true;
+    if (m[3]) {
+      const sign = m[1] === "-" ? -1 : 1;
+      const count = m[2] === "" ? 1 : Number(m[2]);
+      total += sign * count * Number(m[3]);
+    } else if (m[4]) {
+      total += Number(m[4]);
+    }
+  }
+  return matched ? total : 0;
 }
 
 const round1 = (v) => Math.round(v * 10) / 10;
@@ -587,21 +602,10 @@ export function computeItemValue(item) {
     if (critMode === "max+die") {
       // Le dé bonus : celui du crit, sinon le dé principal relancé.
       const bonusDie = diceAverage(critDice || dmg.dice);
-      // ⚠️ Fidèle au moteur, y compris à son défaut : item.js prend les faces
-      // du PREMIER dé (`roll.dice[0].faces`) et en retranche le total de TOUTE
-      // la formule. Sur « 1d8 » c'est bien +max ; sur « 2d6 » c'est 6 − 7 = −1,
-      // et le critique retire alors des dégâts. La pesée le montre plutôt que
-      // de peser une intention que le code n'applique pas — d'où l'alerte.
+      // Les dés passent à leur maximum, puis le dé bonus s'ajoute. L'écart
+      // moyen gagné par la substitution est donc `max − moyenne`, toujours ≥ 0.
       const dicePart = diceAverage(dmg.dice);
-      critAvg = (firstDieFaces(dmg.dice) - dicePart) + bonusDie + critFlat + critScaled;
-      if (dicePart && firstDieFaces(dmg.dice) < dicePart) {
-        warnings.push(
-          `Critique en « max+die » sur une formule à plusieurs dés (${dmg.dice}) : le moteur ` +
-          `remplace le total des dés par les faces du PREMIER seul, ce qui RETIRE ` +
-          `${round1(dicePart - firstDieFaces(dmg.dice))} dégât(s) en moyenne. Un seul dé plus gros ` +
-          `(ou le mode « double ») évite ce piège.`
-        );
-      }
+      critAvg = Math.max(0, diceMax(dmg.dice) - dicePart) + bonusDie + critFlat + critScaled;
     } else {
       // « double » ou autre : critBonus = rawBrut + critFlat + critStatBonus.
       critAvg = (avg + scaled) + critFlat + critScaled;
@@ -1598,7 +1602,8 @@ export function monsterProfileFromBand(band, lvl, which = "mid", label = "Monstr
     // tranche de 5 d'Endurance.
     pv: Math.max(1, Math.round(pvBase + Math.floor(endurance / 5))),
     regenPv: Math.max(0, pick(band?.regenPv)),
-    vitesse: Math.max(0, pick(band?.vitesse, 3)),
+    // Même repli que monster-gen.js : BASE_VITESSE, pas 3 (voir la note là-bas).
+    vitesse: Math.max(0, pick(band?.vitesse, BASE_VITESSE)),
     fatigueMax: Math.max(1, pick(band?.fatigueMax, 10)),
     manaMax: 0,
     // L'allonge n'est pas tirée par la génération : elle reste celle de la
