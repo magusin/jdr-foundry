@@ -15,6 +15,10 @@ import { actorStateResistRows } from "../rules/resistances.js";
 import { findStateSlot } from "../rules/status-effects.js";
 import { dropPassifOnStateLabel, passifStates } from "../rules/loadout.js";
 import { computeMonsterValue, computeMonsterBandValues } from "../rules/item-value.js";
+import {
+  ARCHETYPES, getArchetype, archetypeProfile, buildBand,
+  recommendedAbilities, abilityItemData
+} from "../rules/monster-archetypes.js";
 import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -102,6 +106,97 @@ function getBand(system, lvl) {
       ...rangeArrToObj(b.resistancesElem?.[key])
     }))
   };
+}
+
+/**
+ * Fenêtre de choix d'archétype pour « ⚡ Calibrer (archétype) ».
+ *
+ * Elle montre les SEPT archétypes chiffrés au niveau médian de la créature,
+ * pas seulement leur nom : le MJ choisit sur des PV et des dégâts, pas sur un
+ * adjectif. Le tableau est calculé par rules/monster-archetypes.js, qui lit le
+ * groupe de référence (taille, dégâts par attaque, niveau) des réglages du
+ * monde — deux tables différentes n'y verront donc pas les mêmes nombres, ce
+ * qui est le but.
+ *
+ * @returns {Promise<{key:string, createAbility:boolean}|null>} null si annulé.
+ */
+async function promptArchetype(levels, actor) {
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  if (!DialogV2) return null;
+  const mid = levels[Math.floor(levels.length / 2)];
+  const hasSpell = Array.from(actor?.items ?? []).some(i => i.type === "spell");
+
+  const rows = ARCHETYPES.map(a => {
+    const p = archetypeProfile(mid, a.key);
+    const abilities = recommendedAbilities(mid, a.key)
+      .map(x => `${x.dice}${x.flat ? `+${x.flat}` : ""}`).join(" &amp; ");
+    return `<tr>
+      <td style="white-space:nowrap"><b>${a.icon} ${a.label}</b></td>
+      <td style="text-align:center">${p.pvTotal}</td>
+      <td style="text-align:center">${a.armPct}&nbsp;/&nbsp;${a.resPct}&nbsp;%</td>
+      <td style="text-align:center;white-space:nowrap">${abilities}</td>
+      <td style="text-align:center">${p.survie.tours}</td>
+      <td style="text-align:center">${p.xp}</td>
+      <td style="font-size:11px;opacity:.75">${a.hint}</td>
+    </tr>`;
+  }).join("");
+
+  const options = ARCHETYPES.map(a =>
+    `<option value="${a.key}">${a.icon} ${a.label} — ${a.hint}</option>`
+  ).join("");
+
+  const P = archetypeProfile(mid, "soldat").party;
+  const content = `
+    <div style="font-size:12px">
+      <p style="margin:0 0 8px">
+        Chiffres calculés au <b>niveau ${mid}</b> contre le groupe de référence
+        (<b>${P.size} PJ</b>, ${P.pv} PV, ${P.damagePerHit} dégâts par attaque,
+        ${P.reductionPct}&nbsp;% de mitigation). Réglable dans les paramètres du
+        monde (taille, dégâts, niveau du groupe).
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="opacity:.7;font-size:11px;text-align:left">
+          <th>Archétype</th><th>PV</th><th>Arm/Rés</th><th>Capacité</th>
+          <th>Tours à<br>l'abattre</th><th>XP</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <hr/>
+      <p style="margin:6px 0">
+        <label>Archétype à appliquer aux niveaux <b>${levels.join(", ")}</b> :</label><br/>
+        <select name="arch" style="width:100%">${options}</select>
+      </p>
+      <p style="margin:6px 0">
+        <label><input type="checkbox" name="createAbility" ${hasSpell ? "" : "checked"} />
+          Créer aussi la ou les capacités d'attaque recommandées
+          ${hasSpell ? "(cette créature en a déjà — les doublons de nom sont ignorés)" : ""}
+        </label>
+      </p>
+      <p style="margin:6px 0;font-size:11px;opacity:.7">
+        Les plages existantes de ces niveaux seront <b>remplacées</b>. Les
+        résistances élémentaires restent à zéro : elles relèvent du thème de la
+        créature, à saisir à la main.
+      </p>
+    </div>`;
+
+  return DialogV2.wait({
+    window: { title: `Calibrer ${actor?.name ?? "le monstre"}` },
+    position: { width: 760 },
+    content,
+    buttons: [
+      {
+        action: "ok", label: "⚡ Calibrer", default: true,
+        callback: (event, button, dialog) => {
+          const root = dialog?.element ?? button?.form ?? null;
+          const key = root?.querySelector?.("[name='arch']")?.value ?? "soldat";
+          const createAbility = !!root?.querySelector?.("[name='createAbility']")?.checked;
+          return { key, createAbility };
+        }
+      },
+      { action: "cancel", label: "Annuler" }
+    ],
+    rejectClose: false
+  }).then(r => (r && r !== "cancel" && r.key) ? r : null).catch(() => null);
 }
 
 export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -441,6 +536,53 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         for (const lvl of levels) ensureBand(clone, lvl);
         await this.document.update({ "system.gen.bands": clone.gen.bands });
         this.render({ force: false });
+      });
+    });
+
+    // ── GEN : remplir les bandes depuis un archétype ──────────────────
+    //
+    // Le bouton voisin (« + Initialiser les niveaux ») n'écrit que des zéros :
+    // il crée la structure, pas la créature. Celui-ci calcule des plages
+    // réelles par niveau (rules/monster-archetypes.js) et propose de créer la
+    // capacité d'attaque correspondante — sans elle, un monstre parfaitement
+    // calibré reste un sac de PV qui ne fait rien, ce qui est exactement le
+    // symptôme « il manque des stats aux monstres ».
+    qsAll("[data-action='genFillBands']").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        if (!game.user.isGM) return;
+        const sys = this.document.system ?? {};
+        const levels = uniqSorted(parseLevels(sys.gen?.levelsCsv));
+        if (!levels.length) {
+          ui.notifications?.warn?.("Renseigne d'abord les niveaux possibles (ex : 2,4,6).");
+          return;
+        }
+        const choice = await promptArchetype(levels, this.document);
+        if (!choice) return;
+
+        const bands = foundry.utils.deepClone(sys.gen?.bands ?? {});
+        for (const lvl of levels) bands[String(lvl)] = buildBand(lvl, choice.key);
+        await this.document.update({ "system.gen.bands": bands });
+
+        let created = 0;
+        if (choice.createAbility) {
+          const mid = levels[Math.floor(levels.length / 2)];
+          const existing = new Set(Array.from(this.document.items)
+            .filter(i => i.type === "spell").map(i => String(i.name).toLowerCase()));
+          const toCreate = recommendedAbilities(mid, choice.key)
+            .filter(spec => !existing.has(String(spec.label).toLowerCase()))
+            .map(spec => abilityItemData(spec, { img: this.document.img }));
+          if (toCreate.length) {
+            await this.document.createEmbeddedDocuments("Item", toCreate);
+            created = toCreate.length;
+          }
+        }
+
+        ui.notifications?.info?.(
+          `${getArchetype(choice.key).label} : ${levels.length} niveau(x) calibré(s)` +
+          (created ? `, ${created} capacité(s) créée(s).` : ".")
+        );
+        this.render({ force: true });
       });
     });
 
