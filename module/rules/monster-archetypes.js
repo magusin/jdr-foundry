@@ -79,7 +79,7 @@ export const ARCHETYPES = [
   {
     key: "pietaille", label: "Piétaille", icon: "🐀",
     hint: "figurant : se joue par 4 à 6, tombe en un tour",
-    tkill: 0.6, share: 0.10, attacks: 1, fight: 0.15,
+    tkill: 1, share: 0.06, count: 6, fight: 0.15,
     force: 0.9, int: 0.5, dex: 0.9, acu: 0.8, end: 0.6,
     armPct: 8, resPct: 5, armFixe: 0, resFixe: 0,
     vitesse: 8, fatigue: 8, toucher: -1, regenPct: 0,
@@ -88,7 +88,7 @@ export const ARCHETYPES = [
   {
     key: "soldat", label: "Soldat", icon: "🗡️",
     hint: "l'unité de base d'un combat : 3 à 4 font une rencontre",
-    tkill: 1.2, share: 0.15, attacks: 1, fight: 0.33,
+    tkill: 2, share: 0.14, count: 3, fight: 0.33,
     force: 1.1, int: 0.6, dex: 1.0, acu: 0.9, end: 1.0,
     armPct: 15, resPct: 10, armFixe: 1, resFixe: 0,
     vitesse: 8, fatigue: 10, toucher: 0, regenPct: 0,
@@ -97,7 +97,7 @@ export const ARCHETYPES = [
   {
     key: "brute", label: "Brute", icon: "🪓",
     hint: "lente et blindée : encaisse le groupe pendant que le reste frappe",
-    tkill: 2.2, share: 0.20, attacks: 1, fight: 0.5,
+    tkill: 4, share: 0.32, count: 1, fight: 0.5,
     force: 1.6, int: 0.5, dex: 0.7, acu: 0.6, end: 1.6,
     armPct: 25, resPct: 12, armFixe: 2, resFixe: 0,
     vitesse: 6, fatigue: 14, toucher: 0, regenPct: 2,
@@ -106,7 +106,7 @@ export const ARCHETYPES = [
   {
     key: "rodeur", label: "Rôdeur", icon: "🏹",
     hint: "rapide, difficile à toucher, fragile : tire et décroche",
-    tkill: 1.0, share: 0.18, attacks: 1, fight: 0.4,
+    tkill: 1.5, share: 0.34, count: 2, fight: 0.4,
     force: 0.9, int: 0.7, dex: 1.4, acu: 1.2, end: 0.7,
     armPct: 8, resPct: 8, armFixe: 0, resFixe: 0,
     vitesse: 11, fatigue: 10, toucher: 1, regenPct: 0,
@@ -115,7 +115,7 @@ export const ARCHETYPES = [
   {
     key: "mage", label: "Mage", icon: "✨",
     hint: "frappe fort à distance, s'effondre au contact",
-    tkill: 0.9, share: 0.22, attacks: 1, fight: 0.4,
+    tkill: 1.5, share: 0.35, count: 2, fight: 0.4,
     force: 0.5, int: 1.6, dex: 0.8, acu: 1.4, end: 0.6,
     armPct: 5, resPct: 25, armFixe: 0, resFixe: 1,
     vitesse: 7, fatigue: 10, toucher: 1, regenPct: 0,
@@ -124,7 +124,7 @@ export const ARCHETYPES = [
   {
     key: "elite", label: "Élite", icon: "🛡️",
     hint: "mini-boss : un seul exemplaire fait déjà un vrai combat",
-    tkill: 4, share: 0.26, attacks: 2, fight: 1,
+    tkill: 7, share: 0.19, special: 2, count: 1, fight: 1,
     force: 1.4, int: 1.2, dex: 1.2, acu: 1.2, end: 1.4,
     armPct: 25, resPct: 22, armFixe: 2, resFixe: 1,
     vitesse: 9, fatigue: 16, toucher: 1, regenPct: 2,
@@ -133,7 +133,7 @@ export const ARCHETYPES = [
   {
     key: "boss", label: "Boss", icon: "👑",
     hint: "combat de fin d'arc : vérifie que le groupe peut le blesser",
-    tkill: 6, share: 0.38, attacks: 2, fight: 2.5,
+    tkill: 12, share: 0.14, special: 2, count: 1, fight: 2.5,
     force: 1.8, int: 1.6, dex: 1.3, acu: 1.3, end: 2.0,
     armPct: 32, resPct: 30, armFixe: 3, resFixe: 2,
     vitesse: 9, fatigue: 22, toucher: 2, regenPct: 4,
@@ -251,12 +251,46 @@ export function archetypeProfile(level, key, opts = {}) {
   const atkStat   = isPhys ? stats.dexterite : stats.acuite;
   const tnMonster = Math.min(16, Math.max(6, tnFromRatio((100 + atkStat) / (100 + ref)) - a.toucher));
   const hitM      = hitChanceFor(tnMonster);
-  const landedGoal = a.share * P.pv;                       // par tour, sur UN PJ
-  const perHitLanded = landedGoal / Math.max(0.05, hitM * a.attacks);
+
+  // La RÉGÉNÉRATION du groupe s'ajoute à la menace visée, elle ne s'en
+  // retranche pas : un PJ récupère `P.regenPv` PV à chaque tour (init.js, et
+  // l'équipement fait monter ce chiffre), donc une créature qui inflige juste
+  // cette valeur ne blesse personne — le combat dure indéfiniment sans que
+  // rien ne bouge. C'était le trou le plus coûteux du premier calibrage : à
+  // bas niveau la régen annulait jusqu'à un tiers de la menace d'un monstre.
+  // ...et elle se PARTAGE entre les créatures de la rencontre : la régen est
+  // un seul flux sur le PJ visé, pas un flux par assaillant. La compter
+  // entière sur chacun des six membres d'une bande de piétaille sextuplait la
+  // compensation — vérifié, ça transformait la rencontre la plus anodine du
+  // bestiaire en anéantissement du groupe dès que le MJ annonçait une régen de
+  // 4. D'où `count`, le nombre d'exemplaires auquel l'archétype est censé se
+  // jouer, qui est aussi ce que le guide recommande de poser sur la table.
+  const regenPj    = Math.max(0, n(P.regenPv, 1)) / Math.max(1, a.count);
+  const landedGoal = a.share * P.pv + regenPj;             // par tour, sur UN PJ
+
+  // Une créature ne place qu'UNE capacité normale par tour : le budget
+  // d'action (action-budget.js) donne 2 places mais `sortNormal` est plafonné
+  // à 1. Une seconde capacité ne s'ajoute donc pas à la première, elle la
+  // REMPLACE le tour où elle sort. Avec une recharge 2, elle sort un tour sur
+  // trois : la capacité de base porte 60 % de la menace visée, la spéciale en
+  // porte 200 %, et la moyenne (⅔ × 0,6 + ⅓ × 2) retombe sur ~1. Le partage
+  // est volontairement déséquilibré vers la spéciale : un gros coup qui tombe
+  // un tour sur trois se joue (on le voit venir, on se protège, on écourte le
+  // combat), là où la même menace étalée à l'identique tous les tours n'est
+  // qu'une soustraction.
+  // Le premier calibrage divisait naïvement la menace par « deux attaques par
+  // tour » qui n'existaient pas : les élites et les boss délivraient la moitié
+  // de ce qui était annoncé.
+  const baseFactor = a.special ? 0.6 : 1;
+  const perHitLanded = (landedGoal * baseFactor) / Math.max(0.05, hitM);
   const rawNeeded  = perHitLanded / Math.max(0.3, 1 - P.reductionPct / 100);
   const scaleStat  = isPhys ? stats.force : stats.intelligence;
   const statBonus  = Math.floor(scaleStat / 10);           // per 10 / perStep 1
   const dmg        = diceForAverage(rawNeeded - statBonus);
+  const specialDmg = a.special
+    ? diceForAverage((landedGoal * 2) / Math.max(0.05, hitM)
+        / Math.max(0.3, 1 - P.reductionPct / 100) - statBonus)
+    : null;
 
   // ── 5. Reste ─────────────────────────────────────────────────────────
   const regenPv = Math.max(0, Math.round((pvTotal * a.regenPct) / 100));
@@ -284,7 +318,11 @@ export function archetypeProfile(level, key, opts = {}) {
       pctPvPj: Math.round(a.share * 100),
       dice: dmg.dice, flat: dmg.flat, moyenne: Math.round((dmg.average + statBonus) * 10) / 10,
       statBonus, scaleStat: isPhys ? "force" : "intelligence",
-      attaques: a.attacks
+      regenPj,
+      special: specialDmg
+        ? { dice: specialDmg.dice, flat: specialDmg.flat, cooldown: a.special,
+            moyenne: Math.round((specialDmg.average + statBonus) * 10) / 10 }
+        : null
     }
   };
 }
@@ -354,16 +392,16 @@ export function recommendedAbilities(level, key, opts = {}) {
     note: `≈ ${p.menace.moyenne} de dégâts bruts, ${p.menace.pctPvPj} % des PV d'un PJ par tour`
   };
   const out = [base];
-  if (a.attacks >= 2) {
-    const big = diceForAverage((3.5 * parseInt(p.menace.dice, 10) + p.menace.flat) * 2);
+  const sp = p.menace.special;
+  if (sp) {
     out.push({
       ...base,
       label: a.key === "boss" ? "Déchaînement" : "Coup puissant",
-      dice: big.dice, flat: big.flat,
+      dice: sp.dice, flat: sp.flat,
       cibles: a.key === "boss" ? 2 : 1,
-      cooldown: 2,
+      cooldown: sp.cooldown,
       fatigueCost: 2,
-      note: `recharge 2 : disponible un tour sur deux, ≈ ${big.average + p.menace.statBonus} bruts`
+      note: `recharge ${sp.cooldown} : sort un tour sur ${sp.cooldown + 1} À LA PLACE de l'attaque de base, ≈ ${sp.moyenne} bruts`
     });
   }
   return out;

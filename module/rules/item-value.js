@@ -1446,9 +1446,11 @@ export function partyRefFor(level = 1) {
   // `game` n'existe pas, on retombe sur les valeurs de départ.
   let size = 3;
   let dmg = 7;      // deux armes 1d6 : dé principal + dé de seconde main
+  let regen = 1;    // regeneration.pv d'un personnage neuf (init.js)
   try {
     size = n(game.settings.get("rpg", "peseeGroupeTaille"), 3);
     dmg = n(game.settings.get("rpg", "peseeDegatsAttaque"), 7);
+    regen = n(game.settings.get("rpg", "peseeRegenGroupe"), 1);
   } catch (e) { /* hors Foundry, ou réglages pas encore enregistrés */ }
 
   return {
@@ -1476,7 +1478,13 @@ export function partyRefFor(level = 1) {
     // rattraper le groupe, ce qui n'a de sens que comparé à sa vraie valeur :
     // le seuil était écrit en dur (« plus rapide qu'un PJ de départ (3 m) »)
     // et serait devenu faux le jour où la base bouge — c'est arrivé.
-    vitesse: BASE_VITESSE
+    vitesse: BASE_VITESSE,
+    // PV regagnés par tour de combat. Ni la pesée d'objet ni celle de sort ne
+    // s'en servent : c'est le calibrage des monstres qui en a besoin, et il
+    // doit lire la MÊME référence que tout le reste plutôt que sa propre
+    // constante. Un monstre dont les dégâts par tour ne dépassent pas cette
+    // valeur ne fait rien du tout, quel que soit le nombre de tours.
+    regenPv: Math.max(0, regen)
   };
 }
 

@@ -202,6 +202,33 @@ reste (PV, scores, dés de la capacité, XP) en découle.
   les trois niveaux, ce qui réduit les dégâts encaissés par coup et donc les PV nécessaires
   pour tenir `tkill` tours. Juste mathématiquement, illisible à la table — un monstre de
   niveau 5 avec moins de PV que celui de niveau 3 se lit comme un bug.
+- **Trois choses que le premier calibrage ratait, et qui allaient toutes dans le même
+  sens — des monstres qui ne font pas de dégâts** (rapporté tel quel, vérifié par
+  simulation de combat avant/après) : (1) la **régénération** du groupe (`regeneration.pv`,
+  1 par tour à la création, davantage avec l'équipement) n'était pas déduite, alors qu'elle
+  annulait jusqu'à un tiers de la menace d'une créature à bas niveau — elle est maintenant
+  ajoutée à la menace visée, et **partagée par le nombre d'exemplaires** de l'archétype
+  (`count`), la régen étant un flux unique sur le PJ visé et non un flux par assaillant :
+  la compter entière sur chacune des six piétailles transformait la rencontre la plus
+  anodine du bestiaire en anéantissement du groupe ; (2) une créature était supposée placer
+  **deux attaques par tour**, ce que le budget d'action interdit (`slotsTotal.max` vaut 2
+  mais `sortNormal` est plafonné à 1) — élites et boss délivraient donc la moitié de la
+  menace annoncée ; (3) `tkill` était calibré sur des combats de 1 à 4 tours, là où la table
+  veut des combats **longs et tactiques**.
+- **La seconde capacité REMPLACE la première, elle ne s'y ajoute pas.** Une capacité à
+  recharge 2 sort un tour sur trois *à la place* de l'attaque de base. D'où le partage
+  60 % / 200 % (moyenne ⅔ × 0,6 + ⅓ × 2 ≈ 1) : volontairement déséquilibré vers la
+  spéciale, parce qu'un gros coup qu'on voit venir se joue — on se protège, on écourte le
+  combat — là où la même menace lissée sur tous les tours n'est qu'une soustraction. Une
+  élite enlève ainsi jusqu'à 83 % des PV d'un PJ en un coup.
+- **Les valeurs de `share` sont RÉSOLUES sur simulation, pas choisies.** Le coût visé est
+  celui d'une rencontre entière (40 à 60 % des PV du groupe, 80 % pour un boss), et le
+  `share` par créature en est déduit par recherche dichotomique — un modèle analytique
+  linéaire se trompe de 15 % près du seuil de mort, et la spirale (un PJ à terre = un tiers
+  de dégâts du groupe en moins = combat plus long = plus de dégâts subis) amplifie
+  n'importe quelle erreur. Conséquence connue : un boss au **niveau 1-2 reste à la limite
+  du TPK** (96 % des PV du groupe), les PV y étant trop petits pour absorber l'arrondi des
+  dés ; le guide dit d'y jouer une élite.
 - **La capacité est le vrai livrable, pas la bande.** Un monstre n'a pas d'armes dans ce
   système (ses attaques *sont* ses items `spell`, cf. `ACTION_EXCLUDED_TYPES`), donc une
   bande parfaitement calibrée sans capacité écrite reste un sac de PV qui ne fait rien.

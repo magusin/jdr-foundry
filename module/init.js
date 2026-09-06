@@ -555,6 +555,20 @@ Hooks.once("ready", () => {
     default: 7, requiresReload: false
   });
 
+  // Régénération de PV d'un PJ par tour de combat. Le défaut 1 est celui posé
+  // à la création d'un personnage (`regeneration.pv`), mais l'équipement et
+  // les passifs la font monter — et c'est le nombre le plus structurant du
+  // calibrage des monstres : une créature qui n'inflige pas plus que la régen
+  // du groupe ne le blessera JAMAIS, quel que soit le nombre de tours. Le
+  // calibrage par archétype (rules/monster-archetypes.js) le déduit de la
+  // menace visée pour cette raison.
+  game.settings.register("rpg", "peseeRegenGroupe", {
+    name: "Pesée — régénération d'un PJ par tour",
+    hint: "PV qu'un personnage récupère à chaque tour de combat, équipement et passifs compris. Le calibrage des monstres l'ajoute aux dégâts qu'une créature doit infliger : sans ça, une créature calibrée sur le papier ne blesse personne. Purement indicatif : n'affecte aucune règle.",
+    scope: "world", config: true, type: Number,
+    default: 1, requiresReload: false
+  });
+
   // Combien de capacités un monstre sort réellement dans un tour. Sans ce
   // plafond, la pesée notait la menace sur la SEULE meilleure attaque, ce qui
   // sous-estimait tout monstre à deux bonnes capacités — et, à l'inverse,
