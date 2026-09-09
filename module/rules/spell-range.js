@@ -21,7 +21,7 @@ export async function showSpellRange(token, rangeM, spellName = "") {
 
   // Supprime l'éventuel cercle précédent de ce token
   await clearSpellRange(token.id);
-  await _drawCircle(token, rangeM, { spellName });
+  await drawSpellCircle(token, rangeM, { spellName });
 }
 
 /**
@@ -40,7 +40,7 @@ export async function showSpellRange(token, rangeM, spellName = "") {
  * @param {string} [opts.color]                Couleur de remplissage/bordure
  * @param {string} [opts.spellName]            Étiquette, pour le flag
  */
-async function _drawCircle(token, radiusM, { center = null, color = "#9b59b6", spellName = "" } = {}) {
+export async function drawSpellCircle(token, radiusM, { center = null, color = "#9b59b6", spellName = "" } = {}) {
   if (!canvas?.scene || !token || !(radiusM > 0)) return null;
 
   const gs = canvas.scene.grid.size ?? 100;
@@ -114,7 +114,7 @@ export async function showSpellRangeFromItem(token, spellItem) {
   if (rangeM <= 0 && zoneM <= 0) return;
 
   await clearSpellRange(token.id);
-  if (rangeM > 0) await _drawCircle(token, rangeM, { spellName: spellItem.name });
+  if (rangeM > 0) await drawSpellCircle(token, rangeM, { spellName: spellItem.name });
 
   // Le rayon de zone est un SECOND cercle, et il n'est pas centré au même
   // endroit : la portée part du lanceur, la zone se pose sur ce qu'il vise.
@@ -125,7 +125,7 @@ export async function showSpellRangeFromItem(token, spellItem) {
   if (zoneM > 0) {
     const tgt = Array.from(game.user?.targets ?? [])[0] ?? null;
     const center = tgt ? { x: tgt.center.x, y: tgt.center.y } : null;
-    await _drawCircle(token, zoneM, {
+    await drawSpellCircle(token, zoneM, {
       center, color: "#e67e22", spellName: `${spellItem.name} — zone`
     });
   }

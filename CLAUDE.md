@@ -99,6 +99,31 @@ règle qui ne vivait que dans la tête du MJ (rapporté exactement ainsi).
   la zone se pose sur ce qu'il vise) — d'où `_activeRangeTemplates` qui retient désormais
   une LISTE d'ids par token : l'ancienne version effaçait le précédent à chaque appel et
   le second cercle mangeait le premier.
+- **Un rayon se VISE, il ne se coche pas.** `pickZoneTargets` (`rules/spell-zone.js`) attend
+  un clic sur le canevas, prend le point comme centre et désigne tout ce que le cercle
+  couvre. `declareSpell` l'appelle **tout seul** quand un sort à rayon part sans aucune
+  cible désignée — et seulement dans ce cas : une sélection faite à la main est un choix,
+  jamais écrasée. Une annulation (Échap, clic droit) abandonne la déclaration, parce que
+  poser la zone « quelque part » par défaut serait pire que ne rien faire. Rien n'est
+  court-circuité ensuite : les cibles trouvées repassent par le chemin normal (un seuil
+  chacune, le MJ coche qui touche). Les écouteurs sont posés en phase de CAPTURE et
+  l'événement est stoppé, sinon le même clic servirait aussi à Foundry (désélection,
+  rectangle de sélection) pendant qu'on l'utilise pour viser. Le plafond `targetCount.max`
+  s'applique aussi à cette sélection — on garde les plus PROCHES du centre — sinon un rayon
+  généreux le contournerait sans un mot.
+- **`system.zoneTargets` filtre par DISPOSITION de token** (`tous` / `allies` / `ennemis`),
+  jamais par type d'acteur — un PNJ hostile est un `character` comme un joueur, et lire un
+  nom de dossier « PJ »/« PNJ » reclasserait tout le monde au premier renommage. « Ennemis »
+  réutilise `areOpposedDisp` (movement-tracker.js), la définition qui décide déjà des
+  attaques d'opportunité : seul le couple Amical ↔ Hostile est une opposition, donc un token
+  **neutre n'est ni allié ni ennemi** et n'est attrapé que par « Tout le monde ». Le filtre
+  vaut aussi pour une sélection manuelle, sinon le champ ne serait qu'une commodité du
+  ciblage automatique : le joueur cocherait son allié lui-même et le sort partirait quand
+  même. Le lanceur est exclu de sa propre zone (son buff passe par `fx.target: self/both`).
+- **Pour une zone, la portée s'applique au CENTRE, pas à chaque cible** : `declareSpell`
+  vérifie les cibles contre `range.max + zoneRadius`. Sans cette marge, un sort « rayon 5 m,
+  portée 30 m » refusait la cible au bord d'une zone posée à 30 m — c'est-à-dire son
+  lancement le plus normal.
 - **La pesée plafonne les cibles par ce qui tient physiquement dans le cercle** : capacité
   `⌊π r² / 3⌋` (≈ 3 m² par créature), soit 1 à 1 m, 4 à 2 m, 9 à 3 m, 26 à 5 m. Elle ne mord
   donc que sur les rayons vraiment serrés — au-delà c'est `targetCount.max` qui limite, et

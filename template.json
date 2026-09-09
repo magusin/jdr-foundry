@@ -369,6 +369,7 @@
         "max": 1
       },
       "zoneRadius": 0,
+      "zoneTargets": "tous",
       "fatigueCost": 1,
       "coutMana": 0,
       "difficulte": 0,

@@ -1,5 +1,6 @@
 // systems/rpg/module/rules/spells.js
 import { checkRange, fmtMeters, rangeDistanceMeters } from "../utils/grid.js";
+import { pickZoneTargets, matchesZoneTargets, zoneTargetsLabel } from "./spell-zone.js";
 import { applyResistances } from "./resistances.js";
 import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
@@ -463,6 +464,7 @@ async function ensureSpellDefaults(item) {
 
   // Rayon de zone : 0 = pas une zone (tout l'arsenal écrit avant ce champ).
   if (sys.zoneRadius === undefined) patch["system.zoneRadius"] = 0;
+  if (sys.zoneTargets === undefined) patch["system.zoneTargets"] = "tous";
 
   // targetCount
   if (!sys.targetCount || typeof sys.targetCount !== "object") patch["system.targetCount"] = { min: 1, max: 1 };
@@ -1127,6 +1129,24 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
   // acteur filtré d'un seul côté décalait toutes les paires suivantes (la
   // cible n°2 recevait le seuil/les résistances de la n°3). On filtre donc
   // les paires, jamais une des deux listes isolément.
+  // ── Zone : viser un point plutôt que cocher chaque token ──────────────
+  // Uniquement quand le joueur n'a désigné personne : une sélection faite à
+  // la main est un choix, elle n'est jamais écrasée. Une annulation abandonne
+  // la déclaration — poser la zone ailleurs « par défaut » serait pire que ne
+  // rien faire. Rien n'est court-circuité ensuite : les cibles trouvées
+  // repassent par le chemin normal (un seuil chacune, le MJ coche qui touche).
+  const zoneRadiusDecl = n(sys.zoneRadius, 0);
+  if (zoneRadiusDecl > 0 && !targetToken && casterT && game.user.targets.size === 0) {
+    const picked = await pickZoneTargets(casterT, item, { casterToken: casterT });
+    if (picked?.cancelled) return { ok: false, reason: "Zone annulée" };
+    if (picked?.ok && picked.dropped > 0) {
+      ui.notifications?.warn?.(
+        `${picked.tokens.length} cible(s) retenue(s) — ${picked.dropped} de plus dans le rayon, ` +
+        `au-delà du maximum du sort.`
+      );
+    }
+  }
+
   const targetPairs = (targetToken ? [targetToken] : Array.from(game.user.targets))
     .map(t => ({ token: t, actor: t?.actor ?? null }))
     .filter(p => p.actor);
@@ -1152,10 +1172,31 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
     }
   }
 
+  // ── Zone : le mode de ciblage vaut aussi pour une sélection manuelle ──
+  // Sans ça, « Ennemis seulement » ne serait qu'une commodité du ciblage
+  // automatique : le joueur contournerait le champ en cochant lui-même son
+  // allié, et le sort partirait quand même.
+  const zoneMode = String(sys.zoneTargets ?? "tous");
+  if (zoneRadiusDecl > 0 && zoneMode !== "tous" && casterT && targetTokens.length) {
+    const bad = targetTokens.find(tT => !matchesZoneTargets(casterT, tT, zoneMode));
+    if (bad) {
+      return {
+        ok: false,
+        reason: `${bad.actor?.name ?? bad.name} n'est pas une cible valide : ` +
+                `ce sort vise « ${zoneTargetsLabel(zoneMode)} »`
+      };
+    }
+  }
+
   // ── Portée : vérifie TOUTES les cibles ────────────────────────────────
   if (casterT && targetTokens.length) {
     const rmin = n(sys.range?.min, 0);
-    const rmax = n(sys.range?.max, 0);
+    // Pour une ZONE, la portée s'applique au centre du cercle, pas à chaque
+    // cible : le bord de la zone se trouve légitimement `zoneRadius` mètres
+    // plus loin que le point visé. Sans cette marge, un sort « rayon 5 m,
+    // portée 30 m » refusait la cible située au bord d'une zone posée à
+    // 30 m — c'est-à-dire exactement le lancement le plus normal du sort.
+    const rmax = n(sys.range?.max, 0) + Math.max(0, zoneRadiusDecl);
     for (const tT of targetTokens) {
       const r = checkRange(casterT, tT, rmin, rmax);
       if (!r.ok) {
