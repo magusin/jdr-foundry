@@ -7,6 +7,7 @@ import {
   DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
+import { ZONE_TARGETS, zoneTargetsLabel } from "../rules/spell-zone.js";
 import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN } from "../rules/attack-bonus.js";
 import { effectCatalogByTag, getEffectDef, EFFECT_TAGS, normalizeEffectTag } from "../rules/effect-library.js";
 import { modIsScaled } from "../rules/effect-tick.js";
@@ -442,7 +443,8 @@ const PASSIF_NEUTRAL_FIELDS = {
   "system.moveSelf": 0,
   "system.fatigueCost": 0,
   "system.targetCount.min": 0,
-  "system.targetCount.max": 1
+  "system.targetCount.max": 1,
+  "system.zoneRadius": 0
 };
 
 export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -635,6 +637,9 @@ static PARTS = foundry.utils.mergeObject(
       const tmin = n(ctx.system.targetCount?.min, 0), tmax = n(ctx.system.targetCount?.max, 0);
       if (tmax > 0) ctx.playerInfo.push({ icon: "👥", label: "Cibles",
         value: tmin === tmax ? `${tmax}` : `${tmin} – ${tmax}` });
+      const zoneR = n(ctx.system.zoneRadius, 0);
+      if (zoneR > 0) ctx.playerInfo.push({ icon: "⭕", label: "Zone",
+        value: `rayon ${zoneR} m · ${zoneTargetsLabel(ctx.system.zoneTargets)}` });
       add("🎲", "Difficulté", n(ctx.system.difficulte, 0), " au seuil");
       const moveSelf = n(ctx.system.moveSelf, 0);
       if (moveSelf > 0) ctx.playerInfo.push({ icon: "🏃", label: "Charge",
@@ -695,6 +700,15 @@ static PARTS = foundry.utils.mergeObject(
     ctx.system.range = ctx.system.range ?? { min: 0, max: 0 };
     // Déplacement du lanceur (charge) — voir rules/spell-move.js.
     ctx.system.moveSelf = Math.max(0, n(ctx.system.moveSelf, 0));
+    // Rayon de zone — voir checkZoneSpread() dans rules/spells.js. 0 = le sort
+    // n'est pas une zone, ce qui est le cas de tout sort écrit avant ce champ.
+    ctx.system.zoneRadius = Math.max(0, n(ctx.system.zoneRadius, 0));
+    // Qui la zone touche (disposition des tokens) — voir rules/spell-zone.js.
+    ctx.system.zoneTargets = String(ctx.system.zoneTargets ?? "tous");
+    ctx.zoneTargetChoices = Object.entries(ZONE_TARGETS).map(([key, label]) => ({
+      key, label, selected: key === ctx.system.zoneTargets
+    }));
+    ctx.zoneTargetsLabel = zoneTargetsLabel(ctx.system.zoneTargets);
     ctx.system.cooldown = ctx.system.cooldown ?? { max: 0, restant: 0 };
 
     // Du bloc hérité `system.aura` il ne reste que `active`, marqueur

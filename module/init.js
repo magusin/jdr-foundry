@@ -56,6 +56,7 @@ import {
 } from "./rules/zone-effects.js";
 import { MOVEMENT_TYPES, getActiveMovementTypes, isImmuneToTerrain, getEffectiveSpeedMult, getMovementTypeLabel } from "./rules/movement-types.js";
 import { showSpellRange, showSpellRangeFromItem, clearSpellRange } from "./rules/spell-range.js";
+import { pickZoneTargets, tokensInZone, pickCanvasPoint, matchesZoneTargets, ZONE_TARGETS } from "./rules/spell-zone.js";
 import { installGlobalErrorHandler } from "./utils/error-handler.js";
 import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getInventoryQty } from "./rules/forge.js";
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
@@ -722,6 +723,10 @@ Hooks.once("ready", () => {
   };
   // API portée de sort visuelle
   game.rpg.spellRange = { showSpellRange, showSpellRangeFromItem, clearSpellRange };
+  // Ciblage d'une zone par un point cliqué (rules/spell-zone.js) : declareSpell
+  // s'en sert tout seul quand un sort à rayon part sans cible désignée, mais
+  // une macro doit pouvoir l'appeler — elles ne peuvent pas importer.
+  game.rpg.spellZone = { pickZoneTargets, tokensInZone, pickCanvasPoint, matchesZoneTargets, ZONE_TARGETS };
   // Rendre getTerrainAt accessible globalement pour les macros
   globalThis.getTerrainAt = _terrainModule.getTerrainAt;
 

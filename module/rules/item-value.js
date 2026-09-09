@@ -964,7 +964,8 @@ const SPEED_LABELS = { normal: "Normal", rapide: "Rapide", passif: "Passif" };
  * @returns {{perUse:number, perTurn:number, total:number, rows:Array, tier:object,
  *            warnings:Array, hit:object, damagePerUse:number, focusPerUse:number,
  *            healSelfPerUse:number, manaCost:number, fatigueCost:number,
- *            cooldown:number, usesPerTurn:number, targets:number, partyRef:object}}
+ *            cooldown:number, usesPerTurn:number, targets:number, zoneRadius:number,
+ *            partyRef:object}}
  */
 export function computeSpellValue(item, opts = {}) {
   const sys = item?.system ?? {};
@@ -1001,7 +1002,21 @@ export function computeSpellValue(item, opts = {}) {
   // Un `targetCount.max` resté à 3 d'une version antérieure du sort aurait
   // sinon triplé le poids de chacun de ses effets, sans que rien ne le montre
   // — la fiche ne propose même plus le champ en passif.
-  const targets = isPassif ? 1 : Math.max(1, n(sys.targetCount?.max, 1));
+  const declaredTargets = isPassif ? 1 : Math.max(1, n(sys.targetCount?.max, 1));
+  // Un rayon de zone PLAFONNE le nombre de cibles réellement atteignables :
+  // la pesée multipliait par `targetCount.max` sans jamais demander si ces
+  // cibles pouvaient tenir ensemble quelque part, si bien qu'« 8 cibles dans
+  // un rayon de 1 m » pesait autant qu'« 8 cibles n'importe où sur la carte ».
+  // La capacité est l'aire du cercle divisée par ~3 m² par créature (une base
+  // d'un mètre et l'espace pour se tenir debout à côté) : 1 m → 1, 2 m → 4,
+  // 3 m → 9, 5 m → 26. Elle ne mord donc que sur les rayons vraiment serrés,
+  // ce qui est l'intention — au-delà, c'est `targetCount.max` qui limite, et
+  // c'est très bien. Rayon 0 (tout l'arsenal existant) ne plafonne rien.
+  const zoneRadius = isPassif ? 0 : Math.max(0, n(sys.zoneRadius, 0));
+  const zoneCapacity = zoneRadius > 0
+    ? Math.max(1, Math.round((Math.PI * zoneRadius * zoneRadius) / 3))
+    : Infinity;
+  const targets = Math.min(declaredTargets, zoneCapacity);
   const cdMax = Math.max(0, n(sys.cooldown?.max, 0));
 
   // ── Dégâts ────────────────────────────────────────────────────────────
@@ -1368,6 +1383,14 @@ export function computeSpellValue(item, opts = {}) {
   if (!lines.length && !(sys.restores ?? []).length && !(sys.effectsUI ?? []).length) {
     warnings.push("Ce sort ne fait rien de mesurable : ni dégâts, ni récupération, ni effet. Vérifie qu'une ligne de dégâts est bien renseignée.");
   }
+  if (zoneRadius > 0 && targets < declaredTargets) {
+    warnings.push(
+      `Rayon de ${zoneRadius} m : au plus ${targets} créature(s) peuvent y tenir, ` +
+      `alors que le sort en autorise ${declaredTargets}. Pesé sur ${targets} — ` +
+      `monte le rayon, ou baisse le nombre de cibles.`
+    );
+  }
+
   if (targets > 1 && rawNormal > 0 && cdMax === 0) {
     warnings.push(
       `${targets} cibles sans aucune recharge : la puissance est multipliée par ${targets} à chaque tour. ` +
@@ -1398,7 +1421,7 @@ export function computeSpellValue(item, opts = {}) {
     focusPerUse: round1(focusDamage),
     tickDamagePerUse: round1(tickDamagePerUse),
     healSelfPerUse: round1(healSelf),
-    manaCost, fatigueCost, cooldown: cdMax, usesPerTurn, targets,
+    manaCost, fatigueCost, cooldown: cdMax, usesPerTurn, targets, zoneRadius,
     speed, isSupport, partyRef: PARTY
   };
 }
@@ -1669,7 +1692,11 @@ function evaluateMonsterAbility(sp, profile, PARTY) {
     toucherMagique: profile.toucherMagique
   });
   const cdMax = Math.max(0, n(s.cooldown?.max, 0));
-  const targets = Math.max(1, n(s.targetCount?.max, 1));
+  // Le nombre de cibles vient de computeSpellValue, pas d'une seconde lecture
+  // de `targetCount.max` : depuis qu'un rayon de zone peut le plafonner, en
+  // relire la valeur brute ici ferait diverger la division (focus) de la
+  // multiplication (menace) sur la même capacité.
+  const targets = Math.max(1, n(value.targets, n(s.targetCount?.max, 1)));
 
   return {
     name: sp?.name ?? "Capacité",
