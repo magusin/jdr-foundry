@@ -145,6 +145,12 @@
           {{#if canEdit}}<input type="number" name="system.targetCount.max" value="{{system.targetCount.max}}" min="0" style="width:100%"/>
           {{else}}<div><b>{{system.targetCount.max}}</b></div>{{/if}}
         </div>
+
+        <div>
+          <label title="Rayon de la ZONE touchée, à ne pas confondre avec la portée ci-dessus : la portée dit jusqu'où le lanceur peut viser, le rayon dit ce que le sort couvre une fois lancé. Au-delà, la déclaration est refusée — deux cibles séparées de plus de deux fois ce rayon ne peuvent pas tenir dans le même cercle. 0 = le sort n'est pas une zone (aucune vérification).">Rayon de zone (m)</label>
+          {{#if canEdit}}<input type="number" name="system.zoneRadius" value="{{system.zoneRadius}}" min="0" step="0.5" style="width:100%"/>
+          {{else}}<div><b>{{system.zoneRadius}}</b></div>{{/if}}
+        </div>
         {{/unless}}
 
         <div>

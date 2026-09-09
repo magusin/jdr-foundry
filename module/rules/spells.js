@@ -1,5 +1,5 @@
 // systems/rpg/module/rules/spells.js
-import { checkRange, fmtMeters } from "../utils/grid.js";
+import { checkRange, fmtMeters, rangeDistanceMeters } from "../utils/grid.js";
 import { applyResistances } from "./resistances.js";
 import { resistanceFor, fxResistTextParts } from "./damage-types.js";
 import { computeTN } from "./combat.js";
@@ -460,6 +460,9 @@ async function ensureSpellDefaults(item) {
     if (sys.range.min === undefined) patch["system.range.min"] = 0;
     if (sys.range.max === undefined) patch["system.range.max"] = 6;
   }
+
+  // Rayon de zone : 0 = pas une zone (tout l'arsenal écrit avant ce champ).
+  if (sys.zoneRadius === undefined) patch["system.zoneRadius"] = 0;
 
   // targetCount
   if (!sys.targetCount || typeof sys.targetCount !== "object") patch["system.targetCount"] = { min: 1, max: 1 };
@@ -1060,6 +1063,47 @@ async function upsertState(actor, state) {
  *
  * Compatible PJ + monstre (tous sont Actor)
  */
+/**
+ * Les cibles visées tiennent-elles dans un cercle de `radius` mètres ?
+ *
+ * `system.range.max` dit jusqu'où le lanceur peut VISER, `system.zoneRadius`
+ * dit ce que le sort COUVRE une fois lancé — et rien ne reliait les deux :
+ * un piège de ronces « rayon 5 m, portée 30 m » laissait cibler six créatures
+ * dispersées sur toute la carte, parce que la seule vérification existante
+ * était lanceur → chaque cible. Le rayon n'était une règle que dans la tête
+ * du MJ.
+ *
+ * Le test porte sur le DIAMÈTRE du groupe (distance maximale entre deux
+ * cibles ≤ 2 × rayon), pas sur le plus petit cercle qui les contient. C'est
+ * volontairement PERMISSIF : par le théorème de Jung, un ensemble de diamètre
+ * d tient dans un cercle de rayon d/√3 ≈ 0,58 d, donc certaines configurations
+ * acceptées ici ne tiendraient pas tout à fait dans le cercle. Refuser un
+ * lancement légitime coûte bien plus cher à la table qu'en laisser passer un
+ * limite — et le MJ garde le dernier mot cible par cible au moment de
+ * valider. Un rayon nul (le défaut, et tout l'arsenal existant) ne teste rien.
+ *
+ * La mesure est celle de tout le reste du système : bord à bord, en mètres
+ * (`rangeDistanceMeters`), donc deux grosses créatures comptent comme proches
+ * dès que leurs corps le sont.
+ */
+export function checkZoneSpread(tokens, radius) {
+  const r = Math.max(0, Number(radius) || 0);
+  const list = (tokens ?? []).filter(Boolean);
+  if (r <= 0 || list.length < 2) return { ok: true, dist: 0, maxSpread: 2 * r };
+
+  const maxSpread = 2 * r;
+  let worst = null;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const d = rangeDistanceMeters(list[i], list[j]);
+      if (!Number.isFinite(d)) continue;
+      if (!worst || d > worst.dist) worst = { a: list[i], b: list[j], dist: d };
+    }
+  }
+  if (worst && worst.dist > maxSpread) return { ok: false, ...worst, maxSpread };
+  return { ok: true, dist: worst?.dist ?? 0, maxSpread };
+}
+
 export async function declareSpell(actor, item, { casterToken = null, targetToken = null, actionId = null } = {}) {
   if (!actor || !item) return { ok: false, reason: "Missing actor/item" };
   if (item.type !== "spell") return { ok: false, reason: "Not a spell" };
@@ -1118,6 +1162,22 @@ export async function declareSpell(actor, item, { casterToken = null, targetToke
         const why = r.tooClose ? "trop près" : "hors portée";
         return { ok: false, reason: `${tT.actor?.name ?? tT.name} ${why} (${fmtMeters(r.dist)}, ${rmin}–${rmax} m)` };
       }
+    }
+  }
+
+  // ── Zone : les cibles doivent tenir dans le rayon du sort ─────────────
+  // Distinct de la portée ci-dessus, qui ne mesure que lanceur → cible.
+  const zoneR = n(sys.zoneRadius, 0);
+  if (zoneR > 0 && targetTokens.length > 1) {
+    const z = checkZoneSpread(targetTokens, zoneR);
+    if (!z.ok) {
+      const na = z.a?.actor?.name ?? z.a?.name ?? "une cible";
+      const nb = z.b?.actor?.name ?? z.b?.name ?? "une autre";
+      return {
+        ok: false,
+        reason: `Zone de ${zoneR} m : ${na} et ${nb} sont à ${fmtMeters(z.dist)} l'un de l'autre, ` +
+                `au-delà des ${fmtMeters(z.maxSpread)} qu'un cercle de ${zoneR} m peut couvrir`
+      };
     }
   }
 

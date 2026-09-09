@@ -73,6 +73,40 @@ For both spells (`rules/spells.js`) and weapon attacks (`rules/attack-declare.js
 - **Weapon attacks are single-target**, and deliberately so: `attack-declare.js` stores one `targetUuid`. None of the above applies to them.
 - **Chat visibility** (`rules/chat-visibility.js`): `.rpg-gm-only` spans are stripped from the DOM for non-GMs, `.rpg-hp-secret` spans are stripped unless the viewer owns the referenced actor **or** the referenced actor is a monster with `system.pvReveal === "exact"` (`pct` only unlocks the rounded percentage on the monster sheet itself, per `monster-sheet-v2.js` — chat lines are always exact numbers, so `pct` alone must not unlock them). Both hooks run in `renderChatMessageHTML`. Anything revealing a verdict before GM validation, or an enemy's exact HP/mana/fatigue, must go through one of these wrappers (`gmOnly()` / `hpSecret()`), not be written to raw chat content — this is easy to miss on ambient messages that don't look like "combat" (turn-start DOT ticks in `turn-effects.js`, the per-turn regen message in `init.js`'s `updateCombat` hook), not just the attack/spell resolution flow.
 
+### `zoneRadius` : la portée dit jusqu'où on vise, le rayon dit ce qu'on couvre
+
+`system.range.max` et `system.zoneRadius` répondent à deux questions différentes, et
+seule la première était vérifiée : `declareSpell` ne testait que lanceur → chaque cible.
+Un sort « rayon 5 m, portée 30 m » laissait donc cibler six créatures dispersées sur toute
+la carte et partait sans broncher — le rayon n'existait dans aucune donnée, c'était une
+règle qui ne vivait que dans la tête du MJ (rapporté exactement ainsi).
+
+- **Le test porte sur le DIAMÈTRE du groupe**, pas sur le plus petit cercle qui le contient :
+  `checkZoneSpread` (`spells.js`) refuse dès que deux cibles sont à plus de `2 × rayon`
+  l'une de l'autre, mesuré **bord à bord** comme tout le reste (`rangeDistanceMeters`).
+  C'est volontairement permissif — par le théorème de Jung un ensemble de diamètre `d` tient
+  dans un cercle de rayon `d/√3 ≈ 0,58 d`, donc certaines configurations acceptées ici ne
+  rentreraient pas tout à fait. Refuser un lancement légitime coûte plus cher à la table
+  qu'en laisser passer un limite, et le MJ garde de toute façon le dernier mot cible par
+  cible au moment de valider.
+- **Rayon 0 = pas une zone**, aucune vérification : c'est l'état de tout l'arsenal écrit
+  avant le champ, et rien ne change pour lui. Le champ est aussi dans
+  `PASSIF_NEUTRAL_FIELDS` (un passif ne vise personne).
+- **Le cercle d'aide en dessine DEUX**, et c'est ce qui rendait le champ nécessaire côté
+  interface : `showSpellRangeFromItem` n'affichait que `range.max`, soit précisément le
+  rayon que le joueur ne doit pas croire toucher. La zone est un second cercle, orange,
+  **centré sur la première cible désignée** quand il y en a une (la portée part du lanceur,
+  la zone se pose sur ce qu'il vise) — d'où `_activeRangeTemplates` qui retient désormais
+  une LISTE d'ids par token : l'ancienne version effaçait le précédent à chaque appel et
+  le second cercle mangeait le premier.
+- **La pesée plafonne les cibles par ce qui tient physiquement dans le cercle** : capacité
+  `⌊π r² / 3⌋` (≈ 3 m² par créature), soit 1 à 1 m, 4 à 2 m, 9 à 3 m, 26 à 5 m. Elle ne mord
+  donc que sur les rayons vraiment serrés — au-delà c'est `targetCount.max` qui limite, et
+  c'est très bien. `computeSpellValue` renvoie ce `targets` plafonné, et
+  `evaluateMonsterAbility` le **relit depuis ce retour** plutôt que de refaire sa propre
+  lecture de `targetCount.max` : la division (focus, dégâts sur un seul PJ) et la
+  multiplication (menace, dégâts sur le groupe) doivent porter sur le même nombre.
+
 ### A state can add damage to its bearer's attacks — `rules/attack-bonus.js`
 
 « Lames aiguisées », « Arme enflammée », « Poignards équilibrés » : a spell effect (section 8 of the spell sheet, stored flat as `fx.atk*` and normalized into `state.attackBonus` by `spells.js`) adds damage to **every** attack its bearer makes while it lasts — not to the next one only, which the table judged too punitive. Three cumulative forms (flat, dice, % of the raw hit) and three filters (scope `arme`/`sort`/`toutes`, weapon `categories`, and the added damage's own `livraison`/`tag`).
