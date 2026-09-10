@@ -365,12 +365,39 @@ export function defaultActionKey(item) {
   return item?.getFlag?.(FLAG_SCOPE, ACTION_KEY_FLAG) ?? null;
 }
 
+/**
+ * Rend un slot d'attaque réservé mais jamais déclaré (declareAttack a refusé).
+ * Silencieux : un joueur n'a pas le droit d'écrire sur le document Combat,
+ * exactement comme pour la réservation.
+ */
+async function releaseAttackSlot(actionId) {
+  try {
+    const { findLogEntry, getBudget, saveBudget, releaseSlot, updateLogEntry } =
+      await import("./action-budget.js");
+    const combat = game.combat;
+    if (!combat || !actionId) return;
+    const found = findLogEntry(combat, actionId);
+    if (!found) return;
+    const budget = getBudget(combat, found.combatantId);
+    await saveBudget(combat, found.combatantId,
+      releaseSlot(budget, found.entry.slot ?? "attaque", false));
+    await updateLogEntry(combat, actionId, { status: "rejected" });
+  } catch (e) {
+    console.warn("[RPG] libération du slot d'attaque :", e);
+  }
+}
+
 /** Le combattant correspondant à cet acteur dans le combat en cours. */
 function combatantFor(actor, combat = game.combat) {
   if (!combat || !actor) return null;
-  const token = actor.getActiveTokens?.()?.[0] ?? null;
-  return combat.combatants.find(c =>
-    c.actorId === actor.id || (token && c.tokenId === token.id)) ?? null;
+  // Par TOKEN d'abord : deux tokens non liés issus du même prototype
+  // partagent l'`actorId`, et chercher par acteur rendait toujours le premier
+  // — le second dépensait alors le budget de son voisin.
+  const token = canvas?.tokens?.controlled?.find(t => t.actor === actor)
+             ?? actor.getActiveTokens?.()?.[0] ?? null;
+  return (token ? combat.combatants.find(c => c.tokenId === token.id) : null)
+      ?? combat.combatants.find(c => c.actorId === actor.id)
+      ?? null;
 }
 
 /**
@@ -597,8 +624,19 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
     }
 
     const { declareAttack } = await import("./attack-declare.js");
-    await declareAttack(actor, weapon, target.actor,
+    const msg = await declareAttack(actor, weapon, target.actor,
       { title, offhand, difficulte, actionId, targetToken: target, ammo: ammoPick });
+
+    // declareAttack rend `null` quand il refuse (hors de portée, recharge,
+    // munition manquante). Le slot était déjà réservé : il faut le rendre,
+    // sinon un refus coûte l'action sans que rien n'ait été déclaré.
+    if (!msg) {
+      if (actionId) await releaseAttackSlot(actionId);
+      // `cancelled` : declareAttack a déjà dit POURQUOI il refuse (portée,
+      // recharge, munition) — un second avertissement générique par-dessus
+      // n'apprendrait rien.
+      return { handled: true, ok: false, cancelled: true };
+    }
     return { handled: true, ok: true };
   }
 
