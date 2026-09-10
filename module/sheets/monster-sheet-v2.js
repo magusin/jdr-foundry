@@ -5,7 +5,7 @@ import { randomizeMonster } from "../monster-gen.js";
 import { normalizeState, ensureStateDialogCSS, LABELS, decorateStates } from "./character-sheet-v2.js";
 import {
   applyUiTheme, openImageLightbox, restoreScrollPositions, uniqueSheetOptions,
-  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced, bindItemDragOut
 } from "./sheet-helpers.js";
 import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
 import {
@@ -456,6 +456,12 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
 
     // Drag & drop d'item (GM only)
     setupActorItemDrop(this, root);
+
+    // Glisser une capacité vers la barre d'actions. Un monstre n'a pas
+    // d'armes (ses attaques SONT ses items `spell`), donc sans ceci le MJ
+    // n'avait aucun moyen de poser une de ses capacités dans la barre : il
+    // ne lui restait que le menu de combat.
+    bindItemDragOut(root, this.document);
 
     const qsAll = (sel) => Array.from(root.querySelectorAll(sel));
 

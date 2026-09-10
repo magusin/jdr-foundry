@@ -25,7 +25,22 @@
 
   // Helpers budget
   const getCombat       = () => game.combat ?? null;
-  const getCombatant    = (a) => getCombat()?.combatants?.find(c => c.actorId === a?.id) ?? null;
+  // Le combattant se retrouve par TOKEN d'abord, par acteur ensuite. Deux
+  // gobelins posés depuis le même prototype sont des tokens NON LIÉS qui
+  // partagent l'`actorId` : chercher par acteur rendait le premier des deux,
+  // si bien que le second lisait et dépensait le budget d'actions du premier —
+  // ses slots paraissaient déjà consommés avant qu'il ait agi.
+  const getCombatant    = (a) => {
+    const combat = getCombat();
+    if (!combat || !a) return null;
+    const tok = canvas?.tokens?.controlled?.[0] ?? null;
+    const byToken = (tok && tok.actor === a)
+      ? combat.combatants.find(c => c.tokenId === tok.id)
+      : null;
+    return byToken
+        ?? combat.combatants.find(c => c.actorId === a.id)
+        ?? null;
+  };
   const isMyTurn        = (a) => {
     const combat = getCombat();
     if (!combat || !combat.started) return true; // hors combat : pas de restriction
@@ -933,6 +948,23 @@
         const msg = await attackAPI.declareAttack(actor, weapon, targetToken.actor,
           { actionId, attackerToken: token, targetToken, ammo: ammoPick });
 
+        // declareAttack rend `null` quand il REFUSE la déclaration (hors de
+        // portée, arme en recharge, plus de munition). Le slot venait d'être
+        // réservé : sans cette libération il restait « en attente » pour
+        // toujours, et l'action était perdue alors que rien n'a été déclaré.
+        if (!msg) {
+          if (budgetAPI && combat && cbt) {
+            await budgetWrite("libération attaque", async () => {
+              const b = budgetAPI.getBudget(combat, cbt.id);
+              await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.releaseSlot(b, "attaque", false));
+              await budgetAPI.updateLogEntry(combat, actionId, { status: "rejected" });
+            });
+          }
+          rerenderAll();
+          btn.disabled = false;
+          return;
+        }
+
         // Enregistre l'id du message dans le log
         if (budgetAPI && combat && cbt && msg) {
           await budgetWrite("journal attaque", () =>
@@ -988,7 +1020,12 @@
         try {
           const special = await defAPI.runDefaultAction(actor, item, { targetToken });
           if (special?.handled) {
-            if (special.ok === false) notify("warn", special.reason ?? "Action impossible.");
+            // `cancelled` = renoncement (fenêtre fermée) ou refus déjà annoncé
+            // par le moteur : pas de second avertissement.
+            if (special.ok === false) {
+              if (!special.cancelled) notify("warn", special.reason ?? "Action impossible.");
+              rerenderAll();   // le slot a pu être rendu — le widget doit suivre
+            }
             else { rerenderAll(); }
             btn.disabled = false;
             return;

@@ -282,7 +282,7 @@ import { attackBonusText } from "../rules/attack-bonus.js";
 import {
   applyUiTheme, sheetContent, sheetActionButtons, openImageLightbox,
   restoreScrollPositions, uniqueSheetOptions,
-  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced
+  tokenSizeContext, bindTokenSize, applyTokenSizeToPlaced, bindItemDragOut
 } from "./sheet-helpers.js";
 
 export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2) {
@@ -925,34 +925,8 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   _bindItemDragOut(root) {
-    if (!root || root.dataset.rpgItemDrag) return;
-    root.dataset.rpgItemDrag = "1";
-
-    for (const li of root.querySelectorAll("[data-item-id]")) {
-      const item = this.document.items.get(li.dataset.itemId);
-      if (!item) continue;
-      li.setAttribute("draggable", "true");
-      li.classList.add("rpg-draggable");
-      li.title = li.title || "Glisse-moi dans la barre d'actions en bas de l'écran";
-    }
-
-    root.addEventListener("dragstart", (ev) => {
-      const li = ev.target?.closest?.("[data-item-id]");
-      if (!li) return;
-      const item = this.document.items.get(li.dataset.itemId);
-      if (!item) return;
-      try {
-        ev.dataTransfer.setData("text/plain", JSON.stringify({
-          type: "Item",
-          uuid: item.uuid,
-          actorId: this.document.id,
-          itemId: item.id
-        }));
-        ev.dataTransfer.effectAllowed = "copy";
-      } catch (e) {
-        console.warn("[RPG] glisser d'un objet :", e);
-      }
-    });
+    // Implémentation partagée avec la fiche de monstre (sheet-helpers.js).
+    bindItemDragOut(root, this.document);
   }
 
   async _onRender(context, options) {

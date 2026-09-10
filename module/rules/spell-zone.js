@@ -14,7 +14,9 @@
 // un seuil par cible → le MJ coche qui est touché. Rien n'est court-circuité,
 // le MJ garde le dernier mot cible par cible.
 
-import { pointDistanceMeters, tokenHalfExtentMeters } from "../utils/grid.js";
+import {
+  pointDistanceMeters, tokenHalfExtentMeters, gridSizePx, gridDistanceMeters
+} from "../utils/grid.js";
 import { areOpposedDisp } from "./movement-tracker.js";
 import { drawSpellCircle } from "./spell-range.js";
 
@@ -81,6 +83,101 @@ export function tokensInZone(center, radiusM, { casterToken = null, mode = "tous
   return out;
 }
 
+
+// ── Aperçu vivant sous le curseur ─────────────────────────────────────────
+//
+// Le joueur devait cliquer À L'AVEUGLE : le cercle n'était dessiné qu'APRÈS,
+// pour lui montrer ce qu'il venait d'attraper. Un rayon se vise, et viser
+// suppose de voir — d'autant que la couverture dépend du BORD des tokens
+// (tokensInZone), pas de leur centre, donc l'œil seul se trompe sur les
+// grosses créatures et sur les cibles pile à la limite.
+//
+// Tout est dessiné en PIXI, jamais en MeasuredTemplate : un gabarit est un
+// document de la scène, et en créer un à chaque mouvement de souris écrirait
+// dans la base des dizaines de fois par seconde.
+
+let _previewGfx = null;
+
+/** Efface l'aperçu de zone, s'il y en a un. */
+export function clearZonePreview() {
+  try { _previewGfx?.destroy?.({ children: true }); } catch { /* déjà retiré */ }
+  _previewGfx = null;
+}
+
+/**
+ * Dessine le cercle et surligne ce qu'il couvre.
+ *
+ * Le surlignage reprend exactement `tokensInZone` — même mesure bord à bord,
+ * même filtre de disposition, même plafond de cibles — pour que ce qui
+ * s'allume soit ce qui sera réellement désigné au clic. Les cibles écartées
+ * par `targetCount.max` sont dessinées en gris plutôt qu'omises : « la
+ * zone les couvre mais le sort n'en prend pas autant » est une information,
+ * l'absence de tout retour n'en est pas une.
+ *
+ * @returns {Array<Token>} les tokens qui seraient effectivement désignés
+ */
+export function drawZonePreview(center, radiusM, {
+  casterToken = null, mode = "tous", max = 0, label = ""
+} = {}) {
+  clearZonePreview();
+  if (!center || !(radiusM > 0) || !canvas?.ready) return [];
+
+  const found = tokensInZone(center, radiusM, { casterToken, mode });
+  const kept  = (max > 0 && found.length > max) ? found.slice(0, max) : found;
+  const keptIds = new Set(kept.map(k => k.token.id));
+
+  try {
+    const g = new PIXI.Graphics();
+    const perM = gridSizePx() / (gridDistanceMeters() || 1);
+    const rPx  = radiusM * perM;
+
+    g.lineStyle(3, 0xe67e22, 0.95);
+    g.beginFill(0xe67e22, 0.12);
+    g.drawCircle(center.x, center.y, rPx);
+    g.endFill();
+
+    // Croix au centre : sur une grande zone, le bord seul ne dit pas où le
+    // point visé se trouve exactement.
+    g.lineStyle(2, 0xe67e22, 0.9);
+    g.moveTo(center.x - 8, center.y); g.lineTo(center.x + 8, center.y);
+    g.moveTo(center.x, center.y - 8); g.lineTo(center.x, center.y + 8);
+
+    for (const { token } of found) {
+      const inside = keptIds.has(token.id);
+      const marker = new PIXI.Graphics();
+      const pad = 3;
+      marker.lineStyle(3, inside ? 0xffd700 : 0x888888, inside ? 0.95 : 0.6);
+      if (inside) marker.beginFill(0xffd700, 0.10);
+      marker.drawRoundedRect(
+        token.center.x - token.w / 2 - pad, token.center.y - token.h / 2 - pad,
+        token.w + 2 * pad, token.h + 2 * pad, 6
+      );
+      if (inside) marker.endFill();
+      g.addChild(marker);
+    }
+
+    try {
+      const dropped = found.length - kept.length;
+      const txt = `${label ? `${label} — ` : ""}${kept.length} cible${kept.length > 1 ? "s" : ""}`
+                + (dropped > 0 ? ` (+${dropped} hors plafond)` : "");
+      const t = new PIXI.Text(txt, new PIXI.TextStyle({
+        fontFamily: "Signika, sans-serif", fontSize: 16, fontWeight: "700",
+        fill: kept.length ? "#ffd700" : "#dddddd", stroke: "#000000", strokeThickness: 4
+      }));
+      t.anchor.set(0.5, 1);
+      t.position.set(center.x, center.y - rPx - 6);
+      g.addChild(t);
+    } catch { /* étiquette optionnelle */ }
+
+    (canvas.interface ?? canvas.controls ?? canvas.stage).addChild(g);
+    _previewGfx = g;
+  } catch (e) {
+    console.warn("[RPG] aperçu de zone :", e);
+  }
+
+  return kept.map(k => k.token);
+}
+
 /**
  * Attend UN clic du joueur sur le canevas et rend le point visé, en
  * coordonnées de scène.
@@ -93,7 +190,7 @@ export function tokensInZone(center, radiusM, { casterToken = null, mode = "tous
  * de la carte parce que le joueur a changé d'avis serait pire que ne rien
  * faire.
  */
-export function pickCanvasPoint({ hint = "" } = {}) {
+export function pickCanvasPoint({ hint = "", onMove = null } = {}) {
   return new Promise((resolve) => {
     const view = canvas?.app?.view ?? null;
     if (!view) return resolve(null);
@@ -103,6 +200,7 @@ export function pickCanvasPoint({ hint = "" } = {}) {
       if (done) return;
       done = true;
       view.removeEventListener("mousedown", onDown, true);
+      view.removeEventListener("mousemove", onMouseMove, true);
       window.removeEventListener("keydown", onKey, true);
       resolve(pt);
     };
@@ -128,6 +226,23 @@ export function pickCanvasPoint({ hint = "" } = {}) {
       ev.stopPropagation();
       finish(ev.button === 0 ? worldPoint(ev) : null);   // clic droit = annuler
     };
+    // L'aperçu suit la souris. On NE stoppe PAS l'événement ici (contrairement
+    // au clic) : Foundry a besoin des mousemove pour tenir `canvas.mousePosition`
+    // à jour — c'est la source que `worldPoint` lit en priorité, et la couper
+    // ferait viser à côté. Le dessin est calé sur le rafraîchissement de
+    // l'écran : une souris émet bien plus de mousemove que le canevas n'affiche
+    // d'images, et redessiner à chaque événement surligne pour rien.
+    let raf = 0;
+    const onMouseMove = (ev) => {
+      if (!onMove || raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (done) return;
+        const pt = worldPoint(ev);
+        if (pt) { try { onMove(pt); } catch (e) { console.warn("[RPG] aperçu de visée :", e); } }
+      });
+    };
+
     const onKey = (ev) => {
       if (ev.key !== "Escape") return;
       ev.preventDefault();
@@ -136,6 +251,7 @@ export function pickCanvasPoint({ hint = "" } = {}) {
     };
 
     view.addEventListener("mousedown", onDown, true);
+    view.addEventListener("mousemove", onMouseMove, true);
     window.addEventListener("keydown", onKey, true);
     if (hint) ui.notifications?.info?.(hint);
   });
@@ -155,18 +271,38 @@ export async function pickZoneTargets(casterToken, item, opts = {}) {
 
   const mode = String(sys.zoneTargets ?? "tous");
   const label = zoneTargetsLabel(mode).toLowerCase();
-  const center = await pickCanvasPoint({
-    hint: `${item.name} — clique le centre de la zone (rayon ${radius} m, ${label}). Échap ou clic droit pour annuler.`
-  });
-  if (!center) return { ok: false, cancelled: true };
-
-  const found = tokensInZone(center, radius, { casterToken, mode });
 
   // Le plafond de cibles du sort s'applique aussi à une sélection automatique,
   // sinon un rayon généreux contournerait `targetCount.max` sans un mot. On
   // garde les plus PROCHES du centre — c'est ce qu'un joueur qui pose sa zone
-  // à cet endroit-là a voulu toucher.
+  // à cet endroit-là a voulu toucher. Il est lu ICI parce que l'aperçu doit
+  // appliquer exactement la même règle que le clic : montrer quatre cibles
+  // allumées puis n'en désigner que deux serait pire que ne rien montrer.
   const tcMax = Math.max(0, n(sys.targetCount?.max, 0));
+
+  // Premier dessin AVANT le moindre mouvement : sans lui, un joueur dont le
+  // curseur est déjà au bon endroit ne voit rien tant qu'il ne bouge pas.
+  try {
+    const mp = canvas?.mousePosition;
+    if (mp) drawZonePreview(mp, radius, { casterToken, mode, max: tcMax, label: item.name });
+  } catch { /* pas de canevas */ }
+
+  let center = null;
+  try {
+    center = await pickCanvasPoint({
+      hint: `${item.name} — clique le centre de la zone (rayon ${radius} m, ${label}). Échap ou clic droit pour annuler.`,
+      onMove: (pt) => drawZonePreview(pt, radius, {
+        casterToken, mode, max: tcMax, label: item.name
+      })
+    });
+  } finally {
+    // L'aperçu meurt avec la visée, y compris sur annulation ou sur erreur :
+    // un cercle orange oublié sur la carte se lit comme une zone active.
+    clearZonePreview();
+  }
+  if (!center) return { ok: false, cancelled: true };
+
+  const found = tokensInZone(center, radius, { casterToken, mode });
   const kept = (tcMax > 0 && found.length > tcMax) ? found.slice(0, tcMax) : found;
   const dropped = found.length - kept.length;
 

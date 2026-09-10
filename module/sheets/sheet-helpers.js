@@ -431,3 +431,58 @@ export function applyUiTheme(root) {
     el.classList.add(`rpg-theme-${theme}`);
   }
 }
+
+/**
+ * Rend les lignes d'objet d'une fiche d'acteur glissables vers la barre
+ * d'actions (hotbar.js crée alors la macro qui déclenche l'objet).
+ *
+ * Partagé par la fiche de personnage ET la fiche de monstre : seule la
+ * première l'avait, si bien qu'aucune capacité de monstre ne pouvait être
+ * posée dans la barre — le MJ n'avait plus que le menu de combat pour les
+ * lancer. Les deux fiches balisent leurs lignes de la même façon
+ * (`[data-item-id]`), il n'y avait donc rien de spécifique à dupliquer.
+ *
+ * L'écouteur est délégué et posé UNE seule fois par élément de fenêtre
+ * (`dataset.rpgItemDrag`) : `_onRender` est rappelé à chaque rendu alors que
+ * l'élément, lui, survit.
+ *
+ * @param {HTMLElement} root  Élément de la fenêtre
+ * @param {Actor}       actor Acteur propriétaire des objets listés
+ */
+export function bindItemDragOut(root, actor) {
+  if (!root || !actor) return;
+
+  // L'attribut draggable doit être (re)posé à chaque rendu : les lignes sont
+  // recréées, contrairement à l'écouteur délégué.
+  for (const li of root.querySelectorAll("[data-item-id]")) {
+    // Les boutons d'une ligne (Déclarer, 🗑…) reportent le même
+    // `data-item-id` : c'est la LIGNE qu'on rend glissable, pas chacun de ses
+    // boutons, sinon l'infobulle « glisse-moi » s'affiche sur tout.
+    if (li.parentElement?.closest("[data-item-id]")) continue;
+    if (!actor.items?.get?.(li.dataset.itemId)) continue;
+    li.setAttribute("draggable", "true");
+    li.classList.add("rpg-draggable");
+    li.title = li.title || "Glisse-moi dans la barre d'actions en bas de l'écran";
+  }
+
+  if (root.dataset.rpgItemDrag) return;
+  root.dataset.rpgItemDrag = "1";
+
+  root.addEventListener("dragstart", (ev) => {
+    const li = ev.target?.closest?.("[data-item-id]");
+    if (!li) return;
+    const item = actor.items?.get?.(li.dataset.itemId);
+    if (!item) return;
+    try {
+      ev.dataTransfer.setData("text/plain", JSON.stringify({
+        type: "Item",
+        uuid: item.uuid,
+        actorId: actor.id,
+        itemId: item.id
+      }));
+      ev.dataTransfer.effectAllowed = "copy";
+    } catch (e) {
+      console.warn("[RPG] glisser d'un objet :", e);
+    }
+  });
+}

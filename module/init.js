@@ -2239,6 +2239,22 @@ Hooks.once("ready", () => {
     });
   });
 
+  // ---------------------------
+  // Menu Combat : suivre le budget d'actions en direct
+  // ---------------------------
+  // Le budget vit dans les flags du Combat, et le menu ne se redessinait qu'au
+  // CHANGEMENT DE TOUR. Quand le MJ refuse une déclaration (❌ Annuler), le
+  // slot est bien rendu côté données — mais le menu resté ouvert continuait
+  // d'afficher l'action comme consommée et son bouton grisé : à la table, ça
+  // se lit exactement comme « le slot est perdu même quand je refuse ».
+  // Ce hook n'est PAS réservé au MJ : le joueur voit son menu se mettre à jour
+  // quand le MJ tranche.
+  Hooks.on("updateCombat", (combat, changed) => {
+    const rpgFlags = changed?.flags?.rpg;
+    if (!rpgFlags || !("budget" in rpgFlags || "log" in rpgFlags)) return;
+    try { game.rpg?._menuRefresh?.(); } catch { /* menu fermé */ }
+  });
+
   let _lastTurnKey = null;
 
   // ---------------------------
