@@ -142,6 +142,21 @@ export function rangeDistanceMeters(a, b) {
 }
 
 /**
+ * Les deux références désignent-elles le même token ?
+ *
+ * Compare l'objet, puis l'UUID du document : un appelant peut fournir un Token
+ * du canevas là où un autre fournit son document (ou un token virtuel, qui n'a
+ * ni l'un ni l'autre et ne peut donc jamais être « soi-même »).
+ */
+export function isSameToken(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const ua = a.document?.uuid ?? a.uuid ?? null;
+  const ub = b.document?.uuid ?? b.uuid ?? null;
+  return !!ua && ua === ub;
+}
+
+/**
  * La cible est-elle à portée ? Tout est en mètres, bord à bord.
  *
  * Aucune exception, aucun plancher : `max` est la distance maximale entre les
@@ -154,6 +169,18 @@ export function checkRange(caster, target, min = 0, max = 0) {
   const rmin = Math.max(0, Number(min) || 0);
   const rmax = Math.max(0, Number(max) || 0);
   const dist = rangeDistanceMeters(caster, target);
+
+  // ── Se viser soi-même est toujours à portée ───────────────────────────
+  // Un sort de renfort sur soi (« Peau cuirassée ») se déclare en se
+  // désignant comme cible, et sa portée est 0 : c'est ce que le champ veut
+  // dire pour un sort personnel. Le refus ci-dessous (`rmax <= 0`) existe
+  // pour empêcher de le lancer sur le VOISIN, collé donc à 0 m — il ne doit
+  // jamais mordre sur le lanceur lui-même, qui le rendait incastable. Le
+  // seuil minimal ne s'y applique pas non plus : « ne pas tirer à bout
+  // portant » parle d'une autre créature.
+  if (isSameToken(caster, target)) {
+    return { ok: true, dist: 0, min: rmin, max: rmax, tooClose: false, tooFar: false };
+  }
 
   // Portée nulle = aucune allonge : le sort ou l'action ne vise que son
   // lanceur. À ne surtout pas laisser au test ci-dessous : deux tokens
