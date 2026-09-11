@@ -23,7 +23,7 @@
 
 import { listEffects, getEffectDef, EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS } from "../rules/state-builder.js";
-import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "../rules/damage-types.js";
+import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, stateResistanceRows } from "../rules/damage-types.js";
 import { BONUS_SCOPES, WEAPON_CATEGORIES, BONUS_FX_WHEN, normalizeAttackBonus } from "../rules/attack-bonus.js";
 import { MOVEMENT_TYPES } from "../rules/movement-types.js";
 
@@ -191,6 +191,25 @@ export function ensureStateDialogCSS() {
   width: 110px !important;
 }
 
+/* lignes de résistance aux états : une grille, comme la fiche de sort */
+.rpg-state-dialog .rpg-res-row {
+  display: grid !important;
+  grid-template-columns: minmax(0,1.3fr) minmax(0,1.6fr) 70px 70px 40px 26px !important;
+  gap: 8px !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+}
+.rpg-state-dialog .rpg-res-head {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  opacity: .7 !important;
+}
+.rpg-state-dialog .rpg-res-key { display: flex !important; flex-direction: column !important; gap: 3px !important; min-width: 0 !important; }
+.rpg-state-dialog .rpg-res-key select { font-size: 10px !important; }
+.rpg-state-dialog .rpg-res-row input[type="checkbox"] { width: auto !important; }
+.rpg-state-dialog .rpg-res-add { margin: 2px 0 10px !important; cursor: pointer !important; }
+.rpg-state-dialog .rpg-res-del { cursor: pointer !important; border: 0 !important; background: none !important; color: #c0392b !important; }
+
 /* séparateurs */
 .rpg-state-dialog hr {
   border: 0 !important;
@@ -287,8 +306,27 @@ export async function editStateDialog(state, { title } = {}) {
 
   const modsHtml = keys.map(k => row(k, MOD_LABELS[k] ?? k)).join("");
 
+  // Une ligne de résistance aux états. Le même HTML sert au rendu initial et au
+  // bouton « + Ajouter », pour que les deux ne puissent pas diverger.
+  const resistRowHtml = (r = {}) => `
+    <div class="rpg-res-row">
+      <select data-res-field="tag">${fxTagOptions(r.tag)}</select>
+      <span class="rpg-res-key">
+        <select class="rpg-res-fx-pick">${fxKeyOptions(r.effectKey, "— Catalogue —")}</select>
+        <input type="text" data-res-field="effectKey" value="${String(r.effectKey ?? "")}"
+          placeholder="vide = tout le type"
+          title="Comparé au NOM de l'état reçu, sans tenir compte de la casse. Le menu au-dessus ne fait que remplir ce champ ; un nom hors catalogue est accepté."/>
+      </span>
+      <input type="number" data-res-field="durationReduction" value="${Number(r.durationReduction ?? 0) || 0}" step="1"/>
+      <input type="number" data-res-field="dotReductionPct" value="${Number(r.dotReductionPct ?? 0) || 0}" step="5"/>
+      <input type="checkbox" data-res-field="immune" ${r.immune ? "checked" : ""}/>
+      <button type="button" class="rpg-res-del" title="Retirer cette ligne">✕</button>
+    </div>`;
+
   const resD = st.resistanceDamage ?? {};
-  const resE = st.resistance ?? {};
+  // Toutes les lignes de résistance aux états — `resistances[]` et, pour un
+  // état posé avant la liste, l'objet unique `resistance`.
+  const resRows = stateResistanceRows(st);
   const atk  = st.attackBonus ?? {};
   const atkCats = Array.isArray(atk.categories) ? atk.categories : [];
   const atkFx = atk.effect ?? {};
@@ -347,7 +385,14 @@ export async function editStateDialog(state, { title } = {}) {
       </div>
 
       <div class="line">
-        <div class="lbl">Difficulté retrait (jet, 0 = indissipable)</div>
+        <div class="lbl">Indébuffable</div>
+        <div><input type="checkbox" name="undispellable" ${!st.cleanseDC ? "checked" : ""}/>
+          <small class="hint">Aucun jet ne peut le retirer : l'action « Retirer un état » ne le proposera
+          même pas (<code>removableStates</code>). Décoche pour fixer une difficulté ci-dessous.</small></div>
+      </div>
+
+      <div class="line">
+        <div class="lbl">Difficulté de retrait (seuil du jet)</div>
         <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
       </div>
 
@@ -414,46 +459,22 @@ export async function editStateDialog(state, { title } = {}) {
       </div>
 
       <hr/>
-      <h3>Résistance aux ÉTATS accordée</h3>
-      <p class="hint">Sur les états reçus ENSUITE par le porteur : durée raccourcie, dégâts par tour réduits.
-        Les deux filtres se combinent — un <b>type</b> seul vise toute la famille (tous les états de feu), un
+      <h3>Résistances aux ÉTATS accordées</h3>
+      <p class="hint">Sur les états reçus ENSUITE par le porteur. <b>Autant de lignes que voulu</b>, et chacune
+        combine librement ses filtres : un <b>type</b> seul vise toute la famille (tous les états de feu), un
         <b>effet précis</b> seul ne vise que lui quel que soit son type (« Poison » uniquement), les deux ensemble
-        exigent les deux. Valeurs négatives = vulnérabilité (l'état dure plus longtemps / tape plus fort).
-        <b>Dégâts par tour −100 %</b> = il est posé mais ne fait plus rien ; <b>Immunité</b> = il n'est pas posé du tout.
+        exigent les deux. <b>Immunité</b> = l'état n'est pas posé ; <b>dégâts par tour −100 %</b> = il est posé mais
+        ne fait plus rien ; une <b>durée</b> ramenée à 0 l'empêche aussi d'être posé. Valeurs négatives =
+        vulnérabilité (dure plus longtemps, tape plus fort), et les lignes qui correspondent s'additionnent.
         Indépendant du bloc ci-dessus, qui ne parle que des dégâts directs.</p>
 
-      <div class="two">
-        <div>
-          <label>Type d'état</label>
-          <select name="resE.tag">${fxTagOptions(resE.tag)}</select>
+      <div class="rpg-res-list">
+        <div class="rpg-res-row rpg-res-head">
+          <span>Type d'état</span><span>Effet précis</span><span>Durée −</span><span>DOT −%</span><span>Immun.</span><span></span>
         </div>
-        <div>
-          <label>Effet précis (nom exact de l'état)</label>
-          <select class="rpg-res-fx-pick">${fxKeyOptions(resE.effectKey)}</select>
-          <input type="text" name="resE.effectKey" value="${String(resE.effectKey ?? "")}"
-            placeholder="ex : Poison" style="margin-top:4px"
-            title="Comparé au NOM de l'état reçu (sans tenir compte de la casse). Le menu au-dessus remplit ce champ depuis le catalogue, mais un nom hors catalogue est accepté."/>
-        </div>
+        ${resRows.map(r => resistRowHtml(r)).join("")}
       </div>
-
-      <div class="two">
-        <div>
-          <label>Durée en moins (tours)</label>
-          <input type="number" name="resE.durationReduction" value="${Number(resE.durationReduction ?? 0) || 0}"/>
-        </div>
-        <div></div>
-      </div>
-
-      <div class="two">
-        <div>
-          <label>Dégâts par tour en moins (%)</label>
-          <input type="number" name="resE.dotReductionPct" value="${Number(resE.dotReductionPct ?? 0) || 0}"/>
-        </div>
-        <div>
-          <label>Immunité totale</label>
-          <input type="checkbox" name="resE.immune" ${resE.immune ? "checked" : ""}/>
-        </div>
-      </div>
+      <button type="button" class="rpg-res-add">+ Ajouter une résistance</button>
 
       <hr/>
       <h3>Bonus de dégâts aux attaques du porteur</h3>
@@ -609,7 +630,12 @@ export async function editStateDialog(state, { title } = {}) {
 
     out.duration = Math.max(1, getNum("duration", out.duration));
     out.remaining = Math.max(0, getNum("remaining", out.remaining));
-    out.cleanseDC = Math.max(0, getNum("cleanseDC", out.cleanseDC));
+    // « Indébuffable » et « difficulté de retrait » sont le MÊME champ vu des
+    // deux côtés : `removableStates` (remove-state.js) ne propose que les états
+    // portant un seuil, donc 0 veut dire « aucun jet ne le retire ». La case
+    // évite au MJ de deviner que ce 0 est une règle et non un oubli ; cochée,
+    // elle l'emporte sur la valeur saisie.
+    out.cleanseDC = getChk("undispellable") ? 0 : Math.max(0, getNum("cleanseDC", out.cleanseDC));
 
     out.dot = out.dot ?? {};
     out.dot.flat = getNum("dot.flat", 0);
@@ -634,23 +660,29 @@ export async function editStateDialog(state, { title } = {}) {
     if (rdTag) out.resistanceDamage = { tag: rdTag, pct: clamp(getNum("resD.pct", 0), RESIST_MIN, RESIST_MAX) };
     else delete out.resistanceDamage;
 
-    // Résistance aux ÉTATS (resistances.js) : l'un OU l'autre des deux filtres
-    // suffit — une résistance sans type mais nommant « Poison » est le cas
-    // même qu'on veut écrire, et `computeResistanceFor` la lit très bien
-    // (il n'ignore que celle qui n'a NI tag NI effectKey). L'immunité seule
-    // est une configuration valide, d'où le test sur les filtres et non sur
-    // les nombres.
-    const reTag = getStr("resE.tag", "");
-    const reKey = getStr("resE.effectKey", "");
-    if (reTag || reKey) {
-      out.resistance = {
-        tag: reTag || null,
-        effectKey: reKey,
-        durationReduction: getNum("resE.durationReduction", 0),
-        dotReductionPct: getNum("resE.dotReductionPct", 0),
-        immune: getChk("resE.immune")
-      };
-    } else delete out.resistance;
+    // Résistances aux ÉTATS (resistances.js), en LISTE : l'un OU l'autre des
+    // deux filtres suffit sur chaque ligne — une résistance sans type mais
+    // nommant « Poison » est le cas même qu'on veut écrire, et
+    // `computeResistanceFor` la lit très bien (il n'ignore que celle qui n'a
+    // NI tag NI effectKey). Une ligne entièrement vide est abandonnée plutôt
+    // qu'écrite : inerte côté moteur, elle ne ferait qu'encombrer la fiche.
+    // `resistance` (l'objet unique d'avant) est supprimé une fois relu ici,
+    // sinon il s'ajouterait aux lignes à chaque lecture.
+    const resistances = [];
+    htmlRoot.querySelectorAll(".rpg-res-row").forEach(row => {
+      if (row.classList.contains("rpg-res-head")) return;
+      const f = (k) => row.querySelector(`[data-res-field="${k}"]`);
+      const tag = String(f("tag")?.value ?? "").trim();
+      const effectKey = String(f("effectKey")?.value ?? "").trim();
+      const immune = !!f("immune")?.checked;
+      const durationReduction = Number(f("durationReduction")?.value) || 0;
+      const dotReductionPct = Number(f("dotReductionPct")?.value) || 0;
+      if (!tag && !effectKey && !immune && !durationReduction && !dotReductionPct) return;
+      resistances.push({ tag: tag || null, effectKey, durationReduction, dotReductionPct, immune });
+    });
+    delete out.resistance;
+    if (resistances.length) out.resistances = resistances;
+    else delete out.resistances;
 
     // Bonus de dégâts : normalisé par le module qui le lit (attack-bonus.js),
     // jamais à la main — c'est lui qui décide qu'un bonus vide vaut `null`,
@@ -746,13 +778,32 @@ export async function editStateDialog(state, { title } = {}) {
       // catalogue ne connaît pas les états écrits à la main, et « Poison » n'y
       // figure pas sous ce nom-là (il s'y appelle « Empoisonnement »). Le menu
       // ne fait donc que remplir le champ.
-      const fill = (selSelector, inputName) => {
-        const sel = root?.querySelector(selSelector);
-        const input = root?.querySelector(`input[name="${inputName}"]`);
-        sel?.addEventListener("change", () => { if (input && sel.value) input.value = sel.value; });
-      };
-      fill("select.rpg-res-fx-pick", "resE.effectKey");
-      fill("select.rpg-atkfx-pick", "atkFx.label");
+      const atkPick = root?.querySelector("select.rpg-atkfx-pick");
+      const atkInput = root?.querySelector('input[name="atkFx.label"]');
+      atkPick?.addEventListener("change", () => {
+        if (atkInput && atkPick.value) atkInput.value = atkPick.value;
+      });
+
+      // Les lignes de résistance sont ajoutées et retirées à chaud : un seul
+      // écouteur délégué sur la fenêtre, sinon une ligne créée après coup
+      // n'aurait ni son menu de catalogue ni son ✕.
+      const list = root?.querySelector(".rpg-res-list");
+      root?.querySelector(".rpg-res-add")?.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        list?.insertAdjacentHTML("beforeend", resistRowHtml({}));
+      });
+      root?.addEventListener("click", (ev) => {
+        const del = ev.target?.closest?.(".rpg-res-del");
+        if (!del) return;
+        ev.preventDefault();
+        del.closest(".rpg-res-row")?.remove();
+      });
+      root?.addEventListener("change", (ev) => {
+        const sel = ev.target?.closest?.("select.rpg-res-fx-pick");
+        if (!sel || !sel.value) return;
+        const input = sel.closest(".rpg-res-row")?.querySelector('[data-res-field="effectKey"]');
+        if (input) input.value = sel.value;
+      });
     });
   });
 }

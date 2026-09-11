@@ -717,61 +717,67 @@
             <small class="fx-hint">Réduit les <b>dégâts</b> du type choisi tant que l'effet est actif — rien à voir avec la partie 7 ci-dessous, qui ne joue que sur les états. Ex. Écaille de dragon : <b>Feu · −50%</b>. <b>100</b> = immunité, valeur <b>négative</b> = vulnérabilité.</small>
           </fieldset>
 
-          {{!-- 7 · Résistance aux ÉTATS --}}
+          {{!-- 7 · Résistances aux ÉTATS — une LISTE, comme sur une armure.
+               Chaque ligne combine librement un type, un effet nommé, une
+               immunité, une réduction de durée et une réduction des dégâts par
+               tour : une seule ligne ne permettait qu'une de ces phrases à la
+               fois, alors que « immunisé au Poison ET brûlures raccourcies »
+               est la demande normale. --}}
           <fieldset class="fx-fieldset">
-            <legend>7 · Résistance aux états (optionnel)</legend>
-            <div class="fx-grid-4">
-              <div>
-                <label title="Type des ÉTATS visés (brûlure = feu, poison = terre…) — champ distinct du type de dégâts en partie 6 : un même effet peut protéger des dégâts de feu sans rien changer aux brûlures, ou l'inverse.">🧪 Type d'état visé</label>
-                <select data-fx-field="resistTag">
-                  <option value="" {{#unless fx.resistTag}}selected{{/unless}}>— Aucun —</option>
+            <legend>7 · Résistances aux états (optionnel)</legend>
+            <div class="fx-resists-list" data-fx-idx="{{i}}">
+              {{#if fx.resists.length}}
+              <div class="fx-resist-row fx-resist-head">
+                <span title="Famille d'états visée. « — Aucun — » = n'importe quel type, et c'est alors l'effet nommé qui filtre.">Type d'état</span>
+                <span title="Ne viser qu'un effet nommé. Comparé au NOM de l'état reçu ; un nom hors catalogue est accepté.">Effet précis</span>
+                <span title="Retiré à la durée de l'état reçu. Positif = résistance, négatif = vulnérabilité. Si la durée tombe à 0, l'état n'est pas posé du tout.">Durée −</span>
+                <span title="Retiré aux dégâts par tour de l'état reçu. 100 = il se pose mais ne fait plus rien.">DOT −%</span>
+                <span title="L'état n'est pas posé du tout.">Immunité</span>
+                <span></span>
+              </div>
+              {{/if}}
+              {{#each fx.resists as |res ri|}}
+              <div class="fx-resist-row" data-res-index="{{ri}}">
+                <select data-res-field="tag">
+                  <option value="" {{#unless res.tag}}selected{{/unless}}>— Aucun —</option>
                   {{#each @root.damageTypeChoices as |c|}}
-                    <option value="{{c.key}}" {{#if (eq fx.resistTag c.key)}}selected{{/if}}>{{c.label}}</option>
+                    <option value="{{c.key}}" {{#if (eq res.tag c.key)}}selected{{/if}}>{{c.label}}</option>
                   {{/each}}
                 </select>
-              </div>
-              <div>
-                {{!-- Filtre par NOM d'effet : « Poison » seulement, plutôt que
-                     toute une famille. Porte le libellé, pas la clé technique
-                     — c'est ce que compare computeResistanceFor(). --}}
-                <label title="Ne viser qu'UN effet nommé (« Poison ») au lieu de tout un type. Vide = tous les effets du type choisi. Les deux champs se combinent : un effet précis sans type visé le vise quel que soit son élément.">🎯 Effet précis</label>
                 {{!-- Menu = confort, champ texte = la valeur réellement stockée.
                      Le catalogue ne connaît pas les états écrits à la main, et
                      un même effet peut y porter un autre nom (« Empoisonnement »
                      pour un état que le MJ appelle « Poison »). --}}
-                <select class="fx-resist-catalogue-select">
-                  <option value="">— Choisir dans le catalogue —</option>
-                  {{#each @root.EFFECT_CATALOG_LABELS as |group gLabel|}}
-                  <optgroup label="{{gLabel}}">
-                    {{#each group as |e|}}
-                    <option value="{{e.value}}">{{e.label}}</option>
+                <span class="fx-resist-key">
+                  <select class="fx-resist-catalogue-select">
+                    <option value="">— Catalogue —</option>
+                    {{#each @root.EFFECT_CATALOG_LABELS as |group gLabel|}}
+                    <optgroup label="{{gLabel}}">
+                      {{#each group as |e|}}
+                      <option value="{{e.value}}">{{e.label}}</option>
+                      {{/each}}
+                    </optgroup>
                     {{/each}}
-                  </optgroup>
-                  {{/each}}
-                </select>
-                <input type="text" data-fx-field="resistEffectKey" value="{{fx.resistEffectKey}}"
-                  placeholder="vide = tous ceux du type" style="margin-top:4px"
-                  title="Comparé au NOM de l'état reçu, sans tenir compte de la casse. Un nom hors catalogue est accepté."/>
-              </div>
-              <div>
-                <label title="Retiré à la durée d'un état du type visé quand la cible le reçoit — pas seulement de ce sort, de n'importe quel sort ou piège. Positif = résistance (dure moins longtemps) ; négatif = vulnérabilité (dure plus longtemps).">⏳ Réduction de durée (tours)</label>
-                <input type="number" data-fx-field="resistDurationReduction" value="{{fx.resistDurationReduction}}" step="1" placeholder="0"/>
-              </div>
-              <div>
-                <label title="Retiré aux dégâts/soin PAR TOUR d'un état du type visé (brûlure, poison…). Positif (%) = résistance ; négatif = vulnérabilité (dégâts amplifiés).">💥 Réduction dégâts/tour (%)</label>
-                <input type="number" data-fx-field="resistDotPct" value="{{fx.resistDotPct}}" step="5" placeholder="0"/>
-              </div>
-              <div>
-                <label>🚫 Immunité aux états</label>
-                <label class="fx-check" title="La cible ignore complètement tout ÉTAT du type visé (durée et dégâts par tour). Ne touche pas aux dégâts directs — ceux-là se règlent en partie 6.">
-                  <input type="checkbox" data-fx-field="resistImmune" {{#if fx.resistImmune}}checked{{/if}} />
-                  <span>Immunisé</span>
+                  </select>
+                  <input type="text" data-res-field="effectKey" value="{{res.effectKey}}"
+                    placeholder="vide = tout le type"
+                    title="Comparé au NOM de l'état reçu, sans tenir compte de la casse."/>
+                </span>
+                <input type="number" data-res-field="durationReduction" value="{{res.durationReduction}}" step="1" placeholder="0"/>
+                <input type="number" data-res-field="dotReductionPct" value="{{res.dotReductionPct}}" step="5" placeholder="0"/>
+                <label class="fx-check">
+                  <input type="checkbox" data-res-field="immune" {{#if res.immune}}checked{{/if}} />
                 </label>
+                <button type="button" data-action="removeFxResist" data-fx-idx="{{i}}" data-res-index="{{ri}}"
+                  class="fx-del-btn" title="Retirer cette résistance">✕</button>
               </div>
+              {{/each}}
             </div>
-            <small class="fx-hint">Agit sur la <b>durée</b> et les <b>dégâts par tour</b> des états visés (brûlure, poison, gel...), jamais sur les dégâts directs — ceux-là se règlent en partie 6.
-              Les deux filtres se combinent : <b>type</b> seul = toute la famille, <b>effet précis</b> seul = ce seul effet quel que soit son type (« immunisé au Poison » et rien d'autre), les deux = les deux conditions.
-              « Réduction dégâts/tour 100 % » le laisse se poser sans qu'il fasse quoi que ce soit ; « Immunisé » l'empêche d'être posé.
+            <button type="button" data-action="addFxResist" data-fx-idx="{{i}}" class="fx-add-btn">+ Ajouter une résistance</button>
+            <small class="fx-hint">Agit sur la <b>durée</b> et les <b>dégâts par tour</b> des états reçus, jamais sur les dégâts directs — ceux-là se règlent en partie 6.
+              Sur chaque ligne les deux filtres se combinent : <b>type</b> seul = toute la famille, <b>effet précis</b> seul = ce seul effet quel que soit son type (« immunisé au Poison » et rien d'autre), les deux = les deux conditions.
+              <b>DOT −100 %</b> le laisse se poser sans qu'il fasse quoi que ce soit ; <b>Immunité</b> l'empêche d'être posé ; une <b>durée</b> ramenée à 0 l'empêche aussi.
+              Les valeurs négatives sont des vulnérabilités (dure plus longtemps, tape plus fort), et les lignes s'additionnent quand plusieurs correspondent.
               Une fois l'effet actif sur une cible, il s'applique à tous les états correspondants qu'elle reçoit ensuite, pas seulement à ceux de ce sort-ci.</small>
           </fieldset>
 

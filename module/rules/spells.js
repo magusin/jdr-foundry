@@ -2,7 +2,7 @@
 import { checkRange, fmtMeters, rangeDistanceMeters } from "../utils/grid.js";
 import { pickZoneTargets, matchesZoneTargets, zoneTargetsLabel } from "./spell-zone.js";
 import { applyResistances } from "./resistances.js";
-import { resistanceFor, fxResistTextParts, damageTypeLabel } from "./damage-types.js";
+import { resistanceFor, fxResistTextParts, fxResistanceRows, damageTypeLabel } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
@@ -1755,25 +1755,23 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
             ...(fx.movementTypeGrant ? { movementTypeGrant: fx.movementTypeGrant } : {})
           },
           removeBaseTN: n(fx.removeBaseTN, 0) || null,
-          // Résistance/vulnérabilité ACCORDÉE par cet effet (ex: "Écaille de
-          // dragon" réduit la durée/les dégâts des effets tag "feu" reçus
-          // ENSUITE par la cible) — lu par resistances.js's applyResistances()
-          // via getStateResistances() tant que cet effet reste actif sur elle.
-          // Toujours construit, même vide : {tag:null,...} est filtré sans
-          // effet côté lecture (computeResistanceFor ignore une résistance sans
-          // tag ni effectKey), pas besoin d'un if ici.
-          resistance: {
-            tag: String(fx.resistTag ?? "").trim() || null,
-            // Ne viser qu'UN effet nommé plutôt que tout un type : lu par
-            // computeResistanceFor (resistances.js), qui le compare au
-            // LIBELLÉ de l'état reçu. Les deux filtres se combinent, et l'un
-            // des deux suffit — c'est ce qui rend « immunisé au Poison, et à
-            // rien d'autre » exprimable.
-            effectKey: String(fx.resistEffectKey ?? "").trim(),
-            durationReduction: n(fx.resistDurationReduction, 0),
-            dotReductionPct: n(fx.resistDotPct, 0),
-            immune: !!fx.resistImmune
-          },
+          // Résistances/vulnérabilités ACCORDÉES par cet effet (ex: « Écaille de
+          // dragon » : immunisé au Poison, et −2 tours sur tout le feu) — lues
+          // par applyResistances() (resistances.js) via getStateResistances()
+          // tant que cet effet reste actif sur la cible.
+          //
+          // Une LISTE, comme sur une pièce d'équipement : chaque ligne combine
+          // librement un type, un effet nommé, une immunité, une réduction de
+          // durée et une réduction des dégâts par tour, et l'un des deux
+          // filtres suffit. `fxResistanceRows` lit aussi les champs plats d'un
+          // sort écrit avant la liste, qui valent une ligne unique.
+          resistances: fxResistanceRows(fx).map(r => ({
+            tag: String(r.tag ?? "").trim() || null,
+            effectKey: String(r.effectKey ?? "").trim(),
+            durationReduction: n(r.durationReduction, 0),
+            dotReductionPct: n(r.dotReductionPct, 0),
+            immune: !!r.immune
+          })),
           // Résistance aux DÉGÂTS d'un type : objet SÉPARÉ de `resistance`
           // ci-dessus, avec son propre type visé. Les deux ne se recouvrent
           // pas (protéger des dégâts de feu n'a pas à protéger des brûlures)

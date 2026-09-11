@@ -477,9 +477,39 @@ ne décompte jamais et dont le DOT continue de tomber chaque tour. Conséquence 
 et voulue : `removableStates` (`remove-state.js`) exclut explicitement un état permanent,
 donc aucun jet ne le retire — c'est le MJ, à la main.
 
+### Une résistance aux états est une LISTE, et chaque ligne combine ses filtres librement
+
+`state.resistances[]` (un état posé) et `fx.resists[]` (un effet de sort) ont la forme
+exacte de `system.resistances[]` d'une armure — `{tag, effectKey, durationReduction,
+dotReductionPct, immune}` — et il y en a **autant que voulu**. Une entrée unique
+(`state.resistance`, les champs plats `fx.resistTag`…) ne permettait qu'une phrase à la
+fois, alors que « immunisé au Poison **et** brûlures raccourcies **et** −50 % sur les
+dégâts des gels » est la demande normale. Les deux formes anciennes restent lues, par
+`stateResistanceRows(st)` et `fxResistanceRows(fx)` (`damage-types.js`) — les deux seuls
+endroits qui décident de cette équivalence, et que lisent `resistances.js`, `spells.js`,
+`loadout.js`, la pesée et les deux interfaces.
+
+- **Les lignes qui correspondent s'ADDITIONNENT** (`computeResistanceFor` somme
+  `durationReduction`/`dotReductionPct` et retient `immune` dès qu'une ligne l'a), donc
+  « −2 tours sur le feu » plus « −100 % de DOT sur les Brûlures » s'appliquent tous les
+  deux à une brûlure. Vérifié.
+- **Une durée ramenée à 0 est un refus**, pas un état d'une durée nulle : `applyResistances`
+  renvoie `_resisted` quand `duration − durationReduction ≤ 0`, exactement comme pour une
+  immunité. C'était déjà le cas et ça reste testé (« Ardeur 2 tours » contre « −2 tours
+  sur le feu » ⇒ bloquée).
+- **Un soin n'est jamais rogné** (`isHealingState`) : ni durée, ni montant, ni immunité.
+- **Trois façons différentes d'annuler**, et elles ne se valent pas : `immune` empêche la
+  pose, `dotReductionPct: 100` laisse l'état se poser inerte (il garde ses mods de stats et
+  son icône), une durée ramenée à 0 empêche la pose aussi. Les hints le disent partout.
+- **« Indébuffable » est `cleanseDC: 0`**, présenté comme une case à cocher dans l'éditeur
+  d'état plutôt que comme un zéro à deviner : `removableStates` (`remove-state.js`) ne
+  propose que les états portant un seuil. La case l'emporte sur la valeur saisie — c'est
+  une lecture du même champ, jamais un second champ (cf. le piège `removeBaseTN` /
+  `retraitMod` documenté plus bas).
+
 ### Une résistance aux états peut ne viser QU'UN effet nommé — et `effectKey` porte un LIBELLÉ
 
-`state.resistance` / `system.resistances[]` portent **deux filtres indépendants** :
+`state.resistances[]` / `system.resistances[]` portent **deux filtres indépendants** :
 `tag` (toute une famille : les états de feu) et `effectKey` (un seul effet : « Poison »).
 `computeResistanceFor` (`resistances.js`) n'ignore une résistance que si elle n'a **ni**
 l'un **ni** l'autre, et exige chaque filtre renseigné — l'un seul suffit donc, ce qui rend
@@ -502,7 +532,14 @@ précis — était injoignable depuis les deux surfaces qui servent le plus.
   « Poison » et laisse passer « Brûlure » **et** « Enracinement » (même tag `terre`).
 - La pesée lisait `fx.resistTag || fx.effectKey` — la clé du catalogue de l'effet
   lui-même, qui nomme ce qu'on pose et non ce contre quoi on protège : elle facturait
-  donc une résistance à chaque effet venu du catalogue. Elle lit `fx.resistEffectKey`.
+  donc une résistance à chaque effet venu du catalogue. Elle boucle maintenant sur
+  `fxResistanceRows(fx)` et pèse **chaque** ligne.
+- Côté interface, les deux surfaces sont des listes avec ✕ et « + Ajouter » : partie 7 de
+  la fiche de sort (`.fx-resist-row` / `data-res-field`, mêmes mécaniques que les lignes de
+  mods — et `data-res-field` a dû être ajouté au test de `_bindLiveSave`, sinon la saisie
+  n'était enregistrée qu'en touchant ensuite un autre champ) et l'éditeur d'état
+  (`.rpg-res-row`, ajout/retrait à chaud par écouteurs délégués, lecture par parcours du
+  DOM et non par `FormData` — un index de formulaire ne survit pas à une ligne retirée).
 
 ### États actifs are matched by label on add, not by id
 
