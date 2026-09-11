@@ -1481,12 +1481,29 @@ export async function confirmSpellDeclaration(message, approve) {
     const actor = d.actorUuid ? await fromUuidSafeTop(d.actorUuid) : null;
     const item  = d.itemUuid  ? await fromUuidSafeTop(d.itemUuid)  : null;
 
+    // Un refus ne doit RIEN coûter : ni mana, ni recharge, ni slot d'action.
+    // (La fatigue, elle, n'est prélevée qu'à la résolution — bumpFatigue —,
+    // il n'y a donc rien à rendre de ce côté.)
+    //
+    // Chaque remboursement est isolé dans son propre try : ils sont
+    // indépendants, et une écriture qui échoue ne doit pas empêcher les
+    // suivantes ni bloquer le passage du message en « refusé » — un message
+    // resté « en attente » alors que le MJ a cliqué serait le pire des deux
+    // mondes.
     if (actor && n(d.manaCost, 0) > 0) {
-      const cur = n(actor.system?.ressources?.mana?.valeur, 0);
-      await actor.update({ "system.ressources.mana.valeur": cur + n(d.manaCost, 0) });
+      try {
+        const cur = n(actor.system?.ressources?.mana?.valeur, 0);
+        const max = n(actor.system?.ressources?.mana?.max, 0);
+        // Plafonné au maximum : rendre plus que la réserve ne peut contenir
+        // ferait du refus un gain net.
+        const back = max > 0 ? Math.min(max, cur + n(d.manaCost, 0)) : cur + n(d.manaCost, 0);
+        await actor.update({ "system.ressources.mana.valeur": back });
+      } catch (e) { console.warn("[RPG] remboursement du mana (sort refusé) :", e); }
     }
     if (item && n(d.cdMax, 0) > 0) {
-      await item.update({ "system.cooldown.restant": 0, "system.recharge.restant": 0 });
+      try {
+        await item.update({ "system.cooldown.restant": 0, "system.recharge.restant": 0 });
+      } catch (e) { console.warn("[RPG] remise à zéro de la recharge (sort refusé) :", e); }
     }
     if (d.actionId && game.combat) {
       try {
@@ -1496,8 +1513,14 @@ export async function confirmSpellDeclaration(message, approve) {
           const budget = getBudget(game.combat, found.combatantId);
           await saveBudget(game.combat, found.combatantId, releaseSlot(budget, found.entry.slot ?? "sortNormal", false));
           await updateLogEntry(game.combat, d.actionId, { status: "rejected" });
+        } else {
+          // Aucune entrée de journal : le slot a bien pu être réservé sans que
+          // sa trace le soit. Sans ce cri dans la console, il resterait « en
+          // attente » pour le reste du tour sans la moindre explication.
+          console.warn(`[RPG] sort refusé : aucune entrée de journal pour l'action ${d.actionId} `
+                     + `— le slot réservé n'a pas pu être rendu automatiquement.`);
         }
-      } catch (e) { /* ignore si pas de budget actif */ }
+      } catch (e) { console.warn("[RPG] libération du slot (sort refusé) :", e); }
     }
 
     await message.update({ content: spellGmContent(d, "rejected"), "flags.rpg.spellDeclare.phase": "rejected" });

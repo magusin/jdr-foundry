@@ -44,16 +44,29 @@ export function applyDifficulty(tnBase, diff) {
  * d'œil, et ça vaut pour tous les sorts sans avoir à deviner l'intention
  * depuis leur contenu. Disposition inconnue → traité en adversaire, le cas
  * le plus courant et le moins avantageux.
+ *
+ * Les tokens concernés sont passés quand l'appelant les connaît, et c'est
+ * important : `getActiveTokens()[0]` rend le PREMIER token de l'acteur, et
+ * deux tokens non liés issus du même prototype partagent leur acteur. Sans
+ * eux, un monstre amical posé à côté de son jumeau hostile était jugé sur la
+ * disposition de l'autre — même famille de piège que la résolution par id au
+ * lieu de l'UUID.
+ *
+ * @param {object} [opts]
+ * @param {Token|TokenDocument} [opts.attackerToken]
+ * @param {Token|TokenDocument} [opts.targetToken]
  */
-export function isFriendlyTarget(attacker, target) {
+export function isFriendlyTarget(attacker, target, opts = {}) {
   if (!attacker || !target) return true;              // pas de cible = sur soi
   if (attacker.id === target.id) return true;
-  const dispositionOf = (a) =>
-    a?.getActiveTokens?.()?.[0]?.document?.disposition
+  const dispOfToken = (t) => t?.document?.disposition ?? t?.disposition ?? null;
+  const dispositionOf = (a, tok) =>
+    dispOfToken(tok)
+    ?? a?.getActiveTokens?.()?.[0]?.document?.disposition
     ?? a?.prototypeToken?.disposition
     ?? null;
-  const da = dispositionOf(attacker);
-  const dt = dispositionOf(target);
+  const da = dispositionOf(attacker, opts.attackerToken);
+  const dt = dispositionOf(target, opts.targetToken);
   if (da === null || dt === null) return false;
   return da === dt;
 }
@@ -231,7 +244,7 @@ export function computeTN(attacker, target, item, opts = {}) {
   // Aucune comparaison de stats : un allié n'esquive pas le soin qu'on lui
   // porte, et son agilité n'a donc rien à y faire. La difficulté saisie sur
   // la fiche EST le seuil. À 0, l'action réussit sans jet.
-  const friendly = opts.friendly ?? isFriendlyTarget(attacker, target);
+  const friendly = opts.friendly ?? isFriendlyTarget(attacker, target, opts);
   if (friendly) {
     const autoSuccess = diff <= 0;
     return {

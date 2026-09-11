@@ -778,14 +778,45 @@
     const rerenderPassif  = () => $root.find(".rpg-passif-list").html(buildPassifHTML());
     const rerenderMana    = () => $root.find(".rpg-mana-val").text(String(getManaNow(actor)));
 
-    // ✅ Expose le callback de refresh pour l'auto-refresh au changement de tour
+    // ── Rafraîchissement automatique ────────────────────────────────────
+    // Le menu est construit UNE fois, en HTML figé : mana, recharges, slots et
+    // libellés (« Slot épuisé pour ce tour », « En recharge (3 tours) ») sont
+    // calculés au moment du rendu. Il ne se redessinait qu'au CHANGEMENT DE
+    // TOUR — donc quand le MJ refusait une déclaration, le remboursement du
+    // mana, la remise à zéro de la recharge et la libération du slot avaient
+    // bien lieu dans les données, mais le menu continuait d'afficher le sort
+    // en recharge et son bouton grisé. À la table ça se lit exactement comme
+    // « le refus coûte quand même le sort ».
+    //
+    // init.js appelle donc ce rappel sur les mises à jour d'acteur, d'objet et
+    // de combat ; l'`actorId` sert à ignorer ce qui ne concerne pas le
+    // personnage affiché.
     game.rpg = game.rpg ?? {};
-    game.rpg._menuRefresh = () => {
+    let _refreshTimer = null;
+    game.rpg._menuActorId = actor.id;
+    game.rpg._menuRefresh = (changedActorId = null) => {
       if (!$root || !document.body.contains($root[0])) {
         game.rpg._menuRefresh = null; // menu fermé, on nettoie
+        game.rpg._menuActorId = null;
         return;
       }
-      rerenderAll();
+      if (changedActorId && changedActorId !== actor.id) return;
+
+      // Regroupe les rafales : valider une déclaration écrit l'acteur, l'objet
+      // et le combat coup sur coup, ce qui ferait trois reconstructions.
+      if (_refreshTimer) clearTimeout(_refreshTimer);
+      _refreshTimer = setTimeout(() => {
+        _refreshTimer = null;
+        if (!document.body.contains($root[0])) return;
+        // Reconstruire remplace tout le contenu : le champ de recherche perd
+        // le focus. Son TEXTE, lui, vit dans `state.q` et survit.
+        const wasSearching = document.activeElement?.classList?.contains("rpg-search");
+        rerenderAll();
+        if (wasSearching) {
+          const input = $root.find(".rpg-search").get(0);
+          if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+        }
+      }, 120);
     };
 
     // Purge des écouteurs d'un rendu précédent. DOIT rester avant le premier
@@ -927,15 +958,16 @@
         // 2. Réserve le slot (pending)
         const actionId = foundry.utils.randomID();
         if (budgetAPI && combat && cbt) {
+          // Journal d'abord, budget ensuite — voir la note sur l'ordre dans la
+          // réservation de sort plus bas.
           await budgetWrite("réservation attaque", async () => {
-            const budget    = budgetAPI.getBudget(combat, cbt.id);
-            const newBudget = budgetAPI.reserveSlot(budget, "attaque");
-            await budgetAPI.saveBudget(combat, cbt.id, newBudget);
             await budgetAPI.addLogEntry(combat, cbt.id, {
               id: actionId, slot: "attaque", status: "pending",
               label: `Attaque ${weapon.name} → ${targetToken.actor.name}`,
               actorId: actor.id, snapshot, timestamp: Date.now()
             });
+            const budget    = budgetAPI.getBudget(combat, cbt.id);
+            await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.reserveSlot(budget, "attaque"));
           });
         }
 
@@ -1073,15 +1105,21 @@
         // 2. Réserve slot pending
         const actionId = foundry.utils.randomID();
         if (budgetAPI && combat && cbt) {
+          // ⚠️ ORDRE : le journal D'ABORD, le budget ensuite. C'est le journal
+          // qui permet de retrouver ce slot pour le rendre (le refus du MJ
+          // cherche l'entrée par `actionId`). Réserver puis échouer à
+          // journaliser laissait un slot « en attente » que PLUS RIEN ne
+          // pouvait libérer — le tour entier était perdu, sans un mot. Dans
+          // l'ordre inverse, un échec ne laisse au pire qu'une entrée de
+          // journal sans slot consommé.
           await budgetWrite("réservation sort", async () => {
-          const budget    = budgetAPI.getBudget(combat, cbt.id);
-          const newBudget = budgetAPI.reserveSlot(budget, slot);
-          await budgetAPI.saveBudget(combat, cbt.id, newBudget);
-          await budgetAPI.addLogEntry(combat, cbt.id, {
-            id: actionId, slot, status: "pending",
-            label: `${item.name}${targets.length ? " → " + targets.map(t => t.actor?.name ?? t.name).join(", ") : ""}`,
-            actorId: actor.id, snapshot, timestamp: Date.now()
-          });
+            await budgetAPI.addLogEntry(combat, cbt.id, {
+              id: actionId, slot, status: "pending",
+              label: `${item.name}${targets.length ? " → " + targets.map(t => t.actor?.name ?? t.name).join(", ") : ""}`,
+              actorId: actor.id, snapshot, timestamp: Date.now()
+            });
+            const budget    = budgetAPI.getBudget(combat, cbt.id);
+            await budgetAPI.saveBudget(combat, cbt.id, budgetAPI.reserveSlot(budget, slot));
           });
         }
 

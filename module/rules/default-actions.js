@@ -602,7 +602,10 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
           return { handled: true, ok: false, reason: "Slot Attaque épuisé pour ce tour." };
         }
         actionId = foundry.utils.randomID();
-        await saveBudget(combat, cbt.id, reserveSlot(budget, "attaque"));
+        // ⚠️ ORDRE : le journal D'ABORD. C'est lui qui permet de retrouver le
+        // slot pour le rendre (le refus du MJ cherche l'entrée par actionId) ;
+        // réserver puis échouer à journaliser laisserait un slot « en
+        // attente » que plus rien ne pourrait libérer.
         await addLogEntry(combat, cbt.id, {
           id: actionId, slot: "attaque", status: "pending",
           label: `Attaque ${weapon.name} → ${target.actor.name}`,
@@ -614,6 +617,7 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
           },
           timestamp: Date.now()
         });
+        await saveBudget(combat, cbt.id, reserveSlot(budget, "attaque"));
       }
     } catch (e) {
       // Un joueur ne peut pas écrire sur le document Combat (même raison que

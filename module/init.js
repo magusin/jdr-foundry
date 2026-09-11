@@ -2240,19 +2240,39 @@ Hooks.once("ready", () => {
   });
 
   // ---------------------------
-  // Menu Combat : suivre le budget d'actions en direct
+  // Menu Combat : le tenir à jour en direct
   // ---------------------------
-  // Le budget vit dans les flags du Combat, et le menu ne se redessinait qu'au
-  // CHANGEMENT DE TOUR. Quand le MJ refuse une déclaration (❌ Annuler), le
-  // slot est bien rendu côté données — mais le menu resté ouvert continuait
-  // d'afficher l'action comme consommée et son bouton grisé : à la table, ça
-  // se lit exactement comme « le slot est perdu même quand je refuse ».
-  // Ce hook n'est PAS réservé au MJ : le joueur voit son menu se mettre à jour
-  // quand le MJ tranche.
+  // Le menu est du HTML figé, construit une fois : mana, recharges et slots y
+  // sont des nombres recopiés au moment du rendu. Il ne se redessinait qu'au
+  // CHANGEMENT DE TOUR. Quand le MJ refuse une déclaration, spells.js rembourse
+  // le mana, remet la recharge à zéro et libère le slot — mais le menu resté
+  // ouvert continuait d'afficher le sort « en recharge (3 tours) » et son
+  // bouton grisé « Slot épuisé pour ce tour ». À la table ça se lit exactement
+  // comme « le refus coûte quand même le sort », alors que les données, elles,
+  // étaient justes.
+  //
+  // Ces hooks ne sont PAS réservés au MJ : le joueur voit son menu se mettre à
+  // jour quand le MJ tranche. Le rappel est groupé côté menu (une validation
+  // écrit l'acteur, l'objet et le combat coup sur coup).
+  const refreshMenu = (actorId = null) => {
+    try { game.rpg?._menuRefresh?.(actorId); } catch { /* menu fermé */ }
+  };
+
+  // Budget d'actions (slots, journal) — vit dans les flags du Combat.
   Hooks.on("updateCombat", (combat, changed) => {
     const rpgFlags = changed?.flags?.rpg;
     if (!rpgFlags || !("budget" in rpgFlags || "log" in rpgFlags)) return;
-    try { game.rpg?._menuRefresh?.(); } catch { /* menu fermé */ }
+    refreshMenu();
+  });
+
+  // Mana, fatigue, PV, états : tout ce que le menu affiche de l'acteur.
+  Hooks.on("updateActor", (actor) => refreshMenu(actor?.id));
+
+  // Recharge d'un sort ou d'une arme : `system.cooldown.restant` est remis à 0
+  // quand le MJ refuse, et c'est ce nombre que le menu affiche.
+  Hooks.on("updateItem", (item) => {
+    if (!item?.parent?.id) return;
+    refreshMenu(item.parent.id);
   });
 
   let _lastTurnKey = null;
