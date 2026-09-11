@@ -177,7 +177,7 @@ export function applyResistPct(amount, pct) {
  */
 export function resistTextParts({
   damageTag = null, damagePct = 0,
-  stateTag = null, durationReduction = 0, dotReductionPct = 0, immune = false
+  stateTag = null, stateEffectKey = "", durationReduction = 0, dotReductionPct = 0, immune = false
 } = {}) {
   const signed = (v, unit = "") => `${v > 0 ? "−" : "+"}${Math.abs(v)}${unit}`;
 
@@ -187,8 +187,13 @@ export function resistTextParts({
     : null;
 
   let state = null;
-  if (stateTag || immune) {
-    const bits = [stateTag ? damageTypeLabel(stateTag) : "?"];
+  // `stateEffectKey` ne vise QU'UN effet nommé (« Poison »), avec ou sans type :
+  // sans lui dans le libellé, « immunisé au poison » et « immunisé à toute la
+  // terre » s'affichaient exactement pareil.
+  const fxKey = String(stateEffectKey ?? "").trim();
+  if (stateTag || fxKey || immune) {
+    const scope = [stateTag ? damageTypeLabel(stateTag) : null, fxKey || null].filter(Boolean);
+    const bits = [scope.length ? scope.join(" · ") : "?"];
     if (immune) {
       bits.push("immunité");
     } else {
@@ -210,6 +215,7 @@ export function stateResistTextParts(st) {
     damageTag:         st?.resistanceDamage?.tag ?? null,
     damagePct:         st?.resistanceDamage?.pct ?? 0,
     stateTag:          st?.resistance?.tag ?? null,
+    stateEffectKey:    st?.resistance?.effectKey ?? "",
     durationReduction: st?.resistance?.durationReduction ?? 0,
     dotReductionPct:   st?.resistance?.dotReductionPct ?? 0,
     immune:            !!st?.resistance?.immune
@@ -222,6 +228,7 @@ export function fxResistTextParts(fx) {
     damageTag:         fx?.resistDamageTag ?? null,
     damagePct:         fx?.resistDamagePct ?? 0,
     stateTag:          fx?.resistTag ?? null,
+    stateEffectKey:    fx?.resistEffectKey ?? "",
     durationReduction: fx?.resistDurationReduction ?? 0,
     dotReductionPct:   fx?.resistDotPct ?? 0,
     immune:            !!fx?.resistImmune

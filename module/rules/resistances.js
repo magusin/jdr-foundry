@@ -28,14 +28,16 @@ export function gearStateResistRows(list) {
   return rows.map(r => {
     const { state } = resistTextParts({
       stateTag: r?.tag ?? null,
+      // Une résistance peut ne viser QU'UN effet précis (« Brûlure ») plutôt
+      // que tout un type : sans ce rappel, deux lignes très différentes
+      // s'affichent à l'identique. Le formateur le porte lui-même depuis
+      // qu'un état posé et un effet de sort peuvent le renseigner aussi.
+      stateEffectKey: r?.effectKey ?? "",
       durationReduction: r?.durationReduction ?? 0,
       dotReductionPct: r?.dotReductionPct ?? 0,
       immune: !!r?.immune
     });
     if (!state) return null;
-    // Une résistance peut ne viser QU'UN effet précis (« Brûlure ») plutôt
-    // que tout un type : sans ce rappel, deux lignes très différentes
-    // s'affichent à l'identique.
     const key = String(r?.effectKey ?? "").trim();
     return { text: key ? `${state} — ${key} uniquement` : state };
   }).filter(Boolean);

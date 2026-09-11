@@ -21,10 +21,11 @@
 // attack-bonus.js, auras.js) : rien n'est réimplémenté ici, on remplit la même
 // structure.
 
-import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
+import { listEffects, getEffectDef, EFFECT_TAGS, effectCatalogByTag } from "../rules/effect-library.js";
 import { STATE_TYPES, AURA_TARGETS } from "../rules/state-builder.js";
 import { DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX } from "../rules/damage-types.js";
-import { BONUS_SCOPES, WEAPON_CATEGORIES, normalizeAttackBonus } from "../rules/attack-bonus.js";
+import { BONUS_SCOPES, WEAPON_CATEGORIES, BONUS_FX_WHEN, normalizeAttackBonus } from "../rules/attack-bonus.js";
+import { MOVEMENT_TYPES } from "../rules/movement-types.js";
 
 /** Libellés des stats modifiables par un état — source unique. */
 export const MOD_LABELS = {
@@ -251,9 +252,22 @@ export async function editStateDialog(state, { title } = {}) {
 
   // Vocabulaire des ÉTATS (neutre inclus) pour la résistance aux états.
   const fxTagOptions = (cur) =>
-    `<option value="">— Aucune —</option>` +
+    `<option value="">— N'importe quel type —</option>` +
     Object.entries(EFFECT_TAGS).map(([k, v]) =>
       `<option value="${k}" ${String(cur ?? "") === k ? "selected" : ""}>${v}</option>`).join("");
+
+  // Effet PRÉCIS visé par la résistance (« Poison » seulement, pas tout le
+  // type). `computeResistanceFor` compare `effectKey` au LIBELLÉ de l'état
+  // reçu, en minuscules — d'où `value: "label"` : la clé technique n'y
+  // correspondrait jamais. C'est la même liste que les fiches d'arme,
+  // d'armure et de talent, où ce filtre existait déjà.
+  const fxCatalog = effectCatalogByTag({ value: "label" });
+  const fxKeyOptions = (cur, placeholder = "— Tous les effets du type choisi —") =>
+    `<option value="">${placeholder}</option>` +
+    Object.entries(fxCatalog).map(([group, list]) =>
+      `<optgroup label="${group}">` +
+      list.map(e => `<option value="${e.value}" ${String(cur ?? "") === e.value ? "selected" : ""}>${e.label}</option>`).join("") +
+      `</optgroup>`).join("");
 
   const row = (k, label) => {
     const cur = st.mods?.[k] ?? {};
@@ -277,6 +291,7 @@ export async function editStateDialog(state, { title } = {}) {
   const resE = st.resistance ?? {};
   const atk  = st.attackBonus ?? {};
   const atkCats = Array.isArray(atk.categories) ? atk.categories : [];
+  const atkFx = atk.effect ?? {};
 
   const content = `
 <div class="rpg-state-dialog">
@@ -313,8 +328,11 @@ export async function editStateDialog(state, { title } = {}) {
       </div>
 
       <div class="line">
-        <div class="lbl">Blessure (permanent, retirée par le MJ seul)</div>
-        <div><input type="checkbox" name="permanent" ${st.permanent ? "checked" : ""}/></div>
+        <div class="lbl">Durée illimitée (∞)</div>
+        <div><input type="checkbox" name="permanent" ${st.permanent ? "checked" : ""}/>
+          <small class="hint">Ne se décompte jamais : ni la durée ni le « restant » ci-dessous ne comptent,
+          l'état reste tant que le MJ ne le retire pas (ou qu'un jet de retrait ne réussit pas).
+          Son effet par tour, lui, continue de tomber chaque tour.</small></div>
       </div>
 
       <div class="two">
@@ -371,6 +389,15 @@ export async function editStateDialog(state, { title } = {}) {
         <input type="number" name="dot.fatiguePerTick" value="${Number(st.dot.fatiguePerTick ?? 0) || 0}"/>
       </div>
 
+      <div class="line">
+        <div class="lbl">Mode de déplacement accordé</div>
+        <select name="mods.movementTypeGrant">
+          <option value="" ${!st.mods?.movementTypeGrant ? "selected" : ""}>— Aucun —</option>
+          ${Object.entries(MOVEMENT_TYPES).filter(([k]) => k !== "terrestre").map(([k, def]) =>
+            `<option value="${k}" ${String(st.mods?.movementTypeGrant ?? "") === k ? "selected" : ""}>${def.label}</option>`).join("")}
+        </select>
+      </div>
+
       <hr/>
       <h3>Résistance aux DÉGÂTS accordée</h3>
       <p class="hint">% retiré aux dégâts de ce type reçus par le porteur. Négatif = vulnérabilité. 100 = immunité.</p>
@@ -388,8 +415,12 @@ export async function editStateDialog(state, { title } = {}) {
 
       <hr/>
       <h3>Résistance aux ÉTATS accordée</h3>
-      <p class="hint">Sur les états de ce type reçus ENSUITE par le porteur : durée raccourcie, dégâts par tour réduits.
-        Valeurs négatives = vulnérabilité (l'état dure plus longtemps / tape plus fort). Indépendant du bloc ci-dessus.</p>
+      <p class="hint">Sur les états reçus ENSUITE par le porteur : durée raccourcie, dégâts par tour réduits.
+        Les deux filtres se combinent — un <b>type</b> seul vise toute la famille (tous les états de feu), un
+        <b>effet précis</b> seul ne vise que lui quel que soit son type (« Poison » uniquement), les deux ensemble
+        exigent les deux. Valeurs négatives = vulnérabilité (l'état dure plus longtemps / tape plus fort).
+        <b>Dégâts par tour −100 %</b> = il est posé mais ne fait plus rien ; <b>Immunité</b> = il n'est pas posé du tout.
+        Indépendant du bloc ci-dessus, qui ne parle que des dégâts directs.</p>
 
       <div class="two">
         <div>
@@ -397,9 +428,20 @@ export async function editStateDialog(state, { title } = {}) {
           <select name="resE.tag">${fxTagOptions(resE.tag)}</select>
         </div>
         <div>
+          <label>Effet précis (nom exact de l'état)</label>
+          <select class="rpg-res-fx-pick">${fxKeyOptions(resE.effectKey)}</select>
+          <input type="text" name="resE.effectKey" value="${String(resE.effectKey ?? "")}"
+            placeholder="ex : Poison" style="margin-top:4px"
+            title="Comparé au NOM de l'état reçu (sans tenir compte de la casse). Le menu au-dessus remplit ce champ depuis le catalogue, mais un nom hors catalogue est accepté."/>
+        </div>
+      </div>
+
+      <div class="two">
+        <div>
           <label>Durée en moins (tours)</label>
           <input type="number" name="resE.durationReduction" value="${Number(resE.durationReduction ?? 0) || 0}"/>
         </div>
+        <div></div>
       </div>
 
       <div class="two">
@@ -469,6 +511,76 @@ export async function editStateDialog(state, { title } = {}) {
         <select name="atk.tag">${dmgTypeOptions(atk.tag)}</select>
       </div>
 
+      <h3 style="margin-top:14px">État posé par ce bonus (« tes lames empoisonnent »)</h3>
+      <p class="hint">Facultatif, et suffisant à lui seul : un bonus qui ne pose qu'un état, sans un point de
+        dégât en plus, est valide. Sans nom, rien n'est posé. L'état est rafraîchi à chaque coup porté
+        plutôt qu'empilé.</p>
+
+      <div class="two">
+        <div>
+          <label>Nom de l'état (catalogue)</label>
+          <select class="rpg-atkfx-pick">${fxKeyOptions(atkFx.label, "— Choisir dans le catalogue —")}</select>
+        </div>
+        <div>
+          <label>Nom posé</label>
+          <input type="text" name="atkFx.label" value="${String(atkFx.label ?? "")}" placeholder="vide = aucun état"/>
+        </div>
+      </div>
+
+      <div class="two">
+        <div>
+          <label>Déclencheur</label>
+          <select name="atkFx.when">
+            ${Object.entries(BONUS_FX_WHEN).map(([k, v]) =>
+              `<option value="${k}" ${String(atkFx.when ?? "hit") === k ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label>Durée (tours)</label>
+          <input type="number" name="atkFx.duration" value="${Number(atkFx.duration ?? 1) || 1}" min="1"/>
+        </div>
+      </div>
+
+      <div class="two">
+        <div>
+          <label>Élément de l'état posé</label>
+          <select name="atkFx.tag">${dmgTypeOptions(atkFx.tag)}</select>
+        </div>
+        <div>
+          <label>Difficulté de retrait (0 = indissipable)</label>
+          <input type="number" name="atkFx.removeBaseTN" value="${Number(atkFx.removeBaseTN ?? 0) || 0}" min="0"/>
+        </div>
+      </div>
+
+      <div class="two">
+        <div>
+          <label>Par tour</label>
+          <select name="atkFx.dot.mode">
+            ${[["none", "— Rien —"], ["damage", "Dégâts"], ["heal", "Soin"]].map(([k, v]) =>
+              `<option value="${k}" ${String(atkFx.dot?.mode ?? "none") === k ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label>Base par tour</label>
+          <input type="number" name="atkFx.dot.base" value="${Number(atkFx.dot?.base ?? 0) || 0}" min="0"/>
+        </div>
+      </div>
+
+      <div class="two">
+        <div>
+          <label>+ stat du porteur ÷ tranche</label>
+          <select name="atkFx.dot.stat">
+            <option value="" ${!atkFx.dot?.stat ? "selected" : ""}>— aucune —</option>
+            ${["force", "dexterite", "intelligence", "acuite", "endurance"].map(k =>
+              `<option value="${k}" ${String(atkFx.dot?.stat ?? "") === k ? "selected" : ""}>${MOD_LABELS[k] ?? k}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label>Tranche</label>
+          <input type="number" name="atkFx.dot.per" value="${Number(atkFx.dot?.per ?? 10) || 10}" min="1"/>
+        </div>
+      </div>
+
       <hr/>
       <h3>Modificateurs (buff / debuff)</h3>
       <p class="hint">Flat = +10 / -10. % = +10 / -10 (pour +10% / -10%).</p>
@@ -522,12 +634,18 @@ export async function editStateDialog(state, { title } = {}) {
     if (rdTag) out.resistanceDamage = { tag: rdTag, pct: clamp(getNum("resD.pct", 0), RESIST_MIN, RESIST_MAX) };
     else delete out.resistanceDamage;
 
-    // Résistance aux ÉTATS (resistances.js) : l'immunité seule est une
-    // configuration valide, d'où le test sur le tag et non sur les nombres.
+    // Résistance aux ÉTATS (resistances.js) : l'un OU l'autre des deux filtres
+    // suffit — une résistance sans type mais nommant « Poison » est le cas
+    // même qu'on veut écrire, et `computeResistanceFor` la lit très bien
+    // (il n'ignore que celle qui n'a NI tag NI effectKey). L'immunité seule
+    // est une configuration valide, d'où le test sur les filtres et non sur
+    // les nombres.
     const reTag = getStr("resE.tag", "");
-    if (reTag) {
+    const reKey = getStr("resE.effectKey", "");
+    if (reTag || reKey) {
       out.resistance = {
-        tag: reTag,
+        tag: reTag || null,
+        effectKey: reKey,
         durationReduction: getNum("resE.durationReduction", 0),
         dotReductionPct: getNum("resE.dotReductionPct", 0),
         immune: getChk("resE.immune")
@@ -535,10 +653,9 @@ export async function editStateDialog(state, { title } = {}) {
     } else delete out.resistance;
 
     // Bonus de dégâts : normalisé par le module qui le lit (attack-bonus.js),
-    // jamais à la main — c'est lui qui décide qu'un bonus vide vaut `null`.
-    // `effect` est repris tel quel : un état posé par un sort peut porter un
-    // « tes lames empoisonnent » que cette fenêtre n'édite pas, et le perdre
-    // en corrigeant une durée serait une régression silencieuse.
+    // jamais à la main — c'est lui qui décide qu'un bonus vide vaut `null`,
+    // et qu'un bonus qui ne pose qu'un état sans un point de dégât en plus
+    // est parfaitement valide.
     const atkNext = normalizeAttackBonus({
       scope: getStr("atk.scope", "arme"),
       categories: Object.keys(WEAPON_CATEGORIES).filter(k => getChk(`atk.cat.${k}`)),
@@ -547,12 +664,32 @@ export async function editStateDialog(state, { title } = {}) {
       dice: getStr("atk.dice", ""),
       livraison: getStr("atk.livraison", ""),
       tag: getStr("atk.tag", ""),
-      effect: st.attackBonus?.effect ?? null
+      // État posé sur la cible touchée. Sans nom, `normalizeBonusEffect` rend
+      // null et le bonus reste purement chiffré — c'est la façon de l'enlever.
+      effect: {
+        label: getStr("atkFx.label", ""),
+        when: getStr("atkFx.when", "hit"),
+        duration: Math.max(1, getNum("atkFx.duration", 1)),
+        removeBaseTN: Math.max(0, getNum("atkFx.removeBaseTN", 0)),
+        tag: getStr("atkFx.tag", ""),
+        dot: {
+          mode: getStr("atkFx.dot.mode", "none"),
+          base: Math.max(0, getNum("atkFx.dot.base", 0)),
+          stat: getStr("atkFx.dot.stat", ""),
+          per: Math.max(1, getNum("atkFx.dot.per", 10))
+        }
+      }
     });
     if (atkNext) out.attackBonus = atkNext;
     else delete out.attackBonus;
 
     out.mods = out.mods ?? {};
+    // Le mode de déplacement accordé n'est pas une stat : il voyage dans
+    // `mods` sous sa propre clé, exactement comme l'écrit spells.js, et c'est
+    // là que le movement-tracker va le chercher.
+    const moveGrant = getStr("mods.movementTypeGrant", "");
+    if (moveGrant) out.mods.movementTypeGrant = moveGrant;
+    else delete out.mods.movementTypeGrant;
     for (const k of keys) {
       const flat = getNum(`mods.${k}.flat`, 0);
       const pct = getNum(`mods.${k}.pct`, 0);
@@ -603,6 +740,19 @@ export async function editStateDialog(state, { title } = {}) {
         if (labelInput) labelInput.value = def.label;
         if (tagSel) tagSel.value = def.tag;
       });
+
+      // Les deux champs qui désignent un état PAR SON NOM (la résistance ciblée,
+      // l'état posé par le bonus d'attaque) gardent une saisie libre : le
+      // catalogue ne connaît pas les états écrits à la main, et « Poison » n'y
+      // figure pas sous ce nom-là (il s'y appelle « Empoisonnement »). Le menu
+      // ne fait donc que remplir le champ.
+      const fill = (selSelector, inputName) => {
+        const sel = root?.querySelector(selSelector);
+        const input = root?.querySelector(`input[name="${inputName}"]`);
+        sel?.addEventListener("change", () => { if (input && sel.value) input.value = sel.value; });
+      };
+      fill("select.rpg-res-fx-pick", "resE.effectKey");
+      fill("select.rpg-atkfx-pick", "atkFx.label");
     });
   });
 }

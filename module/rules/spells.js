@@ -1764,6 +1764,12 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           // tag ni effectKey), pas besoin d'un if ici.
           resistance: {
             tag: String(fx.resistTag ?? "").trim() || null,
+            // Ne viser qu'UN effet nommé plutôt que tout un type : lu par
+            // computeResistanceFor (resistances.js), qui le compare au
+            // LIBELLÉ de l'état reçu. Les deux filtres se combinent, et l'un
+            // des deux suffit — c'est ce qui rend « immunisé au Poison, et à
+            // rien d'autre » exprimable.
+            effectKey: String(fx.resistEffectKey ?? "").trim(),
             durationReduction: n(fx.resistDurationReduction, 0),
             dotReductionPct: n(fx.resistDotPct, 0),
             immune: !!fx.resistImmune

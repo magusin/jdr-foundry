@@ -460,15 +460,49 @@ retrait (`removableStates`, `remove-state.js`) : indissipable, sans un mot.
 La fenêtre écrit un état de la **même forme exacte** que celui qu'un sort pose
 (`upsertState`, `spells.js`), ce qui est ce qui permet d'accorder à la main tout ce qu'un
 effet de sort sait accorder — et ces champs manquaient tous : `dot.fatiguePerTick`,
-`permanent` (blessure), `resistanceDamage` (dégâts), `resistance` (états), `attackBonus`.
+`permanent` (durée illimitée), `resistanceDamage` (dégâts), `resistance` (états, type
+**et** effet nommé), `mods.movementTypeGrant`, `attackBonus` et l'état que ce bonus pose
+(« tes lames empoisonnent », `attackBonus.effect`, dégâts par tour compris avec son
+échelle `base + stat ÷ tranche`).
 Chacun est lu par un module qui ignore l'existence de cette fenêtre (`actor.js`,
 `resistances.js`, `attack-bonus.js`, `turn-effects.js`) : rien n'y est réimplémenté, on
-remplit la même structure. Deux précautions dans le parseur : une résistance dont le type
-est vidé est **supprimée** de l'état plutôt que laissée à `null` (un vestige que plus
-aucune surface n'affiche), et le `effect` d'un `attackBonus` (« tes lames empoisonnent »,
-que cette fenêtre n'édite pas) est repris tel quel — le perdre en corrigeant une durée
-serait une régression silencieuse. `normalizeAttackBonus` reste le seul à décider qu'un
-bonus vide vaut `null`.
+remplit la même structure. Une précaution dans le parseur : une résistance dont les deux
+filtres sont vidés est **supprimée** de l'état plutôt que laissée à `null` (un vestige que
+plus aucune surface n'affiche). `normalizeAttackBonus` reste le seul à décider qu'un bonus
+vide vaut `null` — et qu'un bonus ne posant qu'un état, sans un point de dégât en plus,
+est valide.
+
+**« Durée illimitée » est le champ `permanent`**, celui que `tickStates` (`turn-effects.js`)
+ne décompte jamais et dont le DOT continue de tomber chaque tour. Conséquence à connaître,
+et voulue : `removableStates` (`remove-state.js`) exclut explicitement un état permanent,
+donc aucun jet ne le retire — c'est le MJ, à la main.
+
+### Une résistance aux états peut ne viser QU'UN effet nommé — et `effectKey` porte un LIBELLÉ
+
+`state.resistance` / `system.resistances[]` portent **deux filtres indépendants** :
+`tag` (toute une famille : les états de feu) et `effectKey` (un seul effet : « Poison »).
+`computeResistanceFor` (`resistances.js`) n'ignore une résistance que si elle n'a **ni**
+l'un **ni** l'autre, et exige chaque filtre renseigné — l'un seul suffit donc, ce qui rend
+« immunisé au Poison, et à rien d'autre » exprimable. Les fiches d'arme, d'armure et de
+talent exposaient les deux depuis toujours ; la fiche de **sort** (partie 7) et l'éditeur
+d'état ne proposaient que le type, donc le cas le plus demandé — une immunité à un poison
+précis — était injoignable depuis les deux surfaces qui servent le plus.
+
+- **`effectKey` est comparé au LIBELLÉ de l'état reçu, en minuscules**, jamais à la clé
+  technique du catalogue. D'où `effectCatalogByTag({ value: "label" })` pour remplir le
+  menu, et d'où le fait que le champ reste une **saisie libre** avec le menu en simple
+  aide : le catalogue ne connaît pas les états écrits à la main, et un même effet peut y
+  porter un autre nom (il s'y appelle « Empoisonnement », le MJ écrit « Poison »).
+- **Immunité et « −100 % de dégâts par tour » ne sont pas la même chose** : la première
+  empêche l'état d'être posé (`_resisted`), la seconde le laisse se poser inerte. Les deux
+  sont légitimes et les hints le disent.
+- `resistTextParts` porte maintenant `stateEffectKey`, sinon « immunisé au poison » et
+  « immunisé à toute la terre » s'affichaient à l'identique partout.
+- Vérifié sur le moteur : un état accordant `{effectKey: "Poison", immune: true}` bloque
+  « Poison » et laisse passer « Brûlure » **et** « Enracinement » (même tag `terre`).
+- La pesée lisait `fx.resistTag || fx.effectKey` — la clé du catalogue de l'effet
+  lui-même, qui nomme ce qu'on pose et non ce contre quoi on protège : elle facturait
+  donc une résistance à chaque effet venu du catalogue. Elle lit `fx.resistEffectKey`.
 
 ### États actifs are matched by label on add, not by id
 

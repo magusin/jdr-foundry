@@ -1265,7 +1265,13 @@ export function computeSpellValue(item, opts = {}) {
     }
 
     // Résistance aux ÉTATS accordée — le même barème que sur une pièce d'équipement.
-    const rtag = String(fx.resistTag ?? "") || String(fx.effectKey ?? "");
+    // Le filtre de la RÉSISTANCE, pas la clé du catalogue de l'effet lui-même :
+    // `fx.effectKey` nomme l'effet qu'on pose (« Bénédiction »), pas ce contre
+    // quoi il protège — le lire ici faisait peser une résistance à chaque fois
+    // qu'un effet venait du catalogue, y compris quand il n'en accordait
+    // aucune. Une résistance sans aucun filtre est de toute façon inerte côté
+    // moteur (computeResistanceFor l'ignore), donc elle ne vaut rien.
+    const rtag = String(fx.resistTag ?? "") || String(fx.resistEffectKey ?? "");
     if (rtag) {
       if (fx.resistImmune) {
         add(`${fxLabel} · immunité ${rtag}`, `${dur} tour(s)`,

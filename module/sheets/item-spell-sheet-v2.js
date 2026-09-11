@@ -612,6 +612,11 @@ static PARTS = foundry.utils.mergeObject(
     // familles vivait ici et ignorait « neutre », dont le groupe s'affichait
     // sous sa clé technique dès que le tag a été renommé.
     ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "key" });
+    // Le MÊME catalogue, mais portant le LIBELLÉ : une résistance aux états
+    // filtre sur `effectKey`, que `computeResistanceFor` compare au libellé de
+    // l'état reçu (en minuscules) et jamais à la clé technique. Les fiches
+    // d'arme, d'armure et de talent l'exposent ainsi depuis toujours.
+    ctx.EFFECT_CATALOG_LABELS = effectCatalogByTag({ value: "label" });
     // Familles d'ÉTATS (neutre inclus) — l'élément d'un état posé sert aux
     // résistances aux états, dont le vocabulaire est celui d'EFFECT_TAGS et
     // non celui des types de dégâts (qui connaît « magique » et ignore
@@ -808,6 +813,8 @@ static PARTS = foundry.utils.mergeObject(
       fx.resistDamagePct = clampResist(fx.resistDamagePct);
 
       fx.resistTag = String(fx.resistTag ?? "");
+      // Filtre par NOM d'effet (« Poison »), facultatif et indépendant du type.
+      fx.resistEffectKey = String(fx.resistEffectKey ?? "");
       fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
       fx.resistDotPct = n(fx.resistDotPct, 0);
       fx.resistImmune = !!fx.resistImmune;
@@ -973,6 +980,7 @@ static PARTS = foundry.utils.mergeObject(
         // Résistance aux ÉTATS (durée, dégâts par tour, immunité) — lue par
         // resistances.js, sans aucun effet sur les dégâts directs.
         resistTag:               str("resistTag", prev.resistTag ?? ""),
+        resistEffectKey:         str("resistEffectKey", prev.resistEffectKey ?? ""),
         resistDurationReduction: num("resistDurationReduction", 0),
         resistDotPct:            num("resistDotPct", 0),
         resistImmune:            bool("resistImmune"),
@@ -1494,6 +1502,16 @@ static PARTS = foundry.utils.mergeObject(
       // l'état posé et le catalogue est le choix explicite du MJ. Repasser sur
       // « — Nom libre — » ne l'efface pas, pour ne pas perdre un nom saisi à la
       // main d'un simple clic.
+      // Partie 7 : le menu du catalogue ne fait que REMPLIR le champ texte de
+      // l'effet visé par la résistance — c'est ce champ qui est stocké, pour
+      // qu'un état nommé à la main (hors catalogue) reste visable.
+      if (ev.target?.matches?.("select.fx-resist-catalogue-select")) {
+        const sel = ev.target;
+        const input = sel.closest("details")?.querySelector('[data-fx-field="resistEffectKey"]');
+        if (input && sel.value) input.value = sel.value;
+        await this._saveEffects(root);
+      }
+
       if (ev.target?.matches?.("select.fx-atkfx-catalogue-select")) {
         const sel = ev.target;
         const def = sel.value ? getEffectDef(sel.value) : null;
