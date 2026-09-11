@@ -38,6 +38,7 @@
 
 import { normalizeAttackBonus } from "./attack-bonus.js";
 import { tickPerTick, scaledModValue } from "./effect-tick.js";
+import { fxResistanceRows } from "./damage-types.js";
 
 const FLAG_SCOPE = "rpg";
 
@@ -335,12 +336,17 @@ export function passifStates(actor) {
           fatiguePerTick: Number(fx?.fatigueDot) || 0
         },
         mods,
-        resistance: {
-          tag: String(fx?.resistTag ?? "").trim() || null,
-          durationReduction: Number(fx?.resistDurationReduction) || 0,
-          dotReductionPct: Number(fx?.resistDotPct) || 0,
-          immune: !!fx?.resistImmune
-        },
+        // Toutes les lignes de résistance de l'effet, pas la première : un
+        // passif « Écaille de dragon » peut immuniser au Poison ET raccourcir
+        // les brûlures. `fxResistanceRows` lit la liste, et retombe sur les
+        // champs plats d'un passif écrit avant elle.
+        resistances: fxResistanceRows(fx).map(r => ({
+          tag: String(r?.tag ?? "").trim() || null,
+          effectKey: String(r?.effectKey ?? "").trim(),
+          durationReduction: Number(r?.durationReduction) || 0,
+          dotReductionPct: Number(r?.dotReductionPct) || 0,
+          immune: !!r?.immune
+        })),
         resistanceDamage: {
           tag: String(fx?.resistDamageTag ?? "").trim() || null,
           pct: Number(fx?.resistDamagePct) || 0

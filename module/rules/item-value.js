@@ -66,6 +66,7 @@
 import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
 import { BASE_VITESSE } from "./base-speed.js";
 import { normalizeAttackBonus } from "./attack-bonus.js";
+import { fxResistanceRows } from "./damage-types.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
@@ -1264,19 +1265,29 @@ export function computeSpellValue(item, opts = {}) {
           sign * Math.abs(rdPct) * w * durFactor * affected * fxChance);
     }
 
-    // Résistance aux ÉTATS accordée — le même barème que sur une pièce d'équipement.
-    const rtag = String(fx.resistTag ?? "") || String(fx.effectKey ?? "");
-    if (rtag) {
-      if (fx.resistImmune) {
+    // Résistances aux ÉTATS accordées — le même barème que sur une pièce
+    // d'équipement, et TOUTES les lignes : un effet peut en accorder plusieurs
+    // (immunité au Poison + durée réduite sur le feu), n'en peser qu'une
+    // sous-lirait exactement les effets les plus chargés.
+    //
+    // Le filtre lu est celui de la RÉSISTANCE, jamais `fx.effectKey` : celui-là
+    // nomme l'effet qu'on pose (« Bénédiction »), pas ce contre quoi il
+    // protège — le lire ici facturait une résistance à chaque effet venu du
+    // catalogue. Une ligne sans aucun filtre est de toute façon inerte côté
+    // moteur (computeResistanceFor l'ignore), donc elle ne vaut rien.
+    for (const r of fxResistanceRows(fx)) {
+      const rtag = String(r.tag ?? "") || String(r.effectKey ?? "");
+      if (!rtag) continue;
+      if (r.immune) {
         add(`${fxLabel} · immunité ${rtag}`, `${dur} tour(s)`,
             (onAlly ? 1 : -1) * STATE_RESIST_WEIGHTS.immune * durFactor * affected * fxChance);
       }
-      const rd = n(fx.resistDurationReduction, 0);
+      const rd = n(r.durationReduction, 0);
       if (rd) {
         add(`${fxLabel} · durée ${rtag}`, `${rd > 0 ? "−" : "+"}${Math.abs(round1(rd))} tour(s)`,
             (onAlly === (rd > 0) ? 1 : -1) * Math.abs(rd) * STATE_RESIST_WEIGHTS.durationReduction * durFactor * affected * fxChance);
       }
-      const rp = n(fx.resistDotPct, 0);
+      const rp = n(r.dotReductionPct, 0);
       if (rp) {
         add(`${fxLabel} · DOT ${rtag}`, `${rp > 0 ? "−" : "+"}${Math.abs(round1(rp))} %`,
             (onAlly === (rp > 0) ? 1 : -1) * Math.abs(rp) * STATE_RESIST_WEIGHTS.dotReductionPct * durFactor * affected * fxChance);

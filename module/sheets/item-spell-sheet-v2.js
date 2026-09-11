@@ -4,7 +4,7 @@ import { getManaCostReduction, getActiveWeathers, getBiomeManaBonus, getActiveBi
 import { applyUiTheme, sheetContent, sheetActionButtons, restoreScrollPositions, uniqueSheetOptions } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
 import {
-  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts
+  DAMAGE_TYPES, DAMAGE_TYPE_KEYS, RESIST_MIN, RESIST_MAX, fxResistTextParts, fxResistanceRows
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
 import { ZONE_TARGETS, zoneTargetsLabel } from "../rules/spell-zone.js";
@@ -496,6 +496,8 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       removeRestoreLine: async function(event) { await this._actionRemoveRestoreLine(event); },
       addMod:        async function(event) { await this._actionAddMod(event); },
       removeMod:     async function(event) { await this._actionRemoveMod(event); },
+      addFxResist:    async function(event) { await this._actionAddFxResist(event); },
+      removeFxResist: async function(event) { await this._actionRemoveFxResist(event); },
       // La pesée est calculée dans _prepareContext, donc au rendu. La saisie
       // d'un champ, elle, enregistre SANS re-rendre (_bindLiveSave, pour ne
       // pas faire sauter le curseur) : sans ce bouton, le MJ devrait fermer
@@ -612,6 +614,11 @@ static PARTS = foundry.utils.mergeObject(
     // familles vivait ici et ignorait « neutre », dont le groupe s'affichait
     // sous sa clé technique dès que le tag a été renommé.
     ctx.EFFECT_CATALOG = effectCatalogByTag({ value: "key" });
+    // Le MÊME catalogue, mais portant le LIBELLÉ : une résistance aux états
+    // filtre sur `effectKey`, que `computeResistanceFor` compare au libellé de
+    // l'état reçu (en minuscules) et jamais à la clé technique. Les fiches
+    // d'arme, d'armure et de talent l'exposent ainsi depuis toujours.
+    ctx.EFFECT_CATALOG_LABELS = effectCatalogByTag({ value: "label" });
     // Familles d'ÉTATS (neutre inclus) — l'élément d'un état posé sert aux
     // résistances aux états, dont le vocabulaire est celui d'EFFECT_TAGS et
     // non celui des types de dégâts (qui connaît « magique » et ignore
@@ -807,10 +814,17 @@ static PARTS = foundry.utils.mergeObject(
       fx.resistDamageTag = String(fx.resistDamageTag ?? "");
       fx.resistDamagePct = clampResist(fx.resistDamagePct);
 
-      fx.resistTag = String(fx.resistTag ?? "");
-      fx.resistDurationReduction = n(fx.resistDurationReduction, 0);
-      fx.resistDotPct = n(fx.resistDotPct, 0);
-      fx.resistImmune = !!fx.resistImmune;
+      // Résistances aux états : une LISTE. `fxResistanceRows` la lit, ou la
+      // fabrique depuis les champs plats d'un sort écrit avant elle — un seul
+      // endroit décide de cette équivalence, et c'est celui que lisent aussi
+      // spells.js, loadout.js et la pesée.
+      fx.resists = fxResistanceRows(fx).map(r => ({
+        tag: String(r?.tag ?? ""),
+        effectKey: String(r?.effectKey ?? ""),
+        durationReduction: n(r?.durationReduction, 0),
+        dotReductionPct: n(r?.dotReductionPct, 0),
+        immune: !!r?.immune
+      }));
 
       // Bonus de dégâts aux attaques du porteur (partie 8). Stocké à plat sur
       // l'effet (atk*) et regroupé à l'écriture de l'état — voir spells.js.
@@ -944,8 +958,24 @@ static PARTS = foundry.utils.mergeObject(
         });
       });
 
+      // Résistances aux états : une ligne par `.fx-resist-row`, comme les mods.
+      // Une ligne sans aucun filtre (ni type, ni effet, ni immunité) est
+      // abandonnée — elle serait inerte côté moteur et ne ferait qu'encombrer.
+      const resists = [];
+      card.querySelectorAll(".fx-resist-row[data-res-index]").forEach(row => {
+        const val = (f) => row.querySelector(`[data-res-field="${f}"]`);
+        const tag = String(val("tag")?.value ?? "").trim();
+        const effectKey = String(val("effectKey")?.value ?? "").trim();
+        const immune = !!val("immune")?.checked;
+        const durationReduction = Number(val("durationReduction")?.value) || 0;
+        const dotReductionPct = Number(val("dotReductionPct")?.value) || 0;
+        if (!tag && !effectKey && !immune && !durationReduction && !dotReductionPct) return;
+        resists.push({ tag, effectKey, durationReduction, dotReductionPct, immune });
+      });
+
       out.push({
         ...prev,
+        resists,
         id:        prev.id ?? foundry.utils.randomID(),
         effectKey: str("effectKey", prev.effectKey ?? ""),
         label:     str("label", prev.label ?? ""),
@@ -972,10 +1002,6 @@ static PARTS = foundry.utils.mergeObject(
         resistDamagePct:         clampResist(num("resistDamagePct", 0)),
         // Résistance aux ÉTATS (durée, dégâts par tour, immunité) — lue par
         // resistances.js, sans aucun effet sur les dégâts directs.
-        resistTag:               str("resistTag", prev.resistTag ?? ""),
-        resistDurationReduction: num("resistDurationReduction", 0),
-        resistDotPct:            num("resistDotPct", 0),
-        resistImmune:            bool("resistImmune"),
         // Bonus de dégâts aux attaques du porteur (partie 8). Les catégories
         // sont des cases à cocher : elles n'ont pas de champ unique, on les
         // relit sur la carte. Aucune cochée = toutes les armes.
@@ -1043,7 +1069,12 @@ static PARTS = foundry.utils.mergeObject(
       try {
         // 1) Champs d'un effet secondaire
         const fxCard = el.closest?.("details[data-fx-index]");
-        if (fxCard && (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field"))) {
+        // `data-res-field` (une ligne de résistance) doit être là aussi, sinon
+        // la saisie ne s'enregistre que si le MJ touche ENSUITE un autre champ
+        // de l'effet — exactement le genre de perte silencieuse que ce
+        // gestionnaire existe pour éviter.
+        if (fxCard && (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field")
+                       || el.hasAttribute("data-res-field"))) {
           ev.stopPropagation();
           // Affiche/masque les champs dépendants avant d'enregistrer
           this._syncOptionalFields(root, fxCard);
@@ -1494,6 +1525,18 @@ static PARTS = foundry.utils.mergeObject(
       // l'état posé et le catalogue est le choix explicite du MJ. Repasser sur
       // « — Nom libre — » ne l'efface pas, pour ne pas perdre un nom saisi à la
       // main d'un simple clic.
+      // Partie 7 : le menu du catalogue ne fait que REMPLIR le champ texte de
+      // l'effet visé par la résistance — c'est ce champ qui est stocké, pour
+      // qu'un état nommé à la main (hors catalogue) reste visable.
+      if (ev.target?.matches?.("select.fx-resist-catalogue-select")) {
+        const sel = ev.target;
+        // Sa propre ligne, jamais la première de l'effet : plusieurs
+        // résistances cohabitent et chacune a son menu.
+        const input = sel.closest(".fx-resist-row")?.querySelector('[data-res-field="effectKey"]');
+        if (input && sel.value) input.value = sel.value;
+        await this._saveEffects(root);
+      }
+
       if (ev.target?.matches?.("select.fx-atkfx-catalogue-select")) {
         const sel = ev.target;
         const def = sel.value ? getEffectDef(sel.value) : null;
@@ -1537,7 +1580,8 @@ static PARTS = foundry.utils.mergeObject(
       atkLivraison: "", atkTag: "",
       atkFxLabel: "", atkFxWhen: "hit", atkFxDuration: 1, atkFxRemoveTN: 0,
       atkFxTag: "", atkFxDotMode: "none", atkFxDotBase: 0, atkFxDotStat: "", atkFxDotPer: 10,
-      mods: []
+      mods: [],
+      resists: []
     });
     await this._updateAndKeepView({ "system.effectsUI": effects });
   }
@@ -1622,6 +1666,41 @@ static PARTS = foundry.utils.mergeObject(
     effects[fxIndex].mods = normMods(effects[fxIndex].mods);
     effects[fxIndex].mods.push({ stat: "force", mode: "flat", value: 0 });
 
+    await this._updateAndKeepView({ "system.effectsUI": effects });
+  }
+
+  /** Index de l'effet porté par un bouton d'action (mêmes attributs qu'addMod). */
+  _fxIndexOf(event) {
+    const btn = event?.target?.closest?.("[data-action]");
+    const idx = Number(
+      btn?.dataset?.fxIdx ?? btn?.dataset?.fxIndex ??
+      btn?.closest?.("[data-fx-index]")?.dataset?.fxIndex ?? -1
+    );
+    return Number.isFinite(idx) && idx >= 0 ? idx : -1;
+  }
+
+  async _actionAddFxResist(event) {
+    const fxIndex = this._fxIndexOf(event);
+    if (fxIndex < 0) return;
+    // On repart de l'état affiché, pas du document : une saisie en cours
+    // ailleurs dans l'effet ne doit pas être perdue par l'ajout d'une ligne.
+    const effects = this._currentEffects();
+    if (!effects[fxIndex]) return;
+    const list = Array.isArray(effects[fxIndex].resists) ? effects[fxIndex].resists : [];
+    list.push({ tag: "", effectKey: "", durationReduction: 0, dotReductionPct: 0, immune: false });
+    effects[fxIndex].resists = list;
+    await this._updateAndKeepView({ "system.effectsUI": effects });
+  }
+
+  async _actionRemoveFxResist(event) {
+    const fxIndex = this._fxIndexOf(event);
+    const btn = event?.target?.closest?.("[data-action]");
+    const resIndex = Number(btn?.dataset?.resIndex ?? -1);
+    if (fxIndex < 0 || !Number.isFinite(resIndex) || resIndex < 0) return;
+    const effects = this._currentEffects();
+    const list = Array.isArray(effects[fxIndex]?.resists) ? effects[fxIndex].resists : null;
+    if (!list || resIndex >= list.length) return;
+    list.splice(resIndex, 1);
     await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 

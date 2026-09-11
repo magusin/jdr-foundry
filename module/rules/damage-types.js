@@ -177,7 +177,7 @@ export function applyResistPct(amount, pct) {
  */
 export function resistTextParts({
   damageTag = null, damagePct = 0,
-  stateTag = null, durationReduction = 0, dotReductionPct = 0, immune = false
+  stateTag = null, stateEffectKey = "", durationReduction = 0, dotReductionPct = 0, immune = false
 } = {}) {
   const signed = (v, unit = "") => `${v > 0 ? "−" : "+"}${Math.abs(v)}${unit}`;
 
@@ -187,8 +187,13 @@ export function resistTextParts({
     : null;
 
   let state = null;
-  if (stateTag || immune) {
-    const bits = [stateTag ? damageTypeLabel(stateTag) : "?"];
+  // `stateEffectKey` ne vise QU'UN effet nommé (« Poison »), avec ou sans type :
+  // sans lui dans le libellé, « immunisé au poison » et « immunisé à toute la
+  // terre » s'affichaient exactement pareil.
+  const fxKey = String(stateEffectKey ?? "").trim();
+  if (stateTag || fxKey || immune) {
+    const scope = [stateTag ? damageTypeLabel(stateTag) : null, fxKey || null].filter(Boolean);
+    const bits = [scope.length ? scope.join(" · ") : "?"];
     if (immune) {
       bits.push("immunité");
     } else {
@@ -204,28 +209,81 @@ export function resistTextParts({
   return { damage, state, all: [damage, state].filter(Boolean) };
 }
 
-/** Même texte, lu directement sur un état actif (`system.etatsActifs[]`). */
+/**
+ * Les résistances aux ÉTATS portées par un état actif, en LISTE.
+ *
+ * Un état (comme une pièce d'équipement) peut en accorder plusieurs : immunité
+ * au Poison, plus une réduction de durée sur tout le feu, plus −50 % sur les
+ * dégâts par tour des brûlures. Une seule entrée ne permettait qu'une de ces
+ * trois phrases à la fois. `resistances[]` est la forme actuelle ;
+ * `resistance` (objet unique) reste lue telle quelle — c'est la forme de tous
+ * les états posés avant, et celle des passifs jusqu'à leur prochaine écriture.
+ */
+export function stateResistanceRows(st) {
+  const out = [];
+  if (Array.isArray(st?.resistances)) {
+    for (const r of st.resistances) if (r && typeof r === "object") out.push(r);
+  }
+  if (st?.resistance && typeof st.resistance === "object") out.push(st.resistance);
+  return out;
+}
+
+/**
+ * Même texte, lu directement sur un état actif (`system.etatsActifs[]`).
+ * `state` reste la PREMIÈRE ligne (les appelants qui n'en lisent qu'une n'ont
+ * pas changé de comportement), `states` les porte toutes et `all` les concatène
+ * derrière la résistance aux dégâts.
+ */
 export function stateResistTextParts(st) {
-  return resistTextParts({
-    damageTag:         st?.resistanceDamage?.tag ?? null,
-    damagePct:         st?.resistanceDamage?.pct ?? 0,
-    stateTag:          st?.resistance?.tag ?? null,
-    durationReduction: st?.resistance?.durationReduction ?? 0,
-    dotReductionPct:   st?.resistance?.dotReductionPct ?? 0,
-    immune:            !!st?.resistance?.immune
-  });
+  const damage = resistTextParts({
+    damageTag: st?.resistanceDamage?.tag ?? null,
+    damagePct: st?.resistanceDamage?.pct ?? 0
+  }).damage;
+
+  const states = stateResistanceRows(st).map(r => resistTextParts({
+    stateTag:          r?.tag ?? null,
+    stateEffectKey:    r?.effectKey ?? "",
+    durationReduction: r?.durationReduction ?? 0,
+    dotReductionPct:   r?.dotReductionPct ?? 0,
+    immune:            !!r?.immune
+  }).state).filter(Boolean);
+
+  return { damage, state: states[0] ?? null, states, all: [damage, ...states].filter(Boolean) };
+}
+
+/**
+ * Lignes de résistance aux ÉTATS d'un effet de sort, en liste.
+ * `fx.resists[]` est la forme actuelle ; les champs plats (`resistTag`…) sont
+ * ceux d'un sort écrit avant, et valent une ligne unique.
+ */
+export function fxResistanceRows(fx) {
+  if (Array.isArray(fx?.resists) && fx.resists.length) return fx.resists.filter(r => r && typeof r === "object");
+  const legacy = {
+    tag: fx?.resistTag ?? null,
+    effectKey: fx?.resistEffectKey ?? "",
+    durationReduction: fx?.resistDurationReduction ?? 0,
+    dotReductionPct: fx?.resistDotPct ?? 0,
+    immune: !!fx?.resistImmune
+  };
+  return (legacy.tag || legacy.effectKey || legacy.immune) ? [legacy] : [];
 }
 
 /** Même texte, lu sur un effet de la fiche de sort (`system.effectsUI[]`). */
 export function fxResistTextParts(fx) {
-  return resistTextParts({
-    damageTag:         fx?.resistDamageTag ?? null,
-    damagePct:         fx?.resistDamagePct ?? 0,
-    stateTag:          fx?.resistTag ?? null,
-    durationReduction: fx?.resistDurationReduction ?? 0,
-    dotReductionPct:   fx?.resistDotPct ?? 0,
-    immune:            !!fx?.resistImmune
-  });
+  const damage = resistTextParts({
+    damageTag: fx?.resistDamageTag ?? null,
+    damagePct: fx?.resistDamagePct ?? 0
+  }).damage;
+
+  const states = fxResistanceRows(fx).map(r => resistTextParts({
+    stateTag:          r?.tag ?? null,
+    stateEffectKey:    r?.effectKey ?? "",
+    durationReduction: r?.durationReduction ?? 0,
+    dotReductionPct:   r?.dotReductionPct ?? 0,
+    immune:            !!r?.immune
+  }).state).filter(Boolean);
+
+  return { damage, state: states[0] ?? null, states, all: [damage, ...states].filter(Boolean) };
 }
 
 /**

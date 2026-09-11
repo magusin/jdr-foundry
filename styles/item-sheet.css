@@ -472,6 +472,28 @@
 }
 .rpg-spell-sheet .fx-mod-head > span , .rpg-zone-sheet .fx-mod-head > span { padding-left: 2px; }
 
+/* Lignes de résistance aux états (partie 7) — même grammaire visuelle que les
+   lignes de bonus au-dessus : une ligne = une résistance, en-tête gris, ✕ au
+   bout. La colonne « effet précis » empile son menu de catalogue au-dessus de
+   la saisie libre, qui est la valeur réellement stockée. */
+.rpg-spell-sheet .fx-resist-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.7fr) minmax(0, 0.7fr) 52px 24px;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.rpg-spell-sheet .fx-resist-head {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-text-dim, #b6ad9a);
+  margin-bottom: 2px;
+}
+.rpg-spell-sheet .fx-resist-head > span { padding-left: 2px; }
+.rpg-spell-sheet .fx-resist-key { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rpg-spell-sheet .fx-resist-key select { font-size: 10px; }
+
 .rpg-spell-sheet .fx-add-btn , .rpg-zone-sheet .fx-add-btn {
   font-size: 11px;
   cursor: pointer;

@@ -8,7 +8,7 @@
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
 
 import { getWeatherModifierFor } from "./weather-library.js";
-import { resistTextParts } from "./damage-types.js";
+import { resistTextParts, stateResistanceRows } from "./damage-types.js";
 import { normalizeEffectTag } from "./effect-library.js";
 import { writeStateOn } from "./status-effects.js";
 import { effectiveStates } from "./loadout.js";
@@ -28,14 +28,16 @@ export function gearStateResistRows(list) {
   return rows.map(r => {
     const { state } = resistTextParts({
       stateTag: r?.tag ?? null,
+      // Une résistance peut ne viser QU'UN effet précis (« Brûlure ») plutôt
+      // que tout un type : sans ce rappel, deux lignes très différentes
+      // s'affichent à l'identique. Le formateur le porte lui-même depuis
+      // qu'un état posé et un effet de sort peuvent le renseigner aussi.
+      stateEffectKey: r?.effectKey ?? "",
       durationReduction: r?.durationReduction ?? 0,
       dotReductionPct: r?.dotReductionPct ?? 0,
       immune: !!r?.immune
     });
     if (!state) return null;
-    // Une résistance peut ne viser QU'UN effet précis (« Brûlure ») plutôt
-    // que tout un type : sans ce rappel, deux lignes très différentes
-    // s'affichent à l'identique.
     const key = String(r?.effectKey ?? "").trim();
     return { text: key ? `${state} — ${key} uniquement` : state };
   }).filter(Boolean);
@@ -78,14 +80,18 @@ export function actorStateResistRows(actor) {
 
 /**
  * Résistances fournies par des états actifs (buffs de résistance posés par sort).
- * Format attendu sur le state : state.resistance = {tag, durationReduction, dotReductionPct, immune}
+ * Format attendu sur le state : state.resistances = [{tag, effectKey, durationReduction,
+ * dotReductionPct, immune}] — ou l'objet unique state.resistance, forme héritée.
  */
 function getStateResistances(actor) {
   const list = [];
   // Passif porté compris — voir effectiveStates (loadout.js).
   const states = effectiveStates(actor);
   for (const st of states) {
-    if (st?.resistance && typeof st.resistance === "object") list.push(st.resistance);
+    // Un état en accorde autant qu'il veut : `resistances[]` (forme actuelle)
+    // et `resistance` (objet unique, forme des états posés avant) — les deux
+    // sont lues, par stateResistanceRows (damage-types.js).
+    list.push(...stateResistanceRows(st));
   }
   return list;
 }
