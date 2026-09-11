@@ -572,7 +572,21 @@ tenus par des tests jsdom :
   images, constaté en test) — le compte annoncé mentait.
 - **Revenir à « Taille de Foundry » retire les trois longhands de `flex` un par
   un.** `style.removeProperty("flex")` laisse `flex-grow/shrink/basis` en place
-  et la vignette resterait figée à son ancienne base.
+  et la vignette resterait figée à son ancienne base. Même piège sur
+  `object-position` : repasser de « Haut » à « Centre » doit l'effacer, sinon
+  le réglage n'a pas de retour en arrière (les deux attrapés par le test, pas
+  par la lecture).
+
+**`vignetteCadrage` est le réglage qui évite la seconde image.** La vignette est
+un CARRÉ découpé dans l'illustration, et Foundry prend le centre — sur une
+créature en pied, c'est le ventre, d'où des vignettes qui se ressemblent toutes.
+`object-position: 50% 15%` garde la tête, sans toucher un seul fichier. Il
+s'applique **même à la taille native** (c'est un choix de ce qu'on montre, pas
+de la place qu'on prend), donc la passe DOM tourne dès que l'un OU l'autre des
+deux réglages est sorti de son défaut. La valeur est validée par une regex
+avant d'être écrite en style en ligne : elle vient d'un `choices`, mais un
+`objectPosition` est une propriété CSS écrite telle quelle et n'a pas à
+accepter n'importe quelle chaîne.
 
 **Et la lightbox agrandissait au lieu de réduire.** `openImageLightbox`
 (`sheet-helpers.js`) écrivait `width: 100%` sous un `max-width: min(80vw,

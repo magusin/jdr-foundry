@@ -484,6 +484,26 @@ Hooks.once("ready", () => {
     onChange: () => { try { refreshDirectoryThumbs(); } catch { /* ignore */ } }
   });
 
+  // Où tombe le recadrage carré de la vignette. C'est LE réglage qui évite de
+  // produire une seconde image : une créature en pied a sa tête dans le tiers
+  // haut, et le recadrage centré de Foundry n'en garde que le flanc.
+  game.settings.register("rpg", "vignetteCadrage", {
+    name: "Cadrage des vignettes (barre latérale)",
+    hint: "La vignette est un carré découpé dans l'illustration. Par défaut Foundry prend le centre — sur une créature en pied, c'est le ventre. « Haut » garde la tête, et une seule image sert alors partout.",
+    scope: "client",
+    config: true,
+    type: String,
+    choices: {
+      "":           "Centre (par défaut Foundry)",
+      "50% 30%":    "Légèrement vers le haut",
+      "50% 15%":    "Haut — visages et têtes",
+      "50% 0%":     "Tout en haut"
+    },
+    default: "",
+    requiresReload: false,
+    onChange: () => { try { refreshDirectoryThumbs(); } catch { /* ignore */ } }
+  });
+
   game.settings.register("rpg", "movementLimitScope", {
     name: "Limite de déplacement en combat",
     hint: "Empêche un token de dépasser sa Vitesse pendant son tour. Hors combat, personne n'est limité.",
