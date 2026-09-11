@@ -64,13 +64,19 @@ export function applySheetViewMode(root, { isGM = false } = {}) {
  * Ouvre une image en grand, en lecture seule. DialogV2 est thématisée
  * automatiquement par le hook renderDialogV2 global (voir init.js) — pas
  * besoin d'appeler applyUiTheme() ici.
+ *
+ * `width: auto` et non `100 %` : la version précédente étirait TOUJOURS
+ * l'image jusqu'à 900 px, donc une illustration de 700 px de large y était
+ * agrandie de 28 % — floue par construction, sur la seule vue censée montrer
+ * le détail. Avec `auto`, une image plus petite que le plafond s'affiche à sa
+ * taille native (nette), une plus grande est réduite comme avant.
  */
 export function openImageLightbox(src, title) {
   const DialogV2 = foundry.applications?.api?.DialogV2;
   if (!DialogV2 || !src) return;
   DialogV2.wait({
     window: { title: title || "Illustration" },
-    content: `<img src="${src}" alt="" style="display:block;width:100%;max-width:min(80vw,900px);max-height:80vh;object-fit:contain;border-radius:8px;" />`,
+    content: `<img src="${src}" alt="" style="display:block;width:auto;max-width:min(80vw,900px);max-height:80vh;object-fit:contain;border-radius:8px;" />`,
     buttons: [{ action: "close", label: "Fermer", default: true }],
     rejectClose: false
   }).catch(() => {});
