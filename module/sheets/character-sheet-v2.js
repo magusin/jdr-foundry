@@ -7,8 +7,9 @@ import {
 } from "../rules/loadout.js";
 import { findStateSlot } from "../rules/status-effects.js";
 import { talentSummary } from "./item-talent-sheet-v2.js";
-import { listEffects, getEffectDef, EFFECT_TAGS } from "../rules/effect-library.js";
-import { STATE_TYPES, AURA_TARGETS, stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
+import { stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
+import { MOD_LABELS, normalizeState, stateDefaults, editStateDialog } from "./state-dialog.js";
+export { normalizeState, ensureStateDialogCSS } from "./state-dialog.js";
 import { isNpcActor } from "../rules/actor-roles.js";
 import {
   normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
@@ -21,29 +22,10 @@ const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api
 /* Utils XP / Skills                            */
 /* -------------------------------------------- */
 
-export const LABELS = {
-  force: "Force",
-  dexterite: "Dextérité",
-  intelligence: "Intelligence",
-  acuite: "Acuité",
-  endurance: "Endurance",
-  pvMax: "PV max",
-  manaMax: "Mana max",
-  fatigueMax: "Fatigue max",
-  regenPv: "Régén PV",
-  regenMana: "Régén Mana",
-  vitesse: "Vitesse",
-  scoreArmure: "Score Armure",
-  scoreResistance: "Score Résistance",
-  armureFixe: "Armure fixe",
-  resistanceFixe: "Résistance fixe",
-  toucherPhysique: "Toucher physique",
-  toucherMagique: "Toucher magique",
-  initiativeMod: "Initiative",
-  fatigueMax: "Fatigue max",
-  podsMax: "Pods max",
-  retraitMod: "Seuil de retrait d'état"
-};
+// Libellés des stats : définis une fois dans l'éditeur d'état partagé, et
+// réexportés ici parce que la fiche de monstre les importe depuis ce module
+// depuis toujours.
+export const LABELS = MOD_LABELS;
 
 /** Clé technique du seul emplacement où une relique peut aller. */
 export const RELIC_SLOT = "artefact";
@@ -75,32 +57,7 @@ export function slotOfItem(item) {
   return item?.system?.emplacement ?? "";
 }
 
-// ⚠️ soit tu recopies ta fonction normalizeState complète depuis le V1,
-// soit tu l'importes si tu l'as mise dans un fichier util.
-export function normalizeState(st) {
-  const out = foundry.utils.deepClone(st ?? {});
-  out.id = String(out.id || foundry.utils.randomID());
-  out.label = String(out.label ?? "").trim() || "État";
-  out.type = String(out.type ?? "custom").trim();
-  out.isAura = !!out.isAura;
-  out.duration = Math.max(1, Number(out.duration ?? 1) || 1);
-  out.remaining = Math.max(0, Number(out.remaining ?? out.duration) || 0);
-  out.cleanseDC = Math.max(0, Number(out.cleanseDC ?? 0) || 0);
-  out.dot = out.dot ?? {};
-  out.dot.flat = Number(out.dot.flat ?? 0) || 0;
-  out.dot.formula = String(out.dot.formula ?? "").trim();
-  out.dot.perTick = Number(out.dot.perTick ?? out.dot.flat) || 0;
-  out.mods = out.mods ?? {};
-  if (out.isAura) {
-    out.aura = out.aura ?? {};
-    out.aura.min = Number(out.aura.min ?? 0) || 0;
-    out.aura.max = Number(out.aura.max ?? 0) || 0;
-    out.aura.target = String(out.aura.target ?? "allies");
-    out.aura.linkedItemId = String(out.aura.linkedItemId ?? "");
-    out.aura.expiresWithCooldown = !!out.aura.expiresWithCooldown;
-  }
-  return out;
-}
+
 
 /**
  * Complète chaque état actif avec son résumé lisible (« Force -2 • Dégâts/tour 3 »)
@@ -166,103 +123,7 @@ export function decorateStates(states) {
   return states;
 }
 
-export function ensureStateDialogCSS() {
-  if (document.getElementById("rpg-state-dialog-css")) return;
 
-  const style = document.createElement("style");
-  style.id = "rpg-state-dialog-css";
-  style.textContent = `
-/* ===== RPG State Dialog (V2) ===== */
-
-/* on scroll sur le contenu du dialog */
-.rpg-state-dialog-window {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-/* wrapper interne */
-.rpg-state-dialog {
-  max-height: 70vh !important;
-  overflow: auto !important;
-  padding-right: 12px !important;
-}
-
-/* inputs */
-.rpg-state-dialog input,
-.rpg-state-dialog select {
-  width: 100% !important;
-  box-sizing: border-box !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-}
-
-/* lignes label/champ */
-.rpg-state-dialog .line {
-  display: grid !important;
-  grid-template-columns: 220px 1fr !important;
-  gap: 14px !important;
-  align-items: center !important;
-  margin-bottom: 12px !important;
-}
-.rpg-state-dialog .lbl {
-  font-weight: 700 !important;
-  opacity: .9 !important;
-}
-
-/* grilles 2 colonnes (durée/restant, portée min/max) */
-.rpg-state-dialog .two {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 14px !important;
-  margin-bottom: 12px !important;
-}
-.rpg-state-dialog .two label {
-  display: block !important;
-  font-weight: 700 !important;
-  opacity: .9 !important;
-  margin: 0 0 6px 0 !important;
-}
-
-/* mods : label + 2 inputs côte à côte (avec espace) */
-.rpg-state-dialog .mods-row {
-  display: grid !important;
-  grid-template-columns: 220px 1fr !important;
-  gap: 14px !important;
-  align-items: center !important;
-  margin: 10px 0 !important;
-}
-.rpg-state-dialog .mods-label {
-  font-weight: 700 !important;
-  opacity: .9 !important;
-}
-.rpg-state-dialog .mods-inputs {
-  display: grid !important;
-  grid-template-columns: 110px 110px !important;
-  gap: 14px !important;
-  justify-content: end !important;
-  justify-items: end !important;
-}
-.rpg-state-dialog .mods-inputs input {
-  width: 110px !important;
-}
-
-/* séparateurs */
-.rpg-state-dialog hr {
-  border: 0 !important;
-  height: 1px !important;
-  background: var(--border-soft, rgba(255,255,255,.12)) !important;
-  margin: 16px 0 !important;
-}
-
-@media (max-width: 560px) {
-  .rpg-state-dialog .line { grid-template-columns: 1fr !important; gap: 8px !important; }
-  .rpg-state-dialog .two { grid-template-columns: 1fr !important; gap: 10px !important; }
-  .rpg-state-dialog .mods-row { grid-template-columns: 1fr !important; gap: 8px !important; }
-  .rpg-state-dialog .mods-inputs { justify-content: start !important; justify-items: start !important; }
-}
-  `;
-  document.head.appendChild(style);
-}
 
 function xpPalierForLevel(level) {
   const n = Math.max(1, Number(level) || 1);
@@ -2156,276 +2017,20 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
   }
 
   _stateDefaults() {
-    return this._normalizeState({
-      id: foundry.utils.randomID(),
-      label: "Poison",
-      type: "poison",
-      tag: "",
-      isAura: false,
-      duration: 3,
-      remaining: 3,
-      cleanseDC: 0,
-      dot: { flat: 0, formula: "", perTick: 0 },
-      mods: {}
-    });
+    return stateDefaults();
   }
 
   _normalizeState(st) {
     return normalizeState(st);
   }
 
-  _allModKeys() {
-    return [
-      "force", "dexterite", "intelligence", "acuite", "endurance",
-      "pvMax", "manaMax", "regenPv", "regenMana",
-      "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
-      "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
-      "fatigueMax", "podsMax", "retraitMod"
-    ];
-  }
-
-  async _editStateDialog(state, { title } = {}) {
-    const st = this._normalizeState(state);
-    const keys = this._allModKeys();
-
-    const labels = {
-      force: "Force",
-      dexterite: "Dextérité",
-      intelligence: "Intelligence",
-      acuite: "Acuité",
-      endurance: "Endurance",
-      pvMax: "PV max",
-      manaMax: "Mana max",
-      regenPv: "Régén PV",
-      regenMana: "Régén Mana",
-      scoreArmure: "Score Armure",
-      scoreResistance: "Score Résistance",
-      armureFixe: "Armure fixe",
-      resistanceFixe: "Résistance fixe",
-      vitesse: "Vitesse",
-      initiativeMod: "Initiative",
-      toucherPhysique: "Toucher physique",
-      toucherMagique: "Toucher magique",
-      fatigueMax: "Fatigue max",
-      podsMax: "Pods max",
-      retraitMod: "Seuil de retrait d'état"
-    };
-
-    // Catalogue d'effets nommés (Ardeur, Brûlure…), groupé par élément —
-    // ne fait que pré-remplir le nom + l'élément ; tout reste éditable.
-    const byTag = {};
-    for (const e of listEffects()) {
-      if (!byTag[e.tag]) byTag[e.tag] = [];
-      byTag[e.tag].push(e);
-    }
-    const effectCatalogOptions = `<option value="">— Personnalisé —</option>` +
-      Object.entries(byTag).map(([tag, list]) =>
-        `<optgroup label="${EFFECT_TAGS[tag] ?? tag}">` +
-        list.map(e => `<option value="${e.key}">${e.label}</option>`).join("") +
-        `</optgroup>`
-      ).join("");
-
-    const tagOptions = Object.entries(STATE_TYPES)
-      .map(([k, v]) => `<option value="${k}" ${(st.tag ?? "") === k ? "selected" : ""}>${v}</option>`).join("");
-
-    const row = (k, label) => {
-      const cur = st.mods?.[k] ?? {};
-      const flat = Number(cur.flat ?? 0) || 0;
-      const pct = Number(cur.pct ?? 0) || 0;
-
-      return `
-        <div class="mods-row">
-          <div class="mods-label">${label}</div>
-          <div class="mods-inputs">
-            <input type="number" name="mods.${k}.flat" value="${flat}" placeholder="Flat"/>
-            <input type="number" name="mods.${k}.pct" value="${pct}" placeholder="%"/>
-          </div>
-        </div>
-      `;
-    };
-
-    const modsHtml = keys.map(k => row(k, labels[k] ?? k)).join("");
-
-    const content = `
-  <div class="rpg-state-dialog">
-
-    <div class="scroll">
-      <form class="rpg-state-edit">
-
-        <div class="line">
-          <div class="lbl">Nom de l'effet (catalogue)</div>
-          <select name="catalogEffect">${effectCatalogOptions}</select>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Nom (label)</div>
-          <input type="text" name="label" value="${st.label}"/>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Type</div>
-          <select name="type">
-            ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
-      `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`
-    ).join("")}
-          </select>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Type / Élément (résistances, couleur d'aura)</div>
-          <select name="tag">${tagOptions}</select>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Aura (avec portée)</div>
-          <div><input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/></div>
-        </div>
-
-        <div class="two">
-          <div>
-            <label>Durée (tours)</label>
-            <input type="number" name="duration" value="${st.duration}" min="1"/>
-          </div>
-          <div>
-            <label>Restant (tours)</label>
-            <input type="number" name="remaining" value="${st.remaining}" min="0"/>
-          </div>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Difficulté retrait (cleanse DC)</div>
-          <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
-        </div>
-
-        <div class="two">
-          <div>
-            <label>Portée min (m) (aura)</label>
-            <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0" step="0.1"/>
-          </div>
-          <div>
-            <label>Portée max (m) (aura)</label>
-            <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0" step="0.1"/>
-          </div>
-        </div>
-
-        <div class="line">
-          <div class="lbl">Cible (aura)</div>
-          <select name="aura.target">
-            ${Object.entries(AURA_TARGETS).map(([t, lbl]) =>
-      `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${lbl}</option>`
-    ).join("")}
-          </select>
-        </div>
-
-        <hr/>
-        <h3>DOT</h3>
-        <p class="hint">DOT fixe = dégâts appliqués à chaque tick (ex: début de tour).</p>
-
-        <div class="line">
-          <div class="lbl">DOT fixe</div>
-          <input type="number" name="dot.flat" value="${Number(st.dot.flat ?? 0) || 0}"/>
-        </div>
-
-        <hr/>
-        <h3>Modificateurs (buff / debuff)</h3>
-        <p class="hint">Flat = +10 / -10. % = +10 / -10 (pour +10% / -10%).</p>
-
-        ${modsHtml}
-      </form>
-    </div>
-  </div>
-`;
-
-    const parseForm = (htmlRoot) => {
-      const form = htmlRoot.querySelector("form");
-      const fd = new FormData(form);
-
-      const getStr = (k, d = "") => String(fd.get(k) ?? d).trim();
-      const getNum = (k, d = 0) => Number(fd.get(k) ?? d) || 0;
-      const getChk = (k) => fd.get(k) !== null;
-
-      const out = this._normalizeState(st);
-      out.label = getStr("label", out.label);
-      out.type = getStr("type", out.type);
-      out.tag = getStr("tag", out.tag ?? "") || null;
-      out.isAura = getChk("isAura");
-
-      out.duration = Math.max(1, getNum("duration", out.duration));
-      out.remaining = Math.max(0, getNum("remaining", out.remaining));
-      out.cleanseDC = Math.max(0, getNum("cleanseDC", out.cleanseDC));
-
-      out.dot = out.dot ?? {};
-      out.dot.flat = getNum("dot.flat", 0);
-      out.dot.formula = "";
-      out.dot.perTick = out.dot.flat;
-
-      if (out.isAura) {
-        out.aura = out.aura ?? {};
-        out.aura.min = Math.max(0, getNum("aura.min", 0));
-        out.aura.max = Math.max(0, getNum("aura.max", 0));
-        out.aura.target = getStr("aura.target", "allies") || "allies";
-      } else {
-        delete out.aura;
-      }
-
-      out.mods = out.mods ?? {};
-      for (const k of keys) {
-        const flat = getNum(`mods.${k}.flat`, 0);
-        const pct = getNum(`mods.${k}.pct`, 0);
-        if (flat !== 0 || pct !== 0) out.mods[k] = { flat, pct };
-        else delete out.mods[k];
-      }
-
-      return out;
-    };
-
-    const DialogV2 = foundry.applications.api.DialogV2 ?? foundry.applications.api.Dialog;
-
-    return await new Promise((resolve) => {
-      ensureStateDialogCSS();
-
-      const dlg = new DialogV2({
-        window: {
-          title: title || "État",
-          contentClasses: ["rpg-state-dialog-window"]
-        },
-        position: { width: 680, height: 760 },
-        content,
-        buttons: [
-          {
-            action: "cancel",
-            label: "Annuler",
-            default: false,
-            callback: () => resolve(null)
-          },
-          {
-            action: "ok",
-            label: "Enregistrer",
-            default: true,
-            callback: (_event, _button, dialog) => {
-              const root = dialog.element ?? dialog?.form ?? dialog;
-              resolve(parseForm(root));
-            }
-          }
-        ],
-        close: () => resolve(null)
-      });
-
-      dlg.render(true).then(() => {
-        // Choisir un effet du catalogue ne fait que pré-remplir nom + élément :
-        // le MJ garde la main sur toutes les valeurs (durée, mods, aura…).
-        const root = dlg.element;
-        const catalogSel = root?.querySelector('select[name="catalogEffect"]');
-        const labelInput = root?.querySelector('input[name="label"]');
-        const tagSel = root?.querySelector('select[name="tag"]');
-        catalogSel?.addEventListener("change", () => {
-          const def = getEffectDef(catalogSel.value);
-          if (!def) return;
-          if (labelInput) labelInput.value = def.label;
-          if (tagSel) tagSel.value = def.tag;
-        });
-      });
-    });
+  /**
+   * L'éditeur d'état vit dans `state-dialog.js` : la fiche de monstre ouvre
+   * exactement la même fenêtre, et les deux copies qui existaient avaient
+   * fini par diverger (voir l'en-tête de ce module).
+   */
+  async _editStateDialog(state, opts = {}) {
+    return editStateDialog(state, opts);
   }
 
   async _postStateInfoToChat(st) {

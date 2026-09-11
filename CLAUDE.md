@@ -132,6 +132,32 @@ règle qui ne vivait que dans la tête du MJ (rapporté exactement ainsi).
   lecture de `targetCount.max` : la division (focus, dégâts sur un seul PJ) et la
   multiplication (menace, dégâts sur le groupe) doivent porter sur le même nombre.
 
+### Une ligne de dégâts porte son propre élément, sinon celui du sort
+
+`system.damages[]` a un champ **`tag`** par ligne (colonne « Élément » de la grille) :
+c'est ce qui rend exprimable « 1d6 physique **et** 2d6 magique de terre » dans un seul
+sort. Deux couches, deux champs, à ne pas confondre : la **livraison** de la ligne décide
+de ce qui l'absorbe (armure vs résistance fixe), l'**élément** décide de la résistance
+élémentaire opposée (`resistancesElem`). L'élément était global au sort (`system.tag`),
+donc une ligne physique dans un sort « terre » était jugée sur la résistance à la terre —
+et il n'existait aucun moyen de l'y soustraire.
+
+- **Vide = celui du sort**, et c'est tout l'arsenal existant : la résolution lisait déjà
+  `b.tag ?? item.system.tag` (chemin écrit pour les bonus d'états, « +1d6 de feu sur un
+  sort de glace »), la fiche ne faisait que ne jamais le remplir. Le champ est donc écrit
+  `null` quand il est vide, jamais `""` — `??` ne retombe pas sur une chaîne vide, et le
+  sort perdrait son élément sur toutes ses lignes.
+- **Quatre endroits écrivent une ligne de dégâts** dans `item-spell-sheet-v2.js` (la
+  normalisation de `expandRaw`, celle du contexte, `_saveDamages`, le collecteur du
+  submit, plus le défaut de `_actionAddDmgLine`) : un champ oublié dans l'un d'eux est
+  effacé au premier caractère tapé ailleurs dans la grille, puisque la liste entière est
+  réécrite à chaque fois.
+- **`RPGItem#_rollSpellDamage` (compétences de monstre) additionne toutes ses lignes en un
+  seul brut** puis mitige une fois : la dernière ligne qui nomme une livraison OU un
+  élément l'emporte pour l'ensemble. L'élément suit la limite préexistante de la
+  livraison plutôt que d'inventer une seconde règle ; le vrai découpage ligne par ligne
+  vit dans `spells.js`.
+
 ### A state can add damage to its bearer's attacks — `rules/attack-bonus.js`
 
 « Lames aiguisées », « Arme enflammée », « Poignards équilibrés » : a spell effect (section 8 of the spell sheet, stored flat as `fx.atk*` and normalized into `state.attackBonus` by `spells.js`) adds damage to **every** attack its bearer makes while it lasts — not to the next one only, which the table judged too punitive. Three cumulative forms (flat, dice, % of the raw hit) and three filters (scope `arme`/`sort`/`toutes`, weapon `categories`, and the added damage's own `livraison`/`tag`).
@@ -417,6 +443,32 @@ Anything that enumerates worn equipment must list all three types — `weapon`, 
 **A folder left empty by that filter is removed too, and that is what actually hides a "Monstre" folder from players.** The codex filter removes *rows*; the folder that held them stayed in the tree, empty, and its name alone is the spoiler (reported exactly that way for a « Monstre » folder in the spell compendium). `hideEmptyFolders` runs after both filters, deepest folder first (a parent can only be judged empty once its children are gone), and drops any folder element with no remaining `[data-entry-id]`/`[data-document-id]` inside. It also runs on packs the codex does not filter — an empty folder teaches a player nothing but its name. The explicit `flags.rpg.gmOnly` marking (macro « Dossiers Compendium (MJ) ») is *not* replaced by it: that one hides a folder even when the player knows one of its entries. Verified against realistic V13/V14 compendium markup in jsdom: a nested Monstre/Boss pair vanishes whole while a Mage folder survives on the single spell the player owns.
 
 A compendium Item dragged onto an actor becomes an **independent embedded copy** — Foundry does not keep it linked to its compendium source. Renaming/editing the actor's copy never updates the compendium entry, and vice versa; this is stock Foundry behavior, not something to "fix" in this codebase.
+
+### L'éditeur d'état posé à la main est UN module, partagé par les deux fiches
+
+`sheets/state-dialog.js` porte `editStateDialog` / `stateDefaults` / `normalizeState` /
+`ensureStateDialogCSS` / `MOD_LABELS`, et les fiches de personnage et de monstre s'y
+réduisent à une délégation. Elles en portaient chacune une copie intégrale, identiques au
+caractère près **sauf deux lignes** — et ces deux-là étaient côté monstre la lecture de
+`remaining` et de `cleanseDC` : les champs s'affichaient, le MJ les remplissait, le
+parseur ne les relisait jamais. Un état posé à la main sur un monstre gardait donc sa
+durée par défaut et, `cleanseDC` restant à 0, n'apparaissait dans aucune tentative de
+retrait (`removableStates`, `remove-state.js`) : indissipable, sans un mot.
+`character-sheet-v2.js` réexporte `normalizeState`/`ensureStateDialogCSS` et
+`LABELS = MOD_LABELS`, parce que d'autres modules les importent de là depuis toujours.
+
+La fenêtre écrit un état de la **même forme exacte** que celui qu'un sort pose
+(`upsertState`, `spells.js`), ce qui est ce qui permet d'accorder à la main tout ce qu'un
+effet de sort sait accorder — et ces champs manquaient tous : `dot.fatiguePerTick`,
+`permanent` (blessure), `resistanceDamage` (dégâts), `resistance` (états), `attackBonus`.
+Chacun est lu par un module qui ignore l'existence de cette fenêtre (`actor.js`,
+`resistances.js`, `attack-bonus.js`, `turn-effects.js`) : rien n'y est réimplémenté, on
+remplit la même structure. Deux précautions dans le parseur : une résistance dont le type
+est vidé est **supprimée** de l'état plutôt que laissée à `null` (un vestige que plus
+aucune surface n'affiche), et le `effect` d'un `attackBonus` (« tes lames empoisonnent »,
+que cette fenêtre n'édite pas) est repris tel quel — le perdre en corrigeant une durée
+serait une régression silencieuse. `normalizeAttackBonus` reste le seul à décider qu'un
+bonus vide vaut `null`.
 
 ### États actifs are matched by label on add, not by id
 

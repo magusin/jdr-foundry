@@ -2,7 +2,7 @@
 import { checkRange, fmtMeters, rangeDistanceMeters } from "../utils/grid.js";
 import { pickZoneTargets, matchesZoneTargets, zoneTargetsLabel } from "./spell-zone.js";
 import { applyResistances } from "./resistances.js";
-import { resistanceFor, fxResistTextParts } from "./damage-types.js";
+import { resistanceFor, fxResistTextParts, damageTypeLabel } from "./damage-types.js";
 import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
@@ -1998,9 +1998,15 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     const flat     = baseFlat + statBonus;
     const dice     = (isCrit && critDice) ? critDice : (String(d.dice ?? "").trim() || null);
     const livr     = String(d.livraison ?? sys.livraison ?? "magique");
+    // Élément PROPRE à la ligne. Vide (tout l'arsenal écrit avant ce champ) =
+    // celui du sort : la résolution lit `b.tag ?? system.tag`, et c'est ce qui
+    // rend exprimable « 1d6 physique + 2d6 magique de terre » — une résistance
+    // élémentaire par ligne, au lieu d'un seul élément pour tout le sort.
+    const lineTag  = String(d.tag ?? "").trim() || null;
+    const tagTxt   = (lineTag && lineTag !== "neutre") ? ` ${damageTypeLabel(lineTag)}` : "";
     dmgBlocks.push({
-      dice, flat, livraison: livr,
-      label: `Dégâts${isCrit ? " (crit)" : ""} ${livraisonLabel(livr)}`.trim(),
+      dice, flat, livraison: livr, tag: lineTag,
+      label: `Dégâts${isCrit ? " (crit)" : ""} ${livraisonLabel(livr)}${tagTxt}`.trim(),
       statKey, statBonus,
       // Vol de vie : part des dégâts RÉELLEMENT infligés (après armure)
       // rendue en PV au lanceur.

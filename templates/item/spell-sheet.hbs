@@ -269,14 +269,14 @@
       </div>
 
       {{#if system.damages.length}}
-      <div style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 52px 82px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
-        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés de dégâts sur réussite critique">Crit dés</span><span title="Bonus plat de dégâts sur réussite critique (peut différer du plat normal)">Crit plat</span><span title="Part des dégâts réellement infligés rendue en PV au lanceur">Vol de vie</span><span>Livraison</span><span></span>
+      <div style="display:grid;grid-template-columns:66px 42px 88px 40px 52px 60px 44px 52px 74px 76px 24px;gap:4px;padding:0 4px 2px;font-size:10px;opacity:.65;font-weight:600">
+        <span>Dés</span><span>Plat</span><span>Stat</span><span>Par</span><span>Gain/niv</span><span title="Dés de dégâts sur réussite critique">Crit dés</span><span title="Bonus plat de dégâts sur réussite critique (peut différer du plat normal)">Crit plat</span><span title="Part des dégâts réellement infligés rendue en PV au lanceur">Vol de vie</span><span>Livraison</span><span title="Type de dégâts de CETTE ligne, opposé à la résistance élémentaire correspondante de la cible. Vide = l'élément du sort (carte Général).">Élément</span><span></span>
       </div>
       {{/if}}
 
       {{#each system.damages as |dmg i|}}
       <div class="dmg-row" data-idx="{{i}}"
-        style="display:grid;grid-template-columns:66px 42px 96px 40px 52px 60px 44px 52px 82px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
+        style="display:grid;grid-template-columns:66px 42px 88px 40px 52px 60px 44px 52px 74px 76px 24px;gap:4px;align-items:center;margin-bottom:4px;padding:4px 4px;background:var(--surface);border-radius:6px">
         <input type="text"   name="system.damages.{{i}}.dice"     value="{{dmg.dice}}"     placeholder="1d6" style="font-size:12px" title="Dés normaux (ex: 1d6)"/>
         <input type="number" name="system.damages.{{i}}.flat"     value="{{dmg.flat}}"     placeholder="0"   style="font-size:12px" title="Bonus plat normal"/>
         <select              name="system.damages.{{i}}.stat"                                                 style="font-size:12px">
@@ -296,6 +296,15 @@
           <option value="magique"  {{#if (eq dmg.livraison "magique")}}selected{{/if}}>Magique</option>
           <option value="physique" {{#if (eq dmg.livraison "physique")}}selected{{/if}}>Physique</option>
         </select>
+        {{!-- Élément de la LIGNE. Vide = celui du sort : une ligne écrite avant
+             l'existence de ce champ garde donc exactement son comportement. --}}
+        <select              name="system.damages.{{i}}.tag"                                                  style="font-size:12px"
+          title="Type de dégâts de cette ligne (résistance élémentaire de la cible). Vide = l'élément du sort.">
+          <option value="" {{#unless dmg.tag}}selected{{/unless}}>— du sort —</option>
+          {{#each @root.damageTypeChoices as |c|}}
+            <option value="{{c.key}}" {{#if (eq c.key ../dmg.tag)}}selected{{/if}}>{{c.label}}</option>
+          {{/each}}
+        </select>
         {{#if @root.canEdit}}
         <button type="button" data-action="removeDmgLine" data-idx="{{i}}"
           style="cursor:pointer;color:#c0392b;border:none;background:none;font-size:14px;padding:0">✕</button>
@@ -308,7 +317,9 @@
       {{/unless}}
       <small class="fx-hint">Une ligne par type de dégâts : la <b>Livraison</b> de chaque ligne décide de ce qui l'encaisse
         (Physique → armure de la cible, Magique → résistance). Un sort peut donc cumuler une ligne physique et une ligne magique.
-        Toutes les lignes s'appliquent à <b>chaque</b> cible visée.</small>
+        L'<b>Élément</b> décide, lui, de la <b>résistance élémentaire</b> opposée à cette ligne — laissé vide, il reprend celui du
+        sort (carte Général). C'est ainsi qu'un sort inflige « 1d6 physique » <i>et</i> « 2d6 magique de terre » : deux lignes,
+        deux livraisons, deux éléments. Toutes les lignes s'appliquent à <b>chaque</b> cible visée.</small>
     </section>
     {{/if}}
     {{/if}}
