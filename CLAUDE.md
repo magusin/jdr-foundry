@@ -545,6 +545,47 @@ précis — était injoignable depuis les deux surfaces qui servent le plus.
 
 `system.etatsActifs` entries (`_stateUpsert` in `character-sheet-v2.js`/`monster-sheet-v2.js`) don't carry the effect catalog's stable `key` (`rules/effect-library.js`) — only a free-text `label`. `_stateAdd()` always starts from a fresh `foundry.utils.randomID()`, so re-applying an effect a target already has (e.g. clicking "Ajouter un état" and picking "Brûlure" again) would previously never match the existing entry and just stacked a duplicate with its own independent countdown. `_stateUpsert` now falls back to matching an existing entry by case-insensitive `label` whenever the id doesn't match anything (a genuine new add), and replaces it in place instead of stacking. Note this is the *manual GM dialog* path — `applyEffect()` in `rules/status-effects.js` (spell-driven effect application) already stacked/replaced correctly via `effectDef.key` and `stacking: "replace"`.
 
+### Vignettes de répertoire : Foundry n'en fabrique que pour les SCÈNES
+
+`scene.thumb` (un fichier de ~300 px généré à l'enregistrement) n'a pas
+d'équivalent pour un Acteur ou un Objet : la ligne du répertoire affiche le
+**fichier d'origine** dans un `<img>` d'environ 48 px, recadré au centre. Une
+illustration de 701 × 561 y est donc réduite d'un facteur ~14 en une passe, et
+la case finale ne porte que ~2 000 pixels — rapporté comme « mes images
+paraissent de mauvaise qualité », avec des fichiers pourtant propres (WebP,
+95 Ko). Aucun filtre ne récupère du détail qui n'a plus de place : **le seul
+levier réel est d'agrandir la case.**
+
+`rules/directory-thumbs.js` le fait, derrière le réglage client
+`vignetteTaille` dont le défaut est **0 = ne rien changer** — la barre latérale
+ancrée reste sinon hors du périmètre de ce système (cf. `themeIfOurs`), et la
+redimensionner est un geste opt-in que l'utilisateur demande. Trois détails
+tenus par des tests jsdom :
+
+- **Styles en ligne, jamais une règle CSS visant des classes de Foundry.** Les
+  noms de classe du répertoire ont déjà changé entre versions, et une feuille
+  qui ne matche plus ne fait rien *sans le dire*. Les lignes sont trouvées par
+  `[data-entry-id]` / `[data-document-id]` (le même repère que `codex.js`), la
+  passe se compte, et elle est idempotente.
+- **Un dossier EST une ligne de répertoire et contient les siennes** : sans un
+  `Set`, chaque image imbriquée est visitée une fois par ancêtre (5 pour 3
+  images, constaté en test) — le compte annoncé mentait.
+- **Revenir à « Taille de Foundry » retire les trois longhands de `flex` un par
+  un.** `style.removeProperty("flex")` laisse `flex-grow/shrink/basis` en place
+  et la vignette resterait figée à son ancienne base.
+
+**Et la lightbox agrandissait au lieu de réduire.** `openImageLightbox`
+(`sheet-helpers.js`) écrivait `width: 100%` sous un `max-width: min(80vw,
+900px)` : toute image plus étroite que 900 px y était étirée — un fichier de
+701 px agrandi de 28 %, flou par construction, sur la seule vue censée montrer
+le détail. C'est `width: auto` désormais : plus petite que le plafond, elle
+s'affiche à sa taille native ; plus grande, elle est réduite comme avant.
+
+Conséquence à connaître pour les assets : viser ~1200 px de large donne une
+lightbox au 1:1 et ne change rien à la vignette (à 48 ou 80 px, c'est la case
+qui décide, pas la source). Et une vignette lisible tient au **cadrage** — un
+plan serré passe à 48 px, une créature en pied dans un décor, jamais.
+
 ### Theming is global and mandatory per-window
 
 `styles/theme.css` defines the design tokens (`--ink`, `--brass`, `--ember`, `--el-*`, etc.) for three user-selectable themes (`sombre`/`clair`/`contraste`, world/client setting `rpg.uiTheme`). Every sheet must call `applyUiTheme(root)` (`sheets/sheet-helpers.js`) from its own `_onRender`, and `applyGlobalTheme()` (called once from `init.js`'s `ready` hook) stamps the theme class on `<body>` so non-sheet windows (macro dialogs, DialogV2 prompts) inherit it too. A new sheet or macro dialog that skips this will render in Foundry's default (unthemed) look regardless of the user's choice.

@@ -17,6 +17,7 @@ import { RPGTalentSheetV2 } from "./sheets/item-talent-sheet-v2.js";
 import { RPGQuestSheetV2 } from "./sheets/item-quest-sheet-v2.js";
 
 import { checkRange, pointDistanceMeters, fmtMeters } from "./utils/grid.js";
+import { installDirectoryThumbs, refreshDirectoryThumbs } from "./rules/directory-thumbs.js";
 import { asList } from "./utils/indexed-list.js";
 import { installRPGTokenRuler } from "./rules/movement-ruler.js";
 import { installCustomStatusEffects, syncActorStatusIcons } from "./rules/status-icons.js";
@@ -459,6 +460,28 @@ Hooks.once("ready", () => {
         try { app.render({ force: false }); } catch { /* ignore */ }
       }
     }
+  });
+
+  // Vignettes des répertoires (Acteurs, Objets…). Foundry n'ayant pas de
+  // vraie miniature pour un acteur, la case de ~48 px réduit l'illustration
+  // d'un facteur ~14 : agrandir la case est le SEUL levier qui rend du détail.
+  // 0 = on ne touche à rien, la barre latérale restant hors du périmètre du
+  // thème de ce système. Réglage personnel, comme le thème.
+  game.settings.register("rpg", "vignetteTaille", {
+    name: "Taille des vignettes (barre latérale)",
+    hint: "Agrandit les images des listes Acteurs / Objets. Une illustration réduite à 48 px n'a plus que ~2 000 pixels : à 80 px elle en porte près de trois fois plus et redevient lisible. « Taille de Foundry » ne change rien.",
+    scope: "client",
+    config: true,
+    type: Number,
+    choices: {
+      0:  "Taille de Foundry (par défaut)",
+      64: "Moyennes — 64 px",
+      80: "Grandes — 80 px",
+      96: "Très grandes — 96 px"
+    },
+    default: 0,
+    requiresReload: false,
+    onChange: () => { try { refreshDirectoryThumbs(); } catch { /* ignore */ } }
   });
 
   game.settings.register("rpg", "movementLimitScope", {
@@ -1026,6 +1049,9 @@ Hooks.once("ready", () => {
     // ✅ Thème global : pose la classe sur <body> pour que TOUTES les fenêtres
     //    (y compris les dialogues de macro) héritent des variables de thème.
     try { applyGlobalTheme(); } catch (e) { console.warn("[RPG] thème global:", e); }
+    // Vignettes des répertoires : même moment que le thème global (le DOM de
+    // la barre latérale existe), et sans effet tant que le réglage vaut 0.
+    try { installDirectoryThumbs(); } catch (e) { console.warn("[RPG] vignettes de répertoire:", e); }
 
     // ✅ Habille les fenêtres du système au fil de leur ouverture : les macros
     //    créent des Dialog/DialogV2 sans classe à nous, qui gardaient donc
