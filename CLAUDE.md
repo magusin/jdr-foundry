@@ -577,6 +577,46 @@ tenus par des tests jsdom :
   le réglage n'a pas de retour en arrière (les deux attrapés par le test, pas
   par la lecture).
 
+**Chrome réduit une image en UNE passe, et c'est ça qui « pixélise ».** Diagnostic
+mené jusqu'au bout avec le MJ, en éliminant dans l'ordre : le fichier chargé
+(`naturalWidth` = 701 × 561, le bon), la taille d'affichage (96 px, le réglage
+s'applique), `image-rendering` (`auto`), et la mise à l'échelle de l'interface
+(Foundry pose un `transform: matrix(1.25)` sur `#ui-right` — retiré à chaud, sans
+effet). Reste le moteur : Chrome décode à 701 px puis tire directement vers 96 px
+avec un filtre bilinéaire qui ne moyenne que quelques pixels voisins. Sur un
+rapport de 7:1 et une texture fine, ça donne du **crénelage**, pas un flou doux —
+et c'est pourquoi un fichier de 1402 px n'avait pas meilleure mine qu'un de 701 :
+même passe unique pour les deux. La preuve était dans les données du MJ avant
+d'être dans le code.
+
+`upgradeThumb` refait donc l'image nous-mêmes : recadrage, descente par
+**moitiés successives** (701 → 350 → 175 → 96, ce qui moyenne réellement tous
+les pixels, comme un mipmap), passe finale à la taille exacte, et le `src` est
+remplacé par le résultat. Points tenus :
+
+- **La cible est la taille RÉELLE à l'écran**, pas la taille CSS : `devicePixelRatio`
+  et le `transform` de l'interface (mesuré par `getBoundingClientRect().width /
+  clientWidth`) multiplient les pixels physiques. Viser la taille CSS produirait
+  une vignette deux fois trop petite, donc réétirée — le bug qu'on essaie de fuir.
+- **Une réduction inférieure à 2:1 est laissée au navigateur** (`halvingSteps`
+  renvoie une liste vide) : il s'en sort très bien à ce rapport, et une passe de
+  plus ne ferait qu'adoucir.
+- **Le fichier d'origine n'est jamais touché** et reste dans
+  `dataset.rpgThumbSrc` — pour revenir en arrière, et pour ne pas
+  ré-échantillonner notre propre sortie au rendu suivant.
+- **Les SVG sont exclus** (le vectoriel se redimensionne parfaitement ; le
+  rasteriser lui ferait perdre sa netteté), et tout est en try/catch : un échec
+  laisse la vignette telle qu'elle était.
+- **Cache par (source, taille, cadrage)** : un répertoire se re-rend à chaque
+  création ou renommage, sans lui on referait le travail des dizaines de fois.
+
+**Un recadrage carré n'a de liberté que sur le GRAND côté.** Sur une image
+PAYSAGE (701 × 561), le carré fait 561 × 561 : il occupe toute la hauteur et se
+promène horizontalement. `object-position: 50% 15%` n'y change donc **rien** —
+vérifié par le test (`sy` vaut 0 à 15 % comme à 50 %). Le réglage de cadrage ne
+mord que sur une image portrait. Le dire est ce qui évite de le proposer comme
+remède à quelqu'un dont tout l'arsenal est en paysage.
+
 **`vignetteCadrage` est le réglage qui évite la seconde image.** La vignette est
 un CARRÉ découpé dans l'illustration, et Foundry prend le centre — sur une
 créature en pied, c'est le ventre, d'où des vignettes qui se ressemblent toutes.
