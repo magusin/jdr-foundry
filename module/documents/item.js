@@ -328,6 +328,7 @@ export class RPGItem extends Item {
     let statBonus = 0;
     let rollTotal = 0;
     let livraison = String(sys.livraison ?? type ?? "magique");
+    let lineTag   = String(sys.tag ?? "").trim() || null;
 
     for (const d of lines) {
       const stat    = String(d?.stat ?? "").trim();
@@ -353,6 +354,14 @@ export class RPGItem extends Item {
       }
       rawBrut += flat + bonus;
       if (d?.livraison) livraison = String(d.livraison);
+      // Élément propre à la ligne, comme sur la fiche de sort. Ce chemin
+      // (compétence de monstre) additionne toutes ses lignes en UN seul brut
+      // puis mitige une fois : la dernière ligne qui nomme une livraison ou un
+      // élément l'emporte donc pour l'ensemble — limite préexistante du champ
+      // « livraison », à laquelle l'élément se conforme plutôt que d'inventer
+      // une seconde règle. Le vrai découpage ligne par ligne vit dans
+      // spells.js (résolution d'un sort lancé).
+      if (String(d?.tag ?? "").trim()) lineTag = String(d.tag).trim();
     }
 
     // Bonus de dégâts accordés par un état actif de l'attaquant. Une
@@ -372,7 +381,7 @@ export class RPGItem extends Item {
       pct  = isMagic ? (Number(red.magiquePct) || 0)      : (Number(red.physiquePct) || 0);
       // Une compétence de monstre porte, elle, un élément (system.tag) :
       // c'est lui qui prime sur la livraison pour la résistance élémentaire.
-      elem = resistanceFor(targetActor, { tag: sys.tag ?? null, livraison });
+      elem = resistanceFor(targetActor, { tag: lineTag, livraison });
     }
 
     const afterFixe = Math.max(0, beforeMitigation - fixe);

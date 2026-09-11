@@ -414,6 +414,7 @@ function normalizeAndMergeEffects(document, expanded) {
       d.per = Number(d.per ?? 10) || 10;
       d.perStep = Number(d.perStep ?? 0) || 0;
       d.siphon = Math.max(0, Math.min(100, Number(d.siphon ?? 0) || 0));
+      d.tag = String(d.tag ?? "").trim();
     }
   }
 
@@ -559,6 +560,9 @@ static PARTS = foundry.utils.mergeObject(
       dmg.critDice = String(dmg.critDice ?? "");
       dmg.critFlat = Number(dmg.critFlat ?? 0) || 0;
       dmg.livraison = String(dmg.livraison ?? "magique");
+      // Élément propre à la ligne. Vide (le défaut, et tout l'existant) =
+      // celui du sort — résolu à la résolution, pas ici.
+      dmg.tag = String(dmg.tag ?? "");
       dmg.siphon = Math.max(0, Math.min(100, Number(dmg.siphon ?? 0) || 0));
     }
 
@@ -662,9 +666,13 @@ static PARTS = foundry.utils.mergeObject(
       for (const d of ctx.system.damages) {
         const normal = formulaOf(d, "flat", "dice");
         if (!normal) continue;
+        // L'élément affiché est celui de la LIGNE, sinon celui du sort : le
+        // joueur doit lire ce à quoi la cible résistera, pas une moyenne.
+        const dTag = String(d.tag ?? "").trim() || String(ctx.system.tag ?? "");
+        const dTagTxt = (dTag && dTag !== "neutre") ? ` ${tagLabel(dTag)}` : "";
         ctx.playerInfo.push({
           icon: "💥",
-          label: `Dégâts ${d.livraison === "physique" ? "physiques" : "magiques"}`,
+          label: `Dégâts ${d.livraison === "physique" ? "physiques" : "magiques"}${dTagTxt}`,
           value: normal, wide: true
         });
         const crit = formulaOf(d, "critFlat", "critDice");
@@ -1183,7 +1191,8 @@ static PARTS = foundry.utils.mergeObject(
         critDice:  get("input[name*='.critDice']")?.value?.trim() || "",
         critFlat:  Number(get("input[name*='.critFlat']")?.value) || 0,
         siphon:    Number(get("input[name$='.siphon']")?.value) || 0,
-        livraison: get("select[name*='.livraison']")?.value || "magique"
+        livraison: get("select[name*='.livraison']")?.value || "magique",
+        tag:       get("select[name$='.tag']")?.value?.trim() || ""
       });
     });
     await this.document.update({ "system.damages": damages }, { render: false });
@@ -1299,6 +1308,7 @@ static PARTS = foundry.utils.mergeObject(
           critFlat: Number(get("input[name*='.critFlat']")?.value) || 0,
           siphon:   Number(get("input[name$='.siphon']")?.value) || 0,
           livraison:get("select[name*='.livraison']")?.value || "magique",
+          tag:      get("select[name$='.tag']")?.value?.trim() || "",
         });
       });
       raw["system.damages"] = damages;
@@ -1553,7 +1563,8 @@ static PARTS = foundry.utils.mergeObject(
       critDice: "",
       critFlat: 0,
       siphon: 0,
-      livraison: "magique"
+      livraison: "magique",
+      tag: ""
     });
     await this._updateAndKeepView({ "system.damages": damages });
   }
