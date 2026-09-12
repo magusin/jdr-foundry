@@ -595,6 +595,27 @@
                 {{#if it._ui.cdMax}} — CD: {{it._ui.cdRestant}}/{{it._ui.cdMax}}{{/if}}
                 {{#if it._ui.damageDice}} — Dégâts: {{it._ui.damageDice}}{{/if}}
               </small>
+
+              {{!-- Les effets de la capacité. _previewEffects était calculé par
+                   monster-sheet-v2.js et n'était affiché nulle part : une
+                   capacité qui ne faisait qu'appliquer un état se lisait donc
+                   comme une capacité qui ne fait rien. Même rendu que la fiche
+                   de personnage, même source (buildSpellEffectsPreview). --}}
+              {{#if it._previewEffects.length}}
+              <div style="margin-top:8px; padding:8px; border:1px solid rgba(255,255,255,.12); border-radius:10px;">
+                <div style="font-size:12px; opacity:.85; margin-bottom:6px;"><b>Effets</b></div>
+                <ul style="margin:0; padding-left:16px; font-size:12px; opacity:.85;">
+                  {{#each it._previewEffects as |fx|}}
+                  <li>
+                    <b>{{fx.label}}</b>
+                    <span style="opacity:.8;">[{{fx.when}} • {{fx.target}}]</span>
+                    {{#if fx.duration}} <span style="opacity:.8;">({{fx.duration}})</span>{{/if}}
+                    {{#if fx.summary}}<div style="opacity:.8;">{{fx.summary}}</div>{{/if}}
+                  </li>
+                  {{/each}}
+                </ul>
+              </div>
+              {{/if}}
             </span>
             <div class="item-controls">
               <a class="btn" data-action="useItem" data-item-id="{{it._id}}">Déclarer</a>
