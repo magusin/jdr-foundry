@@ -57,7 +57,7 @@ function pickRandom(list) {
  * pose pas deux qui se décomptent chacun de leur côté. Un état de même
  * LIBELLÉ venu d'ailleurs est remplacé de la même façon (findStateSlot).
  */
-function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, effP }) {
+function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, mods, effP }) {
   const stat = String(dot?.stat ?? "").trim();
   const per  = Math.max(1, n(dot?.per, 10) || 10);
   const base = Math.abs(n(dot?.base, 0));
@@ -82,7 +82,10 @@ function upsertHitState(states, { id, label, duration, removeBaseTN, tag, dot, e
     removeBaseTN: Math.max(0, n(removeBaseTN, 0)),
     tag: String(tag ?? "") || null,
     dot: { flat: perTick, perTick, formula: "", fatiguePerTick: 0 },
-    mods: {}
+    // Bonus/malus de stat portés par l'état posé. Déjà normalisés à la forme
+    // {stat: {flat, pct}} par attack-bonus.js — c'est celle que lit
+    // sumActiveEffectMods, la même que pour un état venu d'un sort.
+    mods: (mods && typeof mods === "object") ? foundry.utils.deepClone(mods) : {}
   };
 
   // Même id, sinon même LIBELLÉ — la règle est celle des sorts
@@ -175,7 +178,7 @@ async function applyWeaponEffects({ weapon, attacker, target, isCrit }) {
       duration: fx.duration,
       removeBaseTN: fx.removeBaseTN,
       tag: fx.tag,
-      dot: fx.dot, effP
+      dot: fx.dot, mods: fx.mods, effP
     });
 
     postedLabels.push(fx.label);

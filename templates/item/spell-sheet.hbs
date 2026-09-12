@@ -940,10 +940,47 @@
                   </select>
                 </div>
               </div>
+              {{!-- Bonus/malus de stat de l'état posé. Attributs distincts de
+                    ceux de la partie 4 : les deux listes cohabitent dans la
+                    même carte et le collecteur les lit par sélecteur. --}}
+              <div class="fx-atkmods-list" data-fx-idx="{{i}}" style="margin-top:8px">
+                {{#if fx.atkFxMods.length}}
+                <div class="fx-atkmod-row fx-mod-head">
+                  <span>Stat de la cible</span><span>Sens</span><span>Type</span><span>Valeur</span><span></span>
+                </div>
+                {{/if}}
+                {{#each fx.atkFxMods as |mod mi|}}
+                <div class="fx-atkmod-row" data-atkmod-index="{{mi}}">
+                  <select data-atkmod-field="stat">
+                    {{#each @root.statChoices as |c|}}
+                      <option value="{{c.key}}" {{#if (eq mod.stat c.key)}}selected{{/if}}>{{c.label}}</option>
+                    {{/each}}
+                  </select>
+                  <select data-atkmod-field="sens">
+                    <option value="bonus" {{#unless mod.isMalus}}selected{{/unless}}>⬆️ Bonus</option>
+                    <option value="malus" {{#if mod.isMalus}}selected{{/if}}>⬇️ Malus</option>
+                  </select>
+                  <select data-atkmod-field="mode">
+                    <option value="flat" {{#if (eq mod.mode "flat")}}selected{{/if}}>Fixe</option>
+                    <option value="pct"  {{#if (eq mod.mode "pct")}}selected{{/if}}>%</option>
+                  </select>
+                  <input type="number" data-atkmod-field="value" value="{{mod.absValue}}" min="0" placeholder="0"
+                    title="Quantité, toujours positive — le sens est choisi à gauche."/>
+                  <button type="button" data-action="removeAtkFxMod" data-fx-idx="{{i}}" data-atkmod-index="{{mi}}"
+                    class="fx-del-btn" title="Retirer cette stat">✕</button>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addAtkFxMod" data-fx-idx="{{i}}" class="fx-add-btn">+ Stat modifiée par l'état posé</button>
+
               <small class="fx-hint">
                 C'est ce qui permet « <b>tes lames empoisonnent</b> » : l'état est posé sur la cible
                 quand une attaque du porteur touche, filtrée par la <b>portée</b> et les <b>catégories d'arme</b>
                 choisies plus haut. Laisse le <b>nom vide</b> si ce bonus ne doit ajouter que des dégâts.
+                <br>Les <b>stats modifiées</b> ci-dessus portent sur la <b>cible touchée</b>, pas sur le porteur :
+                c'est ce qui rend « ta lame entrave » possible (<b>Vitesse · Malus · % · 100</b>) là où le reste de
+                ce bloc ne sait qu'ajouter des dégâts ou un poison. Un <b>malus</b> est donc le cas normal ici.
+                Pas de mise à l'échelle : la quantité est figée au moment du coup, comme les dégâts par tour.
                 <br>⚠️ Un <b>Retrait (TN) à 0</b> rend l'état impossible à enlever par un jet — parfait pour un
                 buff, redoutable pour un poison que la victime ne pourra jamais soigner.
               </small>

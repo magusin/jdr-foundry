@@ -7,7 +7,8 @@ import { computeTN } from "./combat.js";
 import { getManaCostReduction, getWeatherModifierFor, getBiomeManaBonus } from "./weather-library.js";
 import { hpSecret, gmOnly } from "./chat-visibility.js";
 import {
-  collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus
+  collectAttackBonuses, collectAttackBonusEffects, attackBonusText, normalizeAttackBonus,
+  attackBonusFromFx
 } from "./attack-bonus.js";
 import { advanceCasterTowardTarget } from "./spell-move.js";
 import { writeStateOn } from "./status-effects.js";
@@ -968,24 +969,11 @@ export function buildSpellEffectsPreview({ actor, item }) {
 
     // Bonus de dégâts accordé aux attaques (partie 8 de l'effet) : même
     // formateur que la fiche de sort, la fiche de personnage et le chat.
-    const atkTxt = attackBonusText({
-      scope: fx.atkScope, categories: fx.atkCategories,
-      flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-      livraison: fx.atkLivraison, tag: fx.atkTag,
-      // L'état accordé fait partie du bonus : l'omettre ici rendait l'aperçu
-      // muet sur « tes lames empoisonnent » — et totalement vide pour un
-      // bonus qui ne pose QU'UN état (normalizeAttackBonus rend alors null
-      // faute du moindre dégât), alors que c'est le cas d'usage type.
-      effect: {
-        label: fx.atkFxLabel, when: fx.atkFxWhen,
-        duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
-        tag: fx.atkFxTag,
-        dot: {
-          mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
-          stat: fx.atkFxDotStat, per: fx.atkFxDotPer
-        }
-      }
-    });
+    // L'état accordé fait partie du bonus : l'omettre rendait l'aperçu muet
+    // sur « tes lames empoisonnent » — et totalement vide pour un bonus qui
+    // ne pose QU'UN état (normalizeAttackBonus rend alors null faute du
+    // moindre dégât), alors que c'est le cas d'usage type.
+    const atkTxt = attackBonusText(attackBonusFromFx(fx));
     if (atkTxt) parts.push(atkTxt);
 
     list.push({
@@ -1797,24 +1785,10 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           // Normalisé ici, une fois : les points d'application (jet d'arme,
           // résolution de sort) lisent une forme unique et n'ont pas à
           // connaître les champs à plat de la fiche.
-          attackBonus: normalizeAttackBonus({
-            scope: fx.atkScope, categories: fx.atkCategories,
-            flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-            livraison: fx.atkLivraison, tag: fx.atkTag,
-            // État posé sur la cible quand une attaque du porteur porte —
-            // « tes lames empoisonnent ». Sans nom (atkFxLabel vide),
-            // normalizeBonusEffect rend null et le bonus reste purement
-            // chiffré, comme avant l'existence de ce champ.
-            effect: {
-              label: fx.atkFxLabel, when: fx.atkFxWhen,
-              duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
-              tag: fx.atkFxTag,
-              dot: {
-                mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
-                stat: fx.atkFxDotStat, per: fx.atkFxDotPer
-              }
-            }
-          })
+          // L'état posé sur la cible (« tes lames empoisonnent ») vient des
+          // mêmes champs à plat : sans nom (atkFxLabel vide) il rend null et
+          // le bonus reste purement chiffré.
+          attackBonus: normalizeAttackBonus(attackBonusFromFx(fx))
         };
         if (isAura) state.aura = {
           min: n(fx.auraMin, 0),
@@ -1893,7 +1867,11 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
                 perTick: grantedTick(g.effect, actor),
                 formula: "", fatiguePerTick: 0
               },
-              mods: {}
+              // Les mods de l'état accordé, comme côté arme
+              // (upsertHitState) : les deux moitiés de `scope` doivent poser
+              // exactement le même état, ou « Armes et sorts » ne tiendrait
+              // sa promesse que sur une moitié.
+              mods: foundry.utils.deepClone(g.effect.mods ?? {})
             });
             fxResultRows.push(
               `🧪 <b>${htmlEsc(g.effect.label)}</b> → ${htmlEsc(tActor.name)} — `
