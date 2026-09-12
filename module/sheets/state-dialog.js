@@ -168,28 +168,100 @@ export function ensureStateDialogCSS() {
   margin: 0 0 6px 0 !important;
 }
 
-/* mods : label + 2 inputs côte à côte (avec espace) */
+/* sections numérotées — mêmes repères que l'éditeur d'effet d'un sort, pour
+   que le MJ retrouve « 8 · Bonus de dégâts » au même endroit des deux côtés */
+.rpg-state-dialog .fx-sec {
+  border: 1px solid var(--border-soft, rgba(255,255,255,.16)) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px 14px !important;
+  margin: 0 0 16px 0 !important;
+  min-width: 0 !important;
+}
+.rpg-state-dialog .fx-sec > legend {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  opacity: .85 !important;
+  padding: 0 8px !important;
+}
+.rpg-state-dialog .hint {
+  display: block !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  opacity: .7 !important;
+  font-weight: 400 !important;
+  margin: 0 0 12px 0 !important;
+}
+.rpg-state-dialog .line .hint,
+.rpg-state-dialog .two .hint { margin: 4px 0 0 0 !important; }
+
+/* sous-bloc (l'état posé par un bonus d'attaque) */
+.rpg-state-dialog .fx-subsec {
+  border-top: 1px dashed var(--border-soft, rgba(255,255,255,.16)) !important;
+  margin-top: 14px !important;
+  padding-top: 12px !important;
+}
+.rpg-state-dialog .fx-subtitle {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  margin-bottom: 6px !important;
+}
+
+/* cases « catégories d'arme » */
+.rpg-state-dialog .fx-cats {
+  display: flex !important;
+  gap: 12px !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+}
+.rpg-state-dialog .fx-cats label {
+  display: flex !important;
+  gap: 4px !important;
+  align-items: center !important;
+  font-weight: 400 !important;
+  margin: 0 !important;
+}
+.rpg-state-dialog .fx-cats input[type="checkbox"] { width: auto !important; }
+
+/* mods : vingt stats, donc deux colonnes de lignes compactes. En pile simple
+   elles faisaient une page à elles seules et repoussaient tout le reste. */
+.rpg-state-dialog .mods-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 0 22px !important;
+}
+.rpg-state-dialog .mods-col { min-width: 0 !important; }
 .rpg-state-dialog .mods-row {
   display: grid !important;
-  grid-template-columns: 220px 1fr !important;
-  gap: 14px !important;
+  grid-template-columns: minmax(0,1fr) 62px 62px !important;
+  gap: 8px !important;
   align-items: center !important;
-  margin: 10px 0 !important;
+  margin: 3px 0 !important;
 }
 .rpg-state-dialog .mods-label {
+  font-weight: 400 !important;
+  opacity: .85 !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* une stat effectivement modifiée doit se repérer sans tout relire */
+.rpg-state-dialog .mods-row-on .mods-label {
   font-weight: 700 !important;
-  opacity: .9 !important;
+  opacity: 1 !important;
 }
-.rpg-state-dialog .mods-inputs {
-  display: grid !important;
-  grid-template-columns: 110px 110px !important;
-  gap: 14px !important;
-  justify-content: end !important;
-  justify-items: end !important;
+.rpg-state-dialog .mods-row input { width: 62px !important; text-align: right !important; }
+.rpg-state-dialog .mods-head {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  opacity: .55 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .04em !important;
 }
-.rpg-state-dialog .mods-inputs input {
-  width: 110px !important;
-}
+.rpg-state-dialog .mods-head span { text-align: right !important; }
+.rpg-state-dialog .mods-head .mods-label { font-weight: 700 !important; opacity: .55 !important; }
 
 /* lignes de résistance aux états : une grille, comme la fiche de sort */
 .rpg-state-dialog .rpg-res-row {
@@ -221,8 +293,7 @@ export function ensureStateDialogCSS() {
 @media (max-width: 560px) {
   .rpg-state-dialog .line { grid-template-columns: 1fr !important; gap: 8px !important; }
   .rpg-state-dialog .two { grid-template-columns: 1fr !important; gap: 10px !important; }
-  .rpg-state-dialog .mods-row { grid-template-columns: 1fr !important; gap: 8px !important; }
-  .rpg-state-dialog .mods-inputs { justify-content: start !important; justify-items: start !important; }
+  .rpg-state-dialog .mods-grid { grid-template-columns: 1fr !important; }
 }
   `;
   document.head.appendChild(style);
@@ -293,18 +364,27 @@ export async function editStateDialog(state, { title } = {}) {
     const flat = Number(cur.flat ?? 0) || 0;
     const pct = Number(cur.pct ?? 0) || 0;
 
+    // Une stat laissée à 0 est le cas de loin le plus fréquent : les vingt
+    // lignes sont donc COMPACTES et rangées en deux colonnes, au lieu d'une
+    // pile d'une page qui noyait les huit sections au-dessus d'elle.
     return `
-      <div class="mods-row">
+      <div class="mods-row${(flat || pct) ? " mods-row-on" : ""}">
         <div class="mods-label">${label}</div>
-        <div class="mods-inputs">
-          <input type="number" name="mods.${k}.flat" value="${flat}" placeholder="Flat"/>
-          <input type="number" name="mods.${k}.pct" value="${pct}" placeholder="%"/>
-        </div>
+        <input type="number" name="mods.${k}.flat" value="${flat}" title="Valeur fixe : +10 / −10"/>
+        <input type="number" name="mods.${k}.pct" value="${pct}" title="Pourcentage : +10 pour +10 %"/>
       </div>
     `;
   };
 
-  const modsHtml = keys.map(k => row(k, MOD_LABELS[k] ?? k)).join("");
+  // Deux colonnes, chacune avec SON en-tête : deux champs numériques nus ne
+  // disent pas lequel est le pourcentage, et un en-tête unique en haut de la
+  // grille ne surmonte que la première moitié des lignes.
+  const modsHead = `
+        <div class="mods-row mods-head"><div class="mods-label">Stat</div><span>Fixe</span><span>%</span></div>`;
+  const half = Math.ceil(keys.length / 2);
+  const modsCol = (part) => `
+      <div class="mods-col">${modsHead}${part.map(k => row(k, MOD_LABELS[k] ?? k)).join("")}</div>`;
+  const modsHtml = modsCol(keys.slice(0, half)) + modsCol(keys.slice(half));
 
   // Une ligne de résistance aux états. Le même HTML sert au rendu initial et au
   // bouton « + Ajouter », pour que les deux ne puissent pas diverger.
@@ -337,276 +417,310 @@ export async function editStateDialog(state, { title } = {}) {
   <div class="scroll">
     <form class="rpg-state-edit">
 
-      <div class="line">
-        <div class="lbl">Nom de l'effet (catalogue)</div>
-        <select name="catalogEffect">${effectCatalogOptions}</select>
-      </div>
+      <!-- ══════════ 1 · IDENTITÉ ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>1 · Identité</legend>
+        <p class="hint">Le catalogue ne fait que pré-remplir le nom et l'élément — tout reste modifiable
+          ensuite. C'est le couple (nom, élément) qui donne son icône de jeton à l'état, alors qu'un nom
+          écrit entièrement à la main n'en a aucune.</p>
 
-      <div class="line">
-        <div class="lbl">Nom (label)</div>
-        <input type="text" name="label" value="${st.label}"/>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Type</div>
-        <select name="type">
-          ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
-            `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`).join("")}
-        </select>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Type / Élément (résistances, couleur d'aura)</div>
-        <select name="tag">${tagOptions}</select>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Aura (avec portée)</div>
-        <div><input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/></div>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Durée illimitée (∞)</div>
-        <div><input type="checkbox" name="permanent" ${st.permanent ? "checked" : ""}/>
-          <small class="hint">Ne se décompte jamais : ni la durée ni le « restant » ci-dessous ne comptent,
-          l'état reste tant que le MJ ne le retire pas (ou qu'un jet de retrait ne réussit pas).
-          Son effet par tour, lui, continue de tomber chaque tour.</small></div>
-      </div>
-
-      <div class="two">
-        <div>
-          <label>Durée (tours)</label>
-          <input type="number" name="duration" value="${st.duration}" min="1"/>
+        <div class="line">
+          <div class="lbl">Nom de l'effet (catalogue)</div>
+          <select name="catalogEffect">${effectCatalogOptions}</select>
         </div>
-        <div>
-          <label>Restant (tours)</label>
-          <input type="number" name="remaining" value="${st.remaining}" min="0"/>
+
+        <div class="line">
+          <div class="lbl">Nom (label)</div>
+          <input type="text" name="label" value="${st.label}"/>
         </div>
-      </div>
 
-      <div class="line">
-        <div class="lbl">Indébuffable</div>
-        <div><input type="checkbox" name="undispellable" ${!st.cleanseDC ? "checked" : ""}/>
-          <small class="hint">Aucun jet ne peut le retirer : l'action « Retirer un état » ne le proposera
-          même pas (<code>removableStates</code>). Décoche pour fixer une difficulté ci-dessous.</small></div>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Difficulté de retrait (seuil du jet)</div>
-        <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
-      </div>
-
-      <div class="two">
-        <div>
-          <label>Portée min (m) (aura)</label>
-          <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0" step="0.1"/>
-        </div>
-        <div>
-          <label>Portée max (m) (aura)</label>
-          <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0" step="0.1"/>
-        </div>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Cible (aura)</div>
-        <select name="aura.target">
-          ${Object.entries(AURA_TARGETS).map(([t, lbl]) =>
-            `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${lbl}</option>`).join("")}
-        </select>
-      </div>
-
-      <hr/>
-      <h3>Par tour (DOT / soin)</h3>
-      <p class="hint">Appliqué au début du tour du porteur. Positif = il subit, négatif = il récupère.</p>
-
-      <div class="line">
-        <div class="lbl">PV par tour (fixe)</div>
-        <input type="number" name="dot.flat" value="${Number(st.dot.flat ?? 0) || 0}"/>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Dés par tour (ex : 1d4) — indicatif</div>
-        <input type="text" name="dot.formula" value="${String(st.dot.formula ?? "")}" placeholder=""/>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Fatigue par tour</div>
-        <input type="number" name="dot.fatiguePerTick" value="${Number(st.dot.fatiguePerTick ?? 0) || 0}"/>
-      </div>
-
-      <div class="line">
-        <div class="lbl">Mode de déplacement accordé</div>
-        <select name="mods.movementTypeGrant">
-          <option value="" ${!st.mods?.movementTypeGrant ? "selected" : ""}>— Aucun —</option>
-          ${Object.entries(MOVEMENT_TYPES).filter(([k]) => k !== "terrestre").map(([k, def]) =>
-            `<option value="${k}" ${String(st.mods?.movementTypeGrant ?? "") === k ? "selected" : ""}>${def.label}</option>`).join("")}
-        </select>
-      </div>
-
-      <hr/>
-      <h3>Résistance aux DÉGÂTS accordée</h3>
-      <p class="hint">% retiré aux dégâts de ce type reçus par le porteur. Négatif = vulnérabilité. 100 = immunité.</p>
-
-      <div class="two">
-        <div>
-          <label>Type de dégâts</label>
-          <select name="resD.tag">${dmgTypeOptions(resD.tag)}</select>
-        </div>
-        <div>
-          <label>Résistance (%)</label>
-          <input type="number" name="resD.pct" value="${Number(resD.pct ?? 0) || 0}" min="${RESIST_MIN}" max="${RESIST_MAX}"/>
-        </div>
-      </div>
-
-      <hr/>
-      <h3>Résistances aux ÉTATS accordées</h3>
-      <p class="hint">Sur les états reçus ENSUITE par le porteur. <b>Autant de lignes que voulu</b>, et chacune
-        combine librement ses filtres : un <b>type</b> seul vise toute la famille (tous les états de feu), un
-        <b>effet précis</b> seul ne vise que lui quel que soit son type (« Poison » uniquement), les deux ensemble
-        exigent les deux. <b>Immunité</b> = l'état n'est pas posé ; <b>dégâts par tour −100 %</b> = il est posé mais
-        ne fait plus rien ; une <b>durée</b> ramenée à 0 l'empêche aussi d'être posé. Valeurs négatives =
-        vulnérabilité (dure plus longtemps, tape plus fort), et les lignes qui correspondent s'additionnent.
-        Indépendant du bloc ci-dessus, qui ne parle que des dégâts directs.</p>
-
-      <div class="rpg-res-list">
-        <div class="rpg-res-row rpg-res-head">
-          <span>Type d'état</span><span>Effet précis</span><span>Durée −</span><span>DOT −%</span><span>Immun.</span><span></span>
-        </div>
-        ${resRows.map(r => resistRowHtml(r)).join("")}
-      </div>
-      <button type="button" class="rpg-res-add">+ Ajouter une résistance</button>
-
-      <hr/>
-      <h3>Bonus de dégâts aux attaques du porteur</h3>
-      <p class="hint">« Lames aiguisées », « Arme enflammée » : s'ajoute à CHAQUE attaque tant que l'état dure.
-        Avec une livraison ou un élément propre, le bonus devient sa PROPRE ligne, opposée à la résistance
-        correspondante de la cible ; sans rien, il se fond dans le coup.</p>
-
-      <div class="two">
-        <div>
-          <label>Porte sur</label>
-          <select name="atk.scope">
-            ${Object.entries(BONUS_SCOPES).map(([k, v]) =>
-              `<option value="${k}" ${String(atk.scope ?? "arme") === k ? "selected" : ""}>${v}</option>`).join("")}
-          </select>
-        </div>
-        <div>
-          <label>Catégories d'arme (aucune cochée = toutes)</label>
-          <div style="display:flex;gap:10px;align-items:center">
-            ${Object.entries(WEAPON_CATEGORIES).map(([k, v]) => `
-              <label style="display:flex;gap:4px;align-items:center;font-weight:400">
-                <input type="checkbox" name="atk.cat.${k}" ${atkCats.includes(k) ? "checked" : ""} style="width:auto"/>${v}
-              </label>`).join("")}
+        <div class="two">
+          <div>
+            <label>Catégorie</label>
+            <select name="type">
+              ${["poison", "burn", "buff", "debuff", "aura", "custom"].map(t =>
+                `<option value="${t}" ${st.type === t ? "selected" : ""}>${t}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label>Type / Élément (résistances, couleur d'aura)</label>
+            <select name="tag">${tagOptions}</select>
           </div>
         </div>
-      </div>
+      </fieldset>
 
-      <div class="two">
-        <div>
-          <label>Dégâts fixes (+N)</label>
-          <input type="number" name="atk.flat" value="${Number(atk.flat ?? 0) || 0}"/>
-        </div>
-        <div>
-          <label>Dés ajoutés (ex : 1d6)</label>
-          <input type="text" name="atk.dice" value="${String(atk.dice ?? "")}" placeholder=""/>
-        </div>
-      </div>
+      <!-- ══════════ 2 · DURÉE & RETRAIT ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>2 · Combien de temps, et comment l'enlever</legend>
 
-      <div class="two">
-        <div>
-          <label>% des dégâts bruts</label>
-          <input type="number" name="atk.pct" value="${Number(atk.pct ?? 0) || 0}"/>
+        <div class="line">
+          <div class="lbl">Durée illimitée (∞)</div>
+          <div><input type="checkbox" name="permanent" ${st.permanent ? "checked" : ""}/>
+            <small class="hint">Ne se décompte jamais : ni la durée ni le « restant » ci-dessous ne comptent,
+            l'état reste tant que le MJ ne le retire pas. Son effet par tour, lui, continue de tomber.</small></div>
         </div>
-        <div>
-          <label>Livraison du bonus</label>
-          <select name="atk.livraison">
-            <option value="" ${!atk.livraison ? "selected" : ""}>— celle du coup —</option>
-            <option value="physique" ${atk.livraison === "physique" ? "selected" : ""}>Physique</option>
-            <option value="magique"  ${atk.livraison === "magique"  ? "selected" : ""}>Magique</option>
+
+        <div class="two">
+          <div>
+            <label>Durée (tours)</label>
+            <input type="number" name="duration" value="${st.duration}" min="1"/>
+          </div>
+          <div>
+            <label>Restant (tours)</label>
+            <input type="number" name="remaining" value="${st.remaining}" min="0"/>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Indébuffable</div>
+          <div><input type="checkbox" name="undispellable" ${!st.cleanseDC ? "checked" : ""}/>
+            <small class="hint">Aucun jet ne peut le retirer : l'action « Retirer un état » ne le proposera
+            même pas. Décoche pour fixer une difficulté ci-dessous.</small></div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Difficulté de retrait (seuil du jet)</div>
+          <input type="number" name="cleanseDC" value="${st.cleanseDC}" min="0"/>
+        </div>
+      </fieldset>
+
+      <!-- ══════════ 3 · EFFET PAR TOUR ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>3 · Effet par tour (DOT / soin)</legend>
+        <p class="hint">Appliqué au début du tour du porteur. Positif = il subit, négatif = il récupère.</p>
+
+        <div class="two">
+          <div>
+            <label>PV par tour (fixe)</label>
+            <input type="number" name="dot.flat" value="${Number(st.dot.flat ?? 0) || 0}"/>
+          </div>
+          <div>
+            <label>Fatigue par tour</label>
+            <input type="number" name="dot.fatiguePerTick" value="${Number(st.dot.fatiguePerTick ?? 0) || 0}"/>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Dés par tour (ex : 1d4) — indicatif</div>
+          <input type="text" name="dot.formula" value="${String(st.dot.formula ?? "")}" placeholder=""/>
+        </div>
+      </fieldset>
+
+      <!-- ══════════ 4 · BONUS / MALUS DE STATS ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>4 · Bonus / Malus de stats</legend>
+        <p class="hint">Laisse à 0 ce que l'état ne touche pas. <b>Fixe</b> = +10 / −10 ;
+          <b>%</b> = +10 pour +10 %. Les deux se cumulent sur la même stat.</p>
+
+        <div class="mods-grid">${modsHtml}</div>
+      </fieldset>
+
+      <!-- ══════════ 5 · DÉPLACEMENT & AURA ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>5 · Déplacement &amp; Aura</legend>
+        <p class="hint">Une aura recopie cet état sur qui se tient à portée, et seule la source porte
+          le seuil de retrait : les copies s'effacent d'elles-mêmes dès qu'on sort du cercle.</p>
+
+        <div class="line">
+          <div class="lbl">Mode de déplacement accordé</div>
+          <select name="mods.movementTypeGrant">
+            <option value="" ${!st.mods?.movementTypeGrant ? "selected" : ""}>— Aucun —</option>
+            ${Object.entries(MOVEMENT_TYPES).filter(([k]) => k !== "terrestre").map(([k, def]) =>
+              `<option value="${k}" ${String(st.mods?.movementTypeGrant ?? "") === k ? "selected" : ""}>${def.label}</option>`).join("")}
           </select>
         </div>
-      </div>
 
-      <div class="line">
-        <div class="lbl">Élément du bonus</div>
-        <select name="atk.tag">${dmgTypeOptions(atk.tag)}</select>
-      </div>
-
-      <h3 style="margin-top:14px">État posé par ce bonus (« tes lames empoisonnent »)</h3>
-      <p class="hint">Facultatif, et suffisant à lui seul : un bonus qui ne pose qu'un état, sans un point de
-        dégât en plus, est valide. Sans nom, rien n'est posé. L'état est rafraîchi à chaque coup porté
-        plutôt qu'empilé.</p>
-
-      <div class="two">
-        <div>
-          <label>Nom de l'état (catalogue)</label>
-          <select class="rpg-atkfx-pick">${fxKeyOptions(atkFx.label, "— Choisir dans le catalogue —")}</select>
+        <div class="line">
+          <div class="lbl">Cet état est une aura</div>
+          <div><input type="checkbox" name="isAura" ${st.isAura ? "checked" : ""}/>
+            <small class="hint">Les trois champs ci-dessous ne sont lus que si cette case est cochée.</small></div>
         </div>
-        <div>
-          <label>Nom posé</label>
-          <input type="text" name="atkFx.label" value="${String(atkFx.label ?? "")}" placeholder="vide = aucun état"/>
-        </div>
-      </div>
 
-      <div class="two">
-        <div>
-          <label>Déclencheur</label>
-          <select name="atkFx.when">
-            ${Object.entries(BONUS_FX_WHEN).map(([k, v]) =>
-              `<option value="${k}" ${String(atkFx.when ?? "hit") === k ? "selected" : ""}>${v}</option>`).join("")}
+        <div class="two">
+          <div>
+            <label>Portée min (m)</label>
+            <input type="number" name="aura.min" value="${Number(st.aura?.min ?? 0) || 0}" min="0" step="0.1"/>
+          </div>
+          <div>
+            <label>Portée max (m)</label>
+            <input type="number" name="aura.max" value="${Number(st.aura?.max ?? 0) || 0}" min="0" step="0.1"/>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Cible de l'aura</div>
+          <select name="aura.target">
+            ${Object.entries(AURA_TARGETS).map(([t, lbl]) =>
+              `<option value="${t}" ${(st.aura?.target ?? "allies") === t ? "selected" : ""}>${lbl}</option>`).join("")}
           </select>
         </div>
-        <div>
-          <label>Durée (tours)</label>
-          <input type="number" name="atkFx.duration" value="${Number(atkFx.duration ?? 1) || 1}" min="1"/>
-        </div>
-      </div>
+      </fieldset>
 
-      <div class="two">
-        <div>
-          <label>Élément de l'état posé</label>
-          <select name="atkFx.tag">${dmgTypeOptions(atkFx.tag)}</select>
-        </div>
-        <div>
-          <label>Difficulté de retrait (0 = indissipable)</label>
-          <input type="number" name="atkFx.removeBaseTN" value="${Number(atkFx.removeBaseTN ?? 0) || 0}" min="0"/>
-        </div>
-      </div>
+      <!-- ══════════ 6 · RÉSISTANCE AUX DÉGÂTS ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>6 · Résistance à un type de dégâts (optionnel)</legend>
+        <p class="hint">% retiré aux dégâts de ce type reçus par le porteur. Négatif = vulnérabilité.
+          100 = immunité. Sans rapport avec la section 7, qui ne parle que des états.</p>
 
-      <div class="two">
-        <div>
-          <label>Par tour</label>
-          <select name="atkFx.dot.mode">
-            ${[["none", "— Rien —"], ["damage", "Dégâts"], ["heal", "Soin"]].map(([k, v]) =>
-              `<option value="${k}" ${String(atkFx.dot?.mode ?? "none") === k ? "selected" : ""}>${v}</option>`).join("")}
-          </select>
+        <div class="two">
+          <div>
+            <label>Type de dégâts</label>
+            <select name="resD.tag">${dmgTypeOptions(resD.tag)}</select>
+          </div>
+          <div>
+            <label>Résistance (%)</label>
+            <input type="number" name="resD.pct" value="${Number(resD.pct ?? 0) || 0}" min="${RESIST_MIN}" max="${RESIST_MAX}"/>
+          </div>
         </div>
-        <div>
-          <label>Base par tour</label>
-          <input type="number" name="atkFx.dot.base" value="${Number(atkFx.dot?.base ?? 0) || 0}" min="0"/>
-        </div>
-      </div>
+      </fieldset>
 
-      <div class="two">
-        <div>
-          <label>+ stat du porteur ÷ tranche</label>
-          <select name="atkFx.dot.stat">
-            <option value="" ${!atkFx.dot?.stat ? "selected" : ""}>— aucune —</option>
-            ${["force", "dexterite", "intelligence", "acuite", "endurance"].map(k =>
-              `<option value="${k}" ${String(atkFx.dot?.stat ?? "") === k ? "selected" : ""}>${MOD_LABELS[k] ?? k}</option>`).join("")}
-          </select>
-        </div>
-        <div>
-          <label>Tranche</label>
-          <input type="number" name="atkFx.dot.per" value="${Number(atkFx.dot?.per ?? 10) || 10}" min="1"/>
-        </div>
-      </div>
+      <!-- ══════════ 7 · RÉSISTANCES AUX ÉTATS ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>7 · Résistances aux états (optionnel)</legend>
+        <p class="hint">Sur les états reçus ENSUITE par le porteur. <b>Autant de lignes que voulu</b>, et chacune
+          combine librement ses filtres : un <b>type</b> seul vise toute la famille (tous les états de feu), un
+          <b>effet précis</b> seul ne vise que lui quel que soit son type (« Poison » uniquement), les deux ensemble
+          exigent les deux. <b>Immunité</b> = l'état n'est pas posé ; <b>DOT −100 %</b> = il est posé mais
+          ne fait plus rien ; une <b>durée</b> ramenée à 0 l'empêche aussi d'être posé. Valeurs négatives =
+          vulnérabilité, et les lignes qui correspondent s'additionnent.</p>
 
-      <hr/>
-      <h3>Modificateurs (buff / debuff)</h3>
-      <p class="hint">Flat = +10 / -10. % = +10 / -10 (pour +10% / -10%).</p>
+        <div class="rpg-res-list">
+          <div class="rpg-res-row rpg-res-head">
+            <span>Type d'état</span><span>Effet précis</span><span>Durée −</span><span>DOT −%</span><span>Immun.</span><span></span>
+          </div>
+          ${resRows.map(r => resistRowHtml(r)).join("")}
+        </div>
+        <button type="button" class="rpg-res-add">+ Ajouter une résistance</button>
+      </fieldset>
 
-      ${modsHtml}
+      <!-- ══════════ 8 · BONUS DE DÉGÂTS AUX ATTAQUES ══════════ -->
+      <fieldset class="fx-sec">
+        <legend>8 · Bonus de dégâts aux attaques (optionnel)</legend>
+        <p class="hint">« Lames aiguisées », « Arme enflammée » : s'ajoute à CHAQUE attaque tant que l'état dure.
+          Avec une livraison ou un élément propre, le bonus devient sa PROPRE ligne, opposée à la résistance
+          correspondante de la cible ; sans rien, il se fond dans le coup.</p>
+
+        <div class="two">
+          <div>
+            <label>Porte sur</label>
+            <select name="atk.scope">
+              ${Object.entries(BONUS_SCOPES).map(([k, v]) =>
+                `<option value="${k}" ${String(atk.scope ?? "arme") === k ? "selected" : ""}>${v}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label>Catégories d'arme (aucune cochée = toutes)</label>
+            <div class="fx-cats">
+              ${Object.entries(WEAPON_CATEGORIES).map(([k, v]) => `
+                <label><input type="checkbox" name="atk.cat.${k}" ${atkCats.includes(k) ? "checked" : ""}/>${v}</label>`).join("")}
+            </div>
+          </div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>Dégâts fixes (+N)</label>
+            <input type="number" name="atk.flat" value="${Number(atk.flat ?? 0) || 0}"/>
+          </div>
+          <div>
+            <label>Dés ajoutés (ex : 1d6)</label>
+            <input type="text" name="atk.dice" value="${String(atk.dice ?? "")}" placeholder=""/>
+          </div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>% des dégâts bruts</label>
+            <input type="number" name="atk.pct" value="${Number(atk.pct ?? 0) || 0}"/>
+          </div>
+          <div>
+            <label>Livraison du bonus</label>
+            <select name="atk.livraison">
+              <option value="" ${!atk.livraison ? "selected" : ""}>— celle du coup —</option>
+              <option value="physique" ${atk.livraison === "physique" ? "selected" : ""}>Physique</option>
+              <option value="magique"  ${atk.livraison === "magique"  ? "selected" : ""}>Magique</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="lbl">Élément du bonus</div>
+          <select name="atk.tag">${dmgTypeOptions(atk.tag)}</select>
+        </div>
+
+        <div class="fx-subsec">
+          <div class="fx-subtitle">État posé par ce bonus — « tes lames empoisonnent »</div>
+          <p class="hint">Facultatif, et suffisant à lui seul : un bonus qui ne pose qu'un état, sans un point de
+            dégât en plus, est valide. Sans nom, rien n'est posé. L'état est rafraîchi à chaque coup porté
+            plutôt qu'empilé.</p>
+
+          <div class="two">
+            <div>
+              <label>Nom de l'état (catalogue)</label>
+              <select class="rpg-atkfx-pick">${fxKeyOptions(atkFx.label, "— Choisir dans le catalogue —")}</select>
+            </div>
+            <div>
+              <label>Nom posé</label>
+              <input type="text" name="atkFx.label" value="${String(atkFx.label ?? "")}" placeholder="vide = aucun état"/>
+            </div>
+          </div>
+
+          <div class="two">
+            <div>
+              <label>Déclencheur</label>
+              <select name="atkFx.when">
+                ${Object.entries(BONUS_FX_WHEN).map(([k, v]) =>
+                  `<option value="${k}" ${String(atkFx.when ?? "hit") === k ? "selected" : ""}>${v}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Durée (tours)</label>
+              <input type="number" name="atkFx.duration" value="${Number(atkFx.duration ?? 1) || 1}" min="1"/>
+            </div>
+          </div>
+
+          <div class="two">
+            <div>
+              <label>Élément de l'état posé</label>
+              <select name="atkFx.tag">${dmgTypeOptions(atkFx.tag)}</select>
+            </div>
+            <div>
+              <label>Difficulté de retrait (0 = indissipable)</label>
+              <input type="number" name="atkFx.removeBaseTN" value="${Number(atkFx.removeBaseTN ?? 0) || 0}" min="0"/>
+            </div>
+          </div>
+
+          <div class="two">
+            <div>
+              <label>Par tour</label>
+              <select name="atkFx.dot.mode">
+                ${[["none", "— Rien —"], ["damage", "Dégâts"], ["heal", "Soin"]].map(([k, v]) =>
+                  `<option value="${k}" ${String(atkFx.dot?.mode ?? "none") === k ? "selected" : ""}>${v}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Base par tour</label>
+              <input type="number" name="atkFx.dot.base" value="${Number(atkFx.dot?.base ?? 0) || 0}" min="0"/>
+            </div>
+          </div>
+
+          <div class="two">
+            <div>
+              <label>+ stat du porteur ÷ tranche</label>
+              <select name="atkFx.dot.stat">
+                <option value="" ${!atkFx.dot?.stat ? "selected" : ""}>— aucune —</option>
+                ${["force", "dexterite", "intelligence", "acuite", "endurance"].map(k =>
+                  `<option value="${k}" ${String(atkFx.dot?.stat ?? "") === k ? "selected" : ""}>${MOD_LABELS[k] ?? k}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Tranche</label>
+              <input type="number" name="atkFx.dot.per" value="${Number(atkFx.dot?.per ?? 10) || 10}" min="1"/>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
     </form>
   </div>
 </div>
@@ -742,7 +856,7 @@ export async function editStateDialog(state, { title } = {}) {
         title: title || "État",
         contentClasses: ["rpg-state-dialog-window"]
       },
-      position: { width: 680, height: 760 },
+      position: { width: 780, height: 760 },
       content,
       buttons: [
         { action: "cancel", label: "Annuler", default: false, callback: () => resolve(null) },
