@@ -12,6 +12,7 @@ import {
 import { advanceCasterTowardTarget } from "./spell-move.js";
 import { writeStateOn } from "./status-effects.js";
 import { tickPerTick, scaledModValue } from "./effect-tick.js";
+import { MOVEMENT_TYPES } from "./movement-types.js";
 
 /* ------------------------------------------------------------ */
 /* Utils                                                        */
@@ -950,6 +951,16 @@ export function buildSpellEffectsPreview({ actor, item }) {
     if (fx.isAura) {
       parts.push(`🌀 Aura ${n(fx.auraMin, 0)}–${n(fx.auraMax, 0)} m (${fxTargetLabel(str(fx.auraTarget, "allies"))})`);
     }
+
+    // Mode de déplacement accordé et seuil de retrait : la fiche de sort les
+    // affiche en pastilles (uiMove / uiRemove), l'aperçu les oubliait — un
+    // effet qui ne fait QUE l'un des deux (« Pas de l'ombre » : éthéré, rien
+    // d'autre) s'affichait donc sans une ligne disant ce qu'il fait.
+    if (fx.movementTypeGrant) {
+      const mv = MOVEMENT_TYPES[fx.movementTypeGrant]?.label ?? fx.movementTypeGrant;
+      parts.push(`🏃 ${mv}`);
+    }
+    if (n(fx.removeBaseTN, 0)) parts.push(`🧹 Retrait TN ${n(fx.removeBaseTN, 0)}+`);
 
     // Résistances accordées : même formulation que la fiche de sort et que
     // la liste des états actifs d'un acteur (damage-types.js).
