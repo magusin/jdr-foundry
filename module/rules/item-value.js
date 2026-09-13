@@ -885,6 +885,12 @@ function spellIsHostile(sys) {
   for (const fx of (Array.isArray(sys?.effectsUI) ? sys.effectsUI : [])) {
     if (!fx || String(fx.target ?? "target") !== "target") continue;
     if (String(fx.tick?.mode ?? "none") === "damage") return true;
+    // Épuiser la cible est une intention hostile au même titre que la blesser :
+    // sans cette ligne, un sort dont c'est le SEUL effet passait pour du
+    // soutien, était donc pesé comme lancé sur un allié — sa fatigue comptée
+    // comme un malus infligé à son propre camp, score négatif — et jugé à
+    // 100 % de réussite (la branche amicale).
+    if (n(fx.fatigueDot, 0) > 0) return true;
     if ((Array.isArray(fx.mods) ? fx.mods : []).some(m => (m?.sens === "malus") || n(m?.value, 0) < 0)) return true;
     if (n(fx.resistDamagePct, 0) < 0) return true;   // vulnérabilité imposée
   }
@@ -1153,7 +1159,12 @@ export function computeSpellValue(item, opts = {}) {
     const tick = fx.tick ?? {};
     const tickMode = String(tick.mode ?? "none");
     if (tickMode === "damage" || tickMode === "heal") {
-      const per = Math.abs(n(tick.flat, 0)) + statScale(stats, tick.stat, tick.per, tick.perStep);
+      // Les dés par tour entrent au même titre que la part fixe : depuis
+      // qu'ils sont réellement lancés (turn-effects.js), un « 1d6/tour » qui
+      // pesait zéro sous-lisait tout un archétype de sort.
+      const per = Math.abs(n(tick.flat, 0))
+                + diceAverage(tick.dice)
+                + statScale(stats, tick.stat, tick.per, tick.perStep);
       if (per > 0) {
         const perTick = tickMode === "damage" ? landedAgainstParty(per, PARTY) : per;
         const total = perTick * dur * affected * fxChance;
@@ -1163,6 +1174,21 @@ export function computeSpellValue(item, opts = {}) {
             `${round1(per)} × ${dur} tour(s)${affected > 1 ? ` × ${affected}` : ""}`,
             total * DAMAGE_POINT * (tickMode === "damage" ? 1 : RESTORE_WEIGHTS.pv));
       }
+    }
+
+    // Fatigue par tour, chiffrée comme une récupération de fatigue de signe
+    // opposé : c'est la même ressource et le même barème (RESTORE_WEIGHTS).
+    // Sans cette ligne, un « Épuisement, +3 fatigue/tour pendant 4 tours » —
+    // qui peut à lui seul faire passer une cible au-dessus de son seuil
+    // d'épuisement — pesait exactement zéro.
+    const fatTick = n(fx.fatigueDot, 0);
+    if (fatTick) {
+      // Un gain de fatigue est un malus : positif sur un ennemi, négatif sur
+      // un allié — l'inverse exact d'un soin, d'où le `onAlly ? -1 : 1`.
+      const sign = onAlly ? -1 : 1;
+      add(`${fxLabel} · fatigue par tour`,
+          `${fatTick > 0 ? "+" : "−"}${round1(Math.abs(fatTick))}/tour × ${dur} tour(s)${affected > 1 ? ` × ${affected}` : ""}`,
+          sign * Math.sign(fatTick) * Math.abs(fatTick) * dur * affected * fxChance * RESTORE_WEIGHTS.fatigue);
     }
 
     // Modificateurs de stats : le barème de l'équipement, au prorata de la

@@ -154,11 +154,21 @@ function buildFxUi(fx) {
     const scale = tick.stat && n(tick.perStep, 0)
       ? ` + ${STAT_LABELS[tick.stat] ?? tick.stat}÷${n(tick.per, 10)}×${n(tick.perStep, 0)}`
       : "";
-    uiTick = `${icon} ${n(tick.flat, 0)}${scale} ${word}/tour`;
+    const dice = String(tick.dice ?? "").trim();
+    const base = dice ? (n(tick.flat, 0) ? `${n(tick.flat, 0)} + ${dice}` : dice) : `${n(tick.flat, 0)}`;
+    uiTick = `${icon} ${base}${scale} ${word}/tour`;
   }
   const mods = (fx.mods ?? []).map(decorateMod);
-  return {
+  const ui = {
     uiTick,
+    // Fatigue par tour : sa propre pastille, jamais fondue dans uiTick — un
+    // effet d'épuisement pur a une nature « Aucun » et n'aurait alors rien
+    // affiché du tout.
+    uiFatigue: n(fx.fatigueDot, 0)
+      ? (n(fx.fatigueDot, 0) > 0
+          ? `😮‍💨 +${n(fx.fatigueDot, 0)} fatigue/tour`
+          : `😌 ${n(fx.fatigueDot, 0)} fatigue/tour`)
+      : null,
     uiTag: fx.tag ? tagLabel(fx.tag) : null,
     uiTarget: FX_TARGET_LABELS[String(fx.target ?? "target")] ?? FX_TARGET_LABELS.target,
     uiWhen: WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? fx.when,
@@ -189,6 +199,41 @@ function buildFxUi(fx) {
     })),
     mods
   };
+  // Une SEULE liste de pastilles, lue par le gabarit ET par la mise à jour en
+  // place (_refreshFxChips). Les deux la construisaient chacune de leur côté,
+  // et la copie JS avait déjà pris deux pastilles de retard : la résistance
+  // accordée et le bonus de dégâts aux attaques n'y étaient pas. Comme cette
+  // fonction réécrit la ligne ENTIÈRE à chaque frappe (la fiche enregistre
+  // sans re-render pour ne pas déplacer le curseur), régler « +15 % aux sorts
+  // d'éclair » faisait disparaître la pastille au lieu de l'afficher — le
+  // bonus était bien enregistré et bien appliqué, mais l'en-tête de l'effet
+  // n'en disait plus rien jusqu'au prochain rendu complet.
+  ui.uiChips = fxChipList(ui);
+  return ui;
+}
+
+/**
+ * Pastilles de l'en-tête d'un effet, dans l'ordre d'affichage.
+ * Ajouter un résumé à `buildFxUi` sans l'ajouter ici ne l'affiche nulle part.
+ */
+function fxChipList(ui) {
+  const chips = [
+    { cls: "fx-chip-when", text: ui.uiWhen },
+    { cls: "", text: ui.uiTarget },
+    { cls: "", text: ui.uiDuration }
+  ];
+  if (ui.uiTag)  chips.push({ cls: "fx-chip-tag",  text: ui.uiTag });
+  if (ui.uiTick)    chips.push({ cls: "fx-chip-tick", text: ui.uiTick });
+  if (ui.uiFatigue) chips.push({ cls: "fx-chip-tick", text: ui.uiFatigue });
+  for (const m of (ui.mods ?? [])) {
+    chips.push({ cls: m.isMalus ? "fx-chip-malus" : "fx-chip-bonus", text: m.text });
+  }
+  if (ui.uiAura)         chips.push({ cls: "fx-chip-aura", text: ui.uiAura });
+  if (ui.uiMove)         chips.push({ cls: "", text: ui.uiMove });
+  if (ui.uiRemove)       chips.push({ cls: "", text: ui.uiRemove });
+  if (ui.uiResist)       chips.push({ cls: "", text: ui.uiResist });
+  if (ui.uiAttackBonus)  chips.push({ cls: "fx-chip-atk", text: ui.uiAttackBonus });
+  return chips;
 }
 
 /**
@@ -248,12 +293,23 @@ function normMods(raw) {
  * avec `flat` toujours positif — c'est `mode` qui dit s'il s'agit de dégâts
  * ou de soin. Migre les anciens formats (dot/hot séparés, puis damage.flat signé).
  */
+/**
+ * Dés hérités de l'ancien bloc « dégâts » par effet, retiré de l'interface.
+ * `normDamage` y écrit « 0 » par défaut : ce n'est pas un dé, et le reprendre
+ * comme tel ferait apparaître un « 0 » dans le champ Dés/tour de tout effet.
+ */
+function legacyTickDice(fx) {
+  const d = String(fx?.damage?.dice ?? "").trim();
+  return /\d*d\d/i.test(d) ? d : "";
+}
+
 function normTick(fx) {
   const t = fx?.tick;
   if (t && typeof t === "object" && t.mode) {
     return {
       mode: ["damage", "heal", "none"].includes(t.mode) ? t.mode : "none",
       flat: Math.abs(n(t.flat, 0)),
+      dice: String(t.dice ?? "").trim() || legacyTickDice(fx),
       stat: String(t.stat ?? ""),
       per: Math.max(1, n(t.per, 10) || 10),
       perStep: Math.abs(n(t.perStep, 0)),
@@ -271,6 +327,7 @@ function normTick(fx) {
     return {
       mode: dotHas ? "damage" : "heal",
       flat: Math.abs(n(src.flat, 0)),
+      dice: String(src.formula ?? "").trim() || legacyTickDice(fx),
       stat: String(src.stat ?? ""),
       per: Math.max(1, n(src.per, 10) || 10),
       perStep: Math.abs(n(src.perStep, 0)),
@@ -283,6 +340,7 @@ function normTick(fx) {
   return {
     mode: legacy > 0 ? "damage" : (legacy < 0 ? "heal" : "none"),
     flat: Math.abs(legacy),
+    dice: legacyTickDice(fx),
     stat: "",
     per: 10,
     perStep: 0,
@@ -885,6 +943,7 @@ static PARTS = foundry.utils.mergeObject(
       fx.uiStatBonus = fx?.damage?.preview?.scalingBonus ?? 0;
 
       // Défauts pour les nouveaux champs (permanent/aura)
+      fx.fatigueDot = n(fx.fatigueDot, 0);
       fx.permanent = !!fx.permanent;
       fx.isAura = !!fx.isAura;
       fx.auraMin = n(fx.auraMin, 0);
@@ -893,7 +952,7 @@ static PARTS = foundry.utils.mergeObject(
       // ── Résumé lisible (pastilles) : visible replié pour le MJ et
       //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
       Object.assign(fx, buildFxUi(fx));
-      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.uiResist || fx.uiAttackBonus || fx.mods.length);
+      fx.uiHasSummary = !!(fx.uiTick || fx.uiFatigue || fx.uiAura || fx.uiMove || fx.uiResist || fx.uiAttackBonus || fx.mods.length);
     }
 
     // ui flags joueur
@@ -1050,12 +1109,21 @@ static PARTS = foundry.utils.mergeObject(
         atkFxDotPer:   num("atkFxDotPer", n(prev.atkFxDotPer, 10)),
         atkFxMods,
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
-        // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
-        // via la stat « Fatigue max » dans les bonus/malus.
-        fatigueDot: 0,
+        // Fatigue par tour infligée au porteur (négatif = repose).
+        // Elle valait 0 en dur, avec pour justification « la fatigue se règle
+        // via la stat Fatigue max » — ce qui confond deux choses : cette
+        // stat-là déplace le SEUIL d'épuisement, celle-ci remplit la jauge.
+        // Le moteur l'applique depuis toujours (`dot.fatiguePerTick`,
+        // turn-effects.js), les deux fiches d'acteur l'affichent et l'éditeur
+        // d'état manuel sait l'écrire : un sort était la seule surface qui ne
+        // pouvait pas épuiser sa cible.
+        fatigueDot: num("fatigueDot", n(prev.fatigueDot, 0)),
         tick: {
           mode:      str("tick.mode", "none") || "none",
           flat:      Math.abs(num("tick.flat", 0)),
+          // Dés du dégât/soin par tour : lancés à chaque tour par
+          // turn-effects.js, un jet visible par état.
+          dice:      str("tick.dice", prev.tick?.dice ?? ""),
           stat:      str("tick.stat", ""),
           per:       Math.max(1, num("tick.per", 10) || 10),
           perStep:   Math.abs(num("tick.perStep", 0)),
@@ -1304,21 +1372,10 @@ static PARTS = foundry.utils.mergeObject(
       if (!box) return;
 
       const ui = buildFxUi(fx);
-      const chips = [];
-      const esc = (s) => String(s ?? "")
+      const esc = (v) => String(v ?? "")
         .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-      chips.push(`<span class="fx-chip fx-chip-when">${esc(ui.uiWhen)}</span>`);
-      chips.push(`<span class="fx-chip">${esc(ui.uiTarget)}</span>`);
-      chips.push(`<span class="fx-chip">${esc(ui.uiDuration)}</span>`);
-      if (ui.uiTag)   chips.push(`<span class="fx-chip fx-chip-tag">${esc(ui.uiTag)}</span>`);
-      if (ui.uiTick)  chips.push(`<span class="fx-chip fx-chip-tick">${esc(ui.uiTick)}</span>`);
-      for (const m of ui.mods) {
-        chips.push(`<span class="fx-chip ${m.isMalus ? "fx-chip-malus" : "fx-chip-bonus"}">${esc(m.text)}</span>`);
-      }
-      if (ui.uiAura)   chips.push(`<span class="fx-chip fx-chip-aura">${esc(ui.uiAura)}</span>`);
-      if (ui.uiMove)   chips.push(`<span class="fx-chip">${esc(ui.uiMove)}</span>`);
-      if (ui.uiRemove) chips.push(`<span class="fx-chip">${esc(ui.uiRemove)}</span>`);
+      const chips = ui.uiChips.map(c =>
+        `<span class="fx-chip${c.cls ? " " + c.cls : ""}">${esc(c.text)}</span>`);
 
       box.innerHTML = chips.join("");
     });
@@ -1599,7 +1656,8 @@ static PARTS = foundry.utils.mergeObject(
       auraMax: 3,
       auraTarget: "allies",
       details: "",
-      tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
+      tick: { mode: "none", flat: 0, dice: "", stat: "", per: 10, perStep: 0, livraison: "magique" },
+      fatigueDot: 0,
       // Bonus de dégâts aux attaques : éteint tant qu'aucune portée n'est
       // choisie (partie 8).
       atkScope: "", atkCategories: [], atkSpellTags: [], atkFlat: 0, atkPct: 0, atkDice: "",

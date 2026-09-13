@@ -276,11 +276,12 @@ export function sumActiveEffectMods(actor) {
     },
     pct: {
       principales: {}, defenses: {}, ressources: {}, regen: {}, move: {}, initiative: {}
-    },
-    dot: {
-      flatTotal: 0,
-      formulas: []
     }
+    // Il y avait ici un `dot: {flatTotal, formulas}` que RIEN ne lisait : le
+    // dégât par tour est collecté et appliqué par turn-effects.js, seul, et
+    // cette seconde collecte donnait à croire le contraire (elle a masqué le
+    // fait que les dés n'étaient lancés nulle part). Supprimée plutôt que
+    // laissée en piège.
   };
 
   for (const stRaw of states) {
@@ -291,13 +292,6 @@ export function sumActiveEffectMods(actor) {
     }
 
     const mods = st?.mods ?? {};
-
-    // DOT
-    const dotFlat = Number(st?.dot?.flat ?? st?.dot?.perTick ?? 0) || 0;
-    if (dotFlat) out.dot.flatTotal += dotFlat;
-
-    const dotFormula = String(st?.dot?.formula ?? "").trim();
-    if (dotFormula) out.dot.formulas.push(dotFormula);
 
     // MODS flat / pct
     for (const [key, mod] of Object.entries(mods)) {

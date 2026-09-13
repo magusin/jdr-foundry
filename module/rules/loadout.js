@@ -332,8 +332,12 @@ export function passifStates(actor) {
         remaining: 0,
         dot: {
           flat: perTick, perTick,
-          formula: String(fx?.damage?.dice ?? "").trim(),
-          fatiguePerTick: Number(fx?.fatigueDot) || 0
+          // Mêmes deux champs que l'état posé par un sort (spells.js) : les
+          // dés du DOT (le champ de la fiche, l'ancien bloc en repli) et sa
+          // livraison, qui décide de la résistance élémentaire opposée.
+          formula: String(fx?.tick?.dice ?? fx?.damage?.dice ?? "").trim(),
+          fatiguePerTick: Number(fx?.fatigueDot) || 0,
+          livraison: String(fx?.tick?.livraison ?? "").trim() || null
         },
         mods,
         // Toutes les lignes de résistance de l'effet, pas la première : un

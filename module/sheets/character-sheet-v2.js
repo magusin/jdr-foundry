@@ -15,6 +15,7 @@ import {
   normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
 } from "../rules/damage-types.js";
 import { actorStateResistRows } from "../rules/resistances.js";
+import { MOVEMENT_TYPES } from "../rules/movement-types.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -72,15 +73,32 @@ export function decorateStates(states) {
     const parts = [];
 
     const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-    if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
-    else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
+    // Les dés font partie du montant depuis qu'ils sont réellement lancés
+    // (turn-effects.js) : les taire ici affichait « Dégâts/tour 0 » sur un
+    // saignement écrit uniquement en dés.
+    const dotDice = String(e?.dot?.formula ?? "").trim();
+    const dotQty = dotDice
+      ? (dot ? `${Math.abs(dot)} + ${dotDice}` : dotDice)
+      : `${Math.abs(dot)}`;
+    if (dot > 0 || (dotDice && dot >= 0)) parts.push(`Dégâts/tour ${dotQty}`);
+    else if (dot < 0) parts.push(`Soin/tour ${dotQty}`);
 
     const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
     if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);
     else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
 
     const mods = e?.mods ?? {};
+
+    // Type de déplacement accordé : il vit DANS `mods`, mais sa valeur est une
+    // chaîne (« ethere ») et non un {flat, pct} — la boucle ci-dessous le
+    // lisait donc comme un modificateur de 0 et le jetait. Un « Pas de
+    // l'ombre » qui n'accorde que ça affichait un résumé vide, alors que la
+    // fiche de sort, elle, l'annonce en pastille.
+    const mvKey = String(mods.movementTypeGrant ?? "").trim();
+    if (mvKey) parts.push(`🏃 ${MOVEMENT_TYPES[mvKey]?.label ?? mvKey}`);
+
     const modsTxt = Object.entries(mods)
+      .filter(([k]) => k !== "movementTypeGrant")
       .map(([k, v]) => {
         const name = LABELS[k] ?? k;
         const flat = Number(v?.flat ?? 0) || 0;

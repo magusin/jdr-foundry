@@ -63,6 +63,7 @@ export function normalizeState(st) {
   out.dot = out.dot ?? {};
   out.dot.flat = Number(out.dot.flat ?? 0) || 0;
   out.dot.formula = String(out.dot.formula ?? "").trim();
+  out.dot.livraison = String(out.dot.livraison ?? "").trim() || null;
   out.dot.perTick = Number(out.dot.perTick ?? out.dot.flat) || 0;
   // Fatigue infligée (ou rendue, en négatif) à chaque tour — même tic que les
   // PV, lu par onTurnStartForActor (turn-effects.js).
@@ -553,9 +554,21 @@ export async function editStateDialog(state, { title } = {}) {
         </div>
 
         <div class="line">
-          <div class="lbl">Dés par tour (ex : 1d4) — indicatif</div>
+          <div class="lbl">Dés par tour (ex : 1d4)</div>
           <input type="text" name="dot.formula" value="${String(st.dot.formula ?? "")}" placeholder=""/>
         </div>
+        <div class="line">
+          <div class="lbl">Encaissé comme</div>
+          <select name="dot.livraison">
+            <option value=""         ${!st.dot.livraison ? "selected" : ""}>— Aucun type (jamais réduit) —</option>
+            <option value="physique" ${st.dot.livraison === "physique" ? "selected" : ""}>Physique</option>
+            <option value="magique"  ${st.dot.livraison === "magique"  ? "selected" : ""}>Magique</option>
+          </select>
+        </div>
+        <p class="hint">Les dés sont lancés à chaque tour, en plus de la part fixe, et le jet s'affiche en chat.
+          Le type ci-dessus ne sert que si l'état ne porte aucun <b>élément</b> (partie 1) : il dit alors contre quelle
+          résistance le dégât par tour est encaissé. Un DOT n'est <b>jamais</b> réduit par l'armure fixe, uniquement par
+          la résistance élémentaire de la cible — « aucun type » = rien ne le réduit.</p>
       </fieldset>
 
       <!-- ══════════ 4 · BONUS / MALUS DE STATS ══════════ -->
@@ -830,6 +843,10 @@ export async function editStateDialog(state, { title } = {}) {
     out.dot = out.dot ?? {};
     out.dot.flat = getNum("dot.flat", 0);
     out.dot.formula = getStr("dot.formula", "");
+    // Type du dégât par tour, lu par turn-effects.js pour opposer la
+    // résistance élémentaire de la cible. Vide = aucun type, donc aucune
+    // réduction — l'état de tout ce qui a été posé avant ce champ.
+    out.dot.livraison = getStr("dot.livraison", "") || null;
     // perTick est ce que lit turn-effects.js ; flat n'est que la saisie.
     out.dot.perTick = out.dot.flat;
     out.dot.fatiguePerTick = getNum("dot.fatiguePerTick", 0);
