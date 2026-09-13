@@ -154,7 +154,9 @@ function buildFxUi(fx) {
     const scale = tick.stat && n(tick.perStep, 0)
       ? ` + ${STAT_LABELS[tick.stat] ?? tick.stat}÷${n(tick.per, 10)}×${n(tick.perStep, 0)}`
       : "";
-    uiTick = `${icon} ${n(tick.flat, 0)}${scale} ${word}/tour`;
+    const dice = String(tick.dice ?? "").trim();
+    const base = dice ? (n(tick.flat, 0) ? `${n(tick.flat, 0)} + ${dice}` : dice) : `${n(tick.flat, 0)}`;
+    uiTick = `${icon} ${base}${scale} ${word}/tour`;
   }
   const mods = (fx.mods ?? []).map(decorateMod);
   const ui = {
@@ -291,12 +293,23 @@ function normMods(raw) {
  * avec `flat` toujours positif — c'est `mode` qui dit s'il s'agit de dégâts
  * ou de soin. Migre les anciens formats (dot/hot séparés, puis damage.flat signé).
  */
+/**
+ * Dés hérités de l'ancien bloc « dégâts » par effet, retiré de l'interface.
+ * `normDamage` y écrit « 0 » par défaut : ce n'est pas un dé, et le reprendre
+ * comme tel ferait apparaître un « 0 » dans le champ Dés/tour de tout effet.
+ */
+function legacyTickDice(fx) {
+  const d = String(fx?.damage?.dice ?? "").trim();
+  return /\d*d\d/i.test(d) ? d : "";
+}
+
 function normTick(fx) {
   const t = fx?.tick;
   if (t && typeof t === "object" && t.mode) {
     return {
       mode: ["damage", "heal", "none"].includes(t.mode) ? t.mode : "none",
       flat: Math.abs(n(t.flat, 0)),
+      dice: String(t.dice ?? "").trim() || legacyTickDice(fx),
       stat: String(t.stat ?? ""),
       per: Math.max(1, n(t.per, 10) || 10),
       perStep: Math.abs(n(t.perStep, 0)),
@@ -314,6 +327,7 @@ function normTick(fx) {
     return {
       mode: dotHas ? "damage" : "heal",
       flat: Math.abs(n(src.flat, 0)),
+      dice: String(src.formula ?? "").trim() || legacyTickDice(fx),
       stat: String(src.stat ?? ""),
       per: Math.max(1, n(src.per, 10) || 10),
       perStep: Math.abs(n(src.perStep, 0)),
@@ -326,6 +340,7 @@ function normTick(fx) {
   return {
     mode: legacy > 0 ? "damage" : (legacy < 0 ? "heal" : "none"),
     flat: Math.abs(legacy),
+    dice: legacyTickDice(fx),
     stat: "",
     per: 10,
     perStep: 0,
@@ -1106,6 +1121,9 @@ static PARTS = foundry.utils.mergeObject(
         tick: {
           mode:      str("tick.mode", "none") || "none",
           flat:      Math.abs(num("tick.flat", 0)),
+          // Dés du dégât/soin par tour : lancés à chaque tour par
+          // turn-effects.js, un jet visible par état.
+          dice:      str("tick.dice", prev.tick?.dice ?? ""),
           stat:      str("tick.stat", ""),
           per:       Math.max(1, num("tick.per", 10) || 10),
           perStep:   Math.abs(num("tick.perStep", 0)),
@@ -1638,7 +1656,7 @@ static PARTS = foundry.utils.mergeObject(
       auraMax: 3,
       auraTarget: "allies",
       details: "",
-      tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
+      tick: { mode: "none", flat: 0, dice: "", stat: "", per: 10, perStep: 0, livraison: "magique" },
       fatigueDot: 0,
       // Bonus de dégâts aux attaques : éteint tant qu'aucune portée n'est
       // choisie (partie 8).

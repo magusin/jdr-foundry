@@ -2,6 +2,7 @@
 
 import { hpSecret } from "./chat-visibility.js";
 import { passifStates } from "./loadout.js";
+import { resistanceFor, applyResistPct } from "./damage-types.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -39,10 +40,9 @@ function tickStates(actor) {
     ? foundry.utils.deepClone(actor.system.etatsActifs)
     : [];
 
-  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalDot: 0, totalFatigueDot: 0, dotRolls: [] };
+  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalFatigueDot: 0, dotEntries: [] };
 
   let removedAuraSource = false;
-  let totalDot = 0;
   let totalFatigueDot = 0;
   // Part en DÉS du dégât par tour (`dot.formula`, « 1d4 de saignement »).
   // Elle était écrite par l'éditeur d'état, affichée par les deux fiches
@@ -51,10 +51,21 @@ function tickStates(actor) {
   // uniquement en dés ne faisait donc rien du tout, en promettant le
   // contraire à l'écran. Les formules sont collectées ici et lancées par
   // l'appelant, qui est asynchrone (un jet de dés l'est).
-  const dotRolls = [];
-  const pushFormula = (st) => {
-    const f = dotFormula(st);
-    if (f) dotRolls.push({ label: String(st?.label ?? "Effet"), formula: f });
+  // Un DOT n'est plus un simple nombre : chaque état apporte sa part fixe, ses
+  // dés, et le TYPE de dégât qui décide de la résistance élémentaire opposée.
+  // Le total ne peut donc plus être fait ici — deux états de types différents
+  // ne sont pas mitigés pareil sur la même cible.
+  const dotEntries = [];
+  const pushEntry = (st, flat) => {
+    const formula = dotFormula(st);
+    if (!flat && !formula) return;
+    dotEntries.push({
+      label: String(st?.label ?? "Effet"),
+      flat: n(flat, 0),
+      formula,
+      tag: st?.tag ?? null,
+      livraison: String(st?.dot?.livraison ?? "").trim() || null
+    });
   };
   const next = [];
 
@@ -63,9 +74,8 @@ function tickStates(actor) {
     if (String(st?.type) === "auraApplied") {
       // Les DOT des auras s'appliquent quand même (soin négatif inclus)
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      if (dot !== 0) totalDot += dot;
       totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
-      pushFormula(st);
+      pushEntry(st, dot);
       next.push(st);
       continue;
     }
@@ -75,9 +85,8 @@ function tickStates(actor) {
     // continue de s'appliquer chaque tour tant que la blessure est active.
     if (st?.permanent) {
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      if (dot !== 0) totalDot += dot;
       totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
-      pushFormula(st);
+      pushEntry(st, dot);
       next.push(st);
       continue;
     }
@@ -87,9 +96,10 @@ function tickStates(actor) {
 
     // Collecte DOT avant suppression (soin négatif inclus)
     const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-    if (dot !== 0 && remaining > 0) totalDot += dot;
-    if (remaining > 0) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
-    if (remaining > 0) pushFormula(st);
+    if (remaining > 0) {
+      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      pushEntry(st, dot);
+    }
 
     if (st?.isAura && newRemaining <= 0) removedAuraSource = true;
 
@@ -97,7 +107,7 @@ function tickStates(actor) {
   }
 
   const changed = JSON.stringify(cur) !== JSON.stringify(next);
-  return { changed, next, removedAuraSource, totalDot, totalFatigueDot, dotRolls };
+  return { changed, next, removedAuraSource, totalFatigueDot, dotEntries };
 }
 
 /**
@@ -148,32 +158,70 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   await decCooldowns(actor);
 
   // 2) États + collecte DOT
-  let { changed, next, removedAuraSource, totalDot, totalFatigueDot, dotRolls } = tickStates(actor);
-  dotRolls = Array.isArray(dotRolls) ? dotRolls : [];
+  const { changed, next, removedAuraSource, totalFatigueDot: fatFromStates, dotEntries } = tickStates(actor);
+  let totalFatigueDot = fatFromStates;
+  const entries = Array.isArray(dotEntries) ? [...dotEntries] : [];
 
   // Le passif porté n'écrit aucun état (loadout.js) : son « par tour » doit
   // donc être ajouté ici, sinon un passif qui régénère ou qui brûle son
   // porteur se saisissait sur la fiche et ne se produisait jamais. Rien à
   // décompter ni à réécrire — il vaut tant que le passif est porté.
   for (const st of passifStates(actor)) {
-    totalDot += n(st?.dot?.perTick, 0);
     totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
-    const f = dotFormula(st);
-    if (f) dotRolls.push({ label: String(st?.label ?? "Passif"), formula: f });
+    const flat = n(st?.dot?.perTick, 0);
+    const formula = dotFormula(st);
+    if (flat || formula) {
+      entries.push({
+        label: String(st?.label ?? "Passif"), flat, formula,
+        tag: st?.tag ?? null,
+        livraison: String(st?.dot?.livraison ?? "").trim() || null
+      });
+    }
   }
 
-  // Part en dés du DOT : un jet par état qui en porte, visible en chat comme
-  // tout autre jet du système — un dégât qui tombe sans dé affiché est
-  // indiscernable d'un bug de calcul.
+  // ── Résolution des DOT, état par état ────────────────────────────────
+  //
+  // Deux choses se jouent ici et aucune ne peut se faire sur un total :
+  //   • les DÉS (`dot.formula`) se lancent, un jet par état, visiblement ;
+  //   • la RÉSISTANCE ÉLÉMENTAIRE du porteur s'applique à chacun selon SON
+  //     type — une brûlure et un poison sur la même cible ne sont pas
+  //     encaissés pareil.
+  //
+  // Le type vient de l'élément de l'état, sinon de la livraison de son effet
+  // par tour (`dot.livraison`, physique/magique) — exactement la règle de
+  // resolveDamageType(). Un état qui ne nomme ni l'un ni l'autre n'a aucun
+  // type et n'est donc pas mitigé : c'est l'état de tout ce qui a été écrit
+  // avant, et rien ne change pour lui.
+  //
+  // C'est la SECONDE couche de mitigation seulement (damage-types.js), jamais
+  // l'armure : un poison qui traverse une cotte de mailles est la règle de
+  // cette table, et faire encaisser un DOT par l'armure fixe écraserait à 1
+  // tous les petits DOT du bestiaire. Un soin (montant négatif) n'est jamais
+  // rogné, comme partout ailleurs.
+  let totalDot = 0;
   const dotRollLines = [];
-  for (const d of dotRolls) {
-    try {
-      const roll = await (new Roll(d.formula)).evaluate();
-      totalDot += Number(roll.total) || 0;
-      dotRollLines.push(`${d.label} : ${d.formula} → <b>${roll.total}</b>`);
-    } catch (e) {
-      console.warn(`[RPG] DOT en dés « ${d.formula} » illisible :`, e);
+  for (const e of entries) {
+    let amount = n(e.flat, 0);
+    if (e.formula) {
+      try {
+        const roll = await (new Roll(e.formula)).evaluate();
+        amount += Number(roll.total) || 0;
+        dotRollLines.push(`${e.label} : ${e.formula} → <b>${roll.total}</b>`);
+      } catch (err) {
+        console.warn(`[RPG] DOT en dés « ${e.formula} » illisible :`, err);
+      }
     }
+    if (amount > 0) {
+      const res = resistanceFor(actor, { tag: e.tag, livraison: e.livraison });
+      if (res.pct) {
+        const before = amount;
+        amount = applyResistPct(amount, res.pct);
+        dotRollLines.push(
+          `${e.label} : ${res.label} ${res.pct > 0 ? "−" : "+"}${Math.abs(res.pct)} % (${before} → <b>${amount}</b>)`
+        );
+      }
+    }
+    totalDot += amount;
   }
 
   // 3) Applique DOT avant la mise à jour des états
@@ -193,6 +241,12 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
       ? `subit <b>${totalDot}</b> dégâts (DOT)${dotRollLines.length ? ` <span style="opacity:.8">[${dotRollLines.join(" · ")}]</span>` : ""}`
       : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour)${dotRollLines.length ? ` <span style="opacity:.8">[${dotRollLines.join(" · ")}]</span>` : ""}`)
       + `. PV: ${newPv}/${pvMax}`);
+  }
+  else if (dotRollLines.length) {
+    // Un DOT ramené à zéro par une immunité ne doit pas simplement ne rien
+    // faire en silence : sans cette ligne, le MJ ne peut pas distinguer
+    // « immunisé » de « l'effet ne s'est pas déclenché ».
+    lines.push(`encaisse sans dommage son effet par tour <span style="opacity:.8">[${dotRollLines.join(" · ")}]</span>`);
   }
 
   if (totalFatigueDot !== 0) {

@@ -1159,7 +1159,12 @@ export function computeSpellValue(item, opts = {}) {
     const tick = fx.tick ?? {};
     const tickMode = String(tick.mode ?? "none");
     if (tickMode === "damage" || tickMode === "heal") {
-      const per = Math.abs(n(tick.flat, 0)) + statScale(stats, tick.stat, tick.per, tick.perStep);
+      // Les dés par tour entrent au même titre que la part fixe : depuis
+      // qu'ils sont réellement lancés (turn-effects.js), un « 1d6/tour » qui
+      // pesait zéro sous-lisait tout un archétype de sort.
+      const per = Math.abs(n(tick.flat, 0))
+                + diceAverage(tick.dice)
+                + statScale(stats, tick.stat, tick.per, tick.perStep);
       if (per > 0) {
         const perTick = tickMode === "damage" ? landedAgainstParty(per, PARTY) : per;
         const total = perTick * dur * affected * fxChance;

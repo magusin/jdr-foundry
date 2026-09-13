@@ -73,8 +73,15 @@ export function decorateStates(states) {
     const parts = [];
 
     const dot = Number(e?.dot?.perTick ?? e?.dot?.flat ?? 0) || 0;
-    if (dot > 0) parts.push(`Dégâts/tour ${dot}`);
-    else if (dot < 0) parts.push(`Soin/tour ${Math.abs(dot)}`);
+    // Les dés font partie du montant depuis qu'ils sont réellement lancés
+    // (turn-effects.js) : les taire ici affichait « Dégâts/tour 0 » sur un
+    // saignement écrit uniquement en dés.
+    const dotDice = String(e?.dot?.formula ?? "").trim();
+    const dotQty = dotDice
+      ? (dot ? `${Math.abs(dot)} + ${dotDice}` : dotDice)
+      : `${Math.abs(dot)}`;
+    if (dot > 0 || (dotDice && dot >= 0)) parts.push(`Dégâts/tour ${dotQty}`);
+    else if (dot < 0) parts.push(`Soin/tour ${dotQty}`);
 
     const fatDot = Number(e?.dot?.fatiguePerTick ?? 0) || 0;
     if (fatDot > 0) parts.push(`Épuise +${fatDot} fatigue/tour`);

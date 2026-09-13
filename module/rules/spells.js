@@ -943,8 +943,15 @@ export function buildSpellEffectsPreview({ actor, item }) {
   for (const fx of (Array.isArray(sys.effectsUI) ? sys.effectsUI : [])) {
     const parts = [];
     const perTick = tickPerTick(fx, getEffP(actor));
-    if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
-    else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
+    // Les dés par tour sont une part du montant, pas une décoration : les
+    // taire affichait « 0 dégâts/tour » sur un effet écrit uniquement en dés.
+    const tickDice = String(fx.tick?.dice ?? "").trim();
+    const tickQty = tickDice
+      ? (perTick ? `${Math.abs(perTick)} + ${tickDice}` : tickDice)
+      : `${Math.abs(perTick)}`;
+    const tickMode = String(fx.tick?.mode ?? "none");
+    if (perTick > 0 || (tickDice && tickMode === "damage")) parts.push(`💥 ${tickQty} dégâts/tour`);
+    else if (perTick < 0 || (tickDice && tickMode === "heal")) parts.push(`💚 ${tickQty} soin/tour`);
 
     // Fatigue par tour : à part du perTick ci-dessus, qui ne parle que de PV.
     const fatTick = n(fx.fatigueDot, 0);
@@ -1743,7 +1750,15 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
         // du lanceur (stat ÷ per × perStep), figée au lancement.
         // En interne le moteur de tour traite un perTick négatif comme un soin.
         const dotFlat  = tickPerTick(fx, getEffP(actor));
-        const dotDice  = String(fx.damage?.dice ?? "").trim();
+        // Dés du dégât par tour. `fx.tick.dice` est le champ de la fiche ;
+        // `fx.damage.dice` est l'ancien bloc « dégâts » par effet, retiré de
+        // l'interface mais encore présent dans les données d'un sort écrit
+        // avant — il sert de repli pour ne pas lui faire perdre ses dés.
+        const dotDice  = String(fx.tick?.dice ?? fx.damage?.dice ?? "").trim();
+        // Livraison du DOT : décide de la résistance élémentaire opposée quand
+        // l'effet ne nomme pas d'élément (resolveDamageType). Elle était
+        // choisie sur la fiche et perdue ici, donc lue par personne.
+        const dotLivr  = String(fx.tick?.livraison ?? "").trim();
         const tag = String(fx.tag ?? "").trim() || null;
         const effectKey = String(fx.effectKey ?? "").trim() || null;
         const isAura = !!fx.isAura;
@@ -1753,7 +1768,11 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
         const state = {
           id: stateId, label: String(fx.label ?? item.name),
           type: "spellEffect", tag, effectKey, isAura, permanent, duration, remaining: duration,
-          dot: { flat: dotFlat, perTick: dotFlat, formula: dotDice, fatiguePerTick: n(fx.fatigueDot, 0) },
+          dot: {
+            flat: dotFlat, perTick: dotFlat, formula: dotDice,
+            fatiguePerTick: n(fx.fatigueDot, 0),
+            livraison: dotLivr || null
+          },
           mods: {
             ...mods,
             ...(fx.movementTypeGrant ? { movementTypeGrant: fx.movementTypeGrant } : {})

@@ -523,6 +523,10 @@
                 <input type="number" data-fx-field="tick.flat" value="{{fx.tick.flat}}" min="0" placeholder="0"/>
               </div>
               <div data-fx-when="tick">
+                <label title="Dés lancés à chaque tour, en plus de la part fixe. Le jet est visible en chat.">🎲 Dés/tour</label>
+                <input type="text" data-fx-field="tick.dice" value="{{fx.tick.dice}}" placeholder="ex : 1d4"/>
+              </div>
+              <div data-fx-when="tick">
                 <label title="Stat du lanceur qui renforce l'effet (ex : Intelligence ÷ 10).">Stat</label>
                 <select data-fx-field="tick.stat">
                   <option value="" {{#unless fx.tick.stat}}selected{{/unless}}>— aucune —</option>
@@ -557,7 +561,10 @@
                 <input type="number" data-fx-field="fatigueDot" value="{{fx.fatigueDot}}" step="1" placeholder="0"/>
               </div>
             </div>
-            <small class="fx-hint">Laisse sur <b>Aucun</b> si l'effet n'inflige ni dégâts ni soin. Sinon : <b>Fixe + (stat ÷ Par) × Gain</b> par tour.
+            <small class="fx-hint">Laisse sur <b>Aucun</b> si l'effet n'inflige ni dégâts ni soin. Sinon : <b>Fixe + dés + (stat ÷ Par) × Gain</b> par tour.
+              La <b>livraison</b> ne sert que si l'effet ne nomme aucun <b>élément</b> (partie 1) : elle dit alors contre quelle résistance
+              (physique ou magique) le dégât par tour est encaissé. Un DOT n'est <b>jamais</b> réduit par l'armure fixe, seulement par la
+              résistance élémentaire de la cible — une brûlure traverse une cotte de mailles, pas un élémentaire de feu.
               La <b>fatigue par tour</b> est à part : elle s'applique quelle que soit la nature, et n'est pas la stat « Fatigue max » de la partie 4
               (celle-ci déplace le seuil d'épuisement, celle-là remplit la jauge).</small>
           </fieldset>

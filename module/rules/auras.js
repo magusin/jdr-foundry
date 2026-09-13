@@ -284,7 +284,15 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
     // résistances et les icônes d'état ne reconnaissaient pas l'effet d'aura.
     tag: auraState?.tag ?? null,
     effectKey: auraState?.effectKey ?? null,
-    dot: { flat: dotFlat, formula: "", perTick: dotFlat, fatiguePerTick: fatigueTick },
+    // `formula` était écrasée par "" : une aura de saignement « 1d4/tour »
+    // perdait ses dés en chemin (ils ne tombaient nulle part tant que rien ne
+    // les lançait, ce qui masquait le trou). `livraison` suit, pour que la
+    // copie soit encaissée par la même résistance élémentaire que la source.
+    dot: {
+      flat: dotFlat, perTick: dotFlat, fatiguePerTick: fatigueTick,
+      formula: String(auraState?.dot?.formula ?? "").trim(),
+      livraison: auraState?.dot?.livraison ?? null
+    },
     mods: foundry.utils.deepClone(auraState.mods ?? {}),
     // ── Tout ce qu'un état sait accorder est reporté, pas seulement ses mods ──
     //
