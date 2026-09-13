@@ -157,7 +157,7 @@ function buildFxUi(fx) {
     uiTick = `${icon} ${n(tick.flat, 0)}${scale} ${word}/tour`;
   }
   const mods = (fx.mods ?? []).map(decorateMod);
-  return {
+  const ui = {
     uiTick,
     uiTag: fx.tag ? tagLabel(fx.tag) : null,
     uiTarget: FX_TARGET_LABELS[String(fx.target ?? "target")] ?? FX_TARGET_LABELS.target,
@@ -189,6 +189,40 @@ function buildFxUi(fx) {
     })),
     mods
   };
+  // Une SEULE liste de pastilles, lue par le gabarit ET par la mise à jour en
+  // place (_refreshFxChips). Les deux la construisaient chacune de leur côté,
+  // et la copie JS avait déjà pris deux pastilles de retard : la résistance
+  // accordée et le bonus de dégâts aux attaques n'y étaient pas. Comme cette
+  // fonction réécrit la ligne ENTIÈRE à chaque frappe (la fiche enregistre
+  // sans re-render pour ne pas déplacer le curseur), régler « +15 % aux sorts
+  // d'éclair » faisait disparaître la pastille au lieu de l'afficher — le
+  // bonus était bien enregistré et bien appliqué, mais l'en-tête de l'effet
+  // n'en disait plus rien jusqu'au prochain rendu complet.
+  ui.uiChips = fxChipList(ui);
+  return ui;
+}
+
+/**
+ * Pastilles de l'en-tête d'un effet, dans l'ordre d'affichage.
+ * Ajouter un résumé à `buildFxUi` sans l'ajouter ici ne l'affiche nulle part.
+ */
+function fxChipList(ui) {
+  const chips = [
+    { cls: "fx-chip-when", text: ui.uiWhen },
+    { cls: "", text: ui.uiTarget },
+    { cls: "", text: ui.uiDuration }
+  ];
+  if (ui.uiTag)  chips.push({ cls: "fx-chip-tag",  text: ui.uiTag });
+  if (ui.uiTick) chips.push({ cls: "fx-chip-tick", text: ui.uiTick });
+  for (const m of (ui.mods ?? [])) {
+    chips.push({ cls: m.isMalus ? "fx-chip-malus" : "fx-chip-bonus", text: m.text });
+  }
+  if (ui.uiAura)         chips.push({ cls: "fx-chip-aura", text: ui.uiAura });
+  if (ui.uiMove)         chips.push({ cls: "", text: ui.uiMove });
+  if (ui.uiRemove)       chips.push({ cls: "", text: ui.uiRemove });
+  if (ui.uiResist)       chips.push({ cls: "", text: ui.uiResist });
+  if (ui.uiAttackBonus)  chips.push({ cls: "fx-chip-atk", text: ui.uiAttackBonus });
+  return chips;
 }
 
 /**
@@ -1304,21 +1338,10 @@ static PARTS = foundry.utils.mergeObject(
       if (!box) return;
 
       const ui = buildFxUi(fx);
-      const chips = [];
-      const esc = (s) => String(s ?? "")
+      const esc = (v) => String(v ?? "")
         .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-      chips.push(`<span class="fx-chip fx-chip-when">${esc(ui.uiWhen)}</span>`);
-      chips.push(`<span class="fx-chip">${esc(ui.uiTarget)}</span>`);
-      chips.push(`<span class="fx-chip">${esc(ui.uiDuration)}</span>`);
-      if (ui.uiTag)   chips.push(`<span class="fx-chip fx-chip-tag">${esc(ui.uiTag)}</span>`);
-      if (ui.uiTick)  chips.push(`<span class="fx-chip fx-chip-tick">${esc(ui.uiTick)}</span>`);
-      for (const m of ui.mods) {
-        chips.push(`<span class="fx-chip ${m.isMalus ? "fx-chip-malus" : "fx-chip-bonus"}">${esc(m.text)}</span>`);
-      }
-      if (ui.uiAura)   chips.push(`<span class="fx-chip fx-chip-aura">${esc(ui.uiAura)}</span>`);
-      if (ui.uiMove)   chips.push(`<span class="fx-chip">${esc(ui.uiMove)}</span>`);
-      if (ui.uiRemove) chips.push(`<span class="fx-chip">${esc(ui.uiRemove)}</span>`);
+      const chips = ui.uiChips.map(c =>
+        `<span class="fx-chip${c.cls ? " " + c.cls : ""}">${esc(c.text)}</span>`);
 
       box.innerHTML = chips.join("");
     });

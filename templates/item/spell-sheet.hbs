@@ -401,22 +401,13 @@
       <details class="fx-card" data-fx-index="{{i}}" {{#unless @root.canEdit}}open{{/unless}}>
         <summary class="fx-summary">
           <span class="fx-title">{{#if fx.label}}{{fx.label}}{{else}}Effet {{i}}{{/if}}</span>
+          {{!-- Liste unique (fxChipList, item-spell-sheet-v2.js) : la mise à
+               jour en place après une saisie réécrit cette même ligne, et la
+               tenir en double avait déjà fait disparaître deux pastilles. --}}
           <span class="fx-chips">
-            <span class="fx-chip fx-chip-when">{{fx.uiWhen}}</span>
-            <span class="fx-chip">{{fx.uiTarget}}</span>
-            <span class="fx-chip">{{fx.uiDuration}}</span>
-            {{#if fx.uiTag}}<span class="fx-chip fx-chip-tag">{{fx.uiTag}}</span>{{/if}}
-            {{#if fx.uiTick}}<span class="fx-chip fx-chip-tick">{{fx.uiTick}}</span>{{/if}}
-            {{#each fx.mods as |mod mi|}}
-            <span class="fx-chip {{#if mod.isMalus}}fx-chip-malus{{else}}fx-chip-bonus{{/if}}">{{mod.text}}</span>
+            {{#each fx.uiChips as |chip ci|}}
+            <span class="fx-chip {{chip.cls}}">{{chip.text}}</span>
             {{/each}}
-            {{#if fx.uiAura}}<span class="fx-chip fx-chip-aura">{{fx.uiAura}}</span>{{/if}}
-            {{#if fx.uiMove}}<span class="fx-chip">{{fx.uiMove}}</span>{{/if}}
-            {{#if fx.uiRemove}}<span class="fx-chip">{{fx.uiRemove}}</span>{{/if}}
-            {{#if fx.uiResist}}<span class="fx-chip">{{fx.uiResist}}</span>{{/if}}
-            {{!-- Bonus de dégâts aux attaques + état qu'il pose : la partie 8
-                 de l'effet n'apparaissait que dépliée, côté MJ. --}}
-            {{#if fx.uiAttackBonus}}<span class="fx-chip fx-chip-atk">{{fx.uiAttackBonus}}</span>{{/if}}
           </span>
           {{#if @root.canEdit}}
           <button type="button" data-action="removeEffect" data-fx-index="{{i}}"
