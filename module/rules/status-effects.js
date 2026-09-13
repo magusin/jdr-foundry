@@ -1,6 +1,7 @@
 // systems/rpg/module/rules/status-effects.js
 
 import { talentStates, passifStates, dropPassifOnStateLabel } from "./loadout.js";
+import { auraAffectsBearer } from "./aura-target.js";
 
 /**
  * Ce que ce module fait encore, et lui seul :
@@ -285,6 +286,13 @@ export function sumActiveEffectMods(actor) {
   };
 
   for (const stRaw of states) {
+    // L'état SOURCE d'une aura qui ne vise que les ennemis ne modifie pas les
+    // stats de son porteur : il décrit ce qu'elle inflige alentour, et les
+    // copies (auraApplied) le portent chez les cibles. Un « −50 % de vitesse
+    // aux ennemis à 4 m » ralentissait sinon aussi celui qui l'émet. Une aura
+    // « alliés »/« tous » le paie toujours, comme avant.
+    if (!auraAffectsBearer(stRaw)) continue;
+
     // ── Normalise vers format V2 si besoin ──────────────────────
     let st = stRaw;
     if (!st?.mods && (st?.debuff || st?.modsFlat || st?.modsPct)) {
