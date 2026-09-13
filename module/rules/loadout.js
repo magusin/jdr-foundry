@@ -36,7 +36,7 @@
 // contente de masquer laisserait deux `equipe: true` en base — donc deux
 // jeux de bonus cumulés dans prepareDerivedData, silencieusement.
 
-import { normalizeAttackBonus } from "./attack-bonus.js";
+import { normalizeAttackBonus, attackBonusFromFx } from "./attack-bonus.js";
 import { tickPerTick, scaledModValue } from "./effect-tick.js";
 import { fxResistanceRows } from "./damage-types.js";
 
@@ -351,20 +351,12 @@ export function passifStates(actor) {
           tag: String(fx?.resistDamageTag ?? "").trim() || null,
           pct: Number(fx?.resistDamagePct) || 0
         },
-        attackBonus: normalizeAttackBonus({
-          scope: fx?.atkScope, categories: fx?.atkCategories, spellTags: fx?.atkSpellTags,
-          flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
-          livraison: fx?.atkLivraison, tag: fx?.atkTag,
-          effect: {
-            label: fx?.atkFxLabel, when: fx?.atkFxWhen,
-            duration: fx?.atkFxDuration, removeBaseTN: fx?.atkFxRemoveTN,
-            tag: fx?.atkFxTag,
-            dot: {
-              mode: fx?.atkFxDotMode, base: fx?.atkFxDotBase,
-              stat: fx?.atkFxDotStat, per: fx?.atkFxDotPer
-            }
-          }
-        })
+        // Même constructeur que la fiche de sort et la pesée
+        // (`attackBonusFromFx`) : cette copie à la main avait déjà perdu le
+        // filtre par élément de sort et les mods de l'état accordé, chacun
+        // ajouté d'un seul côté. Un passif porté doit accorder exactement ce
+        // qu'un état posé accorde.
+        attackBonus: normalizeAttackBonus(attackBonusFromFx(fx))
       };
 
       if (isAura) {

@@ -472,6 +472,17 @@
 }
 .rpg-spell-sheet .fx-mod-head > span , .rpg-zone-sheet .fx-mod-head > span { padding-left: 2px; }
 
+/* Lignes Bonus / Malus de l'ÉTAT POSÉ par un bonus d'attaque (partie 8).
+   Quatre colonnes seulement : ces mods-là sont figés au moment du coup, ils
+   n'ont donc pas les trois colonnes de mise à l'échelle de la partie 4. */
+.rpg-spell-sheet .fx-atkmod-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 0.9fr) 24px;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
 /* Lignes de résistance aux états (partie 7) — même grammaire visuelle que les
    lignes de bonus au-dessus : une ligne = une résistance, en-tête gris, ✕ au
    bout. La colonne « effet précis » empile son menu de catalogue au-dessus de
