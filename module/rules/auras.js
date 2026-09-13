@@ -286,6 +286,34 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
     effectKey: auraState?.effectKey ?? null,
     dot: { flat: dotFlat, formula: "", perTick: dotFlat, fatiguePerTick: fatigueTick },
     mods: foundry.utils.deepClone(auraState.mods ?? {}),
+    // ── Tout ce qu'un état sait accorder est reporté, pas seulement ses mods ──
+    //
+    // La copie ne portait que `dot` et `mods`, alors qu'un effet de sort en
+    // accorde cinq sortes (voir la construction de l'état dans spells.js).
+    // Une aura « +10 % de dégâts à tes sorts d'eau », une aura de résistance
+    // au feu ou une aura d'immunité au poison étaient donc actives sur
+    // l'ÉMETTEUR — dont l'état, lui, est complet — et strictement sans effet
+    // sur les alliés qui se tenaient dedans : la moitié des archétypes
+    // d'aura ne faisait rien, sans un mot.
+    //
+    // Les lecteurs n'avaient rien à changer : collectAttackBonuses
+    // (attack-bonus.js), sumStateResistances (actor.js) et
+    // getStateResistances (resistances.js) bouclent sur effectiveStates()
+    // sans filtrer le type — il ne manquait que les champs.
+    //
+    // Deux champs restent VOLONTAIREMENT hors de la copie, et c'est la règle
+    // de l'aura : `removeBaseTN` (seul l'émetteur est débuffable) et
+    // `permanent` (la copie dure tant qu'on reste à portée, voir plus haut).
+    attackBonus: auraState.attackBonus
+      ? foundry.utils.deepClone(auraState.attackBonus) : null,
+    resistances: Array.isArray(auraState.resistances)
+      ? foundry.utils.deepClone(auraState.resistances) : [],
+    // Forme héritée à une seule ligne, lue par stateResistanceRows au même
+    // titre que la liste : la taire ici aurait fait qu'une aura écrite avant
+    // la liste perde sa résistance en chemin.
+    ...(auraState.resistance ? { resistance: foundry.utils.deepClone(auraState.resistance) } : {}),
+    resistanceDamage: auraState.resistanceDamage
+      ? foundry.utils.deepClone(auraState.resistanceDamage) : null,
     auraApplied: {
       sourceActorId: sourceActor.id,
       sourceTokenId: sourceToken.id,
