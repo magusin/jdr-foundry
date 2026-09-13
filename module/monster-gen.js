@@ -31,6 +31,27 @@ function pickLevel(actor) {
   return levels[randInt(0, levels.length - 1)];
 }
 
+/**
+ * PV max final d'un monstre fraîchement généré.
+ *
+ * ⚠️ Doit reproduire EXACTEMENT `prepareDerivedData` (documents/actor.js) :
+ *   pvMax = base.pvMax + ⌊endurance EFFECTIVE / 5⌋
+ * et l'endurance effective comprend le **bonus de niveau** (+1 à chaque
+ * principale par niveau), que la bande n'écrit pas — elle ne stocke que la
+ * base. Le calcul d'origine ne lisait que `baseEnd`, donc il annonçait un max
+ * plus bas que celui recalculé par la fiche : `pv.valeur` était écrit à cette
+ * valeur trop basse, `pv.max` était aussitôt recalculé plus haut, et tout
+ * monstre généré naissait « Légèrement blessé » (29/30 pour un niveau 7 —
+ * un point manquant par tranche de 5 niveaux).
+ */
+function pvMaxFrom(pvBase, baseEnd, lvl) {
+  const PV_PER_END_STEP = 5; // 5 END => +1 PV
+  const PV_PER_END_GAIN = 1;
+  const effEnd = Math.max(0, Number(baseEnd) || 0) + Math.max(1, Number(lvl) || 1);
+  const pvFromEnd = Math.floor(effEnd / PV_PER_END_STEP) * PV_PER_END_GAIN;
+  return Math.max(1, (Number(pvBase) || 0) + pvFromEnd);
+}
+
 function getBand(actor, lvl) {
   const key = String(lvl);
   return actor.system?.gen?.bands?.[key] ?? null;
@@ -128,12 +149,9 @@ export async function randomizeMonster(actor) {
   })();
 
   // =========================
-  // 2) PV “actuels” au spawn = PV MAX FINAL (base + scaling END)
-  //    ⚠️ doit matcher actor.js (PV_PER_END_STEP=5, PV_PER_END_GAIN=1)
+  // 2) PV “actuels” au spawn = PV MAX FINAL (base + scaling END, niveau compris)
   // =========================
-  const PV_PER_END_STEP = 5;
-  const pvFromEnd = Math.floor(Math.max(0, baseEnd) / PV_PER_END_STEP) * 1;
-  const pvMaxFinal = Math.max(1, pvBase + pvFromEnd);
+  const pvMaxFinal = pvMaxFrom(pvBase, baseEnd, lvl);
 
   // =========================
   // 3) UPDATE : on écrit les BASES
@@ -200,7 +218,7 @@ export function buildRandomUpdatesForActor(actor) {
   const toucherPhysiqueBase = (() => { const [mn, mx] = getRange(band.toucherPhysique, 0, 0); return randInt(mn, mx); })();
   const toucherMagiqueBase  = (() => { const [mn, mx] = getRange(band.toucherMagique, 0, 0); return randInt(mn, mx); })();
 
-  const pvMaxFinal = Math.max(1, pvBase + Math.floor(Math.max(0, baseEnd) / 5));
+  const pvMaxFinal = pvMaxFrom(pvBase, baseEnd, lvl);
 
   return {
     "system.niveau": lvl,
