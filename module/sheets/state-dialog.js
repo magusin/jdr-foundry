@@ -280,6 +280,22 @@ export function ensureStateDialogCSS() {
 .rpg-state-dialog .rpg-res-key select { font-size: 10px !important; }
 .rpg-state-dialog .rpg-res-row input[type="checkbox"] { width: auto !important; }
 .rpg-state-dialog .rpg-res-add { margin: 2px 0 10px !important; cursor: pointer !important; }
+
+/* stats modifiées par l'état qu'un bonus d'attaque pose sur sa cible */
+.rpg-state-dialog .rpg-atkmod-row {
+  display: grid !important;
+  grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) minmax(0,0.8fr) 70px 26px !important;
+  gap: 8px !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+}
+.rpg-state-dialog .rpg-atkmod-head {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  opacity: .7 !important;
+}
+.rpg-state-dialog .rpg-atkmod-add { margin: 2px 0 6px !important; cursor: pointer !important; }
+.rpg-state-dialog .rpg-atkmod-del { cursor: pointer !important; border: 0 !important; background: none !important; color: #c0392b !important; }
 .rpg-state-dialog .rpg-res-del { cursor: pointer !important; border: 0 !important; background: none !important; color: #c0392b !important; }
 
 /* séparateurs */
@@ -403,6 +419,32 @@ export async function editStateDialog(state, { title } = {}) {
       <button type="button" class="rpg-res-del" title="Retirer cette ligne">✕</button>
     </div>`;
 
+  // Bonus/malus de stat portés par l'état que pose le bonus d'attaque. Même
+  // mécanique que les lignes de résistance (ajout/retrait à chaud, lecture
+  // par parcours du DOM) : un index de formulaire ne survit pas au retrait
+  // d'une ligne.
+  const atkModRowHtml = (m = {}) => {
+    const sens = (Number(m.value ?? 0) < 0 || m.sens === "malus") ? "malus" : "bonus";
+    const qty = Math.abs(Number(m.value ?? 0) || 0);
+    return `
+    <div class="rpg-atkmod-row">
+      <select data-atkmod-field="stat">
+        ${Object.entries(MOD_LABELS).filter(([k]) => k !== "retraitMod").map(([k, lbl]) =>
+          `<option value="${k}" ${String(m.stat ?? "") === k ? "selected" : ""}>${lbl}</option>`).join("")}
+      </select>
+      <select data-atkmod-field="sens">
+        <option value="bonus" ${sens === "bonus" ? "selected" : ""}>⬆️ Bonus</option>
+        <option value="malus" ${sens === "malus" ? "selected" : ""}>⬇️ Malus</option>
+      </select>
+      <select data-atkmod-field="mode">
+        <option value="flat" ${m.mode !== "pct" ? "selected" : ""}>Fixe</option>
+        <option value="pct" ${m.mode === "pct" ? "selected" : ""}>%</option>
+      </select>
+      <input type="number" data-atkmod-field="value" value="${qty}" min="0"/>
+      <button type="button" class="rpg-atkmod-del" title="Retirer cette stat">✕</button>
+    </div>`;
+  };
+
   const resD = st.resistanceDamage ?? {};
   // Toutes les lignes de résistance aux états — `resistances[]` et, pour un
   // état posé avant la liste, l'objet unique `resistance`.
@@ -410,6 +452,15 @@ export async function editStateDialog(state, { title } = {}) {
   const atk  = st.attackBonus ?? {};
   const atkCats = Array.isArray(atk.categories) ? atk.categories : [];
   const atkFx = atk.effect ?? {};
+  // L'état stocke {stat: {flat, pct}} ; l'UI édite une ligne par couple
+  // (stat, mode), parce qu'une même stat peut porter un fixe ET un %.
+  const atkModRows = [];
+  for (const [stat, mv] of Object.entries(atkFx.mods ?? {})) {
+    const flat = Number(mv?.flat ?? 0) || 0;
+    const pct = Number(mv?.pct ?? 0) || 0;
+    if (flat) atkModRows.push({ stat, mode: "flat", value: flat });
+    if (pct) atkModRows.push({ stat, mode: "pct", value: pct });
+  }
 
   const content = `
 <div class="rpg-state-dialog">
@@ -718,6 +769,19 @@ export async function editStateDialog(state, { title } = {}) {
               <input type="number" name="atkFx.dot.per" value="${Number(atkFx.dot?.per ?? 10) || 10}" min="1"/>
             </div>
           </div>
+
+          <div class="fx-subtitle" style="margin-top:12px">Stats modifiées sur la cible touchée</div>
+          <p class="hint">Portent sur la <b>cible</b>, pas sur le porteur — c'est ce qui rend « ta lame entrave »
+            possible (<b>Vitesse · Malus · % · 100</b>). Un malus est donc le cas normal ici. La quantité est
+            figée au moment du coup, comme les dégâts par tour : pas de mise à l'échelle.</p>
+
+          <div class="rpg-atkmod-list">
+            <div class="rpg-atkmod-row rpg-atkmod-head">
+              <span>Stat</span><span>Sens</span><span>Type</span><span>Valeur</span><span></span>
+            </div>
+            ${atkModRows.map(m => atkModRowHtml(m)).join("")}
+          </div>
+          <button type="button" class="rpg-atkmod-add">+ Ajouter une stat</button>
         </div>
       </fieldset>
 
@@ -813,6 +877,22 @@ export async function editStateDialog(state, { title } = {}) {
       // État posé sur la cible touchée. Sans nom, `normalizeBonusEffect` rend
       // null et le bonus reste purement chiffré — c'est la façon de l'enlever.
       effect: {
+        // Lues par parcours du DOM (et non par FormData) : les lignes
+        // s'ajoutent et se retirent à chaud, un index de formulaire ne
+        // survivrait pas au retrait de l'une d'elles.
+        mods: Array.from(htmlRoot.querySelectorAll(".rpg-atkmod-list .rpg-atkmod-row"))
+          .filter(row => !row.classList.contains("rpg-atkmod-head"))
+          .map(row => {
+            const v = (f) => row.querySelector(`[data-atkmod-field="${f}"]`);
+            const qty = Math.abs(Number(v("value")?.value) || 0);
+            const sens = v("sens")?.value === "malus" ? "malus" : "bonus";
+            return {
+              stat: String(v("stat")?.value ?? "").trim(),
+              mode: v("mode")?.value === "pct" ? "pct" : "flat",
+              sens,
+              value: sens === "malus" ? -qty : qty
+            };
+          }),
         label: getStr("atkFx.label", ""),
         when: getStr("atkFx.when", "hit"),
         duration: Math.max(1, getNum("atkFx.duration", 1)),
@@ -912,6 +992,19 @@ export async function editStateDialog(state, { title } = {}) {
         ev.preventDefault();
         del.closest(".rpg-res-row")?.remove();
       });
+      // Mêmes mécaniques pour les stats de l'état posé par un bonus d'attaque.
+      const atkModList = root?.querySelector(".rpg-atkmod-list");
+      root?.querySelector(".rpg-atkmod-add")?.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        atkModList?.insertAdjacentHTML("beforeend", atkModRowHtml({ stat: "vitesse", mode: "pct", sens: "malus", value: 0 }));
+      });
+      root?.addEventListener("click", (ev) => {
+        const del = ev.target?.closest?.(".rpg-atkmod-del");
+        if (!del) return;
+        ev.preventDefault();
+        del.closest(".rpg-atkmod-row")?.remove();
+      });
+
       root?.addEventListener("change", (ev) => {
         const sel = ev.target?.closest?.("select.rpg-res-fx-pick");
         if (!sel || !sel.value) return;

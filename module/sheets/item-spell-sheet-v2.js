@@ -8,7 +8,7 @@ import {
 } from "../rules/damage-types.js";
 import { computeSpellValue } from "../rules/item-value.js";
 import { ZONE_TARGETS, zoneTargetsLabel } from "../rules/spell-zone.js";
-import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN } from "../rules/attack-bonus.js";
+import { WEAPON_CATEGORIES, BONUS_SCOPES, normalizeAttackBonus, attackBonusText, BONUS_FX_WHEN, attackBonusFromFx } from "../rules/attack-bonus.js";
 import { effectCatalogByTag, getEffectDef, EFFECT_TAGS, normalizeEffectTag } from "../rules/effect-library.js";
 import { modIsScaled } from "../rules/effect-tick.js";
 
@@ -135,20 +135,7 @@ function decorateMod(m) {
 /** Résumé lisible d'une résistance/vulnérabilité accordée, ou null si l'effet n'en accorde pas. */
 /** Bonus de dégâts porté par cet effet, format normalisé (attack-bonus.js). */
 function fxAttackBonus(fx) {
-  return normalizeAttackBonus({
-    scope: fx?.atkScope, categories: fx?.atkCategories,
-    flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
-    livraison: fx?.atkLivraison, tag: fx?.atkTag,
-    effect: {
-      label: fx?.atkFxLabel, when: fx?.atkFxWhen,
-      duration: fx?.atkFxDuration, removeBaseTN: fx?.atkFxRemoveTN,
-      tag: fx?.atkFxTag,
-      dot: {
-        mode: fx?.atkFxDotMode, base: fx?.atkFxDotBase,
-        stat: fx?.atkFxDotStat, per: fx?.atkFxDotPer
-      }
-    }
-  });
+  return normalizeAttackBonus(attackBonusFromFx(fx));
 }
 
 function buildResistSummary(fx) {
@@ -498,6 +485,8 @@ export class RPGSpellSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       removeMod:     async function(event) { await this._actionRemoveMod(event); },
       addFxResist:    async function(event) { await this._actionAddFxResist(event); },
       removeFxResist: async function(event) { await this._actionRemoveFxResist(event); },
+      addAtkFxMod:    async function(event) { await this._actionAddAtkFxMod(event); },
+      removeAtkFxMod: async function(event) { await this._actionRemoveAtkFxMod(event); },
       // La pesée est calculée dans _prepareContext, donc au rendu. La saisie
       // d'un champ, elle, enregistre SANS re-rendre (_bindLiveSave, pour ne
       // pas faire sauter le curseur) : sans ce bouton, le MJ devrait fermer
@@ -624,6 +613,13 @@ static PARTS = foundry.utils.mergeObject(
     // non celui des types de dégâts (qui connaît « magique » et ignore
     // « neutre »).
     ctx.effectTagChoices = Object.entries(EFFECT_TAGS).map(([key, label]) => ({ key, label }));
+    // Stats modifiables par l'état qu'un bonus d'attaque pose sur sa cible.
+    // `retraitMod` en est exclu : il n'est pas lu sur un état actif — seul
+    // l'équipement porté le fournit (remove-state.js) — et l'offrir ici
+    // afficherait un choix qui ne fait rien.
+    ctx.statChoices = Object.entries(STAT_LABELS)
+      .filter(([key]) => key !== "retraitMod")
+      .map(([key, label]) => ({ key, label }));
     ctx.isReadOnly = !ctx.canEdit;
 
     // ── Vue joueur : résumé compact ────────────────────────────────────────
@@ -855,6 +851,11 @@ static PARTS = foundry.utils.mergeObject(
       fx.atkFxDotBase = Math.max(0, n(fx.atkFxDotBase, 0));
       fx.atkFxDotStat = String(fx.atkFxDotStat ?? "").trim();
       fx.atkFxDotPer = Math.max(1, n(fx.atkFxDotPer, 10) || 10);
+      // Bonus/malus de stat portés par l'état posé — même forme de ligne que
+      // les mods de l'effet lui-même (partie 4), donc même normalisation et
+      // même décoration. Sans mise à l'échelle : la quantité est figée au
+      // moment du coup, comme le DOT ci-dessus.
+      fx.atkFxMods = normMods(fx.atkFxMods).map(decorateMod);
 
       // mods : tableau de { stat, mode:"flat"|"pct", value } — format attendu
       // par buildModsFromFxMods() dans rules/spells.js. On y ajoute, pour
@@ -958,6 +959,20 @@ static PARTS = foundry.utils.mergeObject(
         });
       });
 
+      // Mods de l'état posé par le bonus d'attaque (partie 8). Attributs
+      // DISTINCTS de ceux de la partie 4 (`data-atkmod-field` et non
+      // `data-mod-field`) : les deux listes vivent dans la même carte, et un
+      // sélecteur commun aurait versé ces lignes-ci dans `fx.mods`.
+      const atkFxMods = [];
+      card.querySelectorAll(".fx-atkmod-row[data-atkmod-index]").forEach(row => {
+        const stat = row.querySelector('[data-atkmod-field="stat"]')?.value ?? "";
+        if (!stat) return;
+        const mode = row.querySelector('[data-atkmod-field="mode"]')?.value === "pct" ? "pct" : "flat";
+        const sens = row.querySelector('[data-atkmod-field="sens"]')?.value === "malus" ? "malus" : "bonus";
+        const qty = Math.abs(Number(row.querySelector('[data-atkmod-field="value"]')?.value) || 0);
+        atkFxMods.push({ stat: String(stat), mode, sens, value: sens === "malus" ? -qty : qty });
+      });
+
       // Résistances aux états : une ligne par `.fx-resist-row`, comme les mods.
       // Une ligne sans aucun filtre (ni type, ni effet, ni immunité) est
       // abandonnée — elle serait inerte côté moteur et ne ferait qu'encombrer.
@@ -1023,6 +1038,7 @@ static PARTS = foundry.utils.mergeObject(
         atkFxDotBase:  num("atkFxDotBase", n(prev.atkFxDotBase, 0)),
         atkFxDotStat:  str("atkFxDotStat", prev.atkFxDotStat ?? ""),
         atkFxDotPer:   num("atkFxDotPer", n(prev.atkFxDotPer, 10)),
+        atkFxMods,
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
         // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
         // via la stat « Fatigue max » dans les bonus/malus.
@@ -1074,7 +1090,7 @@ static PARTS = foundry.utils.mergeObject(
         // de l'effet — exactement le genre de perte silencieuse que ce
         // gestionnaire existe pour éviter.
         if (fxCard && (el.hasAttribute("data-fx-field") || el.hasAttribute("data-mod-field")
-                       || el.hasAttribute("data-res-field"))) {
+                       || el.hasAttribute("data-res-field") || el.hasAttribute("data-atkmod-field"))) {
           ev.stopPropagation();
           // Affiche/masque les champs dépendants avant d'enregistrer
           this._syncOptionalFields(root, fxCard);
@@ -1701,6 +1717,31 @@ static PARTS = foundry.utils.mergeObject(
     const list = Array.isArray(effects[fxIndex]?.resists) ? effects[fxIndex].resists : null;
     if (!list || resIndex >= list.length) return;
     list.splice(resIndex, 1);
+    await this._updateAndKeepView({ "system.effectsUI": effects });
+  }
+
+  async _actionAddAtkFxMod(event) {
+    const fxIndex = this._fxIndexOf(event);
+    if (fxIndex < 0) return;
+    // Comme pour les autres ajouts : on repart de l'affiché, pas du document,
+    // pour ne pas perdre une saisie en cours ailleurs dans l'effet.
+    const effects = this._currentEffects();
+    if (!effects[fxIndex]) return;
+    const list = Array.isArray(effects[fxIndex].atkFxMods) ? effects[fxIndex].atkFxMods : [];
+    list.push({ stat: "vitesse", mode: "pct", sens: "malus", value: 0 });
+    effects[fxIndex].atkFxMods = list;
+    await this._updateAndKeepView({ "system.effectsUI": effects });
+  }
+
+  async _actionRemoveAtkFxMod(event) {
+    const fxIndex = this._fxIndexOf(event);
+    const btn = event?.target?.closest?.("[data-action]");
+    const modIndex = Number(btn?.dataset?.atkmodIndex ?? -1);
+    if (fxIndex < 0 || !Number.isFinite(modIndex) || modIndex < 0) return;
+    const effects = this._currentEffects();
+    const list = Array.isArray(effects[fxIndex]?.atkFxMods) ? effects[fxIndex].atkFxMods : null;
+    if (!list || modIndex >= list.length) return;
+    list.splice(modIndex, 1);
     await this._updateAndKeepView({ "system.effectsUI": effects });
   }
 

@@ -65,7 +65,7 @@
 // de référence chiffré — mais elle doit au moins partager le calcul.
 import { tnFromRatio, applyDifficulty, clamp, AUTO_FAIL_MAX, AUTO_SUCC_MIN } from "./combat.js";
 import { BASE_VITESSE } from "./base-speed.js";
-import { normalizeAttackBonus } from "./attack-bonus.js";
+import { normalizeAttackBonus, attackBonusFromFx } from "./attack-bonus.js";
 import { fxResistanceRows } from "./damage-types.js";
 
 const n = (v, d = 0) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
@@ -1206,20 +1206,7 @@ export function computeSpellValue(item, opts = {}) {
     // seconde place part le plus souvent en déplacement). Un bonus en % est
     // ramené en points via l'attaque de référence du groupe — c'est justement
     // ce qui le rend difficile à équilibrer : il monte avec l'arme.
-    const atk = normalizeAttackBonus({
-      scope: fx.atkScope, categories: fx.atkCategories,
-      flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
-      livraison: fx.atkLivraison, tag: fx.atkTag,
-      effect: {
-        label: fx.atkFxLabel, when: fx.atkFxWhen,
-        duration: fx.atkFxDuration, removeBaseTN: fx.atkFxRemoveTN,
-        tag: fx.atkFxTag,
-        dot: {
-          mode: fx.atkFxDotMode, base: fx.atkFxDotBase,
-          stat: fx.atkFxDotStat, per: fx.atkFxDotPer
-        }
-      }
-    });
+    const atk = normalizeAttackBonus(attackBonusFromFx(fx));
 
     // État posé sur la cible par les attaques du porteur (« tes lames
     // empoisonnent »). Pesé comme un DOT MAINTENU, pas cumulé : frapper de
@@ -1238,6 +1225,26 @@ export function computeSpellValue(item, opts = {}) {
         add(`${fxLabel} · état posé`,
             `${round1(tick)}${soin ? " soin" : " dég"}/tour · ${dur} tour(s)`,
             (onAlly === soin ? 1 : -1) * tick * dur * affected * DAMAGE_POINT * fxChance * chance);
+      }
+    }
+
+    // Bonus/malus de stat de ce même état. Pesés comme le DOT ci-dessus : un
+    // état MAINTENU tant que le buff dure (le coup suivant le rafraîchit),
+    // donc `durée du buff`, jamais `durée de l'état × nombre de coups`.
+    for (const [stat, m] of Object.entries(atkFx?.mods ?? {})) {
+      const weight = STAT_WEIGHTS[stat];
+      if (weight === undefined) continue;
+      for (const [mode, raw] of [["flat", n(m?.flat, 0)], ["pct", n(m?.pct, 0)]]) {
+        if (!raw) continue;
+        const qty = Math.abs(raw);
+        const flatEq = mode === "pct" ? (qty / 100) * n(PCT_REF[stat], 10) : qty;
+        // L'état est posé sur la CIBLE de l'attaque : un malus y est un gain
+        // pour le porteur, un bonus un cadeau à l'adversaire — l'inverse
+        // exact de la convention d'un effet posé sur un allié.
+        const sign = (raw < 0) ? 1 : -1;
+        add(`${fxLabel} · état posé · ${LABELS[stat] ?? stat}`,
+            `${raw > 0 ? "+" : "−"}${round1(qty)}${mode === "pct" ? " %" : ""} · ${dur} tour(s)`,
+            sign * flatEq * weight * durFactor * affected * fxChance * chance);
       }
     }
 

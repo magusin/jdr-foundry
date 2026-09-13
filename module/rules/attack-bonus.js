@@ -29,6 +29,7 @@
 
 import { DAMAGE_TYPES, damageTypeLabel } from "./damage-types.js";
 import { effectiveStates } from "./loadout.js";
+import { STAT_KEYS } from "./state-builder.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -89,6 +90,57 @@ export const BONUS_FX_WHEN = {
  * `mods` d'un effet de sort, eux, sont plats ou en pourcentage et n'ont
  * aucun scaling.
  */
+/**
+ * Modificateurs de stat portés par l'état accordé — « ta lame paralyse ».
+ *
+ * Même forme de SORTIE que `state.mods` ({stat: {flat, pct}}), parce que
+ * c'est `sumActiveEffectMods` (status-effects.js) qui les lira sur la cible :
+ * l'état posé par une arme est un état comme un autre, il ne peut pas parler
+ * une seconde langue. En ENTRÉE on accepte aussi les lignes de la fiche de
+ * sort ([{stat, mode, sens, value}]), sinon chaque surface devrait convertir.
+ *
+ * Volontairement sans mise à l'échelle : la quantité est figée au moment du
+ * coup, comme le DOT, et une échelle de plus par ligne rendrait la grille
+ * illisible pour un gain que le DOT couvre déjà.
+ */
+function normalizeBonusMods(raw) {
+  const out = {};
+  const put = (stat, mode, value) => {
+    const key = String(stat ?? "").trim();
+    // Une clé hors de STAT_KEYS n'est lue par personne : la garder ferait
+    // croire à un bonus qui n'existe pas.
+    if (!STAT_KEYS[key]) return;
+    const v = n(value, 0);
+    if (!v) return;
+    out[key] = out[key] ?? { flat: 0, pct: 0 };
+    if (mode === "pct") out[key].pct += v;
+    else out[key].flat += v;
+  };
+
+  if (Array.isArray(raw)) {
+    for (const m of raw) {
+      if (!m || typeof m !== "object") continue;
+      const qty = Math.abs(n(m.value, 0));
+      // `sens` est stocké explicitement — au signe près, « Malus » à 0 se
+      // relisait en « Bonus » (−0 n'est pas < 0), même piège que la fiche.
+      const signed = (m.sens === "malus") ? -qty : (n(m.value, 0) < 0 ? -qty : qty);
+      put(m.stat, m.mode === "pct" ? "pct" : "flat", signed);
+    }
+  } else if (raw && typeof raw === "object") {
+    for (const [stat, v] of Object.entries(raw)) {
+      if (!v || typeof v !== "object") continue;
+      put(stat, "flat", v.flat);
+      put(stat, "pct", v.pct);
+    }
+  }
+  return out;
+}
+
+/** Ce jeu de mods dit-il quelque chose ? */
+function hasMods(mods) {
+  return Object.values(mods ?? {}).some(m => n(m?.flat, 0) || n(m?.pct, 0));
+}
+
 function normalizeBonusEffect(raw) {
   if (!raw || typeof raw !== "object") return null;
   const label = String(raw.label ?? "").trim();
@@ -114,6 +166,39 @@ function normalizeBonusEffect(raw) {
       base: Math.max(0, n(raw.dot?.base, 0)),
       stat: String(raw.dot?.stat ?? "").trim(),
       per:  Math.max(1, n(raw.dot?.per, 10) || 10)
+    },
+    // Bonus/malus de stat portés par l'état posé. Sans eux, un coup ne
+    // pouvait qu'empoisonner (un DOT) : ralentir, désarmer ou paralyser la
+    // cible par une arme était injoignable, alors qu'un sort le fait depuis
+    // toujours avec exactement la même structure d'état.
+    mods: normalizeBonusMods(raw.mods)
+  };
+}
+
+/**
+ * Construit un bonus d'attaque depuis les champs À PLAT d'un effet de sort
+ * (`fx.atk*` / `fx.atkFx*`, item-spell-sheet-v2.js).
+ *
+ * Quatre endroits recopiaient cette correspondance champ par champ — la
+ * résolution (spells.js), l'aperçu (spells.js), la pesée (item-value.js) et
+ * la fiche (item-spell-sheet-v2.js). Un champ ajouté à l'un et oublié dans
+ * les autres est invisible : il s'enregistre, et telle surface l'applique
+ * pendant que telle autre l'ignore. Une seule correspondance, donc.
+ */
+export function attackBonusFromFx(fx) {
+  return {
+    scope: fx?.atkScope, categories: fx?.atkCategories,
+    flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
+    livraison: fx?.atkLivraison, tag: fx?.atkTag,
+    effect: {
+      label: fx?.atkFxLabel, when: fx?.atkFxWhen,
+      duration: fx?.atkFxDuration, removeBaseTN: fx?.atkFxRemoveTN,
+      tag: fx?.atkFxTag,
+      dot: {
+        mode: fx?.atkFxDotMode, base: fx?.atkFxDotBase,
+        stat: fx?.atkFxDotStat, per: fx?.atkFxDotPer
+      },
+      mods: fx?.atkFxMods
     }
   };
 }
@@ -263,6 +348,25 @@ const BONUS_FX_STAT_LABELS = {
  * lire à l'identique partout où le bonus est décrit — fiche de sort, aperçu
  * de déclaration, résumé d'état sur la fiche du porteur, chat.
  */
+/**
+ * « Vitesse −100 % · Score Armure −15 » — les mods de l'état accordé.
+ *
+ * Même signe et même ordre partout : c'est `bonusEffectDetail` qui l'emploie,
+ * donc la fiche de sort, l'aperçu, le résumé d'état et le chat disent tous
+ * la même phrase.
+ */
+function bonusModsText(mods) {
+  const parts = [];
+  for (const [stat, m] of Object.entries(mods ?? {})) {
+    const label = STAT_KEYS[stat] ?? stat;
+    const flat = n(m?.flat, 0);
+    const pct = n(m?.pct, 0);
+    if (flat) parts.push(`${label} ${flat > 0 ? "+" : "−"}${Math.abs(flat)}`);
+    if (pct)  parts.push(`${label} ${pct > 0 ? "+" : "−"}${Math.abs(pct)} %`);
+  }
+  return parts.join(" · ");
+}
+
 function bonusEffectDetail(fx) {
   const statTxt = fx.dot.stat
     ? ` + ${BONUS_FX_STAT_LABELS[fx.dot.stat] ?? fx.dot.stat}÷${fx.dot.per}`
@@ -280,7 +384,10 @@ function bonusEffectDetail(fx) {
   const remTxt = fx.removeBaseTN ? ` · retrait TN ${fx.removeBaseTN}+` : " · irrémédiable";
   const whenTxt = fx.when === "crit" ? " — crit seulement"
     : fx.when === "hitonly" ? " — touche normale" : "";
-  return `${tagTxt} ${fx.duration} tour(s)${dotTxt}${remTxt}${whenTxt}`;
+  // Les bonus/malus de stat de l'état posé : sans eux, « pose Entrave
+  // 2 tour(s) » ne dit pas que l'entrave immobilise.
+  const modTxt = bonusModsText(fx.mods);
+  return `${tagTxt} ${fx.duration} tour(s)${dotTxt}${modTxt ? ` · ${modTxt}` : ""}${remTxt}${whenTxt}`;
 }
 
 /**
