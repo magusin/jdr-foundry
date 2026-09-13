@@ -181,6 +181,12 @@ function buildFxUi(fx) {
       key, label,
       checked: (Array.isArray(fx?.atkCategories) ? fx.atkCategories : []).includes(key)
     })),
+    // Pendant côté sorts : « +2 à tes sorts d'éclair ». Même vocabulaire que
+    // l'élément d'un sort (DAMAGE_TYPES), physique/magique compris.
+    atkSpellTagChoices: DAMAGE_TYPE_KEYS.map(key => ({
+      key, label: DAMAGE_TYPES[key],
+      checked: (Array.isArray(fx?.atkSpellTags) ? fx.atkSpellTags : []).includes(key)
+    })),
     mods
   };
 }
@@ -827,6 +833,8 @@ static PARTS = foundry.utils.mergeObject(
       fx.atkScope = BONUS_SCOPES[String(fx.atkScope ?? "")] ? String(fx.atkScope) : "";
       fx.atkCategories = (Array.isArray(fx.atkCategories) ? fx.atkCategories : [])
         .map(String).filter(c => WEAPON_CATEGORIES[c]);
+      fx.atkSpellTags = (Array.isArray(fx.atkSpellTags) ? fx.atkSpellTags : [])
+        .map(String).filter(t => DAMAGE_TYPES[t]);
       fx.atkFlat = n(fx.atkFlat, 0);
       fx.atkPct = n(fx.atkPct, 0);
       fx.atkDice = String(fx.atkDice ?? "").trim();
@@ -1023,6 +1031,8 @@ static PARTS = foundry.utils.mergeObject(
         atkScope:      str("atkScope", prev.atkScope ?? ""),
         atkCategories: Array.from(card.querySelectorAll('[data-fx-field="atkCat"]'))
                             .filter(c => c.checked).map(c => String(c.dataset.cat)),
+        atkSpellTags:  Array.from(card.querySelectorAll('[data-fx-field="atkSpellTag"]'))
+                            .filter(c => c.checked).map(c => String(c.dataset.tag)),
         atkFlat:       num("atkFlat", 0),
         atkPct:        num("atkPct", 0),
         atkDice:       str("atkDice", prev.atkDice ?? ""),
@@ -1592,7 +1602,7 @@ static PARTS = foundry.utils.mergeObject(
       tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
       // Bonus de dégâts aux attaques : éteint tant qu'aucune portée n'est
       // choisie (partie 8).
-      atkScope: "", atkCategories: [], atkFlat: 0, atkPct: 0, atkDice: "",
+      atkScope: "", atkCategories: [], atkSpellTags: [], atkFlat: 0, atkPct: 0, atkDice: "",
       atkLivraison: "", atkTag: "",
       atkFxLabel: "", atkFxWhen: "hit", atkFxDuration: 1, atkFxRemoveTN: 0,
       atkFxTag: "", atkFxDotMode: "none", atkFxDotBase: 0, atkFxDotStat: "", atkFxDotPer: 10,

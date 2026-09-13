@@ -367,7 +367,7 @@ export class RPGItem extends Item {
     // Bonus de dégâts accordés par un état actif de l'attaquant. Une
     // compétence de monstre est un sort : c'est la portée « sorts » qui la
     // couvre, pas celle des armes (le monstre n'en porte pas).
-    const bonus = await rollAttackBonuses(attackerActor, { kind: "sort", rawBase: rawBrut });
+    const bonus = await rollAttackBonuses(attackerActor, { kind: "sort", spell: this, rawBase: rawBrut });
     const beforeMitigation = Math.max(0, rawBrut + bonus.same);
 
     let fixe = 0, pct = 0;

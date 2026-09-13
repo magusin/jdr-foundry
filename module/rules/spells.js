@@ -1851,7 +1851,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     // cette ligne, effectsForResult renvoie une liste vide).
     if (outcome === "success" || outcome === "crit") {
       try {
-        const granted = collectAttackBonusEffects(actor, { kind: "sort", isCrit: outcome === "crit" });
+        const granted = collectAttackBonusEffects(actor, { kind: "sort", spell: item, isCrit: outcome === "crit" });
         for (const g of granted) {
           for (const tActor of targetActors) {
             await upsertState(tActor, {
@@ -2015,7 +2015,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
   // renseigné se fond dans la première ligne du sort, qu'il partage.
   // Le pourcentage, lui, n'est pas une ligne : il multiplie le brut au moment
   // du jet (voir bonusPct plus bas et le handler de « Lancer les dégâts »).
-  const atkBonus = collectAttackBonuses(actor, { kind: "sort" });
+  const atkBonus = collectAttackBonuses(actor, { kind: "sort", spell: item });
   const bonusPct = n(atkBonus.pct, 0);
   if (dmgBlocks.length) {
     if (atkBonus.flatSame || atkBonus.sameDice.length) {

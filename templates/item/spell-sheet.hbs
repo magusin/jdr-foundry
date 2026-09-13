@@ -844,11 +844,29 @@
                 <div class="fx-hint" style="padding-top:6px">{{#if fx.uiAttackBonus}}{{fx.uiAttackBonus}}{{else}}—{{/if}}</div>
               </div>
             </div>
+            {{!-- Pendant des catégories d'arme, côté sorts : un bonus peut ne
+                  viser qu'une famille d'éléments (« +2 à tes sorts d'éclair »).
+                  Aucune case cochée = tous les sorts. --}}
+            <div style="margin-top:6px">
+              <label title="Ne concerne que les sorts. Aucune case cochée = tous les sorts. Un sort correspond si son élément — celui de son en-tête ou celui d'une de ses lignes de dégâts — est coché.">✨ Éléments de sort visés</label>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-top:4px">
+                {{#each fx.atkSpellTagChoices as |c|}}
+                  <label class="fx-check" style="gap:3px">
+                    <input type="checkbox" data-fx-field="atkSpellTag" data-tag="{{c.key}}"
+                      {{#if c.checked}}checked{{/if}} />
+                    <span>{{c.label}}</span>
+                  </label>
+                {{/each}}
+              </div>
+            </div>
             <small class="fx-hint">
               Ajoute des dégâts à <b>chaque attaque</b> du porteur tant que l'effet dure — pas seulement à la prochaine.
               Une <b>nature</b> ou un <b>élément</b> renseigné sort les dégâts ajoutés du coup principal : ils sont alors
               mitigés à part, par la résistance correspondante de la cible. C'est ce qui permet « ton épée inflige en plus
               1d6 de feu ». Laisse les deux vides pour un simple « +2 aux dégâts ».
+              Les <b>éléments de sort visés</b> sont un filtre sur ce qui reçoit le bonus, à ne pas confondre avec
+              l'<b>élément ajouté</b> ci-dessus, qui est la nature des dégâts ajoutés : « +2 aux sorts d'éclair » se
+              règle avec la première liste, « +2 de dégâts d'éclair » avec la seconde.
             </small>
 
             {{!-- État posé sur la CIBLE quand une attaque du porteur touche.

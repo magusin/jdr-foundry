@@ -1252,10 +1252,15 @@ export function computeSpellValue(item, opts = {}) {
       const parAttaque = diceAverage(atk.dice) + n(atk.flat, 0)
                        + (n(atk.pct, 0) / 100) * n(PARTY.damagePerHit, 7);
       if (parAttaque) {
-        // Une portée restreinte à une ou deux catégories d'arme ne vaut pas
-        // une portée générale : le porteur doit tenir la bonne arme.
-        const couverture = atk.scope === "toutes" ? 1
-          : (atk.categories.length ? 0.6 + 0.1 * atk.categories.length : 0.9);
+        // Une portée restreinte ne vaut pas une portée générale : le porteur
+        // doit tenir la bonne arme, ou lancer le bon sort. Les deux filtres
+        // se multiplient — « armes de jet ET sorts d'éclair » sur une portée
+        // « toutes » est bien plus étroit que l'un des deux seul.
+        const catCouv = (atk.scope !== "sort" && atk.categories.length)
+          ? Math.min(1, 0.6 + 0.1 * atk.categories.length) : 1;
+        const tagCouv = (atk.scope !== "arme" && atk.spellTags.length)
+          ? Math.min(1, 0.5 + 0.1 * atk.spellTags.length) : 1;
+        const couverture = (atk.scope === "toutes" ? 1 : 0.9) * catCouv * tagCouv;
         add(`${fxLabel} · bonus de dégâts`,
             `${round1(parAttaque)} par attaque × ${dur} tour(s)`,
             (onAlly ? 1 : -1) * parAttaque * dur * couverture * affected * DAMAGE_POINT * fxChance);
