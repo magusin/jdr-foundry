@@ -159,6 +159,14 @@ function buildFxUi(fx) {
   const mods = (fx.mods ?? []).map(decorateMod);
   const ui = {
     uiTick,
+    // Fatigue par tour : sa propre pastille, jamais fondue dans uiTick — un
+    // effet d'épuisement pur a une nature « Aucun » et n'aurait alors rien
+    // affiché du tout.
+    uiFatigue: n(fx.fatigueDot, 0)
+      ? (n(fx.fatigueDot, 0) > 0
+          ? `😮‍💨 +${n(fx.fatigueDot, 0)} fatigue/tour`
+          : `😌 ${n(fx.fatigueDot, 0)} fatigue/tour`)
+      : null,
     uiTag: fx.tag ? tagLabel(fx.tag) : null,
     uiTarget: FX_TARGET_LABELS[String(fx.target ?? "target")] ?? FX_TARGET_LABELS.target,
     uiWhen: WHEN_LABELS[String(fx.when ?? "hit").toLowerCase()] ?? fx.when,
@@ -213,7 +221,8 @@ function fxChipList(ui) {
     { cls: "", text: ui.uiDuration }
   ];
   if (ui.uiTag)  chips.push({ cls: "fx-chip-tag",  text: ui.uiTag });
-  if (ui.uiTick) chips.push({ cls: "fx-chip-tick", text: ui.uiTick });
+  if (ui.uiTick)    chips.push({ cls: "fx-chip-tick", text: ui.uiTick });
+  if (ui.uiFatigue) chips.push({ cls: "fx-chip-tick", text: ui.uiFatigue });
   for (const m of (ui.mods ?? [])) {
     chips.push({ cls: m.isMalus ? "fx-chip-malus" : "fx-chip-bonus", text: m.text });
   }
@@ -919,6 +928,7 @@ static PARTS = foundry.utils.mergeObject(
       fx.uiStatBonus = fx?.damage?.preview?.scalingBonus ?? 0;
 
       // Défauts pour les nouveaux champs (permanent/aura)
+      fx.fatigueDot = n(fx.fatigueDot, 0);
       fx.permanent = !!fx.permanent;
       fx.isAura = !!fx.isAura;
       fx.auraMin = n(fx.auraMin, 0);
@@ -927,7 +937,7 @@ static PARTS = foundry.utils.mergeObject(
       // ── Résumé lisible (pastilles) : visible replié pour le MJ et
       //    affiché tel quel au joueur, qui n'a pas besoin du formulaire.
       Object.assign(fx, buildFxUi(fx));
-      fx.uiHasSummary = !!(fx.uiTick || fx.uiAura || fx.uiMove || fx.uiResist || fx.uiAttackBonus || fx.mods.length);
+      fx.uiHasSummary = !!(fx.uiTick || fx.uiFatigue || fx.uiAura || fx.uiMove || fx.uiResist || fx.uiAttackBonus || fx.mods.length);
     }
 
     // ui flags joueur
@@ -1084,9 +1094,15 @@ static PARTS = foundry.utils.mergeObject(
         atkFxDotPer:   num("atkFxDotPer", n(prev.atkFxDotPer, 10)),
         atkFxMods,
         movementTypeGrant: str("movementTypeGrant", prev.movementTypeGrant ?? ""),
-        // L'effet lui-même ne consomme pas de fatigue : la fatigue se règle
-        // via la stat « Fatigue max » dans les bonus/malus.
-        fatigueDot: 0,
+        // Fatigue par tour infligée au porteur (négatif = repose).
+        // Elle valait 0 en dur, avec pour justification « la fatigue se règle
+        // via la stat Fatigue max » — ce qui confond deux choses : cette
+        // stat-là déplace le SEUIL d'épuisement, celle-ci remplit la jauge.
+        // Le moteur l'applique depuis toujours (`dot.fatiguePerTick`,
+        // turn-effects.js), les deux fiches d'acteur l'affichent et l'éditeur
+        // d'état manuel sait l'écrire : un sort était la seule surface qui ne
+        // pouvait pas épuiser sa cible.
+        fatigueDot: num("fatigueDot", n(prev.fatigueDot, 0)),
         tick: {
           mode:      str("tick.mode", "none") || "none",
           flat:      Math.abs(num("tick.flat", 0)),
@@ -1623,6 +1639,7 @@ static PARTS = foundry.utils.mergeObject(
       auraTarget: "allies",
       details: "",
       tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "magique" },
+      fatigueDot: 0,
       // Bonus de dégâts aux attaques : éteint tant qu'aucune portée n'est
       // choisie (partie 8).
       atkScope: "", atkCategories: [], atkSpellTags: [], atkFlat: 0, atkPct: 0, atkDice: "",

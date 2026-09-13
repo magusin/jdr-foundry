@@ -15,6 +15,7 @@ import {
   normalizeResistMap, resistRows, nonZeroResistRows, stateResistTextParts
 } from "../rules/damage-types.js";
 import { actorStateResistRows } from "../rules/resistances.js";
+import { MOVEMENT_TYPES } from "../rules/movement-types.js";
 
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -80,7 +81,17 @@ export function decorateStates(states) {
     else if (fatDot < 0) parts.push(`Repose ${fatDot} fatigue/tour`);
 
     const mods = e?.mods ?? {};
+
+    // Type de déplacement accordé : il vit DANS `mods`, mais sa valeur est une
+    // chaîne (« ethere ») et non un {flat, pct} — la boucle ci-dessous le
+    // lisait donc comme un modificateur de 0 et le jetait. Un « Pas de
+    // l'ombre » qui n'accorde que ça affichait un résumé vide, alors que la
+    // fiche de sort, elle, l'annonce en pastille.
+    const mvKey = String(mods.movementTypeGrant ?? "").trim();
+    if (mvKey) parts.push(`🏃 ${MOVEMENT_TYPES[mvKey]?.label ?? mvKey}`);
+
     const modsTxt = Object.entries(mods)
+      .filter(([k]) => k !== "movementTypeGrant")
       .map(([k, v]) => {
         const name = LABELS[k] ?? k;
         const flat = Number(v?.flat ?? 0) || 0;

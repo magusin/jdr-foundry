@@ -39,11 +39,23 @@ function tickStates(actor) {
     ? foundry.utils.deepClone(actor.system.etatsActifs)
     : [];
 
-  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalDot: 0, totalFatigueDot: 0 };
+  if (!cur.length) return { changed: false, next: cur, removedAuraSource: false, totalDot: 0, totalFatigueDot: 0, dotRolls: [] };
 
   let removedAuraSource = false;
   let totalDot = 0;
   let totalFatigueDot = 0;
+  // Part en DÉS du dégât par tour (`dot.formula`, « 1d4 de saignement »).
+  // Elle était écrite par l'éditeur d'état, affichée par les deux fiches
+  // d'acteur (« Dégâts par tour : 0 + 1d4 ») et lancée par PERSONNE : seul
+  // `dot.perTick`, la part fixe, était appliqué. Un saignement écrit
+  // uniquement en dés ne faisait donc rien du tout, en promettant le
+  // contraire à l'écran. Les formules sont collectées ici et lancées par
+  // l'appelant, qui est asynchrone (un jet de dés l'est).
+  const dotRolls = [];
+  const pushFormula = (st) => {
+    const f = dotFormula(st);
+    if (f) dotRolls.push({ label: String(st?.label ?? "Effet"), formula: f });
+  };
   const next = [];
 
   for (const st of cur) {
@@ -53,6 +65,7 @@ function tickStates(actor) {
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
       if (dot !== 0) totalDot += dot;
       totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      pushFormula(st);
       next.push(st);
       continue;
     }
@@ -64,6 +77,7 @@ function tickStates(actor) {
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
       if (dot !== 0) totalDot += dot;
       totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      pushFormula(st);
       next.push(st);
       continue;
     }
@@ -75,6 +89,7 @@ function tickStates(actor) {
     const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
     if (dot !== 0 && remaining > 0) totalDot += dot;
     if (remaining > 0) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+    if (remaining > 0) pushFormula(st);
 
     if (st?.isAura && newRemaining <= 0) removedAuraSource = true;
 
@@ -82,7 +97,19 @@ function tickStates(actor) {
   }
 
   const changed = JSON.stringify(cur) !== JSON.stringify(next);
-  return { changed, next, removedAuraSource, totalDot, totalFatigueDot };
+  return { changed, next, removedAuraSource, totalDot, totalFatigueDot, dotRolls };
+}
+
+/**
+ * Formule de dés d'un état, ou "" s'il n'en porte pas.
+ *
+ * « 0 » est le défaut écrit par la fiche de sort pour un effet sans dés
+ * (normDamage), et une chaîne vide celui de l'éditeur d'état : ni l'un ni
+ * l'autre ne doit produire un jet. On exige donc un dé explicite.
+ */
+function dotFormula(st) {
+  const f = String(st?.dot?.formula ?? "").trim();
+  return /\dd\d/i.test(f) || /^d\d/i.test(f) ? f : "";
 }
 
 /**
@@ -121,7 +148,8 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   await decCooldowns(actor);
 
   // 2) États + collecte DOT
-  let { changed, next, removedAuraSource, totalDot, totalFatigueDot } = tickStates(actor);
+  let { changed, next, removedAuraSource, totalDot, totalFatigueDot, dotRolls } = tickStates(actor);
+  dotRolls = Array.isArray(dotRolls) ? dotRolls : [];
 
   // Le passif porté n'écrit aucun état (loadout.js) : son « par tour » doit
   // donc être ajouté ici, sinon un passif qui régénère ou qui brûle son
@@ -130,6 +158,22 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   for (const st of passifStates(actor)) {
     totalDot += n(st?.dot?.perTick, 0);
     totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+    const f = dotFormula(st);
+    if (f) dotRolls.push({ label: String(st?.label ?? "Passif"), formula: f });
+  }
+
+  // Part en dés du DOT : un jet par état qui en porte, visible en chat comme
+  // tout autre jet du système — un dégât qui tombe sans dé affiché est
+  // indiscernable d'un bug de calcul.
+  const dotRollLines = [];
+  for (const d of dotRolls) {
+    try {
+      const roll = await (new Roll(d.formula)).evaluate();
+      totalDot += Number(roll.total) || 0;
+      dotRollLines.push(`${d.label} : ${d.formula} → <b>${roll.total}</b>`);
+    } catch (e) {
+      console.warn(`[RPG] DOT en dés « ${d.formula} » illisible :`, e);
+    }
   }
 
   // 3) Applique DOT avant la mise à jour des états
@@ -146,8 +190,8 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
     updates["system.ressources.pv.valeur"] = newPv;
 
     lines.push((totalDot > 0
-      ? `subit <b>${totalDot}</b> dégâts (DOT)`
-      : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour)`)
+      ? `subit <b>${totalDot}</b> dégâts (DOT)${dotRollLines.length ? ` <span style="opacity:.8">[${dotRollLines.join(" · ")}]</span>` : ""}`
+      : `récupère <b>${Math.abs(totalDot)}</b> PV (soin/tour)${dotRollLines.length ? ` <span style="opacity:.8">[${dotRollLines.join(" · ")}]</span>` : ""}`)
       + `. PV: ${newPv}/${pvMax}`);
   }
 

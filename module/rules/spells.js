@@ -946,6 +946,11 @@ export function buildSpellEffectsPreview({ actor, item }) {
     if (perTick > 0) parts.push(`💥 ${perTick} dégâts/tour`);
     else if (perTick < 0) parts.push(`💚 ${Math.abs(perTick)} soin/tour`);
 
+    // Fatigue par tour : à part du perTick ci-dessus, qui ne parle que de PV.
+    const fatTick = n(fx.fatigueDot, 0);
+    if (fatTick > 0) parts.push(`😮‍💨 +${fatTick} fatigue/tour`);
+    else if (fatTick < 0) parts.push(`😌 ${fatTick} fatigue/tour`);
+
     const modSummary = summarizeMods(buildModsFromFxMods(fx.mods, getEffP(actor)));
     if (modSummary) parts.push(modSummary);
 

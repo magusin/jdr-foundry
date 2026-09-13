@@ -548,8 +548,18 @@
                   <option value="physique" {{#if (eq fx.tick.livraison "physique")}}selected{{/if}}>Physique</option>
                 </select>
               </div>
+              {{!-- Volontairement HORS du gabarit « tick » ci-dessus : un
+                   effet d'épuisement pur n'inflige ni dégâts ni soin, sa
+                   nature reste « Aucun » et il ne doit pas pour autant
+                   masquer ce champ. --}}
+              <div>
+                <label title="Fatigue ajoutée à son porteur à chaque tour. Négatif = l'effet REPOSE (retire de la fatigue). Indépendant de la nature ci-dessus : un effet d'épuisement pur reste sur « Aucun ».">😮‍💨 Fatigue/tour</label>
+                <input type="number" data-fx-field="fatigueDot" value="{{fx.fatigueDot}}" step="1" placeholder="0"/>
+              </div>
             </div>
-            <small class="fx-hint">Laisse sur <b>Aucun</b> si l'effet n'inflige ni dégâts ni soin. Sinon : <b>Fixe + (stat ÷ Par) × Gain</b> par tour.</small>
+            <small class="fx-hint">Laisse sur <b>Aucun</b> si l'effet n'inflige ni dégâts ni soin. Sinon : <b>Fixe + (stat ÷ Par) × Gain</b> par tour.
+              La <b>fatigue par tour</b> est à part : elle s'applique quelle que soit la nature, et n'est pas la stat « Fatigue max » de la partie 4
+              (celle-ci déplace le seuil d'épuisement, celle-là remplit la jauge).</small>
           </fieldset>
 
           {{!-- 4 · Bonus / Malus --}}
@@ -1003,6 +1013,7 @@
           {{#if fx.uiHasSummary}}
           <ul class="fx-read-list">
             {{#if fx.uiTick}}<li>{{fx.uiTick}}</li>{{/if}}
+            {{#if fx.uiFatigue}}<li>{{fx.uiFatigue}}</li>{{/if}}
             {{#each fx.mods as |mod mi|}}<li>{{mod.text}}</li>{{/each}}
             {{#if fx.uiAura}}<li>{{fx.uiAura}}</li>{{/if}}
             {{#if fx.uiMove}}<li>{{fx.uiMove}}</li>{{/if}}
