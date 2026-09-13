@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/character-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+import { auraAffectsBearer } from "../rules/aura-target.js";
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
   talentsOf, passifsOf, equippedTalent, equippedPassif, passifManaCost, hasPaidThisCombat,
@@ -124,6 +125,15 @@ export function decorateStates(states) {
     // relise sur sa fiche exactement ce que le sort lui a promis.
     const atkTxt = attackBonusText(e?.attackBonus);
     if (atkTxt) parts.push(atkTxt);
+
+    // Une aura qui ne vise que les ennemis ne s'applique PAS à son porteur
+    // (aura-target.js) : son dégât par tour et ses mods décrivent ce que
+    // subissent les créatures à portée, pas lui. Sans cette mention, la fiche
+    // de l'émetteur annonçait « Dégâts/tour 3 » sur un état qui ne lui retire
+    // rien — exactement le genre d'écart qui se lit comme un bug.
+    if (!auraAffectsBearer(e) && parts.length) {
+      parts.unshift("⭕ aux ennemis à portée (pas à toi)");
+    }
 
     e.summary = parts.join(" • ");
 

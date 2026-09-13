@@ -2,6 +2,7 @@
 
 import { RPG_AURA_RENDER } from "./aura-render.js";
 import { dropPassifOnStateLabel, effectiveStates } from "./loadout.js";
+import { auraTargetOf } from "./aura-target.js";
 
 const REFRESH_DEBOUNCE_MS = 50;
 let _t = null;
@@ -41,30 +42,6 @@ let _queued = false;
 function debounce(fn) {
   clearTimeout(_t);
   _t = setTimeout(fn, REFRESH_DEBOUNCE_MS);
-}
-
-function auraHasHarm(auraState) {
-  const dot = Number(auraState?.dot?.perTick ?? auraState?.dot?.flat ?? 0) || 0;
-  if (dot > 0) return true;
-
-  const mods = auraState?.mods ?? {};
-  for (const m of Object.values(mods)) {
-    const flat = Number(m?.flat ?? 0) || 0;
-    const pct  = Number(m?.pct ?? 0) || 0;
-    if (flat < 0 || pct < 0) return true;
-  }
-  return false;
-}
-
-/**
- * Cible de l'aura : la valeur choisie par le MJ sur l'effet
- * (aura.target = allies | enemies | both) fait foi. Sans choix explicite,
- * on déduit du contenu : buff => alliés, malus/DOT => ennemis.
- */
-function computeAuraTarget(auraState) {
-  const explicit = String(auraState?.aura?.target ?? "").trim().toLowerCase();
-  if (explicit === "allies" || explicit === "enemies" || explicit === "both") return explicit;
-  return auraHasHarm(auraState) ? "enemies" : "allies";
 }
 
 function getDisposition(token) {
@@ -249,7 +226,7 @@ function makeAppliedState({ sourceActor, sourceToken, auraState, targetActor, ta
   const min = Number(auraState?.aura?.min ?? 0) || 0;
   const max = Number(auraState?.aura?.max ?? 0) || 0;
 
-  const target = computeAuraTarget(auraState);
+  const target = auraTargetOf(auraState);
   const auraKey = String(auraState?.aura?.key ?? auraState?.label ?? "Aura");
   const dotFlat = Number(auraState?.dot?.perTick ?? auraState?.dot?.flat ?? 0) || 0;
   const fatigueTick = Number(auraState?.dot?.fatiguePerTick ?? 0) || 0;
@@ -386,7 +363,7 @@ export const RPG_AURAS = {
           const min = Number(auraState?.aura?.min ?? 0) || 0;
           const max = Number(auraState?.aura?.max ?? 0) || 0;
 
-          const auraTarget = computeAuraTarget(auraState);
+          const auraTarget = auraTargetOf(auraState);
           if (!targetMatches(auraTarget, sourceToken, targetToken)) continue;
 
           // Portées d'aura en MÈTRES (comme saisies sur la fiche de sort)

@@ -2,6 +2,7 @@
 
 import { hpSecret } from "./chat-visibility.js";
 import { passifStates } from "./loadout.js";
+import { auraAffectsBearer } from "./aura-target.js";
 import { resistanceFor, applyResistPct } from "./damage-types.js";
 
 function n(v, d = 0) {
@@ -57,6 +58,15 @@ function tickStates(actor) {
   // ne sont pas mitigés pareil sur la même cible.
   const dotEntries = [];
   const pushEntry = (st, flat) => {
+    // Une aura qui ne vise que les ENNEMIS est une émission, pas un effet
+    // porté : son dégât par tour tombe sur les copies (auraApplied) posées
+    // alentour, jamais sur celui qui la génère. Sans cette coupure, un
+    // « 1 + Int÷10 dégâts/tour · ennemis » blessait son propre lanceur à
+    // chaque tour — l'émetteur ne recevant jamais de copie de sa propre aura
+    // (refreshAuras saute son token), son état SOURCE était la seule chose
+    // qui le frappait. Une aura « alliés »/« tous » continue de le payer,
+    // et c'est ce qui fait qu'une aura de soin soigne aussi son porteur.
+    if (!auraAffectsBearer(st)) return;
     const formula = dotFormula(st);
     if (!flat && !formula) return;
     dotEntries.push({
@@ -74,7 +84,7 @@ function tickStates(actor) {
     if (String(st?.type) === "auraApplied") {
       // Les DOT des auras s'appliquent quand même (soin négatif inclus)
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      if (auraAffectsBearer(st)) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
       pushEntry(st, dot);
       next.push(st);
       continue;
@@ -85,7 +95,7 @@ function tickStates(actor) {
     // continue de s'appliquer chaque tour tant que la blessure est active.
     if (st?.permanent) {
       const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
-      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      if (auraAffectsBearer(st)) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
       pushEntry(st, dot);
       next.push(st);
       continue;
@@ -97,7 +107,7 @@ function tickStates(actor) {
     // Collecte DOT avant suppression (soin négatif inclus)
     const dot = n(st?.dot?.perTick ?? st?.dot?.flat, 0);
     if (remaining > 0) {
-      totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
+      if (auraAffectsBearer(st)) totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
       pushEntry(st, dot);
     }
 
@@ -167,6 +177,9 @@ export async function onTurnStartForActor(actor, { combat = null } = {}) {
   // porteur se saisissait sur la fiche et ne se produisait jamais. Rien à
   // décompter ni à réécrire — il vaut tant que le passif est porté.
   for (const st of passifStates(actor)) {
+    // Même règle que ci-dessus : un passif porté peut lui aussi être une
+    // aura, et une aura « ennemis » ne se paie pas sur son porteur.
+    if (!auraAffectsBearer(st)) continue;
     totalFatigueDot += n(st?.dot?.fatiguePerTick, 0);
     const flat = n(st?.dot?.perTick, 0);
     const formula = dotFormula(st);
