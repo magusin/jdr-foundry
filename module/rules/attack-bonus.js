@@ -55,6 +55,29 @@ export function weaponCategory(weapon) {
   return WEAPON_CATEGORIES[c] ? c : "melee";
 }
 
+/**
+ * Éléments d'un sort — ce contre quoi se juge le filtre `spellTags`.
+ *
+ * Un sort porte son élément sur `system.tag`, mais chaque ligne de dégâts
+ * peut nommer le sien (« 1d6 physique ET 2d6 de terre », voir la colonne
+ * Élément de la grille) : ne lire que `system.tag` ferait rater un sort dont
+ * l'éclair vit dans une ligne et pas dans l'en-tête. Les deux sont donc lus,
+ * et « neutre » (= pas d'élément) n'entre jamais dans l'ensemble — un filtre
+ * ne peut pas cibler l'absence d'élément.
+ */
+export function spellElements(spell) {
+  const out = new Set();
+  const push = (v) => {
+    const t = String(v ?? "").trim();
+    if (t && t !== "neutre") out.add(t);
+  };
+  const sys = spell?.system ?? {};
+  push(sys.tag);
+  push(sys.damage?.tag);
+  for (const d of (Array.isArray(sys.damages) ? sys.damages : [])) push(d?.tag);
+  return out;
+}
+
 /** Portées d'un bonus. */
 export const BONUS_SCOPES = {
   arme:   "Attaques d'arme",
@@ -125,9 +148,15 @@ export function normalizeAttackBonus(raw) {
   const cats = (Array.isArray(raw.categories) ? raw.categories : [])
     .map(c => String(c))
     .filter(c => WEAPON_CATEGORIES[c]);
+  // Pendant de `categories` côté sorts : « +2 à tes sorts d'éclair ». Vide =
+  // tous les sorts, comme une liste de catégories vide vaut toutes les armes.
+  const spellTags = (Array.isArray(raw.spellTags) ? raw.spellTags : [])
+    .map(t => String(t))
+    .filter(t => DAMAGE_TYPES[t]);
   const out = {
     scope,
     categories: cats,
+    spellTags,
     flat: n(raw.flat, 0),
     pct:  n(raw.pct, 0),
     dice: String(raw.dice ?? "").trim(),
@@ -146,7 +175,7 @@ export function normalizeAttackBonus(raw) {
 }
 
 /** Ce bonus s'applique-t-il à CETTE attaque ? */
-function matches(bonus, { kind, weapon }) {
+function matches(bonus, { kind, weapon, spell }) {
   if (!bonus) return false;
   const wantsWeapon = bonus.scope === "arme" || bonus.scope === "toutes";
   const wantsSpell  = bonus.scope === "sort" || bonus.scope === "toutes";
@@ -157,6 +186,22 @@ function matches(bonus, { kind, weapon }) {
   // couteaux de jet alors qu'il vise justement aussi les sorts.
   if (kind === "arme" && bonus.categories.length) {
     if (!bonus.categories.includes(weaponCategory(weapon))) return false;
+  }
+  // Symétriquement, la liste d'éléments ne filtre que les sorts : une arme
+  // n'a pas d'élément, et un bonus « toutes » restreint à l'éclair doit
+  // continuer de porter sur les coups d'épée de son porteur.
+  if (kind === "sort" && bonus.spellTags.length) {
+    // Sans le sort, le filtre est injugeable. On refuse plutôt que d'accorder
+    // le bonus à tout : un appelant qui oublie de passer l'item verrait
+    // sinon un bonus restreint s'appliquer partout, ce qui est exactement ce
+    // que le MJ a voulu empêcher. Le warn est là pour que ce soit lisible
+    // dans la console au lieu de se deviner.
+    if (!spell) {
+      console.warn("[RPG] attack-bonus : bonus restreint par élément évalué sans le sort — ignoré.");
+      return false;
+    }
+    const elems = spellElements(spell);
+    if (!bonus.spellTags.some(t => elems.has(t))) return false;
   }
   return true;
 }
@@ -172,14 +217,14 @@ function matches(bonus, { kind, weapon }) {
  *   - `pct`     : pourcentage cumulé, appliqué au brut de l'attaque ;
  *   - `own`     : lignes à mitiger séparément (elles ont leur propre type).
  */
-export function collectAttackBonuses(actor, { kind = "arme", weapon = null } = {}) {
+export function collectAttackBonuses(actor, { kind = "arme", weapon = null, spell = null } = {}) {
   const out = { entries: [], flatSame: 0, pct: 0, own: [], sameDice: [] };
   // effectiveStates : les états posés PLUS ceux du passif porté, qui ne sont
   // écrits nulle part (loadout.js). Sans eux, un passif « tes coups
   // enflamment » se saisissait sur la fiche et n'ajoutait rien du tout.
   for (const st of effectiveStates(actor)) {
     const bonus = normalizeAttackBonus(st?.attackBonus);
-    if (!bonus || !matches(bonus, { kind, weapon })) continue;
+    if (!bonus || !matches(bonus, { kind, weapon, spell })) continue;
     const label = String(st?.label ?? "Bonus");
     const entry = { ...bonus, label };
     out.entries.push(entry);
@@ -220,13 +265,13 @@ export function hasAttackBonus(b) {
  *
  * @returns {Array<{effect: object, label: string, stateId: string}>}
  */
-export function collectAttackBonusEffects(actor, { kind = "arme", weapon = null, isCrit = false } = {}) {
+export function collectAttackBonusEffects(actor, { kind = "arme", weapon = null, spell = null, isCrit = false } = {}) {
   const allowed = isCrit ? ["hit", "crit"] : ["hit", "hitonly"];
   const out = [];
   for (const st of effectiveStates(actor)) {
     const bonus = normalizeAttackBonus(st?.attackBonus);
     if (!bonus?.effect) continue;
-    if (!matches(bonus, { kind, weapon })) continue;
+    if (!matches(bonus, { kind, weapon, spell })) continue;
     if (!allowed.includes(bonus.effect.when)) continue;
     out.push({
       effect: bonus.effect,
@@ -302,10 +347,17 @@ export function attackBonusText(bonus) {
   if (b.tag) type.push(damageTypeLabel(b.tag));
   const typeTxt = type.length ? ` de ${type.join(" ")}` : "";
 
-  const cible = b.scope === "sort" ? "aux sorts"
-    : b.categories.length
-      ? `aux armes de ${b.categories.map(c => WEAPON_CATEGORIES[c].toLowerCase()).join(" / ")}`
-      : (b.scope === "toutes" ? "aux armes et aux sorts" : "aux attaques d'arme");
+  // Le filtre d'éléments doit se lire dans la phrase, sinon « ⚔️ +2 aux
+  // sorts » décrit un bonus deux fois plus large qu'il ne l'est.
+  const tagsTxt = b.spellTags.length
+    ? ` de type ${b.spellTags.map(t => damageTypeLabel(t)).join(" / ")}`
+    : "";
+  const armesTxt = b.categories.length
+    ? `aux armes de ${b.categories.map(c => WEAPON_CATEGORIES[c].toLowerCase()).join(" / ")}`
+    : "aux attaques d'arme";
+  const cible = b.scope === "sort" ? `aux sorts${tagsTxt}`
+    : b.scope === "toutes" ? `${armesTxt} et aux sorts${tagsTxt}`
+      : armesTxt;
 
   const dmgTxt = parts.length ? `${parts.join(" ")}${typeTxt} ` : "";
 
@@ -329,8 +381,8 @@ export function attackBonusText(bonus) {
  *   l'attaque ; chaque bloc de `blocks` porte son propre type et doit être
  *   mitigé à part par l'appelant.
  */
-export async function rollAttackBonuses(actor, { kind = "arme", weapon = null, rawBase = 0, speaker = null } = {}) {
-  const col = collectAttackBonuses(actor, { kind, weapon });
+export async function rollAttackBonuses(actor, { kind = "arme", weapon = null, spell = null, rawBase = 0, speaker = null } = {}) {
+  const col = collectAttackBonuses(actor, { kind, weapon, spell });
   if (!hasAttackBonus(col)) return { same: 0, blocks: [], entries: [] };
 
   const spk = speaker ?? ChatMessage.getSpeaker({ actor });

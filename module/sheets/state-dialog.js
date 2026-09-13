@@ -409,6 +409,7 @@ export async function editStateDialog(state, { title } = {}) {
   const resRows = stateResistanceRows(st);
   const atk  = st.attackBonus ?? {};
   const atkCats = Array.isArray(atk.categories) ? atk.categories : [];
+  const atkTags = Array.isArray(atk.spellTags) ? atk.spellTags : [];
   const atkFx = atk.effect ?? {};
 
   const content = `
@@ -617,6 +618,17 @@ export async function editStateDialog(state, { title } = {}) {
           </div>
         </div>
 
+        <div>
+          <label>Éléments de sort visés (aucun coché = tous les sorts)</label>
+          <div class="fx-cats">
+            ${DAMAGE_TYPE_KEYS.map(k => `
+              <label><input type="checkbox" name="atk.stag.${k}" ${atkTags.includes(k) ? "checked" : ""}/>${DAMAGE_TYPES[k]}</label>`).join("")}
+          </div>
+          <p class="hint">Filtre ce qui REÇOIT le bonus : « + 2 à tes sorts d'éclair ». À ne pas confondre avec
+            l'élément ci-dessous, qui est celui des dégâts AJOUTÉS. Un sort correspond si son élément — celui de
+            son en-tête ou celui d'une de ses lignes de dégâts — est coché.</p>
+        </div>
+
         <div class="two">
           <div>
             <label>Dégâts fixes (+N)</label>
@@ -805,6 +817,7 @@ export async function editStateDialog(state, { title } = {}) {
     const atkNext = normalizeAttackBonus({
       scope: getStr("atk.scope", "arme"),
       categories: Object.keys(WEAPON_CATEGORIES).filter(k => getChk(`atk.cat.${k}`)),
+      spellTags: DAMAGE_TYPE_KEYS.filter(k => getChk(`atk.stag.${k}`)),
       flat: getNum("atk.flat", 0),
       pct: getNum("atk.pct", 0),
       dice: getStr("atk.dice", ""),

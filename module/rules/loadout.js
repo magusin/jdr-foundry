@@ -352,7 +352,7 @@ export function passifStates(actor) {
           pct: Number(fx?.resistDamagePct) || 0
         },
         attackBonus: normalizeAttackBonus({
-          scope: fx?.atkScope, categories: fx?.atkCategories,
+          scope: fx?.atkScope, categories: fx?.atkCategories, spellTags: fx?.atkSpellTags,
           flat: fx?.atkFlat, pct: fx?.atkPct, dice: fx?.atkDice,
           livraison: fx?.atkLivraison, tag: fx?.atkTag,
           effect: {

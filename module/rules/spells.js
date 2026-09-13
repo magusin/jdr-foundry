@@ -969,7 +969,7 @@ export function buildSpellEffectsPreview({ actor, item }) {
     // Bonus de dégâts accordé aux attaques (partie 8 de l'effet) : même
     // formateur que la fiche de sort, la fiche de personnage et le chat.
     const atkTxt = attackBonusText({
-      scope: fx.atkScope, categories: fx.atkCategories,
+      scope: fx.atkScope, categories: fx.atkCategories, spellTags: fx.atkSpellTags,
       flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
       livraison: fx.atkLivraison, tag: fx.atkTag,
       // L'état accordé fait partie du bonus : l'omettre ici rendait l'aperçu
@@ -1798,7 +1798,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
           // résolution de sort) lisent une forme unique et n'ont pas à
           // connaître les champs à plat de la fiche.
           attackBonus: normalizeAttackBonus({
-            scope: fx.atkScope, categories: fx.atkCategories,
+            scope: fx.atkScope, categories: fx.atkCategories, spellTags: fx.atkSpellTags,
             flat: fx.atkFlat, pct: fx.atkPct, dice: fx.atkDice,
             livraison: fx.atkLivraison, tag: fx.atkTag,
             // État posé sur la cible quand une attaque du porteur porte —
@@ -1877,7 +1877,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
     // cette ligne, effectsForResult renvoie une liste vide).
     if (outcome === "success" || outcome === "crit") {
       try {
-        const granted = collectAttackBonusEffects(actor, { kind: "sort", isCrit: outcome === "crit" });
+        const granted = collectAttackBonusEffects(actor, { kind: "sort", spell: item, isCrit: outcome === "crit" });
         for (const g of granted) {
           for (const tActor of targetActors) {
             await upsertState(tActor, {
@@ -2037,7 +2037,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
   // renseigné se fond dans la première ligne du sort, qu'il partage.
   // Le pourcentage, lui, n'est pas une ligne : il multiplie le brut au moment
   // du jet (voir bonusPct plus bas et le handler de « Lancer les dégâts »).
-  const atkBonus = collectAttackBonuses(actor, { kind: "sort" });
+  const atkBonus = collectAttackBonuses(actor, { kind: "sort", spell: item });
   const bonusPct = n(atkBonus.pct, 0);
   if (dmgBlocks.length) {
     if (atkBonus.flatSame || atkBonus.sameDice.length) {
