@@ -63,7 +63,7 @@ import { checkIngredients, computeForgeChance, declareCraft, resolveCraft, getIn
 import { bindForgeChatButtons } from "./rules/forge-resolve.js";
 import * as EffectLibrary from "./rules/effect-library.js";
 import * as Resistances from "./rules/resistances.js";
-import { appendToCampaignJournal } from "./rules/campaign-journal.js";
+import { appendToCampaignJournal, arcPageName } from "./rules/campaign-journal.js";
 import * as WoundLibrary from "./rules/wound-library.js";
 import * as WeatherLibrary from "./rules/weather-library.js";
 import { initWeatherHUD, initBiomeHUD } from "./rules/weather-library.js";
@@ -1326,7 +1326,7 @@ Hooks.once("ready", () => {
     game.rpg.stateBuilder = StateBuilder;
 
     // ✅ game.rpg.journal : journal de campagne automatique (accessible aux macros)
-    game.rpg.journal = { appendToCampaignJournal };
+    game.rpg.journal = { appendToCampaignJournal, arcPageName };
 
     // ✅ Auto-installation des macros système (GM uniquement)
     // ── Mise à jour des macros système ────────────────────────────────

@@ -89,9 +89,26 @@ export async function resolveQuest(actor, questItem, { success } = {}) {
 
   if (game.rpg?.journal) {
     const allNames = perActorLines.map(e => e.actorName).join(", ");
+    // Page de la TRAME si la quête en porte une (voir campaign-journal.js
+    // #arcPageName) : une histoire principale se relit d'un bloc, pas
+    // dispersée dans la chronique générale.
+    const page = game.rpg.journal.arcPageName?.(questItem.system?.arc) ?? undefined;
+    const opts = page ? { page } : undefined;
     game.rpg.journal.appendToCampaignJournal(
-      `<b>${allNames}</b> ${success ? "a terminé" : "a échoué"} la quête <b>${questItem.name}</b>.`
+      `<b>${allNames}</b> ${success ? "a terminé" : "a échoué"} la quête <b>${questItem.name}</b>.`,
+      opts
     ).catch(() => {});
+
+    // L'épilogue est LE récit de ce qui s'est passé : une fois la quête
+    // résolue il n'a plus rien à cacher, donc il rejoint la chronique au
+    // lieu de rester enfermé dans la fiche d'un objet d'inventaire.
+    const epilogue = String(questItem.system?.epilogue ?? "").trim();
+    if (epilogue) {
+      game.rpg.journal.appendToCampaignJournal(
+        `<i>Épilogue de <b>${questItem.name}</b></i><br>${epilogue}`,
+        opts
+      ).catch(() => {});
+    }
   }
 
   return { ok: true, perActorLines };
