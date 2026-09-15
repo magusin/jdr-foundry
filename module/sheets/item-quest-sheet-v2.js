@@ -3,6 +3,7 @@ import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositi
 import { bindSendToActorsButton } from "./send-item-dialog.js";
 import { splitCharacters } from "../rules/actor-roles.js";
 import { setupItemRefDrop } from "./drop-helper.js";
+import { appendToCampaignJournal, arcPageName } from "../rules/campaign-journal.js";
 import {
   ensureDistribGroupId, findDistribCopies,
   propagateQuestUpdate, activateQuestSync, deactivateQuestSync
@@ -199,11 +200,11 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
         navSelector: ".quest-page-nav",
         contentSelector: ".quest-page-content",
         initial: "apercu",
-        // Recalcule la taille du champ Description au clic sur cet onglet
-        // (voir _sizeDescriptionEditor) — Tabs.activate() est un simple
+        // Recalcule la taille du grand champ texte au clic sur cet onglet
+        // (voir _sizeSoloTextEditor) — Tabs.activate() est un simple
         // bascule de classes CSS, sans re-render, donc _onRender ne
         // repasse pas par ici tout seul à ce moment-là.
-        callback: () => this._sizeDescriptionEditor()
+        callback: () => this._sizeSoloTextEditor()
       });
     }
     this._tabs.bind(root);
@@ -218,12 +219,12 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     }
     this._pendingScrollTop = null;
 
-    // Redimensionne le champ Description à ce render (page déjà active au
+    // Redimensionne le grand champ texte à ce render (page déjà active au
     // premier affichage, ou re-render déclenché par une sauvegarde de
     // champ pendant qu'on y est) — et à chaque redimensionnement de la
     // fenêtre (la fiche est une fenêtre Foundry redimensionnable).
-    this._sizeDescriptionEditor();
-    if (!this._sizeRO) this._sizeRO = new ResizeObserver(() => this._sizeDescriptionEditor());
+    this._sizeSoloTextEditor();
+    if (!this._sizeRO) this._sizeRO = new ResizeObserver(() => this._sizeSoloTextEditor());
     this._sizeRO.disconnect();
     const scrollerEl = root.querySelector(".quest-page-content");
     if (scrollerEl) this._sizeRO.observe(scrollerEl);
@@ -295,7 +296,15 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
    * system.classeRequise (note MJ privée, jamais vue du joueur, donc sans
    * intérêt à répliquer).
    */
-  static QUEST_SYNC_PREFIXES = ["system.etapes", "system.etapeActuelle", "system.statut", "system.recompense", "system.description"];
+  static QUEST_SYNC_PREFIXES = ["system.etapes", "system.etapeActuelle", "system.statut", "system.recompense", "system.description", "system.epilogue"];
+
+  /**
+   * Pages ne portant QU'UN seul grand champ texte, étiré jusqu'en bas de la
+   * fenêtre par _sizeSoloTextEditor. Une page qui gagnerait un second champ
+   * doit sortir de cette liste, sinon le premier prend toute la hauteur et
+   * pousse le second hors de vue.
+   */
+  static SOLO_TEXT_TABS = ["description", "epilogue", "lore"];
 
   _isSyncablePath(path) {
     return RPGQuestSheetV2.QUEST_SYNC_PREFIXES.some(p => path === p || path.startsWith(`${p}.`));
@@ -515,7 +524,9 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
       await this._syncProgress({ [name]: value });
     }
 
-    if (name === "system.description") await this._refreshLinkRow(el);
+    if (name === "system.description" || name === "system.epilogue" || name === "system.lore") {
+      await this._refreshLinkRow(el);
+    }
 
     // Le titre de la fenêtre et le libellé d'une étape dans la nav de gauche
     // sont des COPIES de ce champ affichées ailleurs dans le DOM —
@@ -598,18 +609,24 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
   }
 
   /**
-   * Étire le champ Description jusqu'en bas de la fenêtre — seulement sur
-   * cette page (un seul champ, rien d'autre à partager l'espace avec,
-   * contrairement aux pages d'étape où Récit/Objectifs/Notes MJ
-   * coexistent). On mesure l'espace RÉELLEMENT disponible en JS et on fixe
-   * min-height/max-height à cette valeur calculée.
+   * Étire le grand champ texte jusqu'en bas de la fenêtre — seulement sur
+   * les pages qui n'en portent qu'UN (Description, Épilogue, Récit MJ :
+   * rien d'autre à partager l'espace avec, contrairement aux pages d'étape
+   * où Récit/Objectifs/Notes MJ coexistent), cf. SOLO_TEXT_TABS. On mesure
+   * l'espace RÉELLEMENT disponible en JS et on fixe min-height/max-height
+   * à cette valeur calculée.
    */
-  _sizeDescriptionEditor() {
+  _sizeSoloTextEditor() {
     const root = this.element;
     if (!root) return;
     const scroller = root.querySelector(".quest-page-content");
-    const tab = root.querySelector('.tab[data-tab="description"]');
-    if (!scroller || !tab?.classList.contains("active")) return;
+    if (!scroller) return;
+    // La page ACTIVE parmi les pages mono-champ — et non un data-tab fixe :
+    // les trois partagent exactement la même contrainte de mise en page.
+    const tab = RPGQuestSheetV2.SOLO_TEXT_TABS
+      .map(t => root.querySelector(`.tab[data-tab="${t}"]`))
+      .find(el => el?.classList.contains("active"));
+    if (!tab) return;
     const target = tab.querySelector("textarea.rpg-quest-editor, .rpg-enriched-text");
     if (!target) return;
 
@@ -710,6 +727,25 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     ctx.descriptionHTML = await TextEditorImpl.enrichHTML(ctx.system.description, { secrets: game.user.isGM, relativeTo: item });
     ctx.descriptionLinks = contentLinksFrom(ctx.descriptionHTML);
 
+    ctx.system.arc = String(ctx.system.arc ?? "");
+    ctx.arcPageLabel = arcPageName(ctx.system.arc);
+
+    // Récit MJ (system.lore, hérité du gabarit "details") : le pendant MJ
+    // de la Description — l'intrigue d'ensemble, là où les "Notes MJ" de
+    // chaque étape ne couvrent que le déroulé local. Purgé pour le joueur
+    // plus bas, comme notesMJ.
+    ctx.system.lore = String(ctx.system.lore ?? "");
+    ctx.loreHTML = await TextEditorImpl.enrichHTML(ctx.system.lore, { secrets: true, relativeTo: item });
+    ctx.loreLinks = contentLinksFrom(ctx.loreHTML);
+
+    // Épilogue : ce qui s'est réellement passé, écrit après coup. Il n'est
+    // révélé au joueur qu'une fois la quête RÉSOLUE — avant ça il
+    // annoncerait la fin, exactement comme une étape à venir.
+    ctx.system.epilogue = String(ctx.system.epilogue ?? "");
+    ctx.epilogueVisible = ctx.system.statut !== "active";
+    ctx.epilogueHTML = await TextEditorImpl.enrichHTML(ctx.system.epilogue, { secrets: game.user.isGM, relativeTo: item });
+    ctx.epilogueLinks = contentLinksFrom(ctx.epilogueHTML);
+
     ctx.calc = {
       etapeActuelleNum: ctx.system.etapes.length ? ctx.system.etapeActuelle + 1 : 0,
       totalEtapes: ctx.system.etapes.length,
@@ -758,7 +794,28 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
           : { label: e.label, navLabel: e.navLabel, etapeNum: e.etapeNum, termine: true });
       ctx.system.classeRequise = "";
       ctx.system.recompense = { xp: 0, items: [] };
+      // Notes MJ d'ensemble : jamais envoyées au client du joueur — la
+      // barrière {{#if isGM}} du gabarit ne fait que ne pas les AFFICHER,
+      // elles resteraient lisibles dans les données rendues (même règle
+      // que la récompense juste au-dessus).
+      ctx.system.arc = "";
+      ctx.arcPageLabel = "";
+      ctx.system.lore = "";
+      ctx.loreHTML = "";
+      ctx.loreLinks = [];
+      // Quête encore en cours : l'épilogue n'existe pas non plus côté joueur.
+      if (!ctx.epilogueVisible) {
+        ctx.system.epilogue = "";
+        ctx.epilogueHTML = "";
+        ctx.epilogueLinks = [];
+      }
     }
+
+    // La page Épilogue n'apparaît dans la navigation que si elle a quelque
+    // chose à montrer : toujours pour le MJ (c'est lui qui l'écrit), pour
+    // le joueur seulement une fois la quête résolue ET l'épilogue écrit —
+    // un onglet vide annoncerait une fin qui n'a pas encore été rédigée.
+    ctx.showEpilogue = ctx.isGM || (ctx.epilogueVisible && !!ctx.system.epilogue.trim());
     return ctx;
   }
 
@@ -797,7 +854,7 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     await this.document.update(expanded, { render: true });
 
     const patch = {};
-    for (const key of ["etapes", "statut", "recompense", "description"]) {
+    for (const key of ["etapes", "statut", "recompense", "description", "epilogue"]) {
       if (key in (expanded.system ?? {})) patch[`system.${key}`] = expanded.system[key];
     }
     await this._syncProgress(patch);
@@ -856,10 +913,35 @@ export class RPGQuestSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
     // Le maximum est etapes.length (pas etapes.length - 1) : "Étape suivante"
     // depuis la dernière étape la marque terminée au lieu de rester bloquée
     // dessus indéfiniment (voir la note dans _prepareContext).
+    const avant = etapeActuelle;
     etapeActuelle = Math.max(0, Math.min(etapes.length, etapeActuelle + delta));
     this._pendingTab = etapeActuelle < etapes.length ? `etape-${etapeActuelle}` : "apercu";
     await this.document.update({ "system.etapeActuelle": etapeActuelle }, { render: true });
     await this._syncProgress({ "system.etapeActuelle": etapeActuelle });
+    if (etapeActuelle > avant) this._logEtapeFranchie(etapes, avant, etapeActuelle);
+  }
+
+  /**
+   * Consigne une étape franchie dans le Journal de Campagne — sur la page
+   * de la TRAME quand la quête en porte une (voir arcPageName), sinon sur
+   * la Chronique commune. C'est ce qui fait qu'une histoire principale
+   * s'écrit toute seule pendant qu'on la joue, au lieu de se noyer entre
+   * les repos et les forges de la liste générale.
+   *
+   * Seule l'avancée est consignée : un retour en arrière est une
+   * correction du MJ, pas un événement de la partie. Jamais attendu
+   * (l'écriture ne doit pas retarder le rendu de la fiche) et jamais
+   * bloquant — appendToCampaignJournal est déjà GM-only et silencieux.
+   */
+  _logEtapeFranchie(etapes, avant, apres) {
+    const nom = this.document.name;
+    const arc = String(this.document.system?.arc ?? "").trim();
+    const franchie = etapes[avant];
+    const titre = String(franchie?.label ?? "").trim();
+    const html = apres >= etapes.length
+      ? `Quête <b>${nom}</b> : dernière étape franchie${titre ? ` (${titre})` : ""} — toutes les étapes sont terminées.`
+      : `Quête <b>${nom}</b> : étape ${avant + 1}${titre ? ` « ${titre} »` : ""} franchie → étape ${apres + 1}.`;
+    appendToCampaignJournal(html, { page: arcPageName(arc) }).catch(() => {});
   }
 
   async _actionAddObjectif(event) {

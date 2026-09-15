@@ -30,11 +30,12 @@ async function getOrCreateJournal() {
   return entry;
 }
 
-async function getOrCreatePage(entry) {
-  let page = entry.pages.find(p => p.name === PAGE_NAME);
+async function getOrCreatePage(entry, pageName = PAGE_NAME) {
+  const name = String(pageName ?? "").trim() || PAGE_NAME;
+  let page = entry.pages.find(p => p.name === name);
   if (!page) {
     const [created] = await entry.createEmbeddedDocuments("JournalEntryPage", [
-      { name: PAGE_NAME, type: "text", text: { content: "<p><i>La chronique commence...</i></p>", format: 1 } }
+      { name, type: "text", text: { content: "<p><i>La chronique commence...</i></p>", format: 1 } }
     ]);
     page = created;
   }
@@ -42,14 +43,31 @@ async function getOrCreatePage(entry) {
 }
 
 /**
+ * Nom de la page où consigner les événements d'une trame narrative
+ * (system.arc d'une quête). Une trame nommée a sa PROPRE page : c'est ce
+ * qui transforme la chronique en récit suivi par arc, plutôt qu'en une
+ * seule liste où l'intrigue principale se noie entre les repos et les
+ * forges. Une quête sans arc retombe sur la page commune.
+ */
+export function arcPageName(arc) {
+  const a = String(arc ?? "").trim();
+  return a ? `Trame — ${a}` : PAGE_NAME;
+}
+
+/**
  * Ajoute une ligne au journal de campagne. GM only (silencieux pour les joueurs).
  * @param {string} html - contenu HTML de la ligne (sans <p> englobant, ajouté automatiquement)
+ * @param {object} [opts]
+ * @param {string} [opts.page] - page de destination (défaut : « Chronique »).
+ *   Voir arcPageName() : une quête portant une trame écrit sur la page de
+ *   cette trame. Paramètre optionnel — les appelants historiques gardent
+ *   la page commune sans changer d'un caractère.
  */
-export async function appendToCampaignJournal(html) {
+export async function appendToCampaignJournal(html, { page: pageName = PAGE_NAME } = {}) {
   if (!game.user.isGM) return;
   try {
     const entry = await getOrCreateJournal();
-    const page  = await getOrCreatePage(entry);
+    const page  = await getOrCreatePage(entry, pageName);
 
     const current = String(page.text?.content ?? "");
     const line = `<p><b>[${todayLabel()} — ${nowLabel()}]</b> ${html}</p>`;

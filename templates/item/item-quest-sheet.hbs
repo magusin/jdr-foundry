@@ -25,10 +25,16 @@
         <span>{{etape.etapeNum}}. {{etape.navLabel}}</span>
       </a>
       {{/each}}
+      {{#if showEpilogue}}
+      <a class="item quest-page-item {{#if calc.complete}}quest-page-current{{/if}}" data-tab="epilogue">📜 <span>Épilogue</span></a>
+      {{/if}}
       {{#if isGM}}
       <a class="item quest-page-item" data-tab="recompense">🎁 <span>Récompense</span></a>
       {{/if}}
       <a class="item quest-page-item" data-tab="description">📖 <span>Description</span></a>
+      {{#if isGM}}
+      <a class="item quest-page-item" data-tab="lore">🕮 <span>Récit MJ</span></a>
+      {{/if}}
     </nav>
 
     <div class="quest-page-content">
@@ -43,6 +49,15 @@
             <option value="echouee" {{#if (eq system.statut "echouee")}}selected{{/if}}>Échouée</option>
           </select>
         </div>
+
+        {{#if isGM}}
+        <div class="form-group">
+          <label title="Regroupe cette quête dans une trame narrative (ex : « Le Siège de Val-Cendre »). Les quêtes d'une même trame écrivent leur progression sur une page dédiée du Journal de Campagne. Vide = quête isolée.">Trame narrative</label>
+          <input type="text" name="system.arc" value="{{system.arc}}"
+            placeholder="ex : Histoire principale, ou Le Siège de Val-Cendre" {{#unless canEdit}}disabled{{/unless}} />
+          <p class="quest-hint">Jamais visible du joueur. Sa chronique s'écrit dans « {{arcPageLabel}} ».</p>
+        </div>
+        {{/if}}
 
         <div class="form-group">
           <label class="quest-checkbox-label" title="Plusieurs PJ peuvent l'avoir ; la progression reste synchronisée pour tous.">
@@ -240,6 +255,43 @@
         <div class="rpg-enriched-text">{{{descriptionHTML}}}</div>
         {{/if}}
       </div>
+
+      {{!-- ── PAGE : Épilogue ── Le récit de ce qui s'est réellement passé,
+      écrit APRÈS coup. Le joueur ne le voit qu'une fois la quête résolue
+      (réussie ou échouée) — avant ça, il annoncerait la fin. ── --}}
+      {{#if showEpilogue}}
+      <div class="tab" data-group="pages" data-tab="epilogue">
+        <h3 class="quest-section-title">Épilogue — ce qui s'est passé</h3>
+        {{#if canEdit}}
+        <p class="quest-hint">
+          {{#if epilogueVisible}}Visible du joueur : la quête est résolue.
+          {{else}}⏳ Caché du joueur tant que le statut est « En cours ».{{/if}}
+        </p>
+        <div class="rpg-field-wrap">
+          <textarea name="system.epilogue" rows="14"
+            class="rpg-quest-editor" placeholder="Comment tout ça s'est terminé : ce que les PJ ont fait, qui est mort, ce que le monde en garde. Glisse un PNJ/objet/scène ici pour insérer un @UUID[...].">{{system.epilogue}}</textarea>
+          <div class="rpg-link-row" title="Liens détectés dans ce champ — cliquables">{{#each epilogueLinks}}{{{this}}}{{/each}}</div>
+        </div>
+        {{else}}
+        <div class="rpg-enriched-text">{{{epilogueHTML}}}</div>
+        {{/if}}
+      </div>
+      {{/if}}
+
+      {{!-- ── PAGE : Récit MJ (jamais envoyé au client du joueur, voir
+      _prepareContext) — l'intrigue d'ensemble, sa vérité, ses
+      embranchements : le pendant MJ de la Description. ── --}}
+      {{#if isGM}}
+      <div class="tab" data-group="pages" data-tab="lore">
+        <h3 class="quest-section-title">📝 Récit MJ</h3>
+        <p class="quest-hint">L'intrigue d'ensemble, sa vérité, ses embranchements — jamais visible du joueur. Le déroulé étape par étape se note dans les « Notes MJ » de chaque étape.</p>
+        <div class="rpg-field-wrap">
+          <textarea name="system.lore" rows="14"
+            class="rpg-quest-editor" placeholder="Qui tire les ficelles, ce qui se passe si les PJ échouent, les portes de sortie... Glisse un PNJ/objet/scène ici pour insérer un @UUID[...].">{{system.lore}}</textarea>
+          <div class="rpg-link-row" title="Liens détectés dans ce champ — cliquables">{{#each loreLinks}}{{{this}}}{{/each}}</div>
+        </div>
+      </div>
+      {{/if}}
 
     </div>
   </section>

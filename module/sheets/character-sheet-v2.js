@@ -1267,7 +1267,13 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
           content: `📜 <b>${this.document.name}</b> avance dans <b>${quest.name}</b> : Étape ${next + 1}${label}${syncTxt}`
         });
         if (game.rpg?.journal) {
-          game.rpg.journal.appendToCampaignJournal(`<b>${this.document.name}</b> avance dans la quête <b>${quest.name}</b> (étape ${next + 1}).`).catch(() => {});
+          // Page de la trame si la quête en porte une — voir
+          // campaign-journal.js#arcPageName.
+          const arcPage = game.rpg.journal.arcPageName?.(quest.system?.arc);
+          game.rpg.journal.appendToCampaignJournal(
+            `<b>${this.document.name}</b> avance dans la quête <b>${quest.name}</b> (étape ${next + 1}).`,
+            arcPage ? { page: arcPage } : undefined
+          ).catch(() => {});
         }
         await this.render({ force: true });
         return;

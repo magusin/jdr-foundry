@@ -445,8 +445,10 @@
         "details"
       ],
       "statut": "active",
+      "arc": "",
       "etapeActuelle": 0,
       "etapes": [],
+      "epilogue": "",
       "partagee": false,
       "questGroupId": "",
       "distribGroupId": "",
