@@ -1,6 +1,7 @@
 // module/rules/action-confirm.js
 // Gestion MJ des boutons de confirmation/refus/undo dans le chat
 
+import { resolveDeclaredActor } from "./attack-declare.js";
 import {
   getBudget, saveBudget, confirmSlot, releaseSlot,
   confirmMovement, releaseMovement,
@@ -49,8 +50,9 @@ export function bindActionChatButtons(html, message) {
         try {
           // Cas spécial : récupération → réduit la fatigue, fonctionne avec OU sans combat actif
           if (flags.pendingAction?.type === "recuperation") {
-            const actorId = flags.recuperationActorId;
-            const actor = game.actors.get(actorId);
+            // UUID d'abord : un monstre (token non lié) récupérait sinon sur
+            // la fiche de son prototype — voir resolveDeclaredActor.
+            const actor = await resolveDeclaredActor(flags.recuperationActorUuid ?? null, flags.recuperationActorId);
             if (!actor) throw new Error("Acteur introuvable pour la récupération");
 
             if (result === "reject" || result === "correct") {
@@ -257,7 +259,7 @@ async function handlePendingAction(message, result, actionId) {
       status: result === "reject" ? "rejected" : "corrected"
     });
 
-    const actor = game.actors.get(entry.snapshot?.casterId ?? entry.actorId ?? "");
+    const actor = await resolveDeclaredActor(entry.snapshot?.casterUuid ?? null, entry.snapshot?.casterId ?? entry.actorId ?? "");
     const label = result === "reject"
       ? `❌ Action refusée — ${actor?.name ?? "?"}`
       : `↩️ Le MJ demande à <b>${actor?.name ?? "?"}</b> de choisir une autre action.`;

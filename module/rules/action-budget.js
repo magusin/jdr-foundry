@@ -332,9 +332,14 @@ export async function undoAction(combat, actionId) {
   const snap   = entry.snapshot ?? {};
   const errors = [];
 
+  // Par UUID d'abord : un monstre posé sur la carte est un token NON LIÉ dont
+  // l'acteur synthétique partage l'id de son prototype — game.actors.get(id)
+  // restaurait donc les PV/mana de la fiche du répertoire et laissait le
+  // token intact. L'id reste le repli des entrées écrites avant ce champ.
+  const caster = await resolveDeclaredActor(snap.casterUuid ?? null, snap.casterId);
+
   // 1. Restaure mana du lanceur
   if (snap.casterId !== undefined && snap.casterMana !== undefined) {
-    const caster = game.actors.get(snap.casterId);
     if (caster) {
       await caster.update({ "system.ressources.mana.valeur": snap.casterMana });
     } else {
@@ -346,7 +351,7 @@ export async function undoAction(combat, actionId) {
   if (Array.isArray(snap.targetsSnapshot) && snap.targetsSnapshot.length) {
     // ✅ Multi-cible : restaure les PV de CHAQUE cible touchée par le sort
     for (const ts of snap.targetsSnapshot) {
-      const target = game.actors.get(ts.targetId);
+      const target = await resolveDeclaredActor(ts.targetUuid ?? null, ts.targetId);
       if (target) {
         await target.update({ "system.ressources.pv.valeur": ts.targetPv });
       } else {
@@ -355,7 +360,7 @@ export async function undoAction(combat, actionId) {
     }
   } else if (snap.targetId !== undefined && snap.targetPv !== undefined) {
     // Rétrocompat : ancien format mono-cible
-    const target = game.actors.get(snap.targetId);
+    const target = await resolveDeclaredActor(snap.targetUuid ?? null, snap.targetId);
     if (target) {
       await target.update({ "system.ressources.pv.valeur": snap.targetPv });
     } else {
@@ -380,7 +385,6 @@ export async function undoAction(combat, actionId) {
 
   // 2c. Restaure état passif (toggle)
   if (snap.passifItemId !== undefined && snap.casterId !== undefined) {
-    const caster = game.actors.get(snap.casterId);
     const passifItem = caster?.items.get(snap.passifItemId);
     if (passifItem) {
       await passifItem.update({ "system.aura.active": !!snap.oldAuraActive });
@@ -418,7 +422,6 @@ export async function undoAction(combat, actionId) {
 
   // 4. Restaure cooldown
   if (snap.cooldown?.itemId && snap.casterId) {
-    const caster = game.actors.get(snap.casterId);
     const item   = caster?.items.get(snap.cooldown.itemId);
     if (item) {
       const r = snap.cooldown.oldRestant ?? 0;

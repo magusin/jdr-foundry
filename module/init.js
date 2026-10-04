@@ -1,6 +1,7 @@
 // systems/rpg/module/init.js
 
 // import { RPGCharacterSheet } from "./sheets/character-sheet.js";
+import { isPrimaryGM } from "./utils/primary-gm.js";
 import { RPGCharacterSheetV2 } from "./sheets/character-sheet-v2.js";
 // import { RPGMonsterSheet } from "./sheets/monster-sheet.js";
 import { RPGMonsterSheetV2 } from "./sheets/monster-sheet-v2.js";
@@ -848,26 +849,41 @@ Hooks.once("ready", () => {
   CONFIG.Actor.documentClass = RPGActor;
   CONFIG.Item.documentClass = RPGItem;
 
-  Items.unregisterSheet("core", ItemSheet);
+  // Enregistrement via DocumentSheetConfig plutôt que les globaux `Actors` /
+  // `Items` / `ItemSheet`, dépréciés depuis V13 (avertissement à chaque
+  // chargement en V14, supprimés en V15). Repli sur les globaux si l'API
+  // namespacée manquait — un throw ici empêcherait tout le système de charger.
+  const _DSC = foundry.applications?.apps?.DocumentSheetConfig;
+  const regSheet = (docCls, legacy, cls, opts) => {
+    if (_DSC?.registerSheet) _DSC.registerSheet(docCls, "rpg", cls, opts);
+    else legacy.registerSheet("rpg", cls, opts);
+  };
+  try {
+    const coreItemSheet = foundry.appv1?.sheets?.ItemSheet ?? globalThis.ItemSheet;
+    if (coreItemSheet) {
+      if (_DSC?.unregisterSheet) _DSC.unregisterSheet(Item, "core", coreItemSheet);
+      else Items.unregisterSheet("core", coreItemSheet);
+    }
+  } catch (e) { console.warn("[RPG] Désenregistrement de la fiche d'objet core :", e); }
 
   // Actors.registerSheet("rpg", RPGCharacterSheet, { types: ["character"], makeDefault: true });
-  Actors.registerSheet("rpg", RPGCharacterSheetV2, { types: ["character"], makeDefault: true });
+  regSheet(Actor, globalThis.Actors, RPGCharacterSheetV2, { types: ["character"], makeDefault: true });
   // Actors.registerSheet("rpg", RPGMonsterSheet, { types: ["monster"], makeDefault: true });
-  Actors.registerSheet("rpg", RPGMonsterSheetV2, { types: ["monster"], makeDefault: true });
+  regSheet(Actor, globalThis.Actors, RPGMonsterSheetV2, { types: ["monster"], makeDefault: true });
 
   // Items.registerSheet("rpg", RPGWeaponSheet, { types: ["weapon"], makeDefault: true });
-  Items.registerSheet("rpg", RPGWeaponSheetV2, { types: ["weapon"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGWeaponSheetV2, { types: ["weapon"], makeDefault: true });
   // Items.registerSheet("rpg", RPGArmorSheet, { types: ["armor"], makeDefault: true });
   // Reliques : même fiche que l'armure (même mécanique d'équipement/bonus,
   // voir item-armor-sheet-v2.js), elle s'adapte via ctx.isRelic.
-  Items.registerSheet("rpg", RPGArmorSheetV2, { types: ["armor", "relic"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGArmorSheetV2, { types: ["armor", "relic"], makeDefault: true });
   // Items.registerSheet("rpg", RPGSpellSheet, { types: ["spell"], makeDefault: true });
-  Items.registerSheet("rpg", RPGSpellSheetV2, { types: ["spell"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGSpellSheetV2, { types: ["spell"], makeDefault: true });
   // Items.registerSheet("rpg", RPGGenericItemSheet, { types: ["loot", "consumable"], makeDefault: true });
-  Items.registerSheet("rpg", RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
-  Items.registerSheet("rpg", RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
-  Items.registerSheet("rpg", RPGQuestSheetV2, { types: ["quest"], makeDefault: true });
-  Items.registerSheet("rpg", RPGTalentSheetV2, { types: ["talent"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGGenericItemSheetV2, { types: ["loot", "consumable"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGRecipeSheetV2, { types: ["recipe"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGQuestSheetV2, { types: ["quest"], makeDefault: true });
+  regSheet(Item, globalThis.Items, RPGTalentSheetV2, { types: ["talent"], makeDefault: true });
 
   // Initiative — formule volontairement SIMPLE et robuste : @init est un nombre
   // garanti fourni par getRollData() (défaut 0). Évite tout terme non résolu
@@ -1630,7 +1646,10 @@ Hooks.once("ready", () => {
             try {
               const raw = JSON.parse(decodeURIComponent(btn.dataset.spellDmg ?? btn.dataset.dmgBlocks ?? "{}"));
               const actorId = raw.actorId ?? btn.dataset.actorId;
-              const caster  = game.actors.get(actorId);
+              // Par UUID d'abord (token non lié d'un monstre : même id que son
+              // prototype) — voir resolveDeclaredActor dans attack-declare.js.
+              const casterDoc0 = raw.casterUuid ? await fromUuid(raw.casterUuid).catch(() => null) : null;
+              const caster  = casterDoc0?.actor ?? casterDoc0 ?? game.actors.get(actorId);
               const targets = raw.targets ?? [];
 
               // ── Un seul jet de dés pour TOUTES les cibles ──────────────
@@ -1797,7 +1816,8 @@ Hooks.once("ready", () => {
             btn.textContent = "Calcul...";
             try {
               const raw = JSON.parse(decodeURIComponent(btn.dataset.spellHeal ?? "{}"));
-              const caster = game.actors.get(raw.actorId);
+              const casterDoc0 = raw.casterUuid ? await fromUuid(raw.casterUuid).catch(() => null) : null;
+              const caster = casterDoc0?.actor ?? casterDoc0 ?? game.actors.get(raw.actorId);
 
               for (const entry of (raw.entries ?? [])) {
                 const benef = entry.tokenUuid
@@ -2327,7 +2347,7 @@ Hooks.once("ready", () => {
   // Tick tour combat (cooldowns + effets + auras + regen)
   // ---------------------------
   Hooks.on("updateCombat", async (combat, changed) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     if (!("turn" in changed) && !("round" in changed)) return;
     if (!canvas?.ready) return;
 
@@ -2556,7 +2576,7 @@ Hooks.once("ready", () => {
   // Recalc palier si GM change le niveau
   // ---------------------------
   Hooks.on("updateActor", async (actor, changed, options) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     if (!("system" in changed) || !("niveau" in (changed.system ?? {}))) return;
     if (options.rpgXpSync || options.rpgLevelSync) return;
 
@@ -2568,7 +2588,7 @@ Hooks.once("ready", () => {
   // Level up automatique dès qu'un PJ gagne de l'XP
   // ---------------------------
   Hooks.on("updateActor", async (actor, changed, options) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     if (actor.type !== "character") return;
     if (options.rpgXpSync || options.rpgLevelSync) return;
     if (changed?.system?.xp?.valeur === undefined) return;
@@ -2585,7 +2605,7 @@ Hooks.once("ready", () => {
   // Les états posés par un sort ou l'éditeur s'affichent/disparaissent tout seuls.
   // ---------------------------
   Hooks.on("updateActor", async (actor, changed, options) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     if (changed?.system?.etatsActifs === undefined) return;
     await syncActorStatusIcons(actor);
   });
@@ -2596,7 +2616,7 @@ Hooks.once("ready", () => {
   // ---------------------------
   const _downLogged = new Set();
   Hooks.on("updateActor", async (actor, changed, options) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     const newPv = changed?.system?.ressources?.pv?.valeur;
     if (newPv === undefined) return;
 
@@ -2643,7 +2663,7 @@ Hooks.once("ready", () => {
   // Fin de combat → XP + Loot
   // ---------------------------
   Hooks.on("deleteCombat", async (combat) => {
-    if (!game.user.isGM) return;
+    if (!isPrimaryGM()) return;  // un seul MJ, voir utils/primary-gm.js
     try {
       await resolveEndOfCombat(combat);
     } catch (e) {

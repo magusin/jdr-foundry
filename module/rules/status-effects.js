@@ -36,8 +36,11 @@ function deepClone(o) {
 function normalizeStateV2(st) {
   if (!st) return null;
 
-  // Si c’est déjà ton format V2 (sheet)
-  if (st.label && (st.mods || st.dot || st.type || st.isAura != null)) {
+  // Si c’est déjà ton format V2 (sheet). Un état V1 (modsFlat/modsPct) porte
+  // lui aussi un label et souvent un dot : sans l'exclusion ci-dessous il
+  // tombait ici et perdait tous ses modificateurs de stats.
+  const isV1 = !st.mods && (st.modsFlat || st.modsPct);
+  if (!isV1 && st.label && (st.mods || st.dot || st.type || st.isAura != null)) {
     const out = foundry.utils.deepClone(st);
     out.id = String(out.id ?? foundry.utils.randomID());
     out.label = String(out.label ?? "État").trim() || "État";
@@ -66,7 +69,7 @@ function normalizeStateV2(st) {
   }
 
   // Si c’est l’ancien format V1 (modsFlat/modsPct + dot.perTick ou dot.base/per/perStep)
-  if (st.key && st.label && (st.modsFlat || st.modsPct || st.dot)) {
+  if (st.label && (st.modsFlat || st.modsPct || st.dot)) {
     const out = {
       id: String(st.id ?? foundry.utils.randomID()),
       label: String(st.label ?? "État").trim() || "État",
@@ -88,7 +91,13 @@ function normalizeStateV2(st) {
     // DOT : si “scalé” base/per/perStep (legacyToNew)
     if (st.dot?.base != null || st.dot?.perStep != null) {
       const snap = Number(st.source?.snap ?? 0) || 0;
-      const perTick = scaleValue(st.dot, snap); // réutilise TA fonction scaleValue déjà dans ce fichier
+      // base + ⌊stat ÷ per⌋ × perStep — la forme des anciens états scalés.
+      // (Appelait un `scaleValue` qui n'existait nulle part : un tel état
+      // levait une ReferenceError dans prepareDerivedData.)
+      const base = Number(st.dot.base ?? 0) || 0;
+      const per = Number(st.dot.per ?? 0) || 0;
+      const perStep = Number(st.dot.perStep ?? 1) || 0;
+      const perTick = per > 0 ? base + Math.floor(snap / per) * perStep : base;
       out.dot.flat = Number(perTick) || 0;
       out.dot.perTick = out.dot.flat;
     }
@@ -119,8 +128,21 @@ function normalizeStateV2(st) {
 
   // Si c’est très vieux format (name/duration/dotFlat/debuff)
   if (st.name || st.duration || st.debuff || st.dotFlat != null) {
-    const v1 = legacyToNew(st, null);   // tu as déjà legacyToNew dans ce fichier
-    return normalizeStateV2(v1);        // convertit ensuite en V2
+    // Conversion minimale (un `legacyToNew` était appelé ici sans exister
+    // nulle part : ReferenceError dès qu'un tel état traînait sur un acteur).
+    const dur = Math.max(1, Number(st.duration ?? st.remaining ?? 1) || 1);
+    const flat = Number(st.dotFlat ?? 0) || 0;
+    return {
+      id: String(st.id ?? foundry.utils.randomID()),
+      label: String(st.label ?? st.name ?? "État").trim() || "État",
+      type: "custom",
+      isAura: false,
+      duration: dur,
+      remaining: Math.max(0, Number(st.remaining ?? dur) || 0),
+      cleanseDC: Math.max(0, Number(st.cleanseDC ?? 0) || 0),
+      dot: { flat, formula: "", perTick: flat },
+      mods: {}
+    };
   }
 
   return null;

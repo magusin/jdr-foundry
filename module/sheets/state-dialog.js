@@ -47,7 +47,6 @@ export const MOD_LABELS = {
   toucherPhysique: "Toucher physique",
   toucherMagique: "Toucher magique",
   initiativeMod: "Initiative",
-  fatigueMax: "Fatigue max",
   podsMax: "Pods max",
   retraitMod: "Seuil de retrait d'état"
 };
