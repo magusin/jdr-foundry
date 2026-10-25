@@ -178,7 +178,7 @@ function spread(center, pct = 0.12, { allowNegative = false } = {}) {
  * — un monstre qui fait « 2d6+3 » ne fait jamais 1, ce qui compte quand sa
  * menace est calibrée sur une moyenne.
  */
-function diceForAverage(avg) {
+export function diceForAverage(avg) {
   const target = Math.max(1, Number(avg) || 1);
   let dice = Math.max(1, Math.min(20, Math.round(target / 4.5)));
   let flat = Math.round(target - 3.5 * dice);

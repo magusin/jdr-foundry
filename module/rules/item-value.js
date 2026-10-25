@@ -2054,7 +2054,25 @@ export function computeMonsterValue(actor, opts = {}) {
   // Un monstre qui ne meurt pas n'a pas de score : le classer « boss » avec un
   // nombre astronomique donnerait l'illusion qu'il est simplement très fort,
   // alors que le problème est ailleurs (voir l'alerte).
-  const encounter = invincible ? Infinity : Math.round(threat * survival * 10) / 10;
+  //
+  // Le score est exprimé en ÉQUIVALENT NIVEAU 1 : menace × survie divisé par
+  // les PV du groupe rapportés à ceux d'un groupe débutant (30). Sans ça, les
+  // paliers (seuils fixes 3/12/35/90) dérivaient d'un cran tous les quatre
+  // niveaux — la menace d'un monstre est calibrée en PART des PV d'un PJ
+  // (monster-archetypes.js), donc elle grandit avec eux, alors que sa durée
+  // de vie reste la même. Mesuré avant la correction : une brute de niveau 5
+  // lisait « Élite », une élite de niveau 10 « Boss », une piétaille de
+  // niveau 5 « Mineur » — le même archétype, au même rôle, changeait de
+  // palier par le seul effet du niveau. Le niveau 1 est inchangé (facteur 1).
+  const tierScale = Math.max(1, PARTY.pv / 30);
+  const encounter = invincible ? Infinity : Math.round((threat * survival / tierScale) * 10) / 10;
+  if (tierScale > 1) {
+    rows.push({
+      label: `Score ramené au niveau 1 (menace × survie ÷ ${round1(tierScale)}, PV du groupe ÷ 30)`,
+      value: `${round1(threat * survival)} → ${Number.isFinite(encounter) ? encounter : "∞"}`,
+      points: null
+    });
+  }
   const tier = invincible
     ? MONSTER_TIERS[MONSTER_TIERS.length - 1]
     : (MONSTER_TIERS.find(t => encounter <= t.max) ?? MONSTER_TIERS[MONSTER_TIERS.length - 1]);

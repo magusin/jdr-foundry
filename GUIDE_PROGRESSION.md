@@ -10,6 +10,16 @@ guide dit lesquels et où.
 
 ---
 
+## Avant tout : une campagne prête à jouer
+
+La macro **« 📚 Installer la campagne (MJ) »** installe *Les Marches de
+Cendrebrume* : 25 monstres calibrés par ce guide (archétype × thème), 7 PNJ
+avec leurs secrets, 9 quêtes (trame principale en cinq actes du niveau 1 au
+niveau 10, plus quatre secondaires), le butin, les récompenses (pesées au
+palier annoncé) et un journal « Guide du MJ » (lieux, factions, rythme).
+Règle d'abord les réglages ci-dessous : les monstres sont calibrés au moment
+de l'installation.
+
 ## 0. À faire une fois : les quatre réglages du monde
 
 Paramètres du jeu → Réglages du système. Tout le reste en dépend.
@@ -84,8 +94,15 @@ Fiche du monstre → onglet **🎲 Configuration aléatoire** :
    PV, leur armure, les dégâts de leur capacité, le nombre de tours que le
    groupe mettra à les abattre et l'XP qu'ils rapportent. Tu choisis sur des
    nombres, pas sur un adjectif.
-4. Coche « créer aussi la capacité d'attaque recommandée » si la créature n'a
-   pas encore d'attaque, et valide.
+4. Choisis un **thème** (Bête, Mort-vivant, Spectre, Feu, Glace, Orage,
+   Pierre, Venin, Ombre, Sacré, Profondeurs…) : il donne l'élément des coups,
+   les résistances et faiblesses, l'état infligé par la capacité signature
+   (Brûlure, Givre, Empoisonnement…), et corrige les PV pour que la créature
+   tienne toujours le même nombre de tours. « Aucun » garde l'ancien
+   comportement.
+5. Coche « créer aussi la capacité d'attaque recommandée » si la créature n'a
+   pas encore d'attaque, et valide. Ses dégâts **suivent le niveau** tiré par
+   chaque exemplaire (via le scaling de Force/Intelligence).
 
 Toutes les plages de tous les niveaux déclarés sont remplies d'un coup, et le
 bloc **Pesée** de la fiche affiche immédiatement le palier obtenu (Trivial /
@@ -224,6 +241,13 @@ Ce qu'il faut y lire :
 ---
 
 ## 3. Composer une rencontre, et l'XP qui va avec
+
+> 💡 La macro **« ⚔️ Générateur de Rencontres (MJ) »** fait ce calcul pour
+> toi : niveau du groupe, nombre de PJ, difficulté (facile 0,6 → boss 2,6),
+> thème éventuel. Elle tire dans tes monstres calibrés, compte un monstre plus
+> haut que le groupe ×1,3 par niveau d'écart, et pose les jetons cachés **au
+> bon niveau**. Le réglage **« Niveau des monstres posés »** → « Au niveau du
+> groupe » fait de même pour les monstres que tu déposes à la main.
 
 **100 XP par niveau**, partagés entre les PJ présents à la fin du combat
 (`rules/combat-end.js`). L'XP écrite par le calibrage vise **quatre combats par

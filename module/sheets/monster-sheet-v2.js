@@ -17,8 +17,11 @@ import { dropPassifOnStateLabel, passifStates } from "../rules/loadout.js";
 import { computeMonsterValue, computeMonsterBandValues } from "../rules/item-value.js";
 import {
   ARCHETYPES, getArchetype, archetypeProfile, buildBand,
-  recommendedAbilities, abilityItemData
+  recommendedAbilities
 } from "../rules/monster-archetypes.js";
+import {
+  MONSTER_THEMES, getTheme, applyThemeToBand, themedAbilitiesForLevels, themedAbilityItemData
+} from "../rules/monster-themes.js";
 import { stateTypeLabel, auraTargetLabel } from "../rules/state-builder.js";
 import { checkRange, fmtMeters } from "../utils/grid.js";
 import { asList, listSafeUpdate } from "../utils/indexed-list.js";
@@ -142,7 +145,13 @@ async function promptArchetype(levels, actor) {
   }).join("");
 
   const options = ARCHETYPES.map(a =>
-    `<option value="${a.key}">${a.icon} ${a.label} — ${a.hint}</option>`
+    `<option value="${a.key}" ${a.key === String(actor?.getFlag?.("rpg", "archetype") ?? "") ? "selected" : ""}>${a.icon} ${a.label} — ${a.hint}</option>`
+  ).join("");
+
+  const curTheme = String(actor?.getFlag?.("rpg", "theme") ?? "aucun");
+  const curArch  = String(actor?.getFlag?.("rpg", "archetype") ?? "");
+  const themeOptions = MONSTER_THEMES.map(t =>
+    `<option value="${t.key}" ${t.key === curTheme ? "selected" : ""}>${t.icon} ${t.label}</option>`
   ).join("");
 
   const P = archetypeProfile(mid, "soldat").party;
@@ -167,15 +176,21 @@ async function promptArchetype(levels, actor) {
         <select name="arch" style="width:100%">${options}</select>
       </p>
       <p style="margin:6px 0">
+        <label>Thème (élément, résistances, état infligé — le calibrage reste celui de l'archétype) :</label><br/>
+        <select name="theme" style="width:100%">${themeOptions}</select>
+      </p>
+      <p style="margin:6px 0">
         <label><input type="checkbox" name="createAbility" ${hasSpell ? "" : "checked"} />
           Créer aussi la ou les capacités d'attaque recommandées
           ${hasSpell ? "(cette créature en a déjà — les doublons de nom sont ignorés)" : ""}
         </label>
       </p>
       <p style="margin:6px 0;font-size:11px;opacity:.7">
-        Les plages existantes de ces niveaux seront <b>remplacées</b>. Les
-        résistances élémentaires restent à zéro : elles relèvent du thème de la
-        créature, à saisir à la main.
+        Les plages existantes de ces niveaux seront <b>remplacées</b>. Sans
+        thème, les résistances élémentaires restent à zéro (à saisir à la
+        main). Avec un thème, elles sont posées par lui, et les PV sont
+        corrigés de sa résistance physique/magique pour que la créature tombe
+        dans le même nombre de tours.
       </p>
     </div>`;
 
@@ -190,7 +205,8 @@ async function promptArchetype(levels, actor) {
           const root = dialog?.element ?? button?.form ?? null;
           const key = root?.querySelector?.("[name='arch']")?.value ?? "soldat";
           const createAbility = !!root?.querySelector?.("[name='createAbility']")?.checked;
-          return { key, createAbility };
+          const theme = root?.querySelector?.("[name='theme']")?.value ?? "aucun";
+          return { key, createAbility, theme };
         }
       },
       { action: "cancel", label: "Annuler" }
@@ -567,17 +583,27 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         if (!choice) return;
 
         const bands = foundry.utils.deepClone(sys.gen?.bands ?? {});
-        for (const lvl of levels) bands[String(lvl)] = buildBand(lvl, choice.key);
-        await this.document.update({ "system.gen.bands": bands });
+        for (const lvl of levels) {
+          bands[String(lvl)] = applyThemeToBand(buildBand(lvl, choice.key), choice.theme, lvl, choice.key);
+        }
+        const theme = getTheme(choice.theme);
+        const upd = {
+          "system.gen.bands": bands,
+          // Retenus pour la prochaine ouverture de ce dialogue et pour le
+          // générateur de rencontres (rules/encounter-builder.js).
+          "flags.rpg.archetype": choice.key,
+          "flags.rpg.theme": theme.key
+        };
+        if (theme.move) upd["system.deplacement.type"] = theme.move;
+        await this.document.update(upd);
 
         let created = 0;
         if (choice.createAbility) {
-          const mid = levels[Math.floor(levels.length / 2)];
           const existing = new Set(Array.from(this.document.items)
             .filter(i => i.type === "spell").map(i => String(i.name).toLowerCase()));
-          const toCreate = recommendedAbilities(mid, choice.key)
+          const toCreate = themedAbilitiesForLevels(levels, choice.key, choice.theme)
             .filter(spec => !existing.has(String(spec.label).toLowerCase()))
-            .map(spec => abilityItemData(spec, { img: this.document.img }));
+            .map(spec => themedAbilityItemData(spec, { img: this.document.img }));
           if (toCreate.length) {
             await this.document.createEmbeddedDocuments("Item", toCreate);
             created = toCreate.length;
@@ -585,7 +611,7 @@ export class RPGMonsterSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV
         }
 
         ui.notifications?.info?.(
-          `${getArchetype(choice.key).label} : ${levels.length} niveau(x) calibré(s)` +
+          `${getArchetype(choice.key).label}${theme.key !== "aucun" ? ` (${theme.label})` : ""} : ${levels.length} niveau(x) calibré(s)` +
           (created ? `, ${created} capacité(s) créée(s).` : ".")
         );
         this.render({ force: true });

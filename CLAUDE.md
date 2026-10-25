@@ -339,7 +339,13 @@ reste (PV, scores, dés de la capacité, XP) en découle.
 - **Vérification croisée gratuite** : la pesée (`computeMonsterBandValues`) est un modèle
   *indépendant*, et elle tombe sur le palier attendu pour les sept archétypes du niveau 1
   au niveau 12 (piétaille → Trivial, soldat → Mineur, brute/mage → Sérieux, élite → Élite,
-  boss → Boss). Si l'un des deux bouge, ce désaccord est le test.
+  boss → Boss). Si l'un des deux bouge, ce désaccord est le test. **Ce n'était vrai qu'au
+  niveau 1** jusqu'à ce que le score de rencontre soit ramené en équivalent niveau 1
+  (`menace × survie ÷ (PV du groupe / 30)`, `computeMonsterValue`) : les seuils des paliers
+  sont fixes (3/12/35/90), la menace d'un archétype est une PART des PV d'un PJ, donc elle
+  grandit avec eux — une brute de niveau 5 lisait « Élite », une élite de niveau 10 « Boss ».
+  Re-vérifié après la correction aux niveaux 1, 5 et 10 sur les six archétypes, nus et sous
+  six thèmes : chacun reste sur son palier. Le niveau 1 est inchangé (facteur 1).
 - Les **résistances élémentaires restent à [0, 0]** : elles relèvent du thème de la créature,
   pas de son calibrage — et `rollResistances` n'écrit rien sur une plage nulle, ce qui
   préserve une valeur saisie à la main sur la fiche.
@@ -350,6 +356,73 @@ archétypes aux niveaux 1/3/5/8/12, composition de rencontre et rythme d'XP (100
 quatre rencontres), et la hiérarchie des champs d'équipement — dont le fait, contre-intuitif
 mais voulu, qu'une pièce apportant le score d'armure du niveau pèse « Village » et fait
 pourtant exactement son travail (poids 0,3 contre 10 pour l'armure fixe).
+
+### Thème d'un monstre — `rules/monster-themes.js` — et pourquoi il ne casse pas le calibrage
+
+L'archétype dit le RÔLE (combien de tours, quelle part des PV d'un PJ), le thème dit ce que
+la créature EST : élément de ses coups, résistances, état laissé par sa capacité signature,
+type de déplacement. Le bouton ⚡ de la fiche propose les deux ; `flags.rpg.archetype` /
+`flags.rpg.theme` retiennent le choix (relus par le dialogue et par le générateur de
+rencontres). Trois règles tiennent le calibrage, et chacune a été mesurée sur la pesée
+(niveaux 1/5/10 × six archétypes × six thèmes, écart ≤ ~10 % au palier nu) :
+
+- **Une résistance à la livraison (`physique`/`magique`) se paie en PV ET en régénération**
+  (`themePvFactor` + `applyThemeToBand`). Le facteur est calculé sur les deux étages réels
+  du moteur (`mitigateDamage` puis le %), pas par la règle linéaire `1 − rés/200`, qui se
+  trompait de 15 % sur un spectre blindé. La régen suit le même facteur : la survie vaut
+  `PV ÷ (dégâts reçus − régen)`, et réduire les dégâts reçus sans réduire la régen allongeait
+  le combat d'un boss spectral de 20 %.
+- **Les résistances élémentaires s'équilibrent** (somme ≈ 0 par thème) et ne sont PAS
+  compensées en PV : le groupe ne frappe pas toujours avec le bon élément, c'est la lecture du
+  monstre qui doit payer, pas sa fiche.
+- **Un DOT posé est retiré des dés de la capacité qui le porte**, plafonné à 40 % de son
+  budget, avec l'espérance du modèle de RAFRAÎCHISSEMENT du moteur (même id d'état sur un
+  second coup, `spells.js`) : `dot × (1 − (1 − p)^durée)`, pas `dot × durée` par coup. Les
+  malus de stats (Givre, Affaiblissement…) ne sont pas payés : la pesée les chiffre peu.
+
+**Les dégâts d'une capacité suivent le niveau tiré par l'exemplaire** —
+`themedAbilitiesForLevels(levels, …)`. Avant, les dés étaient dimensionnés au niveau MÉDIAN de
+la fourchette et un « 3,4,5 » tapait au niveau 4 quel que soit son tirage (pesée d'une goule :
+45 → 30 d'un bout à l'autre). Aucune ligne de moteur n'a été ajoutée : on choisit le `per` de
+la ligne de dégâts (1 à 10) qui reproduit le mieux, niveau par niveau, les dégâts bruts visés,
+puisque la Force/Intelligence EFFECTIVE d'un monstre monte avec son niveau (centre de bande +
+1 par niveau, `actor.js`). Conséquence voulue : un monstre dont la capacité est à `per 1`
+perd beaucoup de dégâts sous un malus de Force — c'est une faiblesse lisible, pas un bug.
+
+### Niveau d'un monstre posé, et générateur de rencontres — `rules/encounter-builder.js`
+
+`buildRandomUpdatesForActor(actor, {level})` / `closestConfiguredLevel` (`monster-gen.js`)
+prennent le niveau configuré le PLUS PROCHE d'une valeur voulue (à égalité, le plus bas) ; sans
+valeur, tirage uniforme comme avant. Le hook `preCreateToken` (`init.js`) lit
+`flags.rpg.forceLevel` sur les données du jeton, sinon le réglage monde `monsterLevelMode`
+(`aleatoire` par défaut — rien ne change sans opt-in — ou `groupe` = « Pesée — niveau du
+groupe »). `pickLevel` ignore désormais un niveau listé sans bande, au lieu d'échouer en silence.
+
+Le générateur (macro « ⚔️ Générateur de Rencontres (MJ) », `game.rpg.encounters`) applique la
+règle du guide — 1 point = une rencontre normale pour 3 PJ, budget × taille/3 — sur les monstres
+du MONDE qui ont des bandes à ±2 niveaux. Poids : `fight` de l'archétype si `flags.rpg.archetype`
+existe, sinon le palier de la pesée (`TIER_WEIGHT`). **Un écart de niveau change le poids :
+×1,3 par niveau au-dessus du groupe** (`LEVEL_GAP_FACTOR`, mesuré : +1 → ×1,10–1,38, +2 →
+×1,45–2,1, −1 → ×0,72–0,83) — sans ça, un loup de niveau 3 comptait 0,33 contre un groupe de
+niveau 1 au lieu de 0,56. Deux règles du guide sont appliquées, pas seulement conseillées :
+pas de boss avant le niveau 3, et rien d'autre que de la piétaille à côté d'un boss. Les
+jetons sont posés cachés, avec `forceLevel`.
+
+### Cadre de campagne — `rules/campaign-content.js` (« Les Marches de Cendrebrume »)
+
+Bestiaire (25 créatures), 7 PNJ, 9 quêtes (trame « La Couronne de Cendre » en cinq actes,
+niveaux 1→10, + 4 secondaires), butin, récompenses et un journal « Guide du MJ », installés par
+la macro « 📚 Installer la campagne (MJ) » comme **documents du monde**, jamais en compendium
+(les packs compilés ont servi des fantômes sur la machine du MJ, cf. « Repo layout notes »).
+Idempotent par `flags.rpg.contentKey` : une réinstallation ne recrée que le manquant et
+n'écrase rien. **Aucun chiffre de monstre n'est écrit dans ce fichier** — une entrée nomme son
+archétype, son thème et ses niveaux, et `monsterData()` calcule bandes et capacités à
+l'installation contre les réglages de pesée du monde ; changer un archétype ou un thème change
+donc toute la campagne d'un coup, et c'est voulu. Fourchettes de niveaux étroites (≤ 3) : une
+créature qui doit exister sur toute la campagne a deux entrées. Les objets de récompense sont
+pesés au palier annoncé (`tierNote`) — re-vérifier avec `computeItemValue` après toute
+modification. Les PNJ sont des `character` avec `pnjView: "always"` et leurs notes dans
+`system.mj` (caractère / dialogues / secrets) ; un PNJ qui se bat reçoit une arme équipée.
 
 ### Item "pesée": a GM-only power score, and why it is weighted rather than summed
 

@@ -25,10 +25,28 @@ function getRange(obj, fallbackMin = 0, fallbackMax = 0) {
   return [Number.isFinite(a) ? a : fallbackMin, Number.isFinite(b) ? b : fallbackMax];
 }
 
-function pickLevel(actor) {
-  const levels = parseLevels(actor.system?.gen?.levelsCsv);
+/**
+ * Niveau tiré pour un exemplaire.
+ *
+ * `preferred` (nombre) : le niveau configuré le PLUS PROCHE de cette valeur,
+ * à égalité le plus bas — c'est ce qui permet au générateur de rencontres et
+ * au réglage « Niveau des monstres posés » de poser un loup au niveau du
+ * groupe plutôt qu'au hasard parmi « 2,4,6 ». Sans lui : tirage uniforme,
+ * le comportement d'origine.
+ */
+function pickLevel(actor, preferred = null) {
+  const levels = parseLevels(actor.system?.gen?.levelsCsv)
+    .filter(l => actor.system?.gen?.bands?.[String(l)]);
   if (!levels.length) return null;
+  const want = Number(preferred);
+  if (Number.isFinite(want) && want > 0) {
+    return levels.slice().sort((a, b) => (Math.abs(a - want) - Math.abs(b - want)) || (a - b))[0];
+  }
   return levels[randInt(0, levels.length - 1)];
+}
+
+export function closestConfiguredLevel(actor, preferred) {
+  return pickLevel(actor, preferred);
 }
 
 /**
@@ -190,8 +208,8 @@ export async function randomizeMonster(actor) {
  * Utilisé par preCreateToken pour injecter les stats dans le delta du token
  * sans passer par un acteur du monde.
  */
-export function buildRandomUpdatesForActor(actor) {
-  const lvl = pickLevel(actor);
+export function buildRandomUpdatesForActor(actor, { level = null } = {}) {
+  const lvl = pickLevel(actor, level);
   if (!lvl) return null;
   const band = getBand(actor, lvl);
   if (!band) return null;

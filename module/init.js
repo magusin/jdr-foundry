@@ -74,6 +74,9 @@ import * as ItemLink from "./rules/item-link.js";
 import * as Inventory from "./rules/inventory.js";
 import * as Ammo from "./rules/ammo.js";
 import * as ActorRoles from "./rules/actor-roles.js";
+import * as CampaignContent from "./rules/campaign-content.js";
+import * as EncounterBuilder from "./rules/encounter-builder.js";
+import * as MonsterThemes from "./rules/monster-themes.js";
 import * as Loadout from "./rules/loadout.js";
 import * as ItemValue from "./rules/item-value.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
@@ -590,6 +593,14 @@ Hooks.once("ready", () => {
     hint: "Niveau des personnages joueurs pris comme référence par la pesée des objets et des sorts. Il fixe la mitigation du groupe (donc ce qu'une arme lui inflige vraiment) et la caractéristique de référence du scaling de dégâts (4 au niveau 1, +2 par niveau). Purement indicatif : n'affecte aucune règle. Monte-le quand ta table monte, sinon un objet de milieu de campagne reste jugé contre des débutants.",
     scope: "world", config: true, type: Number,
     default: 1, requiresReload: false
+  });
+
+  game.settings.register("rpg", "monsterLevelMode", {
+    name: "Niveau des monstres posés",
+    hint: "Niveau tiré quand un monstre à plages de génération est posé sur la scène. « Au hasard » : un des niveaux configurés (comportement d'origine). « Au niveau du groupe » : le niveau configuré le plus proche du réglage « Pesée — niveau du groupe », pour qu'un loup « 2,4,6 » n'arrive pas au niveau 6 contre un groupe de niveau 2. Le générateur de rencontres impose toujours son propre niveau.",
+    scope: "world", config: true, type: String,
+    choices: { aleatoire: "Au hasard parmi les niveaux configurés", groupe: "Au niveau du groupe (le plus proche)" },
+    default: "aleatoire", requiresReload: false
   });
 
   game.settings.register("rpg", "peseeDegatsAttaque", {
@@ -1298,6 +1309,14 @@ Hooks.once("ready", () => {
     // deux catégories dans leurs listes de cibles.
     game.rpg.actorRoles = ActorRoles;
 
+    // ✅ game.rpg.content / encounters / monsterThemes : cadre de campagne
+    // installable (« Les Marches de Cendrebrume »), générateur de rencontres
+    // et thèmes de monstres. Exposés pour leurs macros MJ, qui ne peuvent
+    // pas importer de module ES.
+    game.rpg.content = CampaignContent;
+    game.rpg.encounters = EncounterBuilder;
+    game.rpg.monsterThemes = MonsterThemes;
+
     // ✅ game.rpg.loadout : les deux emplacements (Talent, Passif). Exposé
     // parce que macro/menu.js n'est pas un module ES et ne peut pas importer
     // rules/loadout.js — sans ce pont, la bascule d'un passif dans le menu
@@ -1375,6 +1394,8 @@ Hooks.once("ready", () => {
         ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
         ["Basculer les Repères de Carte (MJ)", "toggle-map-markers.js", "icons/svg/eye.svg",             "gm"],
         ["Repères de Carte : Configurer (MJ)", "map-markers-manager.js","icons/svg/book.svg",            "gm"],
+        ["⚔️ Générateur de Rencontres (MJ)",   "encounter-builder.js",  "icons/svg/sword.svg" ,          "gm"],
+        ["📚 Installer la campagne (MJ)",       "campaign-install.js",   "icons/svg/book.svg",            "gm"],
       ];
       const getFolder = async (name) => {
         let f = game.folders.find(x => x.type === "Macro" && x.name === name);
@@ -2527,8 +2548,18 @@ Hooks.once("ready", () => {
     const bands = actor.system?.gen?.bands ?? {};
     if (!Object.keys(bands).length) return;
 
-    // Tire des stats aléatoires pour CE token
-    const randomUpdates = buildRandomUpdatesForActor(actor);
+    // Tire des stats aléatoires pour CE token. Le niveau peut être imposé :
+    // par le générateur de rencontres (flags.rpg.forceLevel sur les données
+    // du token), ou par le réglage « Niveau des monstres posés ».
+    let wantLevel = Number(createData?.flags?.rpg?.forceLevel ?? tokenDoc.flags?.rpg?.forceLevel);
+    if (!(wantLevel > 0)) {
+      let mode = "aleatoire";
+      try { mode = game.settings.get("rpg", "monsterLevelMode"); } catch (e) {}
+      if (mode === "groupe") {
+        try { wantLevel = Number(game.settings.get("rpg", "peseeNiveauGroupe")); } catch (e) {}
+      }
+    }
+    const randomUpdates = buildRandomUpdatesForActor(actor, { level: wantLevel > 0 ? wantLevel : null });
     if (!randomUpdates) return;
 
     // Convertit les clés pointées en objet imbriqué pour le delta V13
