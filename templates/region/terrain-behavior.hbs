@@ -29,9 +29,9 @@
     </div>
 
     <div style="margin-top:8px;padding:6px;background:var(--surface);border-radius:6px;font-size:12px">
-      💡 Avec vitesse <b>6m</b> : dans ce terrain tu parcours <b>{{effectiveSpeed}}m</b> réels pour 6m de mouvement dépensés
+      💡 Avec vitesse <b>{{baseSpeed}}m</b> : dans ce terrain tu parcours <b>{{effectiveSpeed}}m</b> réels pour {{baseSpeed}}m de mouvement dépensés
       {{#if (lt system.speedMult 1)}}
-      — ou inversement 6m réels coûtent <b>{{trueCost}}m</b> de mouvement
+      — ou inversement {{baseSpeed}}m réels coûtent <b>{{trueCost}}m</b> de mouvement
       {{/if}}
     </div>
   </div>

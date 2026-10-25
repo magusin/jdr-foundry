@@ -611,7 +611,7 @@ export async function runDefaultAction(actor, item, { targetToken = null } = {})
           label: `Attaque ${weapon.name} → ${target.actor.name}`,
           actorId: actor.id,
           snapshot: {
-            casterId: actor.id, targetId: target.actor.id,
+            casterId: actor.id, casterUuid: actor.uuid, targetId: target.actor.id, targetUuid: target.actor.uuid,
             targetPv: Number(target.actor.system?.ressources?.pv?.valeur ?? 0) || 0,
             addedStateIds: [], cooldown: null
           },

@@ -939,8 +939,10 @@
         // 1. Snapshot AVANT action
         const snapshot = {
           casterId:  actor.id,
+          casterUuid: actor.uuid,
           casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
           targetId:   targetToken.actor.id,
+          targetUuid: targetToken.actor.uuid,
           targetPv:   n(targetToken.actor.system?.ressources?.pv?.valeur, 0),
           addedStateIds: [],
           cooldown:   null
@@ -1086,15 +1088,17 @@
         // 1. Snapshot AVANT (mana + cooldown + PV de TOUTES les cibles sélectionnées)
         const snapshot = {
           casterId:  actor.id,
+          casterUuid: actor.uuid,
           casterMana: n(actor.system?.ressources?.mana?.valeur, 0),
           // Rétrocompat (1ère cible) — utilisé par l'ancien format d'undo mono-cible
           targetId:   targetToken?.actor?.id ?? null,
+          targetUuid: targetToken?.actor?.uuid ?? null,
           targetPv:   n(targetToken?.actor?.system?.ressources?.pv?.valeur, undefined),
           // ✅ Multi-cible : tableau de snapshots, un par cible touchée
           targetsSnapshot: targets
             .map(t => t.actor)
             .filter(Boolean)
-            .map(a => ({ targetId: a.id, targetPv: n(a.system?.ressources?.pv?.valeur, 0) })),
+            .map(a => ({ targetId: a.id, targetUuid: a.uuid, targetPv: n(a.system?.ressources?.pv?.valeur, 0) })),
           addedStateIds: [],
           cooldown: {
             itemId:     item.id,
@@ -1224,7 +1228,7 @@
             id: actionId, slot: "recuperation", status: "pending",
             label: `Récupération — ${actor.name}`,
             actorId: actor.id,
-            snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
+            snapshot: { casterId: actor.id, casterUuid: actor.uuid, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
             timestamp: Date.now()
           });
           });
@@ -1256,7 +1260,7 @@
         const msg = await ChatMessage.create({
           speaker: ChatMessage.getSpeaker({ actor }),
           content: msgContent,
-          flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id, recuperationAmount: totalReduction } }
+          flags: { rpg: { pendingAction: { type: "recuperation", actionId, outcome: "confirm" }, recuperationActorId: actor.id, recuperationActorUuid: actor.uuid, recuperationAmount: totalReduction } }
         });
 
         if (inCombat) await budgetWrite("journal récupération", () =>
@@ -1308,7 +1312,7 @@
             id: actionId, slot: "deplacement", status: "pending",
             label: `Déplacement — ${actor.name}`,
             actorId: actor.id,
-            snapshot: { casterId: actor.id, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
+            snapshot: { casterId: actor.id, casterUuid: actor.uuid, casterMana: undefined, targetId: null, targetPv: undefined, addedStateIds: [], cooldown: null },
             timestamp: Date.now()
           });
         });
@@ -1381,6 +1385,7 @@
             actorId: actor.id,
             snapshot: {
               casterId: actor.id,
+              casterUuid: actor.uuid,
               passifItemId: item.id,
               oldAuraActive: waToggled
             },

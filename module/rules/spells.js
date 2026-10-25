@@ -825,96 +825,14 @@ export function buildSpellUI({ actor, item }) {
 }
 
 /* -------------------------------------------- */
-/* ✅ DECLARE (castSpell)                         */
+/* castSpell = alias historique de declareSpell     */
 /* -------------------------------------------- */
-
-export async function castSpell(actor, item, { targetToken = null, casterToken = null } = {}) {
-  if (!actor || !item) return { ok: false, reason: "Missing actor/item" };
-  if (item.type !== "spell") return { ok: false, reason: "Not a spell" };
-
-  await ensureSpellDefaults(item);
-  const sys = item.system ?? {};
-
-  const cdRest = n(sys.cooldown?.restant, 0);
-  const cdMax = n(sys.cooldown?.max, 0);
-  if (cdRest > 0) return { ok: false, reason: `Sort en recharge : ${cdRest} tour(s)` };
-
-  const casterT = casterToken ?? actor.getActiveTokens()?.[0] ?? canvas.tokens.controlled?.[0] ?? null;
-  const targetT = targetToken ?? Array.from(game.user.targets)[0] ?? null;
-  const targetActor = targetT?.actor ?? null;
-
-  // portée si cible
-  const rmin = n(sys.range?.min, 0);
-  const rmax = n(sys.range?.max, 0);
-  if (casterT && targetT) {
-    const r = checkRange(casterT, targetT, rmin, rmax);
-    if (!r.ok) {
-      return { ok: false, reason: `Hors portée (${fmtMeters(r.dist)}, ${rmin}–${rmax} m)` };
-    }
-  }
-
-  // mana
-  const _manaCostBase  = n(sys.coutMana, 0);
-  const _tag           = sys.tag ?? "neutre";
-  const _weatherReduc  = getManaCostReduction(_tag);
-  const _biomeReduc    = getBiomeManaBonus(_tag);
-  const manaCost = Math.max(0, _manaCostBase + _weatherReduc + _biomeReduc);
-  const manaCur = n(actor.system?.ressources?.mana?.valeur, 0);
-  if (manaCost > 0 && manaCur < manaCost) return { ok: false, reason: "Mana insuffisant" };
-  if (manaCost > 0) await actor.update({ "system.ressources.mana.valeur": Math.max(0, manaCur - manaCost) });
-
-  // CD
-  if (cdMax > 0) await item.update({ "system.cooldown.restant": cdMax, "system.recharge.restant": cdMax });
-
-  const speaker = ChatMessage.getSpeaker({ actor, token: casterT?.document ?? undefined });
-
-  // ✅ stocker des UUID (PJ + monstres + tokens non-linkés)
-  const actorUuid = actor.uuid;
-  const itemUuid = item.uuid;
-  const targetTokenUuid = targetT?.document?.uuid ?? null;
-  const casterTokenUuid = casterT?.document?.uuid ?? null;
-
-  const publicContent = `
-  <div class="rpg-spell-declare">
-    <div><b>${actor.name}</b> déclare <b>${item.name}</b>${targetActor ? ` sur <b>${targetActor.name}</b>` : ""} (mana -${manaCost}, CD=${cdMax}).</div>
-    <div style="opacity:.8;margin-top:4px;"><i>En attente de validation MJ.</i></div>
-  </div>`;
-
-  const gmContent = `
-  <div class="rpg-spell-declare rpg-gm-panel">
-    <div style="font-size:11px;color:#c8960a;font-weight:600;margin-bottom:4px">⚙️ Validation MJ — ${actor.name} → ${item.name}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button type="button" class="rpg-spell-resolve" data-result="fail">Refuser</button>
-      <button type="button" class="rpg-spell-resolve" data-result="success">Valider</button>
-      <button type="button" class="rpg-spell-resolve" data-result="crit">Valider Crit</button>
-    </div>
-  </div>`;
-
-  // Message public (tout le monde voit)
-  const msg = await ChatMessage.create({
-    speaker,
-    content: publicContent,
-    flags: {
-      rpg: {
-        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid, actionId: actionId ?? null }
-      }
-    }
-  });
-
-  // Message séparé en whisper MJ avec les boutons de validation
-  await ChatMessage.create({
-    speaker,
-    content: gmContent,
-    whisper: gmUserIds(),
-    flags: {
-      rpg: {
-        spellDeclare: { actorUuid, itemUuid, targetTokenUuid, casterTokenUuid, actionId: actionId ?? null }
-      }
-    }
-  });
-
-  return { ok: true, messageId: msg.id };
-}
+// L'ancienne implémentation référençait un `actionId` jamais déclaré
+// (ReferenceError à chaque appel) et postait un message dont les flags ne
+// portaient pas ce que resolveDeclaredSpellFromMessage lit. Personne ne
+// l'appelait plus (init.js écrase déjà game.rpg.spells.castSpell par
+// declareSpell) : on garde le nom exporté, branché sur le vrai flux.
+export { declareSpell as castSpell };
 
 const PREVIEW_WHEN_LABELS = {
   hit: "Touché + crit", hitonly: "Touché normal", crit: "Crit uniquement",
@@ -1553,7 +1471,9 @@ export async function rollSpellDie(message) {
   const d = flags.spellDeclare ?? {};
   if (d.phase !== "awaitingRoll" || !d.needsRoll) return;
 
-  const actor = game.actors.get(d.actorId);
+  // UUID d'abord : le jet d'un monstre (token non lié) s'affichait sinon au
+  // nom de son prototype.
+  const actor = (d.actorUuid ? await fromUuidSafeTop(d.actorUuid) : null) ?? game.actors.get(d.actorId);
   const tn = Number(d.tnFinal) || 11;
   const roll = await (new Roll("1d20")).evaluate();
 
@@ -2139,6 +2059,7 @@ export async function resolveDeclaredSpellFromMessage(message, result, opts = {}
   if (restoreEntries.length) {
     const encodedHeal = encodeURIComponent(JSON.stringify({
       actorId: actor.id,
+      casterUuid: casterToken?.document?.uuid ?? actor.uuid,
       entries: restoreEntries
     }));
     const formula = (b) => {
@@ -2358,7 +2279,7 @@ export function bindSpellChatButtons(htmlEl, message) {
       for (const b of buttons) b.disabled = true;
 
       try {
-        const res = await RPG_SPELLS.resolveDeclaredSpellFromMessage(message, result, opts);
+        const res = await resolveDeclaredSpellFromMessage(message, result, opts);
         if (res === false) {
           // Annulé (ex: MJ a fermé le dialog Échec Critique sans valider) -> on réactive
           for (const b of buttons) b.disabled = false;

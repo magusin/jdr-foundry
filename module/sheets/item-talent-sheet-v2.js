@@ -184,6 +184,9 @@ export class RPGTalentSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
    * et `Array.isArray` échoue silencieusement partout en aval.
    */
   async _onFormSubmitV2(event, form, formData, options) {
+    // Même garde-fou que les fiches arme/armure/générique/recette : la case
+    // « 🔗 Synchro » gère sa propre écriture (bindLinkSyncCheckbox).
+    if (event?.target?.dataset?.action === "toggleLinkSync") return;
     const expanded = foundry.utils.expandObject(formData.object ?? {});
 
     // Résistances aux états : Foundry rend un objet à clés numériques quand

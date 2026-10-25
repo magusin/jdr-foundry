@@ -15,7 +15,8 @@
 //   - description : explication pour le MJ
 
 import { getZoneEffectsAt } from "./zone-effects.js";
-import { restoreScrollPositions } from "../sheets/sheet-helpers.js";
+import { restoreScrollPositions, applyUiTheme } from "../sheets/sheet-helpers.js";
+import { BASE_VITESSE } from "./base-speed.js";
 
 export const TERRAIN_TYPES = {
   terrainDifficile: {
@@ -386,7 +387,16 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
     // (zone-effects.js) : hauteur "auto" + resizable, plutôt que la hauteur
     // par défaut de RegionBehaviorConfig dimensionnée pour son propre
     // formulaire générique, plus court que notre template custom.
-    { window: { title: "Configuration du terrain", resizable: true }, position: { width: 420, height: "auto" } },
+    {
+      // Thème clair/sombre/contraste, comme ZoneEffectBehaviorSheet : classes
+      // AJOUTÉES à celles du core (mergeObject ne fusionne pas les tableaux).
+      classes: [
+        ...(Array.isArray(super.DEFAULT_OPTIONS?.classes) ? super.DEFAULT_OPTIONS.classes : []),
+        "rpg-sheet"
+      ],
+      window: { title: "Configuration du terrain", resizable: true },
+      position: { width: 420, height: "auto" }
+    },
     { inplace: false }
   );
 
@@ -420,14 +430,18 @@ export class TerrainBehaviorSheet extends foundry.applications.sheets.RegionBeha
     const mult = Number(this.document.system?.speedMult ?? terrain.speedMult ?? 1);
     ctx.speedCostLabel = mult >= 1 ? "normal" :
       `${(1/mult).toFixed(1)}× plus lent`;
-    ctx.effectiveSpeed = (6 * mult).toFixed(1);
-    ctx.trueCost       = mult > 0 ? (6 / mult).toFixed(1) : "∞";
+    // Exemple chiffré sur la vitesse de base du système (base-speed.js), pas
+    // sur un 6 écrit en dur resté d'avant le passage à 8 m.
+    ctx.baseSpeed      = BASE_VITESSE;
+    ctx.effectiveSpeed = (BASE_VITESSE * mult).toFixed(1);
+    ctx.trueCost       = mult > 0 ? (BASE_VITESSE / mult).toFixed(1) : "∞";
 
     return ctx;
   }
 
   async _onRender(context, options) {
     await super._onRender(context, options);
+    applyUiTheme(this.element);
     const content = this.element?.querySelector(".window-content");
     if (content) {
       content.style.overflowY = "auto";

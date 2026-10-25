@@ -1,5 +1,6 @@
 // systems/rpg/module/rules/auras.js
 
+import { isPrimaryGM } from "../utils/primary-gm.js";
 import { RPG_AURA_RENDER } from "./aura-render.js";
 import { dropPassifOnStateLabel, effectiveStates } from "./loadout.js";
 import { auraTargetOf } from "./aura-target.js";
@@ -332,7 +333,9 @@ export const RPG_AURAS = {
     // silencieuses. Il garde en revanche le rendu des anneaux, qui est
     // purement local — sans ce partage, un joueur ne verrait plus aucune
     // aura sur le canevas.
-    if (!game.user?.isGM) {
+    // Les MJ non élus aussi : deux clients MJ réécrivant en parallèle la même
+    // liste d'états se marchaient dessus (voir utils/primary-gm.js).
+    if (!isPrimaryGM()) {
       try { RPG_AURA_RENDER.refresh(); } catch (e) { console.warn("[RPG] aura-render:", e); }
       return;
     }

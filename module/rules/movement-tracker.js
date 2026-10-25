@@ -2,6 +2,7 @@
 // Système de déplacement en mètres avec détection de terrain.
 // Grille : 1m par case.
 
+import { isPrimaryGM } from "../utils/primary-gm.js";
 import {
   getBudget, saveBudget, canUseSlot, reserveSlot,
   releaseSlot, addLogEntry, updateLogEntry, findLogEntry,
@@ -450,7 +451,10 @@ export async function onUpdateToken(tokenDoc, changes, options) {
     }
   }
 
-  if (!game.user.isGM) return;
+  // Un seul MJ suit le déplacement : sinon chaque client MJ connecté postait
+  // son propre message de validation, et un piège hors combat partait deux
+  // fois (voir utils/primary-gm.js).
+  if (!isPrimaryGM()) return;
   if (!isCombatEngaged(game.combat)) {
     const newX = "x" in changes ? changes.x : tokenDoc.x;
     const newY = "y" in changes ? changes.y : tokenDoc.y;
@@ -543,7 +547,7 @@ async function _processMove(tokenDoc, combatant, waypoints) {
 
   const actionId = foundry.utils.randomID();
   const snapshot = {
-    casterId: actor.id, tokenId: tokenDoc.id,
+    casterId: actor.id, casterUuid: actor.uuid, tokenId: tokenDoc.id,
     oldX: startPos.x, oldY: startPos.y,
     newX: endPos.x,   newY: endPos.y,
     centerX: endCenter.x, centerY: endCenter.y,
