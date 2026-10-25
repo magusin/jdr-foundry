@@ -308,7 +308,7 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       "pvMax","manaMax","fatigueMax","regenPv","regenMana","vitesse","initiativeMod",
       "podsMax","retraitMod",
       "armureFixe","resistanceFixe","scoreArmure","scoreResistance",
-      "toucherPhysique","toucherMagique"
+      "toucherPhysique","toucherMagique","esquive"
     ];
     for (const k of BONUS_KEYS) ctx.system.bonus[k] = n(ctx.system.bonus[k], 0);
 
@@ -332,7 +332,8 @@ export class RPGWeaponSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2
       scoreArmure: "Score Armure",
       scoreResistance: "Score Résistance",
       toucherPhysique: "Toucher physique",
-      toucherMagique: "Toucher magique"
+      toucherMagique: "Toucher magique",
+      esquive: "Esquive"
     };
 
     ctx.displayWeaponBonuses = Object.entries(LABELS_BONUS)

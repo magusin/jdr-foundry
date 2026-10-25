@@ -40,7 +40,7 @@ export const TALENT_STAT_GROUPS = [
     acuite: "Acuité", endurance: "Endurance"
   }},
   { label: "Combat", stats: {
-    toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+    toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", esquive: "Esquive",
     initiativeMod: "Initiative", vitesse: "Vitesse"
   }},
   { label: "Défenses", stats: {

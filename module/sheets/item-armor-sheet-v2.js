@@ -159,7 +159,8 @@ export class RPGArmorSheetV2 extends HandlebarsApplicationMixin(DocumentSheetV2)
 
       // Combat
       toucherPhysique: "Toucher physique",
-      toucherMagique: "Toucher magique"
+      toucherMagique: "Toucher magique",
+      esquive: "Esquive"
     };
 
     // assure toutes les keys existent (évite undefined dans inputs)

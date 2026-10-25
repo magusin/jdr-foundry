@@ -110,6 +110,9 @@ const SYNC_FIELDS = {
   consumable: [
     "system.poids", "system.prix", "system.vendeurAssocie",
     "system.lore", "system.description", "system.effet",
+    // Usage structuré (rules/consumables.js) : ce que fait l'objet est une
+    // définition, identique sur toutes les copies.
+    "system.use",
     // Famille de munition : définition de l'objet (une flèche est une flèche
     // sur toutes les copies), jamais un état de l'exemplaire.
     "system.ammoKind"

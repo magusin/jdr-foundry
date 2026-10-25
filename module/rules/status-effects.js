@@ -173,6 +173,8 @@ const KEY_TO_BUCKET = {
   // combat — bonus direct à la chance de toucher (réduit le TN nécessaire)
   toucherPhysique: ["combat", "toucherPhysique"],
   toucherMagique: ["combat", "toucherMagique"],
+  // défense — +N au seuil des attaques reçues (computeTN lit la CIBLE)
+  esquive: ["combat", "esquive"],
 
   // ressources — fatigue max (équipement/buffs)
   fatigueMax: ["ressources", "fatigueMax"],

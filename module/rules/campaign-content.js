@@ -82,7 +82,36 @@ export const REWARDS = [
   {
     key: "potion-soin", name: "Potion de soin", type: "consumable", img: "icons/svg/regen.svg",
     system: { poids: 0.2, prix: { argent: 5 }, effet: "Rend 2d6 + 2 PV (une action de récupération).",
+      use: { pv: "2d6+2", mana: "", fatigue: "", cure: "", target: "ally" },
       description: "Une fiole rouge au goût de rouille, préparée par Frère Anselme." },
+    tierNote: "consommable"
+  },
+  {
+    key: "bandage", name: "Bandage de lin", type: "consumable", img: "icons/svg/blood.svg",
+    system: { poids: 0.1, prix: { argent: 1 }, effet: "Arrête un saignement et rend 1d4 PV.",
+      use: { pv: "1d4", mana: "", fatigue: "", cure: "Saignement, Hémorragie", target: "ally" },
+      description: "Une bande propre et un peu d'eau-de-vie. Arrête le sang des morsures et des lames — pas une blessure grave." },
+    tierNote: "consommable"
+  },
+  {
+    key: "antidote", name: "Antidote de Ronce", type: "consumable", img: "icons/svg/poison.svg",
+    system: { poids: 0.2, prix: { argent: 4 }, effet: "Guérit l'empoisonnement.",
+      use: { pv: "", mana: "", fatigue: "", cure: "Empoisonnement", target: "ally" },
+      description: "Une infusion amère d'Ysolde. Indispensable dans les mines de Rochefer." },
+    tierNote: "consommable"
+  },
+  {
+    key: "elixir-vigueur", name: "Élixir de vigueur", type: "consumable", img: "icons/svg/regen.svg",
+    system: { poids: 0.2, prix: { argent: 6 }, effet: "Retire 1d4 + 1 fatigue.",
+      use: { pv: "", mana: "", fatigue: "1d4+1", cure: "", target: "self" },
+      description: "Ça brûle la gorge et ça remet debout. Les mineurs nains en boivent avant chaque descente." },
+    tierNote: "consommable"
+  },
+  {
+    key: "eau-benite", name: "Eau de la chapelle", type: "consumable", img: "icons/svg/aura.svg",
+    system: { poids: 0.2, prix: { argent: 5 }, effet: "Dissipe une malédiction ou un affaiblissement, rend 1d4 mana.",
+      use: { pv: "", mana: "1d4", fatigue: "", cure: "Malédiction, Affaiblissement, Frisson", target: "ally" },
+      description: "Bénie par Frère Anselme. Les Veilleurs Gris la craignent plus que l'acier." },
     tierNote: "consommable"
   },
   {
@@ -155,7 +184,7 @@ export const BESTIARY = [
     loot: [{ key: "peau", pct: 100, qtyMin: 2, qtyMax: 3 }, { key: "croc", pct: 100, qtyMin: 2, qtyMax: 4 }] },
   { key: "brigand", name: "Brigand de la Route Grise", archetype: "soldat", theme: "humain", levels: "1,2,3", img: ICON.human, where: "Route Grise",
     desc: "Déserteur, paysan ruiné ou simple crapule : tous portent le foulard noir de Vesse-Corbeau.",
-    loot: [{ key: "pieces", pct: 70, qtyMin: 2, qtyMax: 6 }, { key: "potion-soin", pct: 10 }] },
+    loot: [{ key: "pieces", pct: 70, qtyMin: 2, qtyMax: 6 }, { key: "potion-soin", pct: 10 }, { key: "bandage", pct: 30 }] },
   { key: "arbaletrier", name: "Arbalétrier de la Route Grise", archetype: "rodeur", theme: "humain", levels: "2,3,4", img: ICON.human, where: "Route Grise",
     desc: "Posté en hauteur, il tire puis disparaît dans les fourrés. Vise toujours le plus bruyant d'abord.",
     loot: [{ key: "pieces", pct: 60, qtyMin: 2, qtyMax: 5 }] },
@@ -180,7 +209,7 @@ export const BESTIARY = [
   // ── Mines de Rochefer (niveaux 3-6) ────────────────────────────────────
   { key: "araignee", name: "Araignée cendrée", archetype: "rodeur", theme: "venin", levels: "3,4,5", img: ICON.venom, where: "Mines de Rochefer",
     desc: "Grande comme un bouclier, couleur de suie. Elle tisse dans les puits abandonnés et crache son venin de loin.",
-    loot: [{ key: "venin", pct: 60 }] },
+    loot: [{ key: "venin", pct: 60 }, { key: "antidote", pct: 15 }] },
   { key: "golem", name: "Golem de Rochefer", archetype: "brute", theme: "pierre", levels: "4,5,6", img: ICON.stone, where: "Mines de Rochefer",
     desc: "Les gardiens du Sceau de Pierre, taillés par les nains d'avant. Ils se sont réveillés le jour où le premier sceau s'est fêlé.",
     loot: [{ key: "roc", pct: 70, qtyMin: 1, qtyMax: 2 }] },
@@ -194,7 +223,7 @@ export const BESTIARY = [
   // ── Crypte de Halte-Grise et Veilleurs Gris (niveaux 2-8) ──────────────
   { key: "acolyte", name: "Acolyte des Veilleurs Gris", archetype: "mage", theme: "ombre", levels: "2,3,4", img: ICON.cowl, where: "Partout (cachés)",
     desc: "Commis, lavandières, gardes : les Veilleurs recrutent parmi ceux que la brume ruine. Ils maudissent avant de fuir.",
-    loot: [{ key: "os", pct: 40 }, { key: "pieces", pct: 50, qtyMin: 1, qtyMax: 4 }] },
+    loot: [{ key: "os", pct: 40 }, { key: "pieces", pct: 50, qtyMin: 1, qtyMax: 4 }, { key: "eau-benite", pct: 10 }] },
   { key: "squelette", name: "Squelette veilleur", archetype: "pietaille", theme: "mortvivant", levels: "2,3,4", img: ICON.undead, where: "Crypte de Halte-Grise",
     desc: "Relevé par les rites des Veilleurs. Fragile, mais jamais seul.",
     loot: [{ key: "os", pct: 50 }] },
@@ -267,7 +296,7 @@ export const NPCS = [
     dialogues: "« Vesse-Corbeau était mon sergent. Le meilleur que j'aie connu. Si vous le croisez… essayez de le ramener vivant. »\n« La loi, c'est tout ce qui nous sépare du marais. »",
     secrets: "Elle a signé l'ordre d'expulsion de Vesse-Corbeau sous la pression du conseil, et le regrette. Elle accepterait de le gracier si le groupe ramène la preuve qu'il nourrit les réfugiés." },
   { key: "anselme", name: "Frère Anselme, prêtre de la Lumière", niveau: 4, classe: "Prêtre", disposition: 1, img: ICON.npc,
-    desc: "<p>Un vieil homme au crâne rasé, mains calleuses de jardinier. Il soigne gratuitement à la chapelle, en échange de quelques heures au potager.</p>",
+    desc: "<p>Un vieil homme au crâne rasé, mains calleuses de jardinier. Il soigne gratuitement à la chapelle, en échange de quelques heures au potager. Il vend l'eau de la chapelle et les potions de soin.</p>",
     caractere: "Doux, lent, d'une patience infinie. Mal à l'aise dès qu'on parle des Veilleurs.",
     dialogues: "« Je soigne les corps. Pour le reste, il faudra vous adresser à plus haut que moi. »\n« La Couronne… je n'aurais jamais cru entendre ce mot à nouveau. »",
     secrets: "Ancien Veilleur Gris : il a quitté le culte il y a vingt ans, quand il a compris ce qu'était Ignar. Il connaît le rite de la Couronne — reforger les trois fragments pour lier ou détruire Ignar — et en a peur. Soigne 2d6 + 2 PV par jour à chaque PJ, contre un service." }
@@ -324,7 +353,7 @@ export const QUESTS = [
         "La brume s'épaissit dès que le fragment quitte le sanctuaire : c'est le premier indice que la brume vient des sceaux. Ysolde le confirme si on la consulte."),
     ] },
   { key: "q3", name: "III · Les Échos de Rochefer", arc: MAIN_ARC, niveaux: "4-6", xp: 50,
-    rewards: [{ key: "pioche-rochefer", qty: 1 }],
+    rewards: [{ key: "pioche-rochefer", qty: 1 }, { key: "antidote", qty: 2 }, { key: "elixir-vigueur", qty: 2 }],
     desc: "<p>Les mines de Rochefer ont fermé : les gardiens de pierre des anciens nains se sont réveillés et tuent les mineurs. Brunhilde Martelgris cherche des gens assez fous pour descendre.</p>",
     lore: "<p>Des Veilleurs, guidés par les plans qu'Orvel a achetés à Brunhilde, ont percé une galerie vers le Sceau de Pierre. Ils n'ont pas réussi à le prendre : le Gardien du Sceau les a écrasés. Les lettres trouvées sur leurs corps sont signées « O. S. ».</p>",
     etapes: [
@@ -339,7 +368,7 @@ export const QUESTS = [
         "Élite seule = rencontre complète. Un nain (Brunhilde) peut prononcer la formule ancestrale et faire perdre son premier tour au Gardien."),
     ] },
   { key: "q4", name: "IV · Le Veilleur derrière le voile", arc: MAIN_ARC, niveaux: "6-7", xp: 60,
-    rewards: [{ key: "cape-veilleur", qty: 1 }],
+    rewards: [{ key: "cape-veilleur", qty: 1 }, { key: "eau-benite", qty: 3 }],
     desc: "<p>Les initiales « O. S. » ne laissent pas beaucoup de choix. Et Orvel a disparu de ses archives depuis trois jours.</p>",
     lore: "<p>Orvel est descendu dans la crypte sous la chapelle pour briser le troisième sceau. S'il a déjà le Fragment d'Eau (acte II), il est à deux doigts de réussir. Frère Anselme connaît l'entrée secrète, et finit par avouer son passé de Veilleur.</p><p><b>Fin de l'acte</b> : vaincu, Orvel ne demande pas grâce ; il demande qu'on regarde la brume en face. Le laisser vivre est un choix (il peut revenir à l'acte V comme allié contre Ignar).</p>",
     etapes: [

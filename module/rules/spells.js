@@ -651,6 +651,7 @@ function summarizeMods(mods = {}) {
     initiativeMod: "Initiative",
     toucherPhysique: "Toucher physique",
     toucherMagique: "Toucher magique",
+    esquive: "Esquive",
     fatigueMax: "Fatigue max"
   }[k] ?? k);
 

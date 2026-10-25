@@ -50,7 +50,7 @@ export const STAT_KEYS = {
   pvMax: "PV max", manaMax: "Mana max",
   regenPv: "Régén PV", regenMana: "Régén Mana",
   vitesse: "Vitesse", initiativeMod: "Initiative",
-  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", esquive: "Esquive",
   fatigueMax: "Fatigue max", podsMax: "Pods max"
 };
 

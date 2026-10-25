@@ -252,7 +252,8 @@
           "regenMana": 0,
           "retraitMod": 0,
           "toucherPhysique": 0,
-          "toucherMagique": 0
+          "toucherMagique": 0,
+          "esquive": 0
         }
       },
       "details": {
@@ -351,7 +352,14 @@
       ],
       "poids": 0.2,
       "effet": "",
-      "ammoKind": ""
+      "ammoKind": "",
+      "use": {
+        "pv": "",
+        "mana": "",
+        "fatigue": "",
+        "cure": "",
+        "target": "self"
+      }
     },
     "spell": {
       "templates": [

@@ -99,7 +99,7 @@ function sumBonuses(actor) {
     // ne l'alimentait — ni ce cumul, ni un champ dans equipBonus, ni une entrée
     // sur les fiches. Exactement la même mort silencieuse que fatigueMax et
     // podsMax avant lui : la lecture valait 0 pour toujours.
-    combat: { toucherPhysique: 0, toucherMagique: 0, initiativeMod: 0 },
+    combat: { toucherPhysique: 0, toucherMagique: 0, initiativeMod: 0, esquive: 0 },
     // Résistances élémentaires apportées par l'équipement porté — même règle
     // que les autres bonus : il faut que l'objet soit équipé, et un monstre
     // ne porte pas d'équipement (voir isEquip plus bas).
@@ -182,6 +182,7 @@ function sumBonuses(actor) {
     totals.combat.toucherPhysique += Number(b.toucherPhysique ?? 0) || 0;
     totals.combat.toucherMagique += Number(b.toucherMagique ?? 0) || 0;
     totals.combat.initiativeMod += Number(b.initiativeMod ?? 0) || 0;
+    totals.combat.esquive += Number(b.esquive ?? 0) || 0;
 
     // ⚠️ system.resistancesElem, PAS system.bonus.* : les résistances
     // élémentaires d'un objet vivent à côté de system.resistances (états),
@@ -654,6 +655,18 @@ export class RPGActor extends Actor {
       + (Number(flat?.combat?.toucherMagique ?? 0) || 0) - epuiseToucherMalus;
     sys.derived.toucherMagique = applyPct(sys.derived.toucherMagique, pct?.combat?.toucherMagique);
     sys.derived.toucherMagique = Math.floor(sys.derived.toucherMagique);
+
+    // ✅ Esquive : le pendant DÉFENSIF du toucher. +1 = +1 au seuil des
+    // attaques adverses qui visent ce personnage (computeTN, combat.js),
+    // physiques comme magiques. Alimentée par l'équipement (un bouclier),
+    // les états (« Se défendre », couverture, pris en flanc en négatif) et
+    // les talents — c'est ce qui manquait pour qu'une position ou une posture
+    // compte : le toucher ne sait rendre plus facile ou plus dur que SES
+    // propres coups, jamais ceux qu'on reçoit.
+    sys.derived.esquive = Number(sys.base.esquive ?? 0)
+      + (Number(bonus.combat?.esquive ?? 0) || 0)
+      + (Number(flat?.combat?.esquive ?? 0) || 0);
+    sys.derived.esquive = Math.floor(applyPct(sys.derived.esquive, pct?.combat?.esquive));
 
     // Stocke les valeurs effectives de combat dans derived.effective
     sys.derived.effective.vitesse        = sys.deplacement.vitesse;

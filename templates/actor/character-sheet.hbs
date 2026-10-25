@@ -1041,7 +1041,8 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             <span class="name">
               <img src="{{it.img}}" alt="" />
               <a class="item-edit">{{it.name}}</a>
-              {{#if it.system.effet}}<div class="muted" style="font-size:11px;margin-top:2px">{{it.system.effet}}</div>{{/if}}
+              {{#if it._derived.useSummary}}<div class="muted" style="font-size:11px;margin-top:2px">🧪 {{it._derived.useSummary}}</div>
+              {{else}}{{#if it.system.effet}}<div class="muted" style="font-size:11px;margin-top:2px">{{it.system.effet}}</div>{{/if}}{{/if}}
             </span>
 
             {{#if ../flags.isGM}}
@@ -1056,6 +1057,10 @@ elles ne sont même pas envoyées dans le contexte de rendu (_prepareNpcContext)
             <span class="total">{{it._derived.poidsTotal}}</span>
 
             <span class="actions">
+              {{#if it._derived.useSummary}}
+              <button type="button" class="icon" data-action="useConsumable" data-item-id="{{it._id}}"
+                title="Utiliser (le MJ valide). Sur un allié au contact : cible-le d'abord (T).">🧪</button>
+              {{/if}}
               {{#if ../flags.isGM}}
               <button type="button" class="icon" data-action="deleteItem" title="Supprimer">✕</button>
               {{/if}}

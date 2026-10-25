@@ -76,6 +76,32 @@
           {{/if}}
         </div>
       </div>
+
+      {{!-- Usage structuré (rules/consumables.js) : ce que le bouton
+            « 🧪 Utiliser » de la fiche de personnage applique vraiment, après
+            validation du MJ. Vide = l'objet ne s'utilise pas (le texte
+            ci-dessus reste une simple description). --}}
+      <h3 style="margin-top:10px">🧪 Usage</h3>
+      {{#if canEdit}}
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+        <div><label>PV rendus</label><input type="text" name="system.use.pv" value="{{system.use.pv}}" placeholder="2d6+2"/></div>
+        <div><label>Mana rendu</label><input type="text" name="system.use.mana" value="{{system.use.mana}}" placeholder="1d4"/></div>
+        <div><label>Fatigue retirée</label><input type="text" name="system.use.fatigue" value="{{system.use.fatigue}}" placeholder="2"/></div>
+      </div>
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-top:6px">
+        <div><label>Guérit les états (libellés, séparés par des virgules)</label>
+          <input type="text" name="system.use.cure" value="{{system.use.cure}}" placeholder="Empoisonnement, Saignement"/></div>
+        <div><label>Sur qui</label>
+          <select name="system.use.target">
+            <option value="self" {{#if (eq system.use.target "self")}}selected{{/if}}>Soi seulement</option>
+            <option value="ally" {{#if (eq system.use.target "ally")}}selected{{/if}}>Soi ou un allié au contact</option>
+          </select></div>
+      </div>
+      <small style="opacity:.75">Formule de dés ou nombre. En combat, utiliser l'objet coûte l'action « Récupération ».
+        Une blessure (permanente) n'est jamais guérie par un objet.</small>
+      {{else}}
+        <div>{{#if useSummary}}{{useSummary}}{{else}}<small style="opacity:.8">Ne s'utilise pas.</small>{{/if}}</div>
+      {{/if}}
       {{/if}}
 
       {{#if isGM}}

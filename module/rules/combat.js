@@ -276,14 +276,19 @@ export function computeTN(attacker, target, item, opts = {}) {
     : rangeDifficultyFor(attacker, target, item, opts);
   const diffTotal = diff + rangeInfo.diff;
 
+  // Esquive de la CIBLE (posture défensive, couverture, bouclier ; négative
+  // quand elle est prise en flanc). Absente de la branche « cible amie » :
+  // un allié n'esquive pas le soin qu'on lui porte.
+  const esquive = Number(target?.system?.derived?.esquive ?? 0) || 0;
+
   const r       = (100 + atk) / (100 + def);
   const tnBase  = tnFromRatio(r);
   let   tnFinal = applyDifficulty(tnBase, diffTotal);
-  tnFinal = clamp(tnFinal - toucherBonus, 6, 16);
+  tnFinal = clamp(tnFinal - toucherBonus + esquive, 6, 16);
 
   return {
     livraison, friendly: false, autoSuccess: false,
-    diff: diffTotal, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus,
+    diff: diffTotal, diffRaw: diff, atk, def, r, tnBase, tnFinal, toucherBonus, esquive,
     // Détail du malus de distance, pour que les surfaces qui annoncent le
     // seuil puissent dire d'où il vient plutôt qu'afficher un total opaque.
     rangeDiff: rangeInfo.diff, rangeDist: rangeInfo.dist

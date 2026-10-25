@@ -55,7 +55,7 @@ const STAT_LABELS = {
   acuite: "Acuité", endurance: "Endurance",
   armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
   scoreArmure: "Score Armure", scoreResistance: "Score Résistance",
-  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", esquive: "Esquive",
   initiativeMod: "Initiative", vitesse: "Vitesse",
   pvMax: "PV max", manaMax: "Mana max",
   regenPv: "Régén PV", regenMana: "Régén Mana",

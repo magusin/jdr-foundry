@@ -35,7 +35,7 @@
     armureFixe:"Armure fixe", resistanceFixe:"Résistance fixe", scoreArmure:"Score Armure",
     scoreResistance:"Score Résistance", pvMax:"PV max", manaMax:"Mana max",
     regenPv:"Régén PV", regenMana:"Régén Mana", vitesse:"Vitesse", initiativeMod:"Initiative",
-    toucherPhysique:"Toucher phys.", toucherMagique:"Toucher mag.",
+    toucherPhysique:"Toucher phys.", toucherMagique:"Toucher mag.", esquive:"Esquive",
     fatigueMax:"Fatigue max", podsMax:"Pods max"
   };
 

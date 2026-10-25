@@ -103,6 +103,11 @@ export const STAT_WEIGHTS = {
   // soit ~10 % de dégâts infligés en plus.
   toucherPhysique: 10,
   toucherMagique: 10,
+  // Esquive : l'exact miroir du toucher. +1 au seuil des attaques reçues =
+  // −5 points de chance d'être touché, soit ~10 % de dégâts encaissés en
+  // moins — des deux livraisons à la fois, comme le toucher qui ne sert
+  // qu'une livraison à la fois mais sur chaque coup donné.
+  esquive: 10,
 
   // ── Mobilité : sur une base de 8 m (BASE_VITESSE), +1 m est un huitième de
   // déplacement en plus. Décide qui engage, qui décroche, qui atteint le mage.
@@ -328,14 +333,14 @@ export function slotsUsedBy(item) {
 }
 
 const LINEAR_FIELDS = new Set([
-  "armureFixe", "resistanceFixe", "toucherPhysique", "toucherMagique",
+  "armureFixe", "resistanceFixe", "toucherPhysique", "toucherMagique", "esquive",
   "vitesse", "fatigueMax", "regenPv", "regenMana"
 ]);
 
 /** Plafond conseillé pour le CUMUL des 9 emplacements. Au-delà : alerte. */
 const STACK_CAPS = {
   armureFixe: 8, resistanceFixe: 8,
-  toucherPhysique: 2, toucherMagique: 2,
+  toucherPhysique: 2, toucherMagique: 2, esquive: 2,
   // Cumul de tout un équipement : au plus la moitié d'un déplacement de base
   // en cadeau. Le plafond était de 2 m quand la base valait 3 — la même
   // proportion sur une base de 8 en donne 4.
@@ -347,7 +352,7 @@ const STACK_CAPS = {
 
 const LABELS = {
   armureFixe: "Armure fixe", resistanceFixe: "Résistance fixe",
-  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique",
+  toucherPhysique: "Toucher physique", toucherMagique: "Toucher magique", esquive: "Esquive",
   vitesse: "Vitesse", initiativeMod: "Initiative", pvMax: "PV max", manaMax: "Mana max",
   fatigueMax: "Fatigue max", podsMax: "Pods max", retraitMod: "Mod. retrait d'état",
   force: "Force", intelligence: "Intelligence",
@@ -800,7 +805,7 @@ const RESTORE_WEIGHTS = { pv: 0.8, mana: 0.6, fatigue: 1.5 };
 const PCT_REF = {
   force: 10, intelligence: 10, dexterite: 10, acuite: 10, endurance: 10,
   armureFixe: 2, resistanceFixe: 2, scoreArmure: 20, scoreResistance: 20,
-  toucherPhysique: 1, toucherMagique: 1, initiativeMod: 5,
+  toucherPhysique: 1, toucherMagique: 1, esquive: 1, initiativeMod: 5,
   vitesse: BASE_VITESSE, pvMax: 30, manaMax: 5, regenPv: 1, regenMana: 1,
   fatigueMax: 10, podsMax: 50
 };
@@ -1777,6 +1782,22 @@ function evaluateMonsterAbility(sp, profile, PARTY) {
  * @returns {{threat:number, survival:number|null, encounter:number|null, tier:object,
  *            rows:Array, warnings:Array, partyRef:object, profile:object}}
  */
+/**
+ * Action de base (Repos, Sprint, Se défendre, Retirer un état…,
+ * default-actions.js) : écartée de la pesée d'un monstre.
+ *
+ * Toute créature les reçoit à la création, à l'identique : elles ne disent
+ * rien de CELLE-CI. Et elles faussaient le calcul : la simulation remplit ses
+ * places d'action par valeur décroissante, et un Sprint (≈ 7 points) passait
+ * devant l'attaque de base d'une élite — mesuré, la Grand-Mère Louve tombait
+ * de 58 à 49 et Ignar de 205 à 184, uniquement parce qu'elles possédaient les
+ * mêmes actions de base que tout le monde.
+ */
+function isBaselineAction(item) {
+  const f = item?.flags?.rpg ?? item?.flags?.["rpg"] ?? null;
+  return !!(f?.defaultActionKey || item?.getFlag?.("rpg", "defaultActionKey"));
+}
+
 export function computeMonsterValue(actor, opts = {}) {
   const profile = opts.profile ?? monsterProfileFromActor(actor);
   const rows = [];
@@ -1814,7 +1835,8 @@ export function computeMonsterValue(actor, opts = {}) {
   // capacités ne frappe pas dix fois plus fort qu'un autre à deux. N vient du
   // budget réel (action-budget.js : slotsTotal.max = 2), réglable en monde
   // pour les créatures épiques jouées seules face au groupe.
-  const spells = opts.spells ?? (actor?.items ? Array.from(actor.items).filter(i => i.type === "spell") : []);
+  const spells = (opts.spells ?? (actor?.items ? Array.from(actor.items).filter(i => i.type === "spell") : []))
+    .filter(i => !isBaselineAction(i));
   const slots = monsterActionSlots();
 
   const abilities = [];
@@ -2112,7 +2134,7 @@ export function computeMonsterValue(actor, opts = {}) {
  */
 export function computeMonsterBandValues(actor) {
   const bands = actor?.system?.gen?.bands ?? {};
-  const spells = actor?.items ? Array.from(actor.items).filter(i => i.type === "spell") : [];
+  const spells = actor?.items ? Array.from(actor.items).filter(i => i.type === "spell" && !isBaselineAction(i)) : [];
   const levels = Object.keys(bands)
     .map(k => parseInt(k, 10))
     .filter(v => Number.isFinite(v) && v > 0)

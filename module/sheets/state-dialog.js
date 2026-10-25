@@ -46,6 +46,7 @@ export const MOD_LABELS = {
   resistanceFixe: "Résistance fixe",
   toucherPhysique: "Toucher physique",
   toucherMagique: "Toucher magique",
+  esquive: "Esquive",
   initiativeMod: "Initiative",
   fatigueMax: "Fatigue max",
   podsMax: "Pods max",
@@ -92,7 +93,7 @@ export const MOD_KEYS = [
   "force", "dexterite", "intelligence", "acuite", "endurance",
   "pvMax", "manaMax", "regenPv", "regenMana",
   "scoreArmure", "scoreResistance", "armureFixe", "resistanceFixe",
-  "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique",
+  "vitesse", "initiativeMod", "toucherPhysique", "toucherMagique", "esquive",
   "fatigueMax", "podsMax", "retraitMod"
 ];
 

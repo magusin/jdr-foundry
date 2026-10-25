@@ -22,7 +22,7 @@ const FLAG_KEY   = "defaultActions";
 // rattrapage au chargement repasse alors sur les acteurs déjà traités par une
 // version antérieure, pour compléter ce qui manque et supprimer ce qui n'a
 // plus lieu d'être (v5 : « Attaquer » retiré des monstres ; v6 : « Sprint »).
-const VERSION    = 6;
+const VERSION    = 7;
 
 /** Drapeau posé sur le combattant : échange d'arme autorisé pour ce round. */
 export const SWAP_OPEN_FLAG = "swapOpenRound";
@@ -247,14 +247,82 @@ function removeStateActionData() {
   };
 }
 
+/**
+ * « Se défendre » — la posture défensive.
+ *
+ * Le joueur renonce à une action pour se mettre en garde : jusqu'au début de
+ * son prochain tour, toute attaque adverse qui le vise a +2 à son seuil
+ * (esquive, combat.js). Aucune ligne de moteur, exactement comme Sprint : un
+ * effet `self` d'un tour, sur une stat que computeTN lit chez la cible.
+ *
+ * Durée 1 : les états sont décrémentés au DÉBUT du tour de leur porteur
+ * (turn-effects.js), donc la garde couvre tous les tours adverses entre deux
+ * tours du défenseur, et tombe quand il reprend la main.
+ *
+ * +2 et pas plus : sur la bande utile du d20 c'est −10 points de chance
+ * d'être touché, soit ~20 % de dégâts encaissés en moins pour une action —
+ * le prix d'une attaque qu'on ne donne pas. À +4, la garde dominerait toute
+ * autre seconde action.
+ */
+function defendActionData() {
+  return {
+    name: "Se défendre",
+    type: "spell",
+    img: "icons/svg/shield.svg",
+    system: {
+      speed: "normal",
+      livraison: "physique",
+      tag: "neutre",
+      coutMana: 0,
+      fatigueCost: 0,
+      difficulte: 0,
+      range: { min: 0, max: 0 },
+      targetCount: { min: 0, max: 0 },
+      cooldown: { max: 0, restant: 0 },
+      damages: [], restores: [],
+      effectsUI: [{
+        id: "defense-garde",
+        label: "En garde",
+        effectKey: "",
+        tag: "",
+        when: "hit",
+        target: "self",
+        duration: 1,
+        permanent: false,
+        removeBaseTN: 0,
+        retraitMod: 0,
+        resistDamageTag: "", resistDamagePct: 0,
+        resistTag: "", resistDurationReduction: 0, resistDotPct: 0, resistImmune: false,
+        movementTypeGrant: "",
+        fatigueDot: 0,
+        tick: { mode: "none", flat: 0, stat: "", per: 10, perStep: 0, livraison: "physique" },
+        isAura: false, auraMin: 0, auraMax: 0, auraTarget: "allies",
+        mods: [{ stat: "esquive", mode: "flat", sens: "bonus", value: 2 }]
+      }],
+      description: "<p>Le personnage se met <b>en garde</b> : jusqu'au début de son "
+                 + "prochain tour, les attaques qui le visent ont <b>+2 à leur seuil</b> "
+                 + "(physiques comme magiques).</p>"
+                 + "<p>Coûte une action. Attaquer puis se mettre en garde occupe "
+                 + "les 2 actions du tour.</p>"
+    },
+    flags: { [FLAG_SCOPE]: { [ACTION_KEY_FLAG]: "defense" } }
+  };
+}
+
 /** Toutes les actions de base, indexées par clé. */
 const DEFAULT_ACTIONS = {
   repos: restActionData,
   attaquer: attackActionData,
   changerArme: swapActionData,
   sprint: sprintActionData,
+  defense: defendActionData,
   retirerEtat: removeStateActionData
 };
+
+/** Données de création d'une action de base (null si la clé est inconnue). */
+export function defaultActionData(key) {
+  return DEFAULT_ACTIONS[key]?.() ?? null;
+}
 
 /** Types d'acteurs concernés. */
 const TARGET_TYPES = new Set(["character", "monster"]);

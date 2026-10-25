@@ -77,6 +77,7 @@ import * as ActorRoles from "./rules/actor-roles.js";
 import * as CampaignContent from "./rules/campaign-content.js";
 import * as EncounterBuilder from "./rules/encounter-builder.js";
 import * as MonsterThemes from "./rules/monster-themes.js";
+import * as Consumables from "./rules/consumables.js";
 import * as Loadout from "./rules/loadout.js";
 import * as ItemValue from "./rules/item-value.js";
 import { syncDefeatedFlag, checkCombatEndCondition, markFled, isFled, isOutOfFight, findCombatantFor } from "./rules/combat-state.js";
@@ -1316,6 +1317,9 @@ Hooks.once("ready", () => {
     game.rpg.content = CampaignContent;
     game.rpg.encounters = EncounterBuilder;
     game.rpg.monsterThemes = MonsterThemes;
+    // ✅ game.rpg.consumables : usage d'un consommable (potion, antidote…),
+    // déclaré par le joueur, validé par le MJ — rules/consumables.js.
+    game.rpg.consumables = Consumables;
 
     // ✅ game.rpg.loadout : les deux emplacements (Talent, Passif). Exposé
     // parce que macro/menu.js n'est pas un module ES et ne peut pas importer
@@ -1394,6 +1398,7 @@ Hooks.once("ready", () => {
         ["Configurer une Zone (MJ)",           "zone-configure.js",     "icons/svg/trap.svg",            "gm"],
         ["Basculer les Repères de Carte (MJ)", "toggle-map-markers.js", "icons/svg/eye.svg",             "gm"],
         ["Repères de Carte : Configurer (MJ)", "map-markers-manager.js","icons/svg/book.svg",            "gm"],
+        ["🛡️ Position tactique (MJ)",          "tactical-position.js",  "icons/svg/shield.svg",          "gm"],
         ["⚔️ Générateur de Rencontres (MJ)",   "encounter-builder.js",  "icons/svg/sword.svg" ,          "gm"],
         ["📚 Installer la campagne (MJ)",       "campaign-install.js",   "icons/svg/book.svg",            "gm"],
       ];
@@ -1488,6 +1493,7 @@ Hooks.once("ready", () => {
       try { bindSwapChatButtons(html, message); } catch (e) { }
       try { bindRemoveStateChatButtons(html, message); } catch (e) { }
       try { bindAgonieChatButtons(html, message); } catch (e) { }
+      try { Consumables.bindConsumableChatButtons(html, message); } catch (e) { console.error("[RPG] consommable :", e); }
       // ── Nouveau : bouton "Lancer le dé" (jet de compétence initié par MJ) ──
       {
         const _root = html instanceof HTMLElement ? html : html?.[0];

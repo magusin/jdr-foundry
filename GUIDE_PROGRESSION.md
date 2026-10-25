@@ -281,6 +281,24 @@ sortie (fuite, phase 2, renfort) plutôt qu'un TPK.
 
 ---
 
+## 3 bis. Les leviers tactiques des joueurs
+
+- **🛡️ Se défendre** (action de base, chaque personnage et monstre l'a) :
+  une action, et jusqu'à son prochain tour le personnage a **+2 au seuil**
+  des attaques qui le visent. Attaquer puis se mettre en garde = le tour entier.
+- **Positions** (macro « 🛡️ Position tactique (MJ) », sur les jetons
+  sélectionnés et ciblés) : couverture légère / moyenne / totale +1 / +2 / +4,
+  en contrebas −1, pris en flanc −2, angle mort −3. C'est toi qui juges la
+  carte ; l'outil applique et le seuil suit.
+- **Esquive sur l'équipement** : un bouclier peut donner +1 d'esquive (champ
+  « Esquive » de la fiche d'armure ou d'arme). Pesée : autant qu'un point de
+  toucher — reste à **+2 au total** sur tout un équipement.
+- **Consommables** : bouton 🧪 dans l'onglet Consommables. En combat, boire
+  ou panser coûte l'action « Récupération ». Remplis la partie « Usage » de
+  l'objet (PV, mana, fatigue, états guéris) ; sans elle, il ne fait rien.
+  Repère : une potion de soin à 2d6+2 rend ~30 % des PV d'un PJ de niveau 1,
+  ~15 % au niveau 10 — c'est voulu, les potions sont un dépannage, pas un soin.
+
 ## 4. Les équipements : ce qui fait vraiment progresser
 
 ### La hiérarchie des champs, et elle est brutale

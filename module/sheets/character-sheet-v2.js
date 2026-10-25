@@ -1,5 +1,6 @@
 // systems/rpg/module/sheets/character-sheet-v2.js
 import { buildSpellUI, buildSpellEffectsPreview, declareSpell } from "../rules/spells.js";
+import { consumableUse, useSummary, declareConsumableUse } from "../rules/consumables.js";
 import { auraAffectsBearer } from "../rules/aura-target.js";
 import { getBudget, saveBudget, canUseSlot, confirmSlot, movementRemaining, movementSpent } from "../rules/action-budget.js";
 import {
@@ -1015,6 +1016,27 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
       } finally { btn.disabled = false; }
     }, { capture: true });
 
+    // ── Utiliser un consommable (joueurs ET MJ) ──────────────────────────
+    // Branché avant le retour joueur, comme « Déclarer » : c'est le joueur qui
+    // boit sa potion ; le MJ valide dans le chat (rules/consumables.js).
+    bindOnce("consume").addEventListener("click", async (evUse) => {
+      const btn = evUse.target?.closest?.("[data-action='useConsumable']");
+      if (!btn || btn.disabled) return;
+      if (!this.document.isOwner) return;
+      evUse.preventDefault();
+      evUse.stopPropagation();
+      const item = this.document.items.get(btn.dataset.itemId);
+      if (!item) return;
+      btn.disabled = true;
+      try {
+        const res = await declareConsumableUse(this.document, item);
+        if (!res.ok && res.reason) ui.notifications?.warn?.(res.reason);
+      } catch (e) {
+        console.error("[RPG] usage de consommable :", e);
+        ui.notifications?.error?.("Impossible d'utiliser cet objet — voir la console (F12).");
+      } finally { btn.disabled = false; }
+    }, { capture: true });
+
     // ── Emplacements Talent / Passif (joueurs ET MJ) ─────────────────────
     // Branché avant le retour joueur, comme les slots d'équipement : c'est
     // le joueur qui choisit ce qu'il porte, pas le MJ.
@@ -1064,7 +1086,9 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
                        + "[data-action='declareSpell'], [data-action='castSpell'],"
                        // Emplacements Talent / Passif : ils appartiennent au
                        // joueur, pas au MJ — c'est tout l'objet de l'onglet.
-                       + "[data-action='pickTalent'], [data-action='pickPassif']";
+                       + "[data-action='pickTalent'], [data-action='pickPassif'],"
+                       // Boire sa potion : un geste du joueur, validé par le MJ.
+                       + "[data-action='useConsumable']";
       // Pur confort d'affichage : actif pour tout le monde.
       const VIEW_CTRL  = ".spell-filter, .spell-filter-q, .spell-filter-reset";
 
@@ -1356,6 +1380,7 @@ export class RPGCharacterSheetV2 extends HandlebarsApplicationMixin(DocumentShee
 
       it._derived = it._derived ?? {};
       it._derived.poidsTotal = Number((qte * poids).toFixed(2));
+      if (it.type === "consumable") it._derived.useSummary = useSummary(consumableUse(it));
       // Libellé lisible de l'emplacement : les listes « Porté »/« Dans le
       // sac » affichaient la clé technique brute, ce qui donnait
       // « artefact » pour une relique alors que le slot s'appelle

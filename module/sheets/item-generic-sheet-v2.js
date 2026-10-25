@@ -2,6 +2,7 @@
 const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 import { applyUiTheme, applySheetViewMode, bindImageEditors, restoreScrollPositions, uniqueSheetOptions, itemTypeLabel } from "./sheet-helpers.js";
 import { bindSendToActorsButton, bindLinkSyncCheckbox } from "./send-item-dialog.js";
+import { consumableUse, useSummary } from "../rules/consumables.js";
 
 function n(v, d = 0) {
   const x = Number(v);
@@ -77,6 +78,14 @@ export class RPGGenericItemSheetV2 extends HandlebarsApplicationMixin(DocumentSh
     // Famille de munition : ce que cet objet peut alimenter comme arme (ammo.js).
     ctx.system.ammoKind = String(ctx.system.ammoKind ?? "");
     ctx.system.description = String(ctx.system.description ?? "");
+    if (item.type === "consumable") {
+      const u = ctx.system.use ?? {};
+      ctx.system.use = {
+        pv: String(u.pv ?? ""), mana: String(u.mana ?? ""), fatigue: String(u.fatigue ?? ""),
+        cure: String(u.cure ?? ""), target: u.target === "ally" ? "ally" : "self"
+      };
+      ctx.useSummary = useSummary(consumableUse(item));
+    }
 
     ctx.system.prix = ctx.system.prix ?? { cuivre: 0, argent: 0, or: 0 };
     ctx.system.prix.cuivre = n(ctx.system.prix.cuivre, 0);
